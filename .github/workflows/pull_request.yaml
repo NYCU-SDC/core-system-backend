@@ -97,11 +97,27 @@ jobs:
 
   Deploy:
     needs: Build
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Deploy container to local
+      - name: Read deploy.sh content
+        id: read_script
         run: |
-          ~/deploy.sh "Snapshot" "${{ github.event.number }}" "${{ github.event.pull_request.title }}"
+          CONTENT=$(cat .deploy/pr-snapshot.sh | base64 -w 0)
+          echo "content=$CONTENT" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger n8n Snapshot Webhook
+        run: |
+          curl -X POST https://webhook.eng.sdc.nycu.club/webhook/deploy \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "Snapshot",
+              "pr_number": "${{ github.event.number }}",
+              "pr_title": "${{ github.event.pull_request.title }}",
+              "repo": "${{ github.repository }}",
+              "image_tag": "nycusdc/core-system-backend:pr-${{ github.event.number }}",
+              "script_b64": "${{ steps.read_script.outputs.content }}",
+              "source": "GitHub Actions"
+            }'
