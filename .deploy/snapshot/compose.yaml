@@ -1,6 +1,8 @@
 networks:
   core_system_$VERSION:
     driver: bridge
+  traefik:
+    external: true
 
 services:
   backend:
@@ -10,6 +12,7 @@ services:
       - '$PORT:8080'
     networks:
       - core_system_$VERSION
+      - traefik
     depends_on:
       postgres:
         condition: service_healthy
@@ -20,6 +23,12 @@ services:
       OTEL_COLLECTOR_URL: 10.140.0.3:4317
     labels:
       - "vector.enable=true"
+      - "traefik.enable=true"
+      - "traefik.http.routers.core-system-backend.rule=Host(`api.snapshot.core-system.sdc.nycu.club`)"
+      - "traefik.http.routers.core-system-backend.entrypoints=websecure"
+      - "traefik.http.routers.core-system-backend.tls=true"
+      - "traefik.http.routers.core-system-backend.tls.certresolver=cloudflare"
+    
     
   postgres:
     image: postgres:latest

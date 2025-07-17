@@ -11,12 +11,26 @@ jobs:
     steps:
       - name: Trigger n8n Snapshot Webhook
         run: |
-          curl -X POST https://webhook.eng.sdc.nycu.club/webhook/snapshot \
+            curl -X POST https://webhook.eng.sdc.nycu.club/webhook/deploy \
             -H "Content-Type: application/json" \
+            -H "x-deploy-token: ${{ secrets.N8N_DEPLOY_TOKEN }}" \
             -d '{
-              "pr_number": "${{ github.event.number }}",
-              "pr_title": "${{ github.event.pull_request.title }}",
-              "repo": "${{ github.repository }}",
-              "branch": "${{ github.ref_name }}",
-              "method": "close"
+              "source": {
+                "title": "Core System",
+                "repo": "${{ github.repository }}",
+                "branch": "${{ github.head_ref || github.ref_name }}",
+                "commit": "${{ github.sha }}",
+                "pr_number": "${{ github.event.pull_request.number }}"
+              },
+              "method": "cleanup",
+              "metadata": {
+                "environment": "snapshot",
+                "component": "backend"
+              },
+              "post": {
+                "notify_discord": {
+                  "enable": true,
+                  "channel": "core-system-activity"
+                }
+              }
             }'

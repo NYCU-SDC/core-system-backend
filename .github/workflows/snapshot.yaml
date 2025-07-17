@@ -72,7 +72,7 @@ jobs:
         run: |
           go mod download
           make gen
-          env GOOS=linux GOARCH=arm64 go build -o bin/backend cmd/backend/main.go
+          env GOOS=linux go build -o bin/backend cmd/backend/main.go
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -88,7 +88,6 @@ jobs:
         with:
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/arm64
           push: true
           tags: |
             nycusdc/core-system-backend:pr-${{ github.event.number }}
@@ -99,10 +98,25 @@ jobs:
     needs: Build
     runs-on: ubuntu-latest
     steps:
+      - name: Extract PR body for webhook
+        uses: ocean1029/extract-pr-body-action@main
+        id: extract
+        with:
+          pr_body: ${{ github.event.pull_request.body }}
+      
+      - name: Process PR body for webhook
+        run: |
+          PR_TYPE=$(echo '${{ steps.extract.outputs.type_block }}' | jq -R -s @json)
+          PR_PURPOSE=$(echo '${{ steps.extract.outputs.purpose_block }}' | jq -R -s @json)
+          echo "PR_TYPE=$PR_TYPE" >> $GITHUB_ENV
+          echo "PR_PURPOSE=$PR_PURPOSE" >> $GITHUB_ENV
+
+
       - name: Trigger n8n Snapshot Webhook
         run: |
-          curl -X POST https://webhook.eng.sdc.nycu.club/webhook/deploy \
+          curl --location --fail-with-body -X POST https://webhook.eng.sdc.nycu.club/webhook/deploy \
             -H "Content-Type: application/json" \
+            -H "x-deploy-token: ${{ secrets.N8N_DEPLOY_TOKEN }}" \
             -d '{
               "source": {
                 "title": "Core System",
@@ -110,16 +124,25 @@ jobs:
                 "branch": "${{ github.head_ref || github.ref_name }}",
                 "commit": "${{ github.sha }}",
                 "pr_number": "${{ github.event.pull_request.number }}",
-                "pr_title": "${{ github.event.pull_request.title }}"
+                "pr_title": "${{ github.event.pull_request.title }}",
+                "pr_type": ${{ env.PR_TYPE }},
+                "pr_purpose": ${{ env.PR_PURPOSE }}
               },
               "method": "deploy",
               "metadata": {
-                "environment": "snapshot"
+                "environment": "snapshot",
+                "component": "backend"
               },
               "post": {
                 "notify_discord": {
                   "enable": true,
                   "channel": "core-system-activity"
+                },
+                "setup_domain": {
+                  "enable": true,
+                  "title": "Endpoint",
+                  "name": "api.snapshot-${{ github.event.pull_request.number }}.core-system.sdc.nycu.club",
+                  "value": "gcp-eng-deploy:internal"
                 }
               }
             }'
