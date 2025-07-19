@@ -17,6 +17,9 @@ services:
       HOST: "0.0.0.0"
       DATABASE_URL: postgres://postgres:password@postgres:5432/core_system?sslmode=disable
       MIGRATION_SOURCE: file:///app/migrations
+      OTEL_COLLECTOR_URL: 10.140.0.3:4317
+    labels:
+      - "vector.enable=true"
     
   postgres:
     image: postgres:latest
