@@ -132,6 +132,9 @@ func main() {
 	basicMiddleware := middleware.NewSet(traceMiddleware.RecoverMiddleware)
 	basicMiddleware = basicMiddleware.Append(traceMiddleware.TraceMiddleWare)
 
+	// Auth Middleware
+	authMiddleware := basicMiddleware.Append(jwtMiddleware.AuthenticateMiddleware)
+
 	// HTTP Server
 	mux := http.NewServeMux()
 
@@ -158,7 +161,7 @@ func main() {
 	mux.HandleFunc("POST /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 
 	// User authenticated routes
-	mux.Handle("GET /api/users/me", jwtMiddleware.AuthenticateMiddleware(userHandler.GetMe))
+	mux.Handle("GET /api/users/me", authMiddleware.HandlerFunc(userHandler.GetMe))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
