@@ -11,12 +11,13 @@ services:
         condition: service_healthy
     environment:
       HOST: "0.0.0.0"
-      BASE_URL: "https://dev.core-system.sdc.nycu.club"
+      BASE_URL: "https://$VERSION.core-system.sdc.nycu.club"
       DATABASE_URL: postgres://postgres:password@postgres:5432/core_system?sslmode=disable
       MIGRATION_SOURCE: file:///app/migrations
       OTEL_COLLECTOR_URL: 10.140.0.3:4317
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
+      VERSION: $VERSION
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
