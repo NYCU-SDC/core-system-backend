@@ -102,7 +102,6 @@ func (s *Service) List(ctx context.Context) ([]Form, error) {
 	ctx, span := s.tracer.Start(ctx, "ListForms")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
-
 	forms, err := s.queries.List(ctx)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms")

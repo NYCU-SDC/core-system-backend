@@ -65,6 +65,27 @@ func (q *Queries) Delete(ctx context.Context, arg DeleteParams) error {
 	return err
 }
 
+const getByID = `-- name: GetByID :one
+SELECT id, form_id, required, type, label, description, "order", created_at, updated_at FROM questions WHERE id = $1
+`
+
+func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (Question, error) {
+	row := q.db.QueryRow(ctx, getByID, id)
+	var i Question
+	err := row.Scan(
+		&i.ID,
+		&i.FormID,
+		&i.Required,
+		&i.Type,
+		&i.Label,
+		&i.Description,
+		&i.Order,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listByFormID = `-- name: ListByFormID :many
 SELECT id, form_id, required, type, label, description, "order", created_at, updated_at FROM questions WHERE form_id = $1 ORDER BY "order"
 `

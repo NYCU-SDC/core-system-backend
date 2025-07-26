@@ -16,6 +16,7 @@ type Querier interface {
 	Update(ctx context.Context, params UpdateParams) (Question, error)
 	Delete(ctx context.Context, params DeleteParams) error
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]Question, error)
+	GetByID(ctx context.Context, questionID uuid.UUID) (Question, error)
 }
 
 type Service struct {
@@ -88,4 +89,18 @@ func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Questio
 		return nil, err
 	}
 	return list, nil
+}
+
+func (s *Service) GetByID(ctx context.Context, questionID uuid.UUID) (Question, error) {
+	ctx, span := s.tracer.Start(ctx, "GetByID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	q, err := s.queries.GetByID(ctx, questionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get question by id")
+		span.RecordError(err)
+		return Question{}, err
+	}
+	return q, nil
 }

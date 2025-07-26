@@ -56,13 +56,13 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	user, err := s.queries.GetByID(traceCtx, id)
+	currentUser, err := s.queries.GetByID(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
 		return User{}, err
 	}
-	return user, nil
+	return currentUser, nil
 }
 
 func resolveAvatarUrl(name, avatarUrl string) string {
@@ -77,7 +77,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	userExists, err := s.queries.UserExistsByAuth(traceCtx, UserExistsByAuthParams{
+	exists, err := s.queries.UserExistsByAuth(traceCtx, UserExistsByAuthParams{
 		Provider:   oauthProvider,
 		ProviderID: oauthProviderID,
 	})
@@ -87,7 +87,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		return uuid.UUID{}, err
 	}
 
-	if userExists {
+	if exists {
 		existingUserID, err := s.queries.GetUserIDByAuth(traceCtx, GetUserIDByAuthParams{
 			Provider:   oauthProvider,
 			ProviderID: oauthProviderID,
