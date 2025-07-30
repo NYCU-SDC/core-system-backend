@@ -14,3 +14,6 @@ DELETE FROM questions WHERE form_id = $1 AND id = $2;
 
 -- name: ListByFormID :many
 SELECT * FROM questions WHERE form_id = $1 ORDER BY "order";
+
+-- name: GetByID :one
+SELECT * FROM questions WHERE id = $1;

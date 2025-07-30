@@ -141,6 +141,16 @@ func (ns NullUnitType) Value() (driver.Value, error) {
 	return string(ns.UnitType), nil
 }
 
+type Answer struct {
+	ID         uuid.UUID
+	ResponseID uuid.UUID
+	QuestionID uuid.UUID
+	Type       QuestionType
+	Value      string
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+}
+
 type Auth struct {
 	ID         uuid.UUID
 	UserID     uuid.UUID
@@ -199,6 +209,14 @@ type RefreshToken struct {
 	UserID         uuid.UUID
 	IsActive       pgtype.Bool
 	ExpirationDate pgtype.Timestamptz
+}
+
+type Response struct {
+	ID          uuid.UUID
+	FormID      uuid.UUID
+	SubmittedBy uuid.UUID
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type Tenant struct {

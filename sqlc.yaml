@@ -2,19 +2,6 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: "./internal/tenant/queries.sql"
-    schema: "./internal/database/full_schema.sql"
-    gen:
-      go:
-        package: "tenant"
-        out: "./internal/tenant"
-        sql_package: "pgx/v5"
-        overrides:
-          - db_type: "uuid"
-            go_type:
-              import: "github.com/google/uuid"
-              type: "UUID"
-  - engine: "postgresql"
     queries: "./internal/jwt/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:
@@ -54,12 +41,12 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
   - engine: "postgresql"
-    queries: "./internal/form/queries.sql"
+    queries: "./internal/form/response/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:
       go:
-        package: "form"
-        out: "./internal/form"
+        package: "response"
+        out: "./internal/form/response"
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -73,6 +60,32 @@ sql:
       go:
         package: "question"
         out: "./internal/form/question"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/form/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "form"
+        out: "./internal/form"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/tenant/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "tenant"
+        out: "./internal/tenant"
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"

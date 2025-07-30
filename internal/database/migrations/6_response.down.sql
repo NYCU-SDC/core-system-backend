@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS answers;
+DROP TABLE IF EXISTS responses;
+DROP TYPE IF EXISTS answer_type;
