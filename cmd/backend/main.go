@@ -7,6 +7,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/response"
+	"NYCU-SDC/core-system-backend/internal/form/submit"
 	"NYCU-SDC/core-system-backend/internal/jwt"
 	"NYCU-SDC/core-system-backend/internal/tenant"
 	"NYCU-SDC/core-system-backend/internal/unit"
@@ -129,14 +130,17 @@ func main() {
 	unitService := unit.NewService(logger, dbPool)
 	formService := form.NewService(logger, dbPool)
 	questionService := question.NewService(logger, dbPool)
-	responseService := response.NewService(logger, dbPool, questionService)
+	responseService := response.NewService(logger, dbPool)
+	submitService := submit.NewService(logger, questionService, responseService)
 
 	// Handler
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	formHandler := form.NewHandler(logger, validator, problemWriter, formService, questionService)
-  unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService)
+	formHandler := form.NewHandler(logger, validator, problemWriter, formService)
+	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
+	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
+	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService, questionService)
 
 	// Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -203,17 +207,19 @@ func main() {
 
 	// Form routes
 	mux.HandleFunc("GET /api/forms", authMiddleware.HandlerFunc(formHandler.ListFormsHandler))
-	mux.HandleFunc("POST /api/forms/{formId}/questions", authMiddleware.HandlerFunc(formHandler.AddQuestionHandler))
-	mux.HandleFunc("GET /api/forms/{formId}/questions", authMiddleware.HandlerFunc(formHandler.ListQuestionsHandler))
-	mux.HandleFunc("PUT /api/forms/{formId}/questions/{questionId}", authMiddleware.HandlerFunc(formHandler.UpdateQuestionHandler))
-	mux.HandleFunc("DELETE /api/forms/{formId}/questions/{questionId}", authMiddleware.HandlerFunc(formHandler.DeleteQuestionHandler))
+	mux.HandleFunc("GET /api/forms/{id}", authMiddleware.HandlerFunc(formHandler.GetFormHandler))
 	mux.HandleFunc("PUT /api/forms/{id}", authMiddleware.HandlerFunc(formHandler.UpdateFormHandler))
 	mux.HandleFunc("DELETE /api/forms/{id}", authMiddleware.HandlerFunc(formHandler.DeleteFormHandler))
-	mux.HandleFunc("GET /api/forms/{id}", authMiddleware.HandlerFunc(formHandler.GetFormHandler))
+
+	// Question routes
+	mux.HandleFunc("GET /api/forms/{formId}/questions", authMiddleware.HandlerFunc(questionHandler.ListQuestionsHandler))
+	mux.HandleFunc("POST /api/forms/{formId}/questions", authMiddleware.HandlerFunc(questionHandler.AddQuestionHandler))
+	mux.HandleFunc("PUT /api/forms/{formId}/questions/{questionId}", authMiddleware.HandlerFunc(questionHandler.UpdateQuestionHandler))
+	mux.HandleFunc("DELETE /api/forms/{formId}/questions/{questionId}", authMiddleware.HandlerFunc(questionHandler.DeleteQuestionHandler))
 
 	// Response routes
 	mux.Handle("GET /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.ListHandler))
-	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.SubmitHandler))
+	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.GetHandler))
 	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.DeleteHandler))
 	mux.Handle("GET /api/forms/{formId}/questions/{questionId}", authMiddleware.HandlerFunc(responseHandler.GetAnswersByQuestionIDHandler))

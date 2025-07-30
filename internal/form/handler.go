@@ -2,7 +2,6 @@ package form
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
-	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -21,15 +19,6 @@ import (
 type Request struct {
 	Title       string `json:"title" validate:"required"`
 	Description string `json:"description"`
-}
-
-type QuestionRequest struct {
-	FormID      uuid.UUID
-	Required    bool   `json:"required" validate:"required"`
-	Type        string `json:"type" validate:"required,oneof=short_text long_text single_choice multiple_choice date"`
-	Title       string `json:"title" validate:"required"`
-	Description string `json:"description"`
-	Order       int32  `json:"order" validate:"required"`
 }
 
 type Store interface {
@@ -41,13 +30,6 @@ type Store interface {
 	ListByUnit(ctx context.Context, unitID uuid.UUID) ([]Form, error)
 }
 
-type QuestionStore interface {
-	Create(ctx context.Context, input question.CreateParams) (question.Question, error)
-	Update(ctx context.Context, input question.UpdateParams) (question.Question, error)
-	Delete(ctx context.Context, formID uuid.UUID, id uuid.UUID) error
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.Question, error)
-}
-
 type Handler struct {
 	logger *zap.Logger
 	tracer trace.Tracer
@@ -55,8 +37,7 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	store         Store
-	questionStore QuestionStore
+	store Store
 }
 
 func NewHandler(
@@ -64,7 +45,6 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	store Store,
-	questionStore QuestionStore,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -72,7 +52,6 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 		store:         store,
-		questionStore: questionStore,
 	}
 }
 
@@ -163,134 +142,4 @@ func (h *Handler) ListFormsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, forms)
-}
-
-func (h *Handler) AddQuestionHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "AddQuestionHandler")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	formIDStr := r.PathValue("formId")
-	formID, err := handlerutil.ParseUUID(formIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	var req QuestionRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	request := question.CreateParams{
-		FormID:      formID,
-		Required:    req.Required,
-		Type:        question.QuestionType(req.Type),
-		Title:       pgtype.Text{String: req.Title, Valid: true},
-		Description: pgtype.Text{String: req.Description, Valid: true},
-		Order:       req.Order,
-	}
-
-	createdQuestion, err := h.questionStore.Create(r.Context(), request)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, createdQuestion)
-}
-
-func (h *Handler) UpdateQuestionHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UpdateQuestionHandler")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	questionIDStr := r.PathValue("questionId")
-	questionID, err := handlerutil.ParseUUID(questionIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	formIDStr := r.PathValue("formId")
-	formID, err := handlerutil.ParseUUID(formIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	var req QuestionRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	request := question.UpdateParams{
-		ID:          questionID,
-		FormID:      formID,
-		Required:    req.Required,
-		Type:        question.QuestionType(req.Type),
-		Title:       pgtype.Text{String: req.Title, Valid: true},
-		Description: pgtype.Text{String: req.Description, Valid: true},
-		Order:       req.Order,
-	}
-
-	updatedQuestion, err := h.questionStore.Update(traceCtx, request)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, updatedQuestion)
-
-}
-
-func (h *Handler) DeleteQuestionHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "DeleteQuestionHandler")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	formIDStr := r.PathValue("formId")
-	formID, err := handlerutil.ParseUUID(formIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	questionIDStr := r.PathValue("questionId")
-	questionID, err := handlerutil.ParseUUID(questionIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	err = h.questionStore.Delete(traceCtx, formID, questionID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
-}
-
-func (h *Handler) ListQuestionsHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ListQuestionsHandler")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	formIDStr := r.PathValue("formId")
-	formID, err := handlerutil.ParseUUID(formIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	questions, err := h.questionStore.ListByFormID(traceCtx, formID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-	
-	handlerutil.WriteJSONResponse(w, http.StatusOK, questions)
 }

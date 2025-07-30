@@ -46,7 +46,7 @@ func (q *Queries) CheckAnswerContent(ctx context.Context, arg CheckAnswerContent
 }
 
 const create = `-- name: Create :one
-INSERT INTO responses (form_id, submitted_by)
+INSERT INTO form_responses (form_id, submitted_by)
 VALUES ($1, $2)
 RETURNING id, form_id, submitted_by, created_at, updated_at
 `
@@ -56,9 +56,9 @@ type CreateParams struct {
 	SubmittedBy uuid.UUID
 }
 
-func (q *Queries) Create(ctx context.Context, arg CreateParams) (Response, error) {
+func (q *Queries) Create(ctx context.Context, arg CreateParams) (FormResponse, error) {
 	row := q.db.QueryRow(ctx, create, arg.FormID, arg.SubmittedBy)
-	var i Response
+	var i FormResponse
 	err := row.Scan(
 		&i.ID,
 		&i.FormID,
@@ -103,7 +103,7 @@ func (q *Queries) CreateAnswer(ctx context.Context, arg CreateAnswerParams) (Ans
 }
 
 const delete = `-- name: Delete :exec
-DELETE FROM responses 
+DELETE FROM form_responses
 WHERE id = $1
 `
 
@@ -123,7 +123,7 @@ func (q *Queries) DeleteAnswersByResponseID(ctx context.Context, responseID uuid
 }
 
 const exists = `-- name: Exists :one
-SELECT EXISTS(SELECT 1 FROM responses WHERE form_id = $1 AND submitted_by = $2)
+SELECT EXISTS(SELECT 1 FROM form_responses WHERE form_id = $1 AND submitted_by = $2)
 `
 
 type ExistsParams struct {
@@ -139,7 +139,7 @@ func (q *Queries) Exists(ctx context.Context, arg ExistsParams) (bool, error) {
 }
 
 const get = `-- name: Get :one
-SELECT id, form_id, submitted_by, created_at, updated_at FROM responses 
+SELECT id, form_id, submitted_by, created_at, updated_at FROM form_responses
 WHERE id = $1 AND form_id = $2
 `
 
@@ -148,9 +148,9 @@ type GetParams struct {
 	FormID uuid.UUID
 }
 
-func (q *Queries) Get(ctx context.Context, arg GetParams) (Response, error) {
+func (q *Queries) Get(ctx context.Context, arg GetParams) (FormResponse, error) {
 	row := q.db.QueryRow(ctx, get, arg.ID, arg.FormID)
-	var i Response
+	var i FormResponse
 	err := row.Scan(
 		&i.ID,
 		&i.FormID,
@@ -179,7 +179,7 @@ func (q *Queries) GetAnswerID(ctx context.Context, arg GetAnswerIDParams) (uuid.
 
 const getAnswersByQuestionID = `-- name: GetAnswersByQuestionID :many
 SELECT a.id, a.response_id, a.question_id, a.type, a.value, a.created_at, a.updated_at, r.form_id, r.submitted_by FROM answers a
-JOIN responses r ON a.response_id = r.id
+JOIN form_responses r ON a.response_id = r.id
 WHERE a.question_id = $1 AND r.form_id = $2
 ORDER BY a.created_at ASC
 `
@@ -266,7 +266,7 @@ func (q *Queries) GetAnswersByResponseID(ctx context.Context, responseID uuid.UU
 }
 
 const getByFormIDAndSubmittedBy = `-- name: GetByFormIDAndSubmittedBy :one
-SELECT id, form_id, submitted_by, created_at, updated_at FROM responses 
+SELECT id, form_id, submitted_by, created_at, updated_at FROM form_responses
 WHERE form_id = $1 AND submitted_by = $2
 `
 
@@ -275,9 +275,9 @@ type GetByFormIDAndSubmittedByParams struct {
 	SubmittedBy uuid.UUID
 }
 
-func (q *Queries) GetByFormIDAndSubmittedBy(ctx context.Context, arg GetByFormIDAndSubmittedByParams) (Response, error) {
+func (q *Queries) GetByFormIDAndSubmittedBy(ctx context.Context, arg GetByFormIDAndSubmittedByParams) (FormResponse, error) {
 	row := q.db.QueryRow(ctx, getByFormIDAndSubmittedBy, arg.FormID, arg.SubmittedBy)
-	var i Response
+	var i FormResponse
 	err := row.Scan(
 		&i.ID,
 		&i.FormID,
@@ -289,20 +289,20 @@ func (q *Queries) GetByFormIDAndSubmittedBy(ctx context.Context, arg GetByFormID
 }
 
 const listByFormID = `-- name: ListByFormID :many
-SELECT id, form_id, submitted_by, created_at, updated_at FROM responses 
+SELECT id, form_id, submitted_by, created_at, updated_at FROM form_responses
 WHERE form_id = $1
 ORDER BY created_at ASC
 `
 
-func (q *Queries) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Response, error) {
+func (q *Queries) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
 	rows, err := q.db.Query(ctx, listByFormID, formID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Response
+	var items []FormResponse
 	for rows.Next() {
-		var i Response
+		var i FormResponse
 		if err := rows.Scan(
 			&i.ID,
 			&i.FormID,
@@ -321,7 +321,7 @@ func (q *Queries) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Respons
 }
 
 const update = `-- name: Update :exec
-UPDATE responses 
+UPDATE form_responses
 SET updated_at = now()
 WHERE id = $1
 `

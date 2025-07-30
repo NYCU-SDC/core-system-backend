@@ -7,8 +7,6 @@ import (
 
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
-	"NYCU-SDC/core-system-backend/internal/user"
-
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -18,11 +16,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
-
-type AnswerRequest struct {
-	QuestionID string `json:"questionId" validate:"required,uuid"`
-	Value      string `json:"value" validate:"required"`
-}	
 
 type QuestionAnswerForGetResponse struct {
 	QuestionID string `json:"questionId" validate:"required,uuid"`
@@ -38,26 +31,16 @@ type AnswerForQuestionResponse struct {
 	UpdatedAt   time.Time `json:"updatedAt" validate:"required,datetime"` // for marking if the answer is updated
 }
 
-type SubmitRequest struct {
-	Answers []AnswerRequest `json:"answers" validate:"required,dive"`
-}
-type ResponseJSON struct {
+type Response struct {
 	ID          string    `json:"id" validate:"required,uuid"`
 	SubmittedBy string    `json:"submittedBy" validate:"required,uuid"`
 	CreatedAt   time.Time `json:"createdAt" validate:"required,datetime"`
 	UpdatedAt   time.Time `json:"updatedAt" validate:"required,datetime"`
 }
 
-type SubmitResponse struct {
-	ID        string    `json:"id" validate:"required,uuid"`
-	FormID    string    `json:"formId" validate:"required,uuid"`
-	CreatedAt time.Time `json:"createdAt" validate:"required,datetime"`
-	UpdatedAt time.Time `json:"updatedAt" validate:"required,datetime"`
-}
-
 type ListResponse struct {
-	FormID        string         `json:"formId" validate:"required,uuid"`
-	ResponseJSONs []ResponseJSON `json:"responses" validate:"required,dive"`
+	FormID        string     `json:"formId" validate:"required,uuid"`
+	ResponseJSONs []Response `json:"responses" validate:"required,dive"`
 }
 
 type GetResponse struct {
@@ -75,15 +58,14 @@ type AnswersForQuestionResponse struct {
 }
 
 type Store interface {
-	Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []AnswerRequest) (Response, error)
-	Get(ctx context.Context, formID uuid.UUID, responseID uuid.UUID) (Response, []Answer, error)
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]Response, error)
+	Get(ctx context.Context, formID uuid.UUID, responseID uuid.UUID) (FormResponse, []Answer, error)
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
 	GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUID, formID uuid.UUID) ([]GetAnswersByQuestionIDRow, error)
 }
 
 type QuestionStore interface {
-	GetByID(ctx context.Context, id uuid.UUID) (question.Question, error)
+	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 }
 
 type Handler struct {
@@ -104,56 +86,6 @@ func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter
 		questionStore: questionStore,
 		tracer:        otel.Tracer("response/handler"),
 	}
-}
-
-// SubmitHandler submits a response to a form
-func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "SubmitFormHandler")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	formIdStr := r.PathValue("formId")
-	formId, err := internal.ParseUUID(formIdStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	var request SubmitRequest
-	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	currentUser, ok := user.GetFromContext(traceCtx)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
-		return
-	}
-
-	answers := make([]AnswerRequest, len(request.Answers))
-	for i, answer := range request.Answers {
-		answers[i] = AnswerRequest{
-			QuestionID: answer.QuestionID,
-			Value:      answer.Value,
-		}
-	}
-
-	newResponse, err := h.store.Submit(traceCtx, formId, currentUser.ID, answers)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	submitResponse := SubmitResponse{
-		ID:        newResponse.ID.String(),
-		FormID:    newResponse.FormID.String(),
-		CreatedAt: newResponse.CreatedAt.Time,
-		UpdatedAt: newResponse.UpdatedAt.Time,
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, submitResponse)
 }
 
 // ListHandler lists all responses for a form
@@ -177,10 +109,10 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 
 	listResponse := ListResponse{
 		FormID:        formId.String(),
-		ResponseJSONs: make([]ResponseJSON, len(responses)),
+		ResponseJSONs: make([]Response, len(responses)),
 	}
 	for i, currentResponse := range responses {
-		listResponse.ResponseJSONs[i] = ResponseJSON{
+		listResponse.ResponseJSONs[i] = Response{
 			ID:          currentResponse.ID.String(),
 			SubmittedBy: currentResponse.SubmittedBy.String(),
 			CreatedAt:   currentResponse.CreatedAt.Time,
@@ -218,14 +150,14 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	questionAnswerResponses := make([]QuestionAnswerForGetResponse, len(answers))
 	for i, answer := range answers {
-		question, err := h.questionStore.GetByID(traceCtx, answer.QuestionID)
+		q, err := h.questionStore.GetByID(traceCtx, answer.QuestionID)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 
 		questionAnswerResponses[i] = QuestionAnswerForGetResponse{
-			QuestionID: question.ID.String(),
+			QuestionID: q.Question().ID.String(),
 			Answer:     answer.Value,
 		}
 	}
@@ -295,7 +227,7 @@ func (h *Handler) GetAnswersByQuestionIDHandler(w http.ResponseWriter, r *http.R
 	}
 
 	questionAnswerResponse := AnswersForQuestionResponse{
-		Question: currentQuestion,
+		Question: currentQuestion.Question(),
 		Answers:  make([]AnswerForQuestionResponse, len(answers)),
 	}
 	for i, answer := range answers {

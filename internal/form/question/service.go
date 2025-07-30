@@ -19,6 +19,11 @@ type Querier interface {
 	GetByID(ctx context.Context, id uuid.UUID) (Question, error)
 }
 
+type Answerable interface {
+	Question() Question
+	Validate(value string) error
+}
+
 type Service struct {
 	logger  *zap.Logger
 	queries Querier
@@ -33,7 +38,7 @@ func NewService(logger *zap.Logger, db DBTX) *Service {
 	}
 }
 
-func (s *Service) Create(ctx context.Context, input CreateParams) (Question, error) {
+func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, error) {
 	ctx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -42,12 +47,13 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Question, err
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create question")
 		span.RecordError(err)
-		return Question{}, err
+		return nil, err
 	}
-	return q, nil
+
+	return NewAnswerable(q)
 }
 
-func (s *Service) Update(ctx context.Context, input UpdateParams) (Question, error) {
+func (s *Service) Update(ctx context.Context, input UpdateParams) (Answerable, error) {
 	ctx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -56,9 +62,10 @@ func (s *Service) Update(ctx context.Context, input UpdateParams) (Question, err
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update question")
 		span.RecordError(err)
-		return Question{}, err
+		return nil, err
 	}
-	return q, nil
+
+	return NewAnswerable(q)
 }
 
 func (s *Service) Delete(ctx context.Context, formID uuid.UUID, id uuid.UUID) error {
@@ -74,10 +81,11 @@ func (s *Service) Delete(ctx context.Context, formID uuid.UUID, id uuid.UUID) er
 		err = databaseutil.WrapDBError(err, logger, "delete question")
 		span.RecordError(err)
 	}
+
 	return err
 }
 
-func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Question, error) {
+func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Answerable, error) {
 	ctx, span := s.tracer.Start(ctx, "ListByFormID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -88,10 +96,22 @@ func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Questio
 		span.RecordError(err)
 		return nil, err
 	}
-	return list, nil
+
+	answerableList := make([]Answerable, len(list))
+	for i, q := range list {
+		answerable, err := NewAnswerable(q)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create answerable from question")
+			span.RecordError(err)
+			return nil, err
+		}
+		answerableList[i] = answerable
+	}
+
+	return answerableList, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Question, error) {
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Answerable, error) {
 	ctx, span := s.tracer.Start(ctx, "GetByID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -100,7 +120,8 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Question, error) {
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get question by id")
 		span.RecordError(err)
-		return Question{}, err
+		return nil, err
 	}
-	return q, nil
+
+	return NewAnswerable(q)
 }

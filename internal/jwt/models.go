@@ -170,6 +170,14 @@ type Form struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type FormResponse struct {
+	ID          uuid.UUID
+	FormID      uuid.UUID
+	SubmittedBy uuid.UUID
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type OrgMember struct {
 	OrgID    uuid.UUID
 	MemberID uuid.UUID
@@ -199,6 +207,7 @@ type Question struct {
 	Type        QuestionType
 	Title       pgtype.Text
 	Description pgtype.Text
+	Metadata    []byte
 	Order       int32
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
@@ -209,14 +218,6 @@ type RefreshToken struct {
 	UserID         uuid.UUID
 	IsActive       pgtype.Bool
 	ExpirationDate pgtype.Timestamptz
-}
-
-type Response struct {
-	ID          uuid.UUID
-	FormID      uuid.UUID
-	SubmittedBy uuid.UUID
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
 }
 
 type Tenant struct {

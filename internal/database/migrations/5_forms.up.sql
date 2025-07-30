@@ -23,9 +23,8 @@ CREATE TABLE IF NOT EXISTS questions(
     type question_type NOT NULL,
     title TEXT,
     description TEXT,
+    metadata JSONB DEFAULT '{}'::JSONB,
     "order" INTEGER NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-
