@@ -3,7 +3,6 @@ package auth
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
-	"NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/jwt"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
@@ -63,7 +62,6 @@ type callBackInfo struct {
 }
 
 type Handler struct {
-	config config.Config
 	logger *zap.Logger
 	tracer trace.Tracer
 
@@ -87,7 +85,7 @@ func NewHandler(
 	jwtIssuer JWTIssuer,
 	jwtStore JWTStore,
 
-	baseURL string,
+	oauthProxyBaseURL string,
 	accessTokenExpiration time.Duration,
 	refreshTokenExpiration time.Duration,
 	googleOauthConfig oauthprovider.GoogleOauth,
@@ -107,7 +105,7 @@ func NewHandler(
 			"google": oauthprovider.NewGoogleConfig(
 				googleOauthConfig.ClientID,
 				googleOauthConfig.ClientSecret,
-				fmt.Sprintf("%s/api/auth/login/oauth/google/callback", baseURL),
+				fmt.Sprintf("%s/auth/google/callback", oauthProxyBaseURL),
 			),
 		},
 
@@ -129,24 +127,32 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	callback := r.URL.Query().Get("c")
-	redirectTo := r.URL.Query().Get("r")
-	if callback == "" {
-		callback = fmt.Sprintf("%s/api/oauth/debug/token", h.config.BaseURL)
-	}
-	if redirectTo != "" {
-		callback = fmt.Sprintf("%s?r=%s", callback, redirectTo)
-	}
-	state := base64.StdEncoding.EncodeToString([]byte(callback))
+	// The final destination for the user, after authentication is complete.
+	callbackURL := r.URL.Query().Get("c")
+	finalRedirectURL := r.URL.Query().Get("r")
 
+	// The URL for the oauth-proxy to call back to. This is our own backend's callback endpoint.
+	// We construct it dynamically based on the current request.
+	if callbackURL == ""{
+		// set the callback URL to the current URL with the path /callback
+		callbackURL = r.URL.String() + "/callback"
+	}
+	if finalRedirectURL != ""{
+		callbackURL = fmt.Sprintf("%s?r=%s", callbackURL, finalRedirectURL)
+	}
+	// The state payload contains the backend callback URL and the final redirect URL.
+	// This will be consumed by the oauth-proxy.
+	state := base64.StdEncoding.EncodeToString([]byte(callbackURL))
+	
 	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, authURL, http.StatusFound)
 
 	logger.Info("Redirecting to Google OAuth2", zap.String("url", authURL))
 }
 
-// Callback handles the OAuth2 callback from the provider
+// Callback handles the OAuth2 callback from oauth-proxy
 func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
+
 	traceCtx, span := h.tracer.Start(r.Context(), "Callback")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
@@ -164,6 +170,8 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackInfo, err), logger)
 		return
 	}
+
+	h.logger.Info("Get Callback from oauth-proxy", zap.Any("callback", callbackInfo.callback))
 
 	callback := callbackInfo.callback.String()
 	code := callbackInfo.code
@@ -201,13 +209,10 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	h.setAccessAndRefreshCookies(w, accessTokenID, refreshTokenID)
 
-	var redirectURL string
-	if redirectTo != "" {
-		redirectURL = fmt.Sprintf("%s?r=%s", callback, redirectTo)
-	} else {
-		redirectURL = callback
+	redirectURL := redirectTo
+	if redirectURL == "" {
+		redirectURL = "/"
 	}
-
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 

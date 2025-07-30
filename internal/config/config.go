@@ -22,6 +22,7 @@ type Config struct {
 	Host                      string                  `yaml:"host"               envconfig:"HOST"`
 	Port                      string                  `yaml:"port"               envconfig:"PORT"`
 	BaseURL                   string                  `yaml:"base_url"          envconfig:"BASE_URL"`
+	OauthProxyBaseURL         string                  `yaml:"oauth_proxy_base_url" envconfig:"OAUTH_PROXY_BASE_URL"`
 	Secret                    string                  `yaml:"secret"             envconfig:"SECRET"`
 	DatabaseURL               string                  `yaml:"database_url"       envconfig:"DATABASE_URL"`
 	MigrationSource           string                  `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
@@ -170,14 +171,15 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 	}
 
 	envConfig := &Config{
-		Debug:            os.Getenv("DEBUG") == "true",
-		Host:             os.Getenv("HOST"),
-		Port:             os.Getenv("PORT"),
-		BaseURL:          os.Getenv("BASE_URL"),
-		Secret:           os.Getenv("SECRET"),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		MigrationSource:  os.Getenv("MIGRATION_SOURCE"),
-		OtelCollectorUrl: os.Getenv("OTEL_COLLECTOR_URL"),
+		Debug:                os.Getenv("DEBUG") == "true",
+		Host:                 os.Getenv("HOST"),
+		Port:                 os.Getenv("PORT"),
+		BaseURL:              os.Getenv("BASE_URL"),
+		OauthProxyBaseURL:    os.Getenv("OAUTH_PROXY_BASE_URL"),
+		Secret:               os.Getenv("SECRET"),
+		DatabaseURL:          os.Getenv("DATABASE_URL"),
+		MigrationSource:      os.Getenv("MIGRATION_SOURCE"),
+		OtelCollectorUrl:     os.Getenv("OTEL_COLLECTOR_URL"),
 		GoogleOauth: googleOauth.GoogleOauth{
 			ClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
