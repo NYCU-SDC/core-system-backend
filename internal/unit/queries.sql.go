@@ -198,65 +198,6 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]uuid.U
 	return items, nil
 }
 
-const listOrgSubUnitIDs = `-- name: ListOrgSubUnitIDs :many
-SELECT child_id FROM parent_child WHERE parent_id = $1
-`
-
-func (q *Queries) ListOrgSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, listOrgSubUnitIDs, parentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []uuid.UUID
-	for rows.Next() {
-		var child_id uuid.UUID
-		if err := rows.Scan(&child_id); err != nil {
-			return nil, err
-		}
-		items = append(items, child_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listOrgSubUnits = `-- name: ListOrgSubUnits :many
-SELECT u.id, u.org_id, u.type, u.name, u.description, u.metadata, u.created_at, u.updated_at FROM units u
-JOIN parent_child pc ON u.id = pc.child_id
-WHERE pc.parent_id = $1
-`
-
-func (q *Queries) ListOrgSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error) {
-	rows, err := q.db.Query(ctx, listOrgSubUnits, parentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Unit
-	for rows.Next() {
-		var i Unit
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.Type,
-			&i.Name,
-			&i.Description,
-			&i.Metadata,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSubUnitIDs = `-- name: ListSubUnitIDs :many
 SELECT child_id FROM parent_child WHERE parent_id = $1
 `

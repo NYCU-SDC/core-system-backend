@@ -18,9 +18,7 @@ type Querier interface {
 	GetByID(ctx context.Context, id uuid.UUID) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Unit, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
-	ListOrgSubUnits(ctx context.Context, orgID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
-	ListOrgSubUnitIDs(ctx context.Context, orgID pgtype.UUID) ([]uuid.UUID, error)
 	UpdateUnit(ctx context.Context, arg UpdateUnitParams) (Unit, error)
 	UpdateOrg(ctx context.Context, arg UpdateOrgParams) (Organization, error)
 	DeleteOrg(ctx context.Context, id uuid.UUID) error
@@ -157,19 +155,7 @@ func (s *Service) ListSubUnits(ctx context.Context, id uuid.UUID, unitType Type)
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var subUnits []Unit
-	var err error
-	switch unitType {
-	case TypeOrg:
-		subUnits, err = s.queries.ListOrgSubUnits(traceCtx, pgtype.UUID{Bytes: id, Valid: true})
-	case TypeUnit:
-		subUnits, err = s.queries.ListSubUnits(traceCtx, pgtype.UUID{Bytes: id, Valid: true})
-	default:
-		logger.Error("invalid unit type: ", zap.String("unitType", unitType.String()))
-		span.RecordError(err)
-		return nil, fmt.Errorf("invalid unit type: %s", unitType.String())
-	}
-
+	subUnits, err := s.queries.ListSubUnits(traceCtx, pgtype.UUID{Bytes: id, Valid: true})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, fmt.Sprintf("list sub units of an %s", unitType.String()))
 		span.RecordError(err)
@@ -190,19 +176,7 @@ func (s *Service) ListSubUnitIDs(ctx context.Context, id uuid.UUID, unitType Typ
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var subUnitIDs []uuid.UUID
-	var err error
-	switch unitType {
-	case TypeOrg:
-		subUnitIDs, err = s.queries.ListOrgSubUnitIDs(traceCtx, pgtype.UUID{Bytes: id, Valid: true})
-	case TypeUnit:
-		subUnitIDs, err = s.queries.ListSubUnitIDs(traceCtx, pgtype.UUID{Bytes: id, Valid: true})
-	default:
-		logger.Error("invalid unit type: ", zap.String("unitType", unitType.String()))
-		span.RecordError(err)
-		return nil, fmt.Errorf("invalid unit type: %s", unitType.String())
-	}
-
+	subUnitIDs, err := s.queries.ListSubUnitIDs(traceCtx, pgtype.UUID{Bytes: id, Valid: true})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, fmt.Sprintf("list sub unit IDs of an %s", unitType.String()))
 		span.RecordError(err)
