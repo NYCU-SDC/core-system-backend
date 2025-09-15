@@ -1,15 +1,5 @@
--- name: CreateOrg :one
-INSERT INTO organizations (name, owner_id, description, metadata, slug)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING *;
-
--- name: CreateUnit :one
-INSERT INTO units (name, org_id, description, metadata)
-VALUES ($1, $2, $3, $4)
-RETURNING *;
-
--- name: CreateUnitWithID :one
-INSERT INTO units (id, name, org_id, description, metadata)
+-- name: Create :one
+INSERT INTO units (name, org_id, description, metadata, type)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
@@ -21,9 +11,6 @@ SELECT * FROM organizations WHERE id = $1;
 
 -- name: GetAllOrganizations :many
 SELECT * FROM organizations;
-
--- name: GetOrgIDBySlug :one
-SELECT id FROM organizations WHERE slug = $1;
 
 -- name: UpdateOrg :one
 UPDATE organizations

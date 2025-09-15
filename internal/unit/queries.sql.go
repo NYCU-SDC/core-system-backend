@@ -67,97 +67,27 @@ func (q *Queries) AddUnitMember(ctx context.Context, arg AddUnitMemberParams) (U
 	return i, err
 }
 
-const createOrg = `-- name: CreateOrg :one
-INSERT INTO organizations (name, owner_id, description, metadata, slug)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, owner_id, name, description, metadata, slug, created_at, updated_at
-`
-
-type CreateOrgParams struct {
-	Name        pgtype.Text
-	OwnerID     pgtype.UUID
-	Description pgtype.Text
-	Metadata    []byte
-	Slug        string
-}
-
-func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) (Organization, error) {
-	row := q.db.QueryRow(ctx, createOrg,
-		arg.Name,
-		arg.OwnerID,
-		arg.Description,
-		arg.Metadata,
-		arg.Slug,
-	)
-	var i Organization
-	err := row.Scan(
-		&i.ID,
-		&i.OwnerID,
-		&i.Name,
-		&i.Description,
-		&i.Metadata,
-		&i.Slug,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const createUnit = `-- name: CreateUnit :one
-INSERT INTO units (name, org_id, description, metadata)
-VALUES ($1, $2, $3, $4)
-RETURNING id, org_id, type, name, description, metadata, created_at, updated_at
-`
-
-type CreateUnitParams struct {
-	Name        pgtype.Text
-	OrgID       pgtype.UUID
-	Description pgtype.Text
-	Metadata    []byte
-}
-
-func (q *Queries) CreateUnit(ctx context.Context, arg CreateUnitParams) (Unit, error) {
-	row := q.db.QueryRow(ctx, createUnit,
-		arg.Name,
-		arg.OrgID,
-		arg.Description,
-		arg.Metadata,
-	)
-	var i Unit
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Type,
-		&i.Name,
-		&i.Description,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const createUnitWithID = `-- name: CreateUnitWithID :one
-INSERT INTO units (id, name, org_id, description, metadata)
+const create = `-- name: Create :one
+INSERT INTO units (name, org_id, description, metadata, type)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, org_id, type, name, description, metadata, created_at, updated_at
 `
 
-type CreateUnitWithIDParams struct {
-	ID          uuid.UUID
+type CreateParams struct {
 	Name        pgtype.Text
 	OrgID       pgtype.UUID
 	Description pgtype.Text
 	Metadata    []byte
+	Type        UnitType
 }
 
-func (q *Queries) CreateUnitWithID(ctx context.Context, arg CreateUnitWithIDParams) (Unit, error) {
-	row := q.db.QueryRow(ctx, createUnitWithID,
-		arg.ID,
+func (q *Queries) Create(ctx context.Context, arg CreateParams) (Unit, error) {
+	row := q.db.QueryRow(ctx, create,
 		arg.Name,
 		arg.OrgID,
 		arg.Description,
 		arg.Metadata,
+		arg.Type,
 	)
 	var i Unit
 	err := row.Scan(
@@ -242,17 +172,6 @@ func (q *Queries) GetOrgByID(ctx context.Context, id uuid.UUID) (Organization, e
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const getOrgIDBySlug = `-- name: GetOrgIDBySlug :one
-SELECT id FROM organizations WHERE slug = $1
-`
-
-func (q *Queries) GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getOrgIDBySlug, slug)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
 }
 
 const getUnitByID = `-- name: GetUnitByID :one

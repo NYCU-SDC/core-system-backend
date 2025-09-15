@@ -14,13 +14,10 @@ import (
 )
 
 type Querier interface {
-	CreateUnit(ctx context.Context, arg CreateUnitParams) (Unit, error)
-	CreateUnitWithID(ctx context.Context, arg CreateUnitWithIDParams) (Unit, error)
-	CreateOrg(ctx context.Context, arg CreateOrgParams) (Organization, error)
+	Create(ctx context.Context, arg CreateParams) (Unit, error)
 	GetOrgByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
 	GetUnitByID(ctx context.Context, id uuid.UUID) (Unit, error)
-	GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListOrgSubUnits(ctx context.Context, orgID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
@@ -78,17 +75,18 @@ func NewService(logger *zap.Logger, db DBTX) *Service {
 	}
 }
 
-// CreateUnit creates a new unit
-func (s *Service) CreateUnit(ctx context.Context, name string, orgID uuid.UUID, description string, metadata []byte) (Unit, error) {
+// Create creates a new unit or organization
+func (s *Service) Create(ctx context.Context, name string, orgID pgtype.UUID, description string, metadata []byte, unitType Type) (Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateUnit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	unit, err := s.queries.CreateUnit(traceCtx, CreateUnitParams{
+	unit, err := s.queries.Create(traceCtx, CreateParams{
 		Name:        pgtype.Text{String: name, Valid: name != ""},
 		OrgID:       orgID,
 		Description: pgtype.Text{String: description, Valid: true},
 		Metadata:    metadata,
+		Type:        UnitType(unitType.String()),
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create unit")
@@ -96,21 +94,21 @@ func (s *Service) CreateUnit(ctx context.Context, name string, orgID uuid.UUID, 
 		return Unit{}, err
 	}
 
-	_, err = s.queries.AddParentChild(traceCtx, AddParentChildParams{
-		ParentID: pgtype.UUID{
-			Bytes: orgID,
-			Valid: true,
-		},
-		ChildID: unit.ID,
-		OrgID:   orgID,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "add parent-child relationship for created unit")
-		span.RecordError(err)
-		return Unit{}, err
+	// Only unit (not organization) need to add parent-child relationship
+	if orgID.Valid {
+		_, err = s.queries.AddParentChild(traceCtx, AddParentChildParams{
+			ParentID: orgID,
+			ChildID:  unit.ID,
+			OrgID:    orgID.Bytes,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "add parent-child relationship for created unit")
+			span.RecordError(err)
+			return Unit{}, err
+		}
 	}
 
-	logger.Info("Created unit",
+	logger.Info(fmt.Sprintf("Created %s", unit.Type),
 		zap.String("unit_id", unit.ID.String()),
 		zap.String("org_id", orgID.String()),
 		zap.String("name", unit.Name.String),
@@ -118,84 +116,6 @@ func (s *Service) CreateUnit(ctx context.Context, name string, orgID uuid.UUID, 
 		zap.String("metadata", string(unit.Metadata)))
 
 	return unit, nil
-}
-
-func (s *Service) CreateOrg(ctx context.Context, name string, description string, ownerID uuid.UUID, metadata []byte, slug string) (Organization, error) {
-	traceCtx, span := s.tracer.Start(ctx, "CreateOrg")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-	println("OwnerID:", ownerID.String())
-
-	org, err := s.queries.CreateOrg(traceCtx, CreateOrgParams{
-		Name:        pgtype.Text{String: name, Valid: name != ""},
-		OwnerID:     pgtype.UUID{Bytes: ownerID, Valid: true},
-		Description: pgtype.Text{String: description, Valid: true},
-		Metadata:    metadata,
-		Slug:        slug,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create organization")
-		span.RecordError(err)
-		return Organization{}, err
-	}
-
-	logger.Info("Created organization",
-		zap.String("org_id", org.ID.String()),
-		zap.String("org_owner_id", org.OwnerID.String()),
-		zap.String("org_name", org.Name.String),
-		zap.String("org_slug", org.Slug),
-		zap.String("org_description", org.Description.String))
-
-	defaultUnit, err := s.queries.CreateUnitWithID(traceCtx, CreateUnitWithIDParams{
-		ID: org.ID,
-		Name: pgtype.Text{
-			String: "Default Unit",
-			Valid:  true,
-		},
-		OrgID: org.ID,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create default unit after creating organization")
-		span.RecordError(err)
-		return Organization{}, err
-	}
-
-	_, err = s.queries.AddParentChild(traceCtx, AddParentChildParams{
-		ParentID: pgtype.UUID{
-			Valid: false,
-		},
-		ChildID: defaultUnit.ID,
-		OrgID:   org.ID,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "add parent-child relationship for default unit")
-		span.RecordError(err)
-		return Organization{}, err
-	}
-
-	logger.Info("Created default unit for organization",
-		zap.String("default_unit_id", defaultUnit.ID.String()),
-		zap.String("default_unit_org_id", defaultUnit.Description.String),
-		zap.String("default_unit_name", defaultUnit.Name.String),
-		zap.String("default_unit_description", defaultUnit.Description.String),
-		zap.String("default_unit_metadata", string(defaultUnit.Metadata)))
-
-	return org, nil
-}
-
-func (s *Service) GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetOrgIDBySlug")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	orgID, err := s.queries.GetOrgIDBySlug(traceCtx, slug)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get organization id by slug")
-		span.RecordError(err)
-		return uuid.Nil, err
-	}
-
-	return orgID, nil
 }
 
 func (s *Service) GetAllOrganizations(ctx context.Context) ([]Organization, error) {
@@ -394,7 +314,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, unitType Type) error
 			return err
 		}
 
-		if unit.ID == unit.OrgID {
+		if unit.Type == "organization" {
 			err = fmt.Errorf("cannot delete default unit with ID %s", id.String())
 			span.RecordError(err)
 			logger.Error("Attempted to delete default unit", zap.String("unit_id", id.String()))

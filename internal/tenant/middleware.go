@@ -15,12 +15,9 @@ import (
 	"net/http"
 )
 
-type orgReader interface {
-	GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error)
-}
-
 type reader interface {
 	Get(ctx context.Context, id uuid.UUID) (Tenant, error)
+	GetBySlug(ctx context.Context, slug string) (Tenant, error)
 }
 
 type Middleware struct {
@@ -28,8 +25,7 @@ type Middleware struct {
 	logger       *zap.Logger
 	masterDBPool *pgxpool.Pool
 
-	reader    reader
-	orgReader orgReader
+	reader reader
 }
 
 func NewMiddleware(
@@ -37,13 +33,11 @@ func NewMiddleware(
 	masterDBPool *pgxpool.Pool,
 
 	reader reader,
-	orgReader orgReader,
 ) *Middleware {
 	return &Middleware{
 		tracer:       otel.Tracer("tenant/middleware"),
 		logger:       logger,
 		reader:       reader,
-		orgReader:    orgReader,
 		masterDBPool: masterDBPool,
 	}
 }
@@ -61,7 +55,7 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		orgID, err := m.orgReader.GetOrgIDBySlug(traceCtx, slug)
+		org, err := m.reader.GetBySlug(traceCtx, slug)
 		if err != nil {
 			err = databaseutil.WrapDBErrorWithKeyValue(err, "organizations", "slug", slug, logger, "get org ID by slug")
 			span.RecordError(err)
@@ -69,9 +63,9 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		tenant, err := m.reader.Get(traceCtx, orgID)
+		tenant, err := m.reader.Get(traceCtx, org.ID)
 		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "tenant", "id", orgID.String(), logger, "get tenant by ID")
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "tenant", "id", org.ID.String(), logger, "get tenant by ID")
 			span.RecordError(err)
 			problem.New().WriteError(traceCtx, w, err, logger)
 			return
@@ -86,7 +80,7 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		ctx := context.WithValue(traceCtx, internal.OrgIDContextKey, orgID)
+		ctx := context.WithValue(traceCtx, internal.OrgIDContextKey, org.ID)
 		ctx = context.WithValue(ctx, internal.OrgSlugContextKey, slug)
 		ctx = context.WithValue(ctx, internal.DBConnectionKey, conn)
 
