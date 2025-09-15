@@ -154,32 +154,12 @@ func (q *Queries) GetAllOrganizations(ctx context.Context) ([]Organization, erro
 	return items, nil
 }
 
-const getOrgByID = `-- name: GetOrgByID :one
-SELECT id, owner_id, name, description, metadata, slug, created_at, updated_at FROM organizations WHERE id = $1
-`
-
-func (q *Queries) GetOrgByID(ctx context.Context, id uuid.UUID) (Organization, error) {
-	row := q.db.QueryRow(ctx, getOrgByID, id)
-	var i Organization
-	err := row.Scan(
-		&i.ID,
-		&i.OwnerID,
-		&i.Name,
-		&i.Description,
-		&i.Metadata,
-		&i.Slug,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getUnitByID = `-- name: GetUnitByID :one
+const getByID = `-- name: GetByID :one
 SELECT id, org_id, type, name, description, metadata, created_at, updated_at FROM units WHERE id = $1
 `
 
-func (q *Queries) GetUnitByID(ctx context.Context, id uuid.UUID) (Unit, error) {
-	row := q.db.QueryRow(ctx, getUnitByID, id)
+func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (Unit, error) {
+	row := q.db.QueryRow(ctx, getByID, id)
 	var i Unit
 	err := row.Scan(
 		&i.ID,

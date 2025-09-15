@@ -3,11 +3,8 @@ INSERT INTO units (name, org_id, description, metadata, type)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
--- name: GetUnitByID :one
+-- name: GetByID :one
 SELECT * FROM units WHERE id = $1;
-
--- name: GetOrgByID :one
-SELECT * FROM organizations WHERE id = $1;
 
 -- name: GetAllOrganizations :many
 SELECT * FROM organizations;

@@ -15,9 +15,8 @@ import (
 
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (Unit, error)
-	GetOrgByID(ctx context.Context, id uuid.UUID) (Organization, error)
+	GetByID(ctx context.Context, id uuid.UUID) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
-	GetUnitByID(ctx context.Context, id uuid.UUID) (Unit, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListOrgSubUnits(ctx context.Context, orgID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
@@ -138,33 +137,18 @@ func (s *Service) GetAllOrganizations(ctx context.Context) ([]Organization, erro
 }
 
 // GetByID retrieves a unit by ID
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID, orgID uuid.UUID, unitType Type) (GenericUnit, error) {
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetByID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var resultUnit GenericUnit
-	var err error
-	switch unitType {
-	case TypeOrg:
-		var org Organization
-		org, err = s.queries.GetOrgByID(traceCtx, orgID)
-		resultUnit = OrgWrapper{org}
-	case TypeUnit:
-		var unit Unit
-		unit, err = s.queries.GetUnitByID(traceCtx, id)
-		resultUnit = Wrapper{unit}
-	default:
-		logger.Error("invalid unit type: ", zap.String("unitType", unitType.String()))
-		return nil, fmt.Errorf("invalid unit type: %s", unitType.String())
-	}
-
+	unit, err := s.queries.GetByID(traceCtx, id)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, fmt.Sprintf("get %s by id", unitType.String()))
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "unit", "unitType", unitType.String(), logger, "get by id")
 		span.RecordError(err)
-		return nil, err
+		return Unit{}, err
 	}
-	return resultUnit, nil
+	return unit, nil
 }
 
 // ListSubUnits retrieves all subunits of a parent unit
@@ -307,7 +291,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, unitType Type) error
 		}
 	case TypeUnit:
 		// Deletion Check: Ensure not deleting default unit
-		unit, err := s.queries.GetUnitByID(traceCtx, id)
+		unit, err := s.queries.GetByID(traceCtx, id)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "get unit by id for deletion check")
 			span.RecordError(err)
