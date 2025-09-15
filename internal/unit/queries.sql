@@ -7,7 +7,7 @@ RETURNING *;
 SELECT * FROM units WHERE id = $1;
 
 -- name: GetAllOrganizations :many
-SELECT * FROM organizations;
+SELECT * FROM units WHERE type = 'organization';
 
 -- name: UpdateOrg :one
 UPDATE organizations

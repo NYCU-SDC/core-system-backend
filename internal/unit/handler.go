@@ -25,7 +25,7 @@ import (
 type Store interface {
 	Create(ctx context.Context, name string, orgID pgtype.UUID, desc string, metadata []byte, unitType Type) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
-	GetAllOrganizations(ctx context.Context) ([]Organization, error)
+	GetAllOrganizations(ctx context.Context) ([]Unit, error)
 	UpdateUnit(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error)
 	UpdateOrg(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte, slug string) (Organization, error)
 	Delete(ctx context.Context, id uuid.UUID, unitType Type) error
@@ -287,9 +287,9 @@ func (h *Handler) GetAllOrganizations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgResponses := make([]orgResponse, 0)
+	orgResponses := make([]Response, 0)
 	for _, org := range organizations {
-		orgResponses = append(orgResponses, convertOrgResponse(org))
+		orgResponses = append(orgResponses, convertResponse(org))
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, orgResponses)

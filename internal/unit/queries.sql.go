@@ -122,25 +122,25 @@ func (q *Queries) DeleteUnit(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAllOrganizations = `-- name: GetAllOrganizations :many
-SELECT id, owner_id, name, description, metadata, slug, created_at, updated_at FROM organizations
+SELECT id, org_id, type, name, description, metadata, created_at, updated_at FROM units WHERE type = 'organization'
 `
 
-func (q *Queries) GetAllOrganizations(ctx context.Context) ([]Organization, error) {
+func (q *Queries) GetAllOrganizations(ctx context.Context) ([]Unit, error) {
 	rows, err := q.db.Query(ctx, getAllOrganizations)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Organization
+	var items []Unit
 	for rows.Next() {
-		var i Organization
+		var i Unit
 		if err := rows.Scan(
 			&i.ID,
-			&i.OwnerID,
+			&i.OrgID,
+			&i.Type,
 			&i.Name,
 			&i.Description,
 			&i.Metadata,
-			&i.Slug,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

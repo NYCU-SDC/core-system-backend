@@ -16,7 +16,7 @@ import (
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID) (Unit, error)
-	GetAllOrganizations(ctx context.Context) ([]Organization, error)
+	GetAllOrganizations(ctx context.Context) ([]Unit, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListOrgSubUnits(ctx context.Context, orgID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
@@ -117,7 +117,7 @@ func (s *Service) Create(ctx context.Context, name string, orgID pgtype.UUID, de
 	return unit, nil
 }
 
-func (s *Service) GetAllOrganizations(ctx context.Context) ([]Organization, error) {
+func (s *Service) GetAllOrganizations(ctx context.Context) ([]Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetAllOrganizations")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -130,7 +130,7 @@ func (s *Service) GetAllOrganizations(ctx context.Context) ([]Organization, erro
 	}
 
 	if organizations == nil {
-		organizations = []Organization{}
+		organizations = []Unit{}
 	}
 
 	return organizations, nil
