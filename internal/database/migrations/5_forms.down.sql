@@ -1,3 +1,3 @@
-DROP TABLE IF EXISTS forms;
 DROP TABLE IF EXISTS questions;
+DROP TABLE IF EXISTS forms;
 DROP TYPE IF EXISTS question_type;
