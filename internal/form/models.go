@@ -275,6 +275,7 @@ type RefreshToken struct {
 
 type Tenant struct {
 	ID         uuid.UUID
+	Slug       string
 	DbStrategy DbStrategy
 	OwnerID    pgtype.UUID
 }
