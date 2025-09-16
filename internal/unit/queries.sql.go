@@ -103,21 +103,12 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (Unit, error) {
 	return i, err
 }
 
-const deleteOrg = `-- name: DeleteOrg :exec
-DELETE FROM organizations WHERE id = $1
-`
-
-func (q *Queries) DeleteOrg(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteOrg, id)
-	return err
-}
-
-const deleteUnit = `-- name: DeleteUnit :exec
+const delete = `-- name: Delete :exec
 DELETE FROM units WHERE id = $1
 `
 
-func (q *Queries) DeleteUnit(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteUnit, id)
+func (q *Queries) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, delete, id)
 	return err
 }
 

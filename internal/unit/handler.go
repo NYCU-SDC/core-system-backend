@@ -71,7 +71,7 @@ type OrgRequest struct {
 	Description string            `json:"description"`
 	Metadata    map[string]string `json:"metadata"`
 	Slug        string            `json:"slug" validate:"required"`
-	DbStrategy  string            `json:"db_strategy" validate:"required"`
+	DbStrategy  string            `json:"db_strategy"`
 }
 
 type Request struct {
@@ -329,7 +329,15 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.tenantService.Update(traceCtx, orgTenant.ID, req.Slug, tenant.DbStrategy(req.DbStrategy))
+	var dbStrategy tenant.DbStrategy
+
+	if req.DbStrategy == "" || req.DbStrategy == string(DbStrategyShared) {
+		dbStrategy = "shared"
+	} else if req.DbStrategy == string(DbStrategyIsolated) {
+		dbStrategy = "isolated"
+	}
+
+	_, err = h.tenantService.Update(traceCtx, orgTenant.ID, req.Slug, dbStrategy)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to update organization tenant: %w", err), h.logger)
 		return

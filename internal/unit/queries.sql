@@ -15,11 +15,8 @@ SET name = $2, description = $3, metadata = $4, updated_at = now()
 WHERE id = $1
 RETURNING *;
 
--- name: DeleteUnit :exec
+-- name: Delete :exec
 DELETE FROM units WHERE id = $1;
-
--- name: DeleteOrg :exec
-DELETE FROM organizations WHERE id = $1;
 
 -- name: AddParentChild :one
 INSERT INTO parent_child (parent_id, child_id, org_id)

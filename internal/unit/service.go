@@ -20,8 +20,7 @@ type Querier interface {
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
 	Update(ctx context.Context, arg UpdateParams) (Unit, error)
-	DeleteOrg(ctx context.Context, id uuid.UUID) error
-	DeleteUnit(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 
 	AddParentChild(ctx context.Context, arg AddParentChildParams) (ParentChild, error)
 	RemoveParentChild(ctx context.Context, childID uuid.UUID) error
@@ -224,41 +223,10 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, unitType Type) error
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	switch unitType {
-	case TypeOrg:
-		err := s.queries.DeleteOrg(traceCtx, id)
-		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "organizations", "id", id.String(), logger, "delete organization")
-			span.RecordError(err)
-			return err
-		}
-	case TypeUnit:
-		// Deletion Check: Ensure not deleting default unit
-		unit, err := s.queries.GetByID(traceCtx, id)
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "get unit by id for deletion check")
-			span.RecordError(err)
-			return err
-		}
-
-		if unit.Type == "organization" {
-			err = fmt.Errorf("cannot delete default unit with ID %s", id.String())
-			span.RecordError(err)
-			logger.Error("Attempted to delete default unit", zap.String("unit_id", id.String()))
-			return err
-		} else {
-			err = s.queries.DeleteUnit(traceCtx, id)
-			if err != nil {
-				err = databaseutil.WrapDBErrorWithKeyValue(err, "units", "id", id.String(), logger, "delete unit")
-				span.RecordError(err)
-				return err
-			}
-		}
-
-	default:
-		err := fmt.Errorf("invalid unit type for deletion: %s", unitType)
+	err := s.queries.Delete(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "organizations", "id", id.String(), logger, fmt.Sprintf("delete %s", unitType.String()))
 		span.RecordError(err)
-		logger.Error("Invalid unit type for deletion", zap.String("unit_type", unitType.String()))
 		return err
 	}
 
