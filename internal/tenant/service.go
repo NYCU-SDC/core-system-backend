@@ -74,19 +74,23 @@ func (s *Service) Create(ctx context.Context, slug string, id uuid.UUID, ownerID
 	return tenant, nil
 }
 
-func (s *Service) Update(ctx context.Context, param UpdateParams) (Tenant, error) {
+func (s *Service) Update(ctx context.Context, id uuid.UUID, slug string, dbStrategy DbStrategy) (Tenant, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
 	logger := internal.WithContext(traceCtx, s.logger)
 
-	tenant, err := s.query.Update(traceCtx, param)
+	tenant, err := s.query.Update(traceCtx, UpdateParams{
+		ID:         id,
+		Slug:       slug,
+		DbStrategy: dbStrategy,
+	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "tenants", "id", param.ID.String(), logger, "update tenant by id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "tenants", "id", id.String(), logger, "update tenant by id")
 		span.RecordError(err)
 		return Tenant{}, err
 	}
 
-	logger.Info("tenant updated", zap.String("tenant_id", tenant.ID.String()), zap.String("db_strategy", string(tenant.DbStrategy)))
+	logger.Info("tenant updated", zap.String("tenant_id", tenant.ID.String()), zap.String("db_strategy", string(tenant.DbStrategy)), zap.String("slug", slug))
 
 	return tenant, nil
 }

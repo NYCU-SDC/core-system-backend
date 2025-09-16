@@ -318,59 +318,22 @@ func (q *Queries) RemoveUnitMember(ctx context.Context, arg RemoveUnitMemberPara
 	return err
 }
 
-const updateOrg = `-- name: UpdateOrg :one
-UPDATE organizations
-SET slug = $2, name = $3, description = $4, metadata = $5, updated_at = now()
-WHERE id = $1
-RETURNING id, owner_id, name, description, metadata, slug, created_at, updated_at
-`
-
-type UpdateOrgParams struct {
-	ID          uuid.UUID
-	Slug        string
-	Name        pgtype.Text
-	Description pgtype.Text
-	Metadata    []byte
-}
-
-func (q *Queries) UpdateOrg(ctx context.Context, arg UpdateOrgParams) (Organization, error) {
-	row := q.db.QueryRow(ctx, updateOrg,
-		arg.ID,
-		arg.Slug,
-		arg.Name,
-		arg.Description,
-		arg.Metadata,
-	)
-	var i Organization
-	err := row.Scan(
-		&i.ID,
-		&i.OwnerID,
-		&i.Name,
-		&i.Description,
-		&i.Metadata,
-		&i.Slug,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateUnit = `-- name: UpdateUnit :one
+const update = `-- name: Update :one
 UPDATE units
 SET name = $2, description = $3, metadata = $4, updated_at = now()
 WHERE id = $1
 RETURNING id, org_id, type, name, description, metadata, created_at, updated_at
 `
 
-type UpdateUnitParams struct {
+type UpdateParams struct {
 	ID          uuid.UUID
 	Name        pgtype.Text
 	Description pgtype.Text
 	Metadata    []byte
 }
 
-func (q *Queries) UpdateUnit(ctx context.Context, arg UpdateUnitParams) (Unit, error) {
-	row := q.db.QueryRow(ctx, updateUnit,
+func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Unit, error) {
+	row := q.db.QueryRow(ctx, update,
 		arg.ID,
 		arg.Name,
 		arg.Description,

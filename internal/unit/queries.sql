@@ -9,13 +9,7 @@ SELECT * FROM units WHERE id = $1;
 -- name: GetAllOrganizations :many
 SELECT * FROM units WHERE type = 'organization';
 
--- name: UpdateOrg :one
-UPDATE organizations
-SET slug = $2, name = $3, description = $4, metadata = $5, updated_at = now()
-WHERE id = $1
-RETURNING *;
-
--- name: UpdateUnit :one
+-- name: Update :one
 UPDATE units
 SET name = $2, description = $3, metadata = $4, updated_at = now()
 WHERE id = $1

@@ -11,7 +11,7 @@ SELECT * FROM tenants WHERE slug = $1;
 
 -- name: Update :one
 UPDATE tenants
-SET db_strategy = $2
+SET slug = $2, db_strategy = $3
 WHERE id = $1
 RETURNING *;
 

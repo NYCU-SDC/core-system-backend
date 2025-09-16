@@ -26,8 +26,7 @@ type Store interface {
 	Create(ctx context.Context, name string, orgID pgtype.UUID, desc string, metadata []byte, unitType Type) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Unit, error)
-	UpdateUnit(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error)
-	UpdateOrg(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte, slug string) (Organization, error)
+	Update(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error)
 	Delete(ctx context.Context, id uuid.UUID, unitType Type) error
 	AddParentChild(ctx context.Context, parentID uuid.UUID, childID uuid.UUID, orgID uuid.UUID) (ParentChild, error)
 	RemoveParentChild(ctx context.Context, childID uuid.UUID) error
@@ -72,23 +71,13 @@ type OrgRequest struct {
 	Description string            `json:"description"`
 	Metadata    map[string]string `json:"metadata"`
 	Slug        string            `json:"slug" validate:"required"`
+	DbStrategy  string            `json:"db_strategy" validate:"required"`
 }
 
 type Request struct {
 	Name        string            `json:"name" validate:"required"`
 	Description string            `json:"description"`
 	Metadata    map[string]string `json:"metadata"`
-}
-
-type orgResponse struct {
-	ID          uuid.UUID         `json:"id"`
-	OwnerID     uuid.UUID         `json:"owner_id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Metadata    map[string]string `json:"metadata"`
-	Slug        string            `json:"slug"`
-	CreatedAt   string            `json:"created_at"`
-	UpdatedAt   string            `json:"updated_at"`
 }
 
 type Response struct {
@@ -114,23 +103,6 @@ func convertResponse(u Unit) Response {
 		Metadata:    meta,
 		CreatedAt:   u.CreatedAt.Time.Format(time.RFC3339),
 		UpdatedAt:   u.UpdatedAt.Time.Format(time.RFC3339),
-	}
-}
-
-func convertOrgResponse(o Organization) orgResponse {
-	var meta map[string]string
-	if err := json.Unmarshal(o.Metadata, &meta); err != nil {
-		meta = make(map[string]string)
-	}
-	return orgResponse{
-		ID:          o.ID,
-		OwnerID:     o.OwnerID.Bytes,
-		Name:        o.Name.String,
-		Description: o.Description.String,
-		Metadata:    meta,
-		Slug:        o.Slug,
-		CreatedAt:   o.CreatedAt.Time.Format(time.RFC3339),
-		UpdatedAt:   o.UpdatedAt.Time.Format(time.RFC3339),
 	}
 }
 
@@ -319,7 +291,7 @@ func (h *Handler) UpdateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedUnit, err := h.store.UpdateUnit(traceCtx, id, req.Name, req.Description, metadataBytes)
+	updatedUnit, err := h.store.Update(traceCtx, id, req.Name, req.Description, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to update unit: %w", err), h.logger)
 		return
@@ -357,13 +329,19 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedOrg, err := h.store.UpdateOrg(traceCtx, orgTenant.ID, req.Name, req.Description, metadataBytes, req.Slug)
+	_, err = h.tenantService.Update(traceCtx, orgTenant.ID, req.Slug, tenant.DbStrategy(req.DbStrategy))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to update organization tenant: %w", err), h.logger)
+		return
+	}
+
+	updatedOrg, err := h.store.Update(traceCtx, orgTenant.ID, req.Name, req.Description, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to update organization: %w", err), h.logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, convertOrgResponse(updatedOrg))
+	handlerutil.WriteJSONResponse(w, http.StatusOK, convertResponse(updatedOrg))
 }
 
 func (h *Handler) DeleteOrg(w http.ResponseWriter, r *http.Request) {

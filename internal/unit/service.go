@@ -19,8 +19,7 @@ type Querier interface {
 	GetAllOrganizations(ctx context.Context) ([]Unit, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
-	UpdateUnit(ctx context.Context, arg UpdateUnitParams) (Unit, error)
-	UpdateOrg(ctx context.Context, arg UpdateOrgParams) (Organization, error)
+	Update(ctx context.Context, arg UpdateParams) (Unit, error)
 	DeleteOrg(ctx context.Context, id uuid.UUID) error
 	DeleteUnit(ctx context.Context, id uuid.UUID) error
 
@@ -191,13 +190,13 @@ func (s *Service) ListSubUnitIDs(ctx context.Context, id uuid.UUID, unitType Typ
 	return subUnitIDs, nil
 }
 
-// UpdateUnit updates the base fields of a unit
-func (s *Service) UpdateUnit(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error) {
+// Update updates the base fields of a unit
+func (s *Service) Update(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateUnit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	unit, err := s.queries.UpdateUnit(traceCtx, UpdateUnitParams{
+	unit, err := s.queries.Update(traceCtx, UpdateParams{
 		ID:          id,
 		Name:        pgtype.Text{String: name, Valid: name != ""},
 		Description: pgtype.Text{String: description, Valid: true},
@@ -217,36 +216,6 @@ func (s *Service) UpdateUnit(ctx context.Context, id uuid.UUID, name string, des
 	)
 
 	return unit, nil
-}
-
-// UpdateOrg updates the base fields of an organization
-func (s *Service) UpdateOrg(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte, slug string) (Organization, error) {
-	traceCtx, span := s.tracer.Start(ctx, "UpdateOrg")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	org, err := s.queries.UpdateOrg(traceCtx, UpdateOrgParams{
-		ID:          id,
-		Slug:        slug,
-		Name:        pgtype.Text{String: name, Valid: name != ""},
-		Description: pgtype.Text{String: description, Valid: true},
-		Metadata:    metadata,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "update org")
-		span.RecordError(err)
-		return Organization{}, err
-	}
-
-	logger.Info("Updated organization",
-		zap.String("orgID", org.ID.String()),
-		zap.String("orgName", org.Name.String),
-		zap.String("orgSlug", org.Slug),
-		zap.String("orgDescription", org.Description.String),
-		zap.ByteString("orgMetadata", org.Metadata),
-	)
-
-	return org, nil
 }
 
 // Delete deletes a unit by ID

@@ -86,18 +86,19 @@ func (q *Queries) GetBySlug(ctx context.Context, slug string) (Tenant, error) {
 
 const update = `-- name: Update :one
 UPDATE tenants
-SET db_strategy = $2
+SET slug = $2, db_strategy = $3
 WHERE id = $1
 RETURNING id, slug, db_strategy, owner_id
 `
 
 type UpdateParams struct {
 	ID         uuid.UUID
+	Slug       string
 	DbStrategy DbStrategy
 }
 
 func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Tenant, error) {
-	row := q.db.QueryRow(ctx, update, arg.ID, arg.DbStrategy)
+	row := q.db.QueryRow(ctx, update, arg.ID, arg.Slug, arg.DbStrategy)
 	var i Tenant
 	err := row.Scan(
 		&i.ID,
