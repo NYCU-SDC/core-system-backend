@@ -35,7 +35,7 @@ type Store interface {
 	ListSubUnits(ctx context.Context, id uuid.UUID, unitType Type) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, id uuid.UUID, unitType Type) ([]uuid.UUID, error)
 	AddMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) (GenericMember, error)
-	ListMembers(ctx context.Context, unitType Type, id uuid.UUID) ([]uuid.UUID, error)
+	ListMembers(ctx context.Context, unitType Type, id uuid.UUID) ([]SimpleUser, error)
 	RemoveMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) error
 }
 
@@ -100,6 +100,13 @@ type Response struct {
 	Metadata    map[string]string `json:"metadata"`
 	CreatedAt   string            `json:"created_at"`
 	UpdatedAt   string            `json:"updated_at"`
+}
+
+type SimpleUserResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Username  string    `json:"username"`
+	AvatarURL string    `json:"avatar_url"`
 }
 
 func convertResponse(u Unit) Response {
@@ -717,7 +724,12 @@ func (h *Handler) ListOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, members)
+	response := make([]SimpleUserResponse, 0, len(members))
+	for _, m := range members {
+		response = append(response, SimpleUserResponse(m))
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *Handler) ListUnitMembers(w http.ResponseWriter, r *http.Request) {
@@ -738,7 +750,12 @@ func (h *Handler) ListUnitMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, members)
+	response := make([]SimpleUserResponse, 0, len(members))
+	for _, m := range members {
+		response = append(response, SimpleUserResponse(m))
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *Handler) RemoveOrgMember(w http.ResponseWriter, r *http.Request) {

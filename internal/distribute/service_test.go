@@ -18,19 +18,25 @@ type fakeUnitStore struct {
 	unitUsers map[uuid.UUID][]uuid.UUID
 }
 
-func (f *fakeUnitStore) ListMembers(ctx context.Context, unitType unit.Type, id uuid.UUID) ([]uuid.UUID, error) {
+func (f *fakeUnitStore) ListMembers(ctx context.Context, unitType unit.Type, id uuid.UUID) ([]unit.SimpleUser, error) {
 	fmt.Printf("ListMembers called with unitType: %v, id: %v\n", unitType, id)
 	switch unitType {
 	case unit.TypeOrg:
 		if users, ok := f.orgUsers[id]; ok {
-			return users, nil
+			simpleUsers := make([]unit.SimpleUser, len(users))
+			for _, u := range users {
+				simpleUsers = append(simpleUsers, unit.SimpleUser{ID: u})
+			}
 		}
-		return []uuid.UUID{}, nil
+		return []unit.SimpleUser{}, nil
 	case unit.TypeUnit:
 		if users, ok := f.unitUsers[id]; ok {
-			return users, nil
+			simpleUsers := make([]unit.SimpleUser, len(users))
+			for _, u := range users {
+				simpleUsers = append(simpleUsers, unit.SimpleUser{ID: u})
+			}
 		}
-		return []uuid.UUID{}, nil
+		return []unit.SimpleUser{}, nil
 	default:
 		return nil, fmt.Errorf("invalid unit type: %v", unitType)
 	}

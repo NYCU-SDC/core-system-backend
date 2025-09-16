@@ -15,6 +15,8 @@ import (
 const addOrgMember = `-- name: AddOrgMember :one
 INSERT INTO org_members (org_id, member_id)
 VALUES ($1, $2)
+ON CONFLICT (org_id, member_id) DO UPDATE
+    SET org_id = EXCLUDED.org_id
 RETURNING org_id, member_id
 `
 
@@ -52,6 +54,8 @@ func (q *Queries) AddParentChild(ctx context.Context, arg AddParentChildParams) 
 const addUnitMember = `-- name: AddUnitMember :one
 INSERT INTO unit_members (unit_id, member_id)
 VALUES ($1, $2)
+ON CONFLICT (unit_id, member_id) DO UPDATE
+    SET unit_id = EXCLUDED.unit_id
 RETURNING unit_id, member_id
 `
 
@@ -276,22 +280,40 @@ func (q *Queries) GetUnitByID(ctx context.Context, id uuid.UUID) (Unit, error) {
 }
 
 const listOrgMembers = `-- name: ListOrgMembers :many
-SELECT member_id FROM org_members WHERE org_id = $1
+SELECT m.member_id,
+       u.name,
+       u.username,
+       u.avatar_url
+FROM org_members m
+JOIN users u ON u.id = m.member_id
+WHERE m.org_id = $1
 `
 
-func (q *Queries) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
+type ListOrgMembersRow struct {
+	MemberID  uuid.UUID
+	Name      pgtype.Text
+	Username  pgtype.Text
+	AvatarUrl pgtype.Text
+}
+
+func (q *Queries) ListOrgMembers(ctx context.Context, orgID uuid.UUID) ([]ListOrgMembersRow, error) {
 	rows, err := q.db.Query(ctx, listOrgMembers, orgID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []ListOrgMembersRow
 	for rows.Next() {
-		var member_id uuid.UUID
-		if err := rows.Scan(&member_id); err != nil {
+		var i ListOrgMembersRow
+		if err := rows.Scan(
+			&i.MemberID,
+			&i.Name,
+			&i.Username,
+			&i.AvatarUrl,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, member_id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -418,22 +440,40 @@ func (q *Queries) ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Uni
 }
 
 const listUnitMembers = `-- name: ListUnitMembers :many
-SELECT member_id FROM unit_members WHERE unit_id = $1
+SELECT m.member_id,
+       u.name,
+       u.username,
+       u.avatar_url
+FROM unit_members m
+JOIN users u ON u.id = m.member_id
+WHERE m.unit_id = $1
 `
 
-func (q *Queries) ListUnitMembers(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error) {
+type ListUnitMembersRow struct {
+	MemberID  uuid.UUID
+	Name      pgtype.Text
+	Username  pgtype.Text
+	AvatarUrl pgtype.Text
+}
+
+func (q *Queries) ListUnitMembers(ctx context.Context, unitID uuid.UUID) ([]ListUnitMembersRow, error) {
 	rows, err := q.db.Query(ctx, listUnitMembers, unitID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []ListUnitMembersRow
 	for rows.Next() {
-		var member_id uuid.UUID
-		if err := rows.Scan(&member_id); err != nil {
+		var i ListUnitMembersRow
+		if err := rows.Scan(
+			&i.MemberID,
+			&i.Name,
+			&i.Username,
+			&i.AvatarUrl,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, member_id)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -442,21 +482,40 @@ func (q *Queries) ListUnitMembers(ctx context.Context, unitID uuid.UUID) ([]uuid
 }
 
 const listUnitsMembers = `-- name: ListUnitsMembers :many
-SELECT unit_id, member_id
-FROM unit_members
-WHERE unit_id = ANY($1::uuid[])
+SELECT m.unit_id,
+       m.member_id,
+       u.name,
+       u.username,
+       u.avatar_url
+FROM unit_members m
+JOIN users u ON u.id = m.member_id
+WHERE m.unit_id = ANY($1::uuid[])
 `
 
-func (q *Queries) ListUnitsMembers(ctx context.Context, dollar_1 []uuid.UUID) ([]UnitMember, error) {
+type ListUnitsMembersRow struct {
+	UnitID    uuid.UUID
+	MemberID  uuid.UUID
+	Name      pgtype.Text
+	Username  pgtype.Text
+	AvatarUrl pgtype.Text
+}
+
+func (q *Queries) ListUnitsMembers(ctx context.Context, dollar_1 []uuid.UUID) ([]ListUnitsMembersRow, error) {
 	rows, err := q.db.Query(ctx, listUnitsMembers, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []UnitMember
+	var items []ListUnitsMembersRow
 	for rows.Next() {
-		var i UnitMember
-		if err := rows.Scan(&i.UnitID, &i.MemberID); err != nil {
+		var i ListUnitsMembersRow
+		if err := rows.Scan(
+			&i.UnitID,
+			&i.MemberID,
+			&i.Name,
+			&i.Username,
+			&i.AvatarUrl,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
