@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5/pgtype"
 	"net/http"
+	"regexp"
 	"time"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -112,6 +113,8 @@ type ParentChildRequest struct {
 	OrgID    uuid.UUID `json:"org_id" validate:"required"`
 }
 
+var slugPattern = `^[a-zA-Z0-9_-]+$`
+
 func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnit")
 	defer span.End()
@@ -172,6 +175,12 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("no user found in request context"), h.logger)
+		return
+	}
+
+	matched, err := regexp.MatchString(slugPattern, req.Slug)
+	if err != nil || !matched {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid slug format: must contain only alphanumeric characters, dashes, and underscores"), h.logger)
 		return
 	}
 
@@ -322,6 +331,25 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org ID by slug: %w", err), h.logger)
 		return
 	}
+
+	if req.Slug != slug {
+		matched, err := regexp.MatchString(slugPattern, req.Slug)
+		if err != nil || !matched {
+			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid slug format: must contain only alphanumeric characters, dashes, and underscores"), h.logger)
+			return
+		}
+
+		unique, err := h.tenantService.ValidateSlugUniqueness(traceCtx, req.Slug)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to validate slug uniqueness: %w", err), h.logger)
+			return
+		}
+		if !unique {
+			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("slug already in use"), h.logger)
+			return
+		}
+	}
+	// TODO: Slug Validator
 
 	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
