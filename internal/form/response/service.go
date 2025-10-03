@@ -161,6 +161,7 @@ func (s Service) Update(ctx context.Context, formID uuid.UUID, userID uuid.UUID,
 				span.RecordError(err)
 				return FormResponse{}, err
 			}
+			continue
 		}
 
 		// if answer exists, check if it is the same as the new answer
