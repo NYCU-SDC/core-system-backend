@@ -42,11 +42,11 @@ func TestUnitService_Create(t *testing.T) {
 		unitType    unit.Type
 	}
 	testCases := []struct {
-		name      string
-		params    params
-		setup     func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
-		validate  func(t *testing.T, params params, db dbbuilder.DBTX, result unit.Unit)
-		expectErr bool
+		name        string
+		params      params
+		setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
+		validate    func(t *testing.T, params params, db dbbuilder.DBTX, result unit.Unit)
+		expectedErr bool
 	}{
 		{
 			name: "Create organization without parent",
@@ -103,7 +103,7 @@ func TestUnitService_Create(t *testing.T) {
 				orgID:       pgtype.UUID{Bytes: uuid.New(), Valid: true},
 				unitType:    unit.TypeUnit,
 			},
-			expectErr: true,
+			expectedErr: true,
 		},
 	}
 
@@ -131,10 +131,10 @@ func TestUnitService_Create(t *testing.T) {
 			var result unit.Unit
 			if params.unitType == unit.TypeOrg {
 				result, err = unitService.CreateOrganization(ctx, params.name, params.description, params.metadata)
-				require.Equal(t, tc.expectErr, err != nil, "expected error: %v, got: %v", tc.expectErr, err)
+				require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			} else {
 				result, err = unitService.CreateUnit(ctx, params.name, params.orgID, params.description, params.metadata)
-				require.Equal(t, tc.expectErr, err != nil, "expected error: %v, got: %v", tc.expectErr, err)
+				require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			}
 
 			if tc.validate != nil {
@@ -151,11 +151,11 @@ func TestUnitService_ListSubUnits(t *testing.T) {
 		expected []unit.Unit
 	}
 	testCases := []struct {
-		name      string
-		params    params
-		setup     func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
-		validate  func(t *testing.T, params params, db dbbuilder.DBTX, result []unit.Unit)
-		expectErr bool
+		name        string
+		params      params
+		setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
+		validate    func(t *testing.T, params params, db dbbuilder.DBTX, result []unit.Unit)
+		expectedErr bool
 	}{
 		{
 			name:   "List child units for organization",
@@ -253,7 +253,7 @@ func TestUnitService_ListSubUnits(t *testing.T) {
 			unitService := unit.NewService(logger, db)
 
 			result, err := unitService.ListSubUnits(ctx, params.parentID, params.unitType)
-			require.Equal(t, tc.expectErr, err != nil, "expected error: %v, got: %v", tc.expectErr, err)
+			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 
 			if tc.validate != nil {
 				tc.validate(t, params, db, result)
@@ -270,11 +270,11 @@ func TestUnitService_ListSubUnitIDs(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name      string
-		params    params
-		setup     func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
-		validate  func(t *testing.T, params params, db dbbuilder.DBTX, result []uuid.UUID)
-		expectErr bool
+		name        string
+		params      params
+		setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
+		validate    func(t *testing.T, params params, db dbbuilder.DBTX, result []uuid.UUID)
+		expectedErr bool
 	}{
 		{
 			name:   "List child unit IDs",
@@ -336,7 +336,7 @@ func TestUnitService_ListSubUnitIDs(t *testing.T) {
 			unitService := unit.NewService(logger, db)
 
 			result, err := unitService.ListSubUnitIDs(ctx, params.parentID, params.unitType)
-			require.Equal(t, tc.expectErr, err != nil, "expected error: %v, got: %v", tc.expectErr, err)
+			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 
 			if tc.validate != nil {
 				tc.validate(t, params, db, result)

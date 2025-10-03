@@ -28,6 +28,8 @@ test:
 	@echo -e ":: $(GREEN)Running tests...$(NC)"
 	@go test -cover ./... && echo -e "==> $(BLUE)All tests passed$(NC)" || (echo -e "==> $(RED)Tests failed$(NC)" && exit 1)
 
+.PHONY: test
+
 gen:
 	@echo -e ":: $(GREEN)Generating schema and code...$(NC)"
 	@echo -e "  -> Running schema creation script..."
