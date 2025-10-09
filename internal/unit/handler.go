@@ -34,8 +34,8 @@ type Store interface {
 	AddParent(ctx context.Context, id uuid.UUID, parentID uuid.UUID) (Unit, error)
 	ListSubUnits(ctx context.Context, id uuid.UUID, unitType Type) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, id uuid.UUID, unitType Type) ([]uuid.UUID, error)
-	AddMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) (UnitMember, error)
-	ListMembers(ctx context.Context, id uuid.UUID) ([]SimpleUser, error)
+	AddMember(ctx context.Context, unitType Type, id uuid.UUID, username string) (AddMemberRow, error)
+	ListMembers(ctx context.Context, id uuid.UUID) ([]user.Profile, error)
 	RemoveMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) error
 	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error)
 }
@@ -102,21 +102,14 @@ type OrganizationResponse struct {
 	Slug        string            `json:"slug"`
 }
 
-type SimpleUserResponse struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Username  string    `json:"username"`
-	AvatarURL string    `json:"avatarUrl"`
-}
-
 type OrgMemberResponse struct {
-	OrgID    uuid.UUID `json:"orgId"`
-	MemberID uuid.UUID `json:"memberId"`
+	OrgID      uuid.UUID            `json:"orgId"`
+	SimpleUser user.ProfileResponse `json:"member"`
 }
 
 type UnitMemberResponse struct {
-	UnitID   uuid.UUID `json:"unitId"`
-	MemberID uuid.UUID `json:"memberId"`
+	UnitID     uuid.UUID            `json:"unitId"`
+	SimpleUser user.ProfileResponse `json:"member"`
 }
 
 func convertUnitResponse(u Unit) UnitResponse {
@@ -689,27 +682,36 @@ func (h *Handler) AddOrgMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get MemberID from request body
+	// Get Username from request body
 	var params struct {
-		MemberID uuid.UUID `json:"memberId"`
+		Email string `json:"email"`
 	}
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &params); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), h.logger)
 		return
 	}
 
-	if orgTenant.ID == uuid.Nil || params.MemberID == uuid.Nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("org ID or member ID cannot be empty"), h.logger)
+	if orgTenant.ID == uuid.Nil || params.Email == "" {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("org ID or member username cannot be empty"), h.logger)
 		return
 	}
 
-	members, err := h.store.AddMember(traceCtx, TypeOrg, orgTenant.ID, params.MemberID)
+	members, err := h.store.AddMember(traceCtx, TypeOrg, orgTenant.ID, params.Email)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to add org member: %w", err), h.logger)
 		return
 	}
 
-	orgMemberResponse := OrgMemberResponse{OrgID: orgTenant.ID, MemberID: members.MemberID}
+	orgMemberResponse := OrgMemberResponse{
+		OrgID: orgTenant.ID,
+		SimpleUser: user.ProfileResponse{
+			ID:        members.MemberID,
+			Name:      members.Name.String,
+			Username:  members.Username.String,
+			AvatarURL: members.AvatarUrl.String,
+			Email:     members.Email,
+		},
+	}
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, orgMemberResponse)
 }
 
@@ -726,25 +728,34 @@ func (h *Handler) AddUnitMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var params struct {
-		MemberID uuid.UUID `json:"memberId"`
+		Email string `json:"email"`
 	}
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &params); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), h.logger)
 		return
 	}
 
-	if params.MemberID == uuid.Nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("member ID cannot be empty"), h.logger)
+	if params.Email == "" {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("member username cannot be empty"), h.logger)
 		return
 	}
 
-	member, err := h.store.AddMember(traceCtx, TypeUnit, id, params.MemberID)
+	member, err := h.store.AddMember(traceCtx, TypeUnit, id, params.Email)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to add unit member: %w", err), h.logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, UnitMemberResponse(member))
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, UnitMemberResponse{
+		UnitID: id,
+		SimpleUser: user.ProfileResponse{
+			ID:        member.MemberID,
+			Name:      member.Name.String,
+			Username:  member.Username.String,
+			Email:     member.Email,
+			AvatarURL: member.AvatarUrl.String,
+		},
+	})
 }
 
 func (h *Handler) ListOrgMembers(w http.ResponseWriter, r *http.Request) {
@@ -771,9 +782,15 @@ func (h *Handler) ListOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := make([]SimpleUserResponse, 0, len(members))
+	response := make([]user.ProfileResponse, 0, len(members))
 	for _, m := range members {
-		response = append(response, SimpleUserResponse(m))
+		response = append(response, user.ProfileResponse{
+			ID:        m.ID,
+			Name:      m.Name,
+			Username:  m.Username,
+			Email:     m.Email,
+			AvatarURL: m.AvatarURL,
+		})
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -797,9 +814,15 @@ func (h *Handler) ListUnitMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := make([]SimpleUserResponse, 0, len(members))
+	response := make([]user.ProfileResponse, 0, len(members))
 	for _, m := range members {
-		response = append(response, SimpleUserResponse(m))
+		response = append(response, user.ProfileResponse{
+			ID:        m.ID,
+			Name:      m.Name,
+			Username:  m.Username,
+			Email:     m.Email,
+			AvatarURL: m.AvatarURL,
+		})
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)

@@ -13,22 +13,45 @@ import (
 )
 
 const addMember = `-- name: AddMember :one
-INSERT INTO unit_members (unit_id, member_id)
-VALUES ($1, $2)
-ON CONFLICT (unit_id, member_id) DO UPDATE
-    SET member_id = EXCLUDED.member_id
-RETURNING unit_id, member_id
+WITH inserted_member AS (
+    INSERT INTO unit_members (unit_id, member_id)
+    SELECT $1, u.id
+    FROM users u
+        WHERE $2::text = ANY(u.email)
+    ON CONFLICT (unit_id, member_id) DO UPDATE
+        SET member_id = EXCLUDED.member_id
+    RETURNING unit_id, member_id
+)
+SELECT um.unit_id, um.member_id, u.name, u.username, u.avatar_url, u.email
+FROM inserted_member um
+LEFT JOIN users u ON u.id = um.member_id
 `
 
 type AddMemberParams struct {
-	UnitID   uuid.UUID
-	MemberID uuid.UUID
+	UnitID      uuid.UUID
+	MemberEmail string
 }
 
-func (q *Queries) AddMember(ctx context.Context, arg AddMemberParams) (UnitMember, error) {
-	row := q.db.QueryRow(ctx, addMember, arg.UnitID, arg.MemberID)
-	var i UnitMember
-	err := row.Scan(&i.UnitID, &i.MemberID)
+type AddMemberRow struct {
+	UnitID    uuid.UUID
+	MemberID  uuid.UUID
+	Name      pgtype.Text
+	Username  pgtype.Text
+	AvatarUrl pgtype.Text
+	Email     []string
+}
+
+func (q *Queries) AddMember(ctx context.Context, arg AddMemberParams) (AddMemberRow, error) {
+	row := q.db.QueryRow(ctx, addMember, arg.UnitID, arg.MemberEmail)
+	var i AddMemberRow
+	err := row.Scan(
+		&i.UnitID,
+		&i.MemberID,
+		&i.Name,
+		&i.Username,
+		&i.AvatarUrl,
+		&i.Email,
+	)
 	return i, err
 }
 
@@ -194,7 +217,8 @@ const listMembers = `-- name: ListMembers :many
 SELECT m.member_id,
        u.name,
        u.username,
-       u.avatar_url
+       u.avatar_url,
+       u.email
 FROM unit_members m
 JOIN users u ON u.id = m.member_id
 WHERE m.unit_id = $1
@@ -205,6 +229,7 @@ type ListMembersRow struct {
 	Name      pgtype.Text
 	Username  pgtype.Text
 	AvatarUrl pgtype.Text
+	Email     []string
 }
 
 func (q *Queries) ListMembers(ctx context.Context, unitID uuid.UUID) ([]ListMembersRow, error) {
@@ -221,6 +246,7 @@ func (q *Queries) ListMembers(ctx context.Context, unitID uuid.UUID) ([]ListMemb
 			&i.Name,
 			&i.Username,
 			&i.AvatarUrl,
+			&i.Email,
 		); err != nil {
 			return nil, err
 		}
@@ -295,7 +321,8 @@ SELECT m.unit_id,
        m.member_id,
        u.name,
        u.username,
-       u.avatar_url
+       u.avatar_url,
+       u.email
 FROM unit_members m
 JOIN users u ON u.id = m.member_id
 WHERE m.unit_id = ANY($1::uuid[])
@@ -307,6 +334,7 @@ type ListUnitsMembersRow struct {
 	Name      pgtype.Text
 	Username  pgtype.Text
 	AvatarUrl pgtype.Text
+	Email     []string
 }
 
 func (q *Queries) ListUnitsMembers(ctx context.Context, dollar_1 []uuid.UUID) ([]ListUnitsMembersRow, error) {
@@ -324,6 +352,7 @@ func (q *Queries) ListUnitsMembers(ctx context.Context, dollar_1 []uuid.UUID) ([
 			&i.Name,
 			&i.Username,
 			&i.AvatarUrl,
+			&i.Email,
 		); err != nil {
 			return nil, err
 		}

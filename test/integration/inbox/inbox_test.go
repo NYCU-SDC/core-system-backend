@@ -70,8 +70,8 @@ func TestInboxService_Create(t *testing.T) {
 				userA := userBuilder.Create()
 				userB := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, userA.ID)
-				unitBuilder.AddMember(unitRow.ID, userB.ID)
+				unitBuilder.AddMember(unitRow.ID, userA.Email[0])
+				unitBuilder.AddMember(unitRow.ID, userB.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -127,7 +127,7 @@ func TestInboxService_Create(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("invalid-user-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -235,7 +235,7 @@ func TestInboxService_List(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("empty-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				params.userID = user.ID
 
@@ -261,7 +261,7 @@ func TestInboxService_List(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("message-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -367,7 +367,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("update-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -405,7 +405,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("archive-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -443,7 +443,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("unstar-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -478,7 +478,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 				org := unitBuilder.Create(unit.UnitTypeOrganization, unitbuilder.WithName("invalid-message-org"))
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("invalid-message-unit"))
 				user := userBuilder.Create()
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				// Use a non-existent message ID
 				params.messageID = uuid.New()
@@ -503,7 +503,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("invalid-user-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -582,7 +582,7 @@ func TestInboxService_DuplicateCreatesProduceMultipleMessages(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("duplicate-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -626,7 +626,7 @@ func TestInboxService_DuplicateCreatesProduceMultipleMessages(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("invalid-duplicate-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),
@@ -708,7 +708,7 @@ func TestInboxService_ArchiveVisibilityInList(t *testing.T) {
 				unitRow := unitBuilder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("archive-visibility-unit"))
 				user := userBuilder.Create()
 
-				unitBuilder.AddMember(unitRow.ID, user.ID)
+				unitBuilder.AddMember(unitRow.ID, user.Email[0])
 
 				formRow := formBuilder.Create(
 					formbuilder.WithUnitID(unitRow.ID),

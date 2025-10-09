@@ -16,15 +16,15 @@ import (
 //goland:noinspection DuplicatedCode
 func TestUnitService_AddMember(t *testing.T) {
 	type params struct {
-		unitType  unit.Type
-		unitID    uuid.UUID
-		memberIDs []uuid.UUID
+		unitType     unit.Type
+		unitID       uuid.UUID
+		memberEmails []string
 	}
 	testCases := []struct {
 		name        string
 		params      params
 		setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
-		validate    func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.UnitMember, err error)
+		validate    func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.AddMemberRow, err error)
 		expectedErr bool
 	}{
 		{
@@ -38,25 +38,25 @@ func TestUnitService_AddMember(t *testing.T) {
 				member := userbuilder.New(t, db).Create()
 
 				params.unitID = org.ID
-				params.memberIDs = []uuid.UUID{member.ID}
+				params.memberEmails = []string{member.Email[0]}
 				return context.Background()
 			},
-			validate: func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.UnitMember, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.AddMemberRow, err error) {
 				require.NoError(t, err)
 				require.Len(t, results, 1)
 				require.Equal(t, params.unitID, results[0].UnitID)
-				require.Equal(t, params.memberIDs[0], results[0].MemberID)
+				require.Equal(t, params.memberEmails[0], results[0].Email[0])
 
-				members, listErr := unit.New(db).ListMembers(context.Background(), params.unitID)
+				memberRows, listErr := unit.New(db).ListMembers(context.Background(), params.unitID)
 
-				memberIDs := make([]uuid.UUID, len(members))
-				for i, member := range members {
-					memberIDs[i] = member.MemberID
+				memberIDs := make([]uuid.UUID, len(memberRows))
+				for i, memberRow := range memberRows {
+					memberIDs[i] = memberRow.MemberID
 				}
 
 				require.NoError(t, listErr)
 				require.Len(t, memberIDs, 1)
-				require.Contains(t, memberIDs, params.memberIDs[0])
+				require.Contains(t, memberIDs, results[0].MemberID)
 			},
 		},
 		{
@@ -72,25 +72,25 @@ func TestUnitService_AddMember(t *testing.T) {
 				memberTwo := userbuilder.New(t, db).Create()
 
 				params.unitID = unitRow.ID
-				params.memberIDs = []uuid.UUID{memberOne.ID, memberTwo.ID}
+				params.memberEmails = []string{memberOne.Email[0], memberTwo.Email[0]}
 				return context.Background()
 			},
-			validate: func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.UnitMember, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.AddMemberRow, err error) {
 				require.NoError(t, err)
-				require.Len(t, results, len(params.memberIDs))
+				require.Len(t, results, len(params.memberEmails))
 
-				seen := make(map[uuid.UUID]struct{})
-				for idx, memberID := range params.memberIDs {
+				seen := make(map[string]struct{})
+				for idx, memberEmail := range params.memberEmails {
 					require.Equal(t, params.unitID, results[idx].UnitID)
-					require.Equal(t, memberID, results[idx].MemberID)
-					seen[memberID] = struct{}{}
+					require.Equal(t, memberEmail, results[idx].Email[0])
+					seen[results[idx].MemberID.String()] = struct{}{}
 				}
 
-				members, listErr := unit.New(db).ListMembers(context.Background(), params.unitID)
+				memberRows, listErr := unit.New(db).ListMembers(context.Background(), params.unitID)
 				require.NoError(t, listErr)
-				require.Len(t, members, len(params.memberIDs))
-				for _, stored := range members {
-					_, ok := seen[stored.MemberID]
+				require.Len(t, memberRows, len(params.memberEmails))
+				for _, stored := range memberRows {
+					_, ok := seen[stored.MemberID.String()]
 					require.True(t, ok, "unexpected member %s", stored)
 				}
 			},
@@ -106,17 +106,17 @@ func TestUnitService_AddMember(t *testing.T) {
 				unitRow := builder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("duplicate-unit"))
 				member := userbuilder.New(t, db).Create()
 
-				builder.AddMember(unitRow.ID, member.ID)
+				builder.AddMember(unitRow.ID, member.Email[0])
 
 				params.unitID = unitRow.ID
-				params.memberIDs = []uuid.UUID{member.ID}
+				params.memberEmails = []string{member.Email[0]}
 				return context.Background()
 			},
-			validate: func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.UnitMember, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.AddMemberRow, err error) {
 				require.NoError(t, err)
 				require.Len(t, results, 1)
 				require.Equal(t, params.unitID, results[0].UnitID)
-				require.Equal(t, params.memberIDs[0], results[0].MemberID)
+				require.Equal(t, params.memberEmails[0], results[0].Email[0])
 
 				members, listErr := unit.New(db).ListMembers(context.Background(), params.unitID)
 
@@ -127,8 +127,52 @@ func TestUnitService_AddMember(t *testing.T) {
 
 				require.NoError(t, listErr)
 				require.Len(t, memberIDs, 1)
-				require.Contains(t, memberIDs, params.memberIDs[0])
+				require.Contains(t, memberIDs, results[0].MemberID)
 			},
+		},
+		{
+			name: "Add member using second email of user",
+			params: params{
+				unitType: unit.TypeUnit,
+			},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
+				builder := unitbuilder.New(t, db)
+				org := builder.Create(unit.UnitTypeOrganization, unitbuilder.WithName("eng-multi-email"))
+				unitRow := builder.Create(unit.UnitTypeUnit, unitbuilder.WithOrgID(org.ID), unitbuilder.WithName("dept-ee"))
+				member := userbuilder.New(t, db).Create(userbuilder.WithEmail([]string{"primary@example.com", "secondary@example.com"}))
+
+				params.unitID = unitRow.ID
+				params.memberEmails = []string{member.Email[1]}
+				return context.Background()
+			},
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.AddMemberRow, err error) {
+				require.NoError(t, err)
+				require.Len(t, results, 1)
+				require.Equal(t, params.unitID, results[0].UnitID)
+				require.Len(t, results[0].Email, 2)
+				require.Equal(t, params.memberEmails[0], results[0].Email[1])
+
+				memberRows, listErr := unit.New(db).ListMembers(context.Background(), params.unitID)
+				require.NoError(t, listErr)
+				require.Len(t, memberRows, 1)
+				require.Equal(t, results[0].MemberID, memberRows[0].MemberID)
+				require.Contains(t, memberRows[0].Email, params.memberEmails[0])
+			},
+		},
+		{
+			name:   "Error when adding unknown email",
+			params: params{unitType: unit.TypeOrg},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
+				builder := unitbuilder.New(t, db)
+				org := builder.Create(unit.UnitTypeOrganization, unitbuilder.WithName("org-unknown-email"))
+				params.unitID = org.ID
+				params.memberEmails = []string{"nonexistent@example.com"}
+				return context.Background()
+			},
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.AddMemberRow, err error) {
+				require.Error(t, err)
+			},
+			expectedErr: true,
 		},
 	}
 
@@ -153,13 +197,13 @@ func TestUnitService_AddMember(t *testing.T) {
 
 			service := unit.NewService(logger, db)
 
-			memberIDs := params.memberIDs
-			require.NotEmpty(t, memberIDs, "memberIDs must not be empty")
+			memberEmails := params.memberEmails
+			require.NotEmpty(t, memberEmails, "memberEmails must not be empty")
 
-			results := make([]unit.UnitMember, 0, len(memberIDs))
+			results := make([]unit.AddMemberRow, 0, len(memberEmails))
 			var encounteredErr error
-			for _, memberID := range memberIDs {
-				result, err := service.AddMember(ctx, params.unitType, params.unitID, memberID)
+			for _, memberEmail := range memberEmails {
+				result, err := service.AddMember(ctx, params.unitType, params.unitID, memberEmail)
 				results = append(results, result)
 				if err != nil {
 					encounteredErr = err
@@ -196,8 +240,8 @@ func TestUnitService_ListMembers(t *testing.T) {
 				memberOne := userB.Create()
 				memberTwo := userB.Create()
 
-				unitB.AddMember(org.ID, memberOne.ID)
-				unitB.AddMember(org.ID, memberTwo.ID)
+				unitB.AddMember(org.ID, memberOne.Email[0])
+				unitB.AddMember(org.ID, memberTwo.Email[0])
 
 				params.unitID = org.ID
 				params.expected = []uuid.UUID{memberOne.ID, memberTwo.ID}
@@ -278,10 +322,10 @@ func TestUnitService_ListUnitsMembers(t *testing.T) {
 				memberB := userB.Create()
 				memberC := userB.Create()
 
-				unitB.AddMember(unitOne.ID, memberA.ID)
-				unitB.AddMember(unitOne.ID, memberB.ID)
-				unitB.AddMember(unitOne.ID, memberB.ID)
-				unitB.AddMember(unitTwo.ID, memberC.ID)
+				unitB.AddMember(unitOne.ID, memberA.Email[0])
+				unitB.AddMember(unitOne.ID, memberB.Email[0])
+				unitB.AddMember(unitOne.ID, memberB.Email[0])
+				unitB.AddMember(unitTwo.ID, memberC.Email[0])
 
 				params.unitIDs = []uuid.UUID{unitOne.ID, unitTwo.ID}
 				params.expected = map[uuid.UUID][]uuid.UUID{
@@ -362,8 +406,8 @@ func TestUnitService_RemoveMember(t *testing.T) {
 				member := userB.Create()
 				remaining := userB.Create()
 
-				unitB.AddMember(unitRow.ID, member.ID)
-				unitB.AddMember(unitRow.ID, remaining.ID)
+				unitB.AddMember(unitRow.ID, member.Email[0])
+				unitB.AddMember(unitRow.ID, remaining.Email[0])
 
 				params.unitID = unitRow.ID
 				params.memberID = member.ID

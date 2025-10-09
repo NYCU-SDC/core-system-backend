@@ -87,9 +87,15 @@ func (g *GoogleConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (us
 	}
 
 	// Create User struct with Google data
+	var emailArray []string
+	if googleUser.Email != "" {
+		emailArray = []string{googleUser.Email}
+	}
+
 	userInfo := user.User{
 		Name:      pgtype.Text{String: googleUser.Name, Valid: googleUser.Name != ""},
 		Username:  pgtype.Text{String: GetUsername(googleUser.Email), Valid: googleUser.Email != ""},
+		Email:     emailArray,
 		AvatarUrl: pgtype.Text{String: googleUser.Picture, Valid: googleUser.Picture != ""},
 		Role:      []string{"user"}, // Default role
 	}

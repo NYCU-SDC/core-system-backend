@@ -322,6 +322,7 @@ type User struct {
 	ID        uuid.UUID
 	Name      pgtype.Text
 	Username  pgtype.Text
+	Email     []string
 	AvatarUrl pgtype.Text
 	Role      []string
 	CreatedAt pgtype.Timestamptz

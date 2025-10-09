@@ -25,3 +25,9 @@ func WithRole(role []string) Option {
 		p.Role = role
 	}
 }
+
+func WithEmail(emails []string) Option {
+	return func(p *FactoryParams) {
+		p.Email = emails
+	}
+}

@@ -16,6 +16,7 @@ type FactoryParams struct {
 	Username  string
 	AvatarURL string
 	Role      []string
+	Email     []string
 }
 
 type Builder struct {
@@ -39,6 +40,7 @@ func (b Builder) Create(opts ...Option) user.User {
 		Username:  testdata.RandomName(),
 		AvatarURL: testdata.RandomURL(),
 		Role:      []string{"user"}, // Default role is "user"
+		Email:     []string{testdata.RandomEmail()},
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -49,6 +51,7 @@ func (b Builder) Create(opts ...Option) user.User {
 		Username:  pgtype.Text{String: p.Username, Valid: true},
 		AvatarUrl: pgtype.Text{String: p.AvatarURL, Valid: true},
 		Role:      p.Role,
+		Email:     p.Email,
 	})
 	require.NoError(b.t, err)
 

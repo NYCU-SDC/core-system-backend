@@ -16,8 +16,8 @@ import (
 type Querier interface {
 	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
 	GetByID(ctx context.Context, id uuid.UUID) (User, error)
-	GetUserIDByAuth(ctx context.Context, arg GetUserIDByAuthParams) (uuid.UUID, error)
-	UserExistsByAuth(ctx context.Context, arg UserExistsByAuthParams) (bool, error)
+	GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.UUID, error)
+	ExistsByAuth(ctx context.Context, arg ExistsByAuthParams) (bool, error)
 	Create(ctx context.Context, arg CreateParams) (User, error)
 	CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, error)
 	Update(ctx context.Context, arg UpdateParams) (User, error)
@@ -27,6 +27,14 @@ type Service struct {
 	logger  *zap.Logger
 	queries Querier
 	tracer  trace.Tracer
+}
+
+type Profile struct {
+	ID        uuid.UUID
+	Name      string
+	Username  string
+	AvatarURL string
+	Email     []string
 }
 
 func NewService(logger *zap.Logger, db DBTX) *Service {
@@ -72,12 +80,12 @@ func resolveAvatarUrl(name, avatarUrl string) string {
 	return avatarUrl
 }
 
-func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
+func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, role []string, email []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "FindOrCreate")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.UserExistsByAuth(traceCtx, UserExistsByAuthParams{
+	exists, err := s.queries.ExistsByAuth(traceCtx, ExistsByAuthParams{
 		Provider:   oauthProvider,
 		ProviderID: oauthProviderID,
 	})
@@ -88,7 +96,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	}
 
 	if exists {
-		existingUserID, err := s.queries.GetUserIDByAuth(traceCtx, GetUserIDByAuthParams{
+		existingUserID, err := s.queries.GetIDByAuth(traceCtx, GetIDByAuthParams{
 			Provider:   oauthProvider,
 			ProviderID: oauthProviderID,
 		})
@@ -103,6 +111,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 			ID:        existingUserID,
 			Name:      pgtype.Text{String: name, Valid: name != ""},
 			Username:  pgtype.Text{String: username, Valid: username != ""},
+			Email:     email,
 			AvatarUrl: pgtype.Text{String: avatarUrl, Valid: avatarUrl != ""},
 		})
 		if err != nil {
@@ -111,7 +120,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 			return uuid.UUID{}, err
 		}
 
-		logger.Debug("Updated existing user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID), zap.String("user_id", existingUserID.String()))
+		logger.Debug("Updated existing user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID), zap.String("user_id", existingUserID.String()), zap.Strings("added_emails", email))
 		return existingUserID, nil
 	}
 
@@ -125,6 +134,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	newUser, err := s.queries.Create(traceCtx, CreateParams{
 		Name:      pgtype.Text{String: name, Valid: name != ""},
 		Username:  pgtype.Text{String: username, Valid: username != ""},
+		Email:     email,
 		AvatarUrl: pgtype.Text{String: avatarUrl, Valid: avatarUrl != ""},
 		Role:      role,
 	})

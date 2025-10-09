@@ -10,6 +10,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -21,13 +22,22 @@ func GetFromContext(ctx context.Context) (*User, bool) {
 	return userData, ok
 }
 
+type ProfileResponse struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Username  string    `json:"username"`
+	Email     []string  `json:"email"`
+	AvatarURL string    `json:"avatarUrl"`
+}
+
 // MeResponse represents the response format for /user/me endpoint
 type MeResponse struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Name      string `json:"name"`
-	AvatarUrl string `json:"avatarUrl"`
-	Role      string `json:"role"`
+	ID        string   `json:"id"`
+	Username  string   `json:"username"`
+	Email     []string `json:"email"`
+	Name      string   `json:"name"`
+	AvatarUrl string   `json:"avatarUrl"`
+	Role      string   `json:"role"`
 }
 
 type Handler struct {
@@ -75,6 +85,7 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	response := MeResponse{
 		ID:        currentUser.ID.String(),
 		Username:  currentUser.Username.String,
+		Email:     currentUser.Email,
 		Name:      currentUser.Name.String,
 		AvatarUrl: currentUser.AvatarUrl.String,
 		Role:      roleStr,

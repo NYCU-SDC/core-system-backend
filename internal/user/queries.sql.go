@@ -13,9 +13,9 @@ import (
 )
 
 const create = `-- name: Create :one
-INSERT INTO users (name, username, avatar_url, role)
-VALUES ($1, $2, $3, $4) 
-RETURNING id, name, username, avatar_url, role, created_at, updated_at
+INSERT INTO users (name, username, avatar_url, role, email)
+VALUES ($1, $2, $3, $4, $5) 
+RETURNING id, name, username, email, avatar_url, role, created_at, updated_at
 `
 
 type CreateParams struct {
@@ -23,6 +23,7 @@ type CreateParams struct {
 	Username  pgtype.Text
 	AvatarUrl pgtype.Text
 	Role      []string
+	Email     []string
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
@@ -31,12 +32,14 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
 		arg.Username,
 		arg.AvatarUrl,
 		arg.Role,
+		arg.Email,
 	)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Username,
+		&i.Email,
 		&i.AvatarUrl,
 		&i.Role,
 		&i.CreatedAt,
@@ -71,6 +74,22 @@ func (q *Queries) CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, e
 	return i, err
 }
 
+const existsByAuth = `-- name: ExistsByAuth :one
+SELECT EXISTS(SELECT 1 FROM auth WHERE provider = $1 AND provider_id = $2)
+`
+
+type ExistsByAuthParams struct {
+	Provider   string
+	ProviderID string
+}
+
+func (q *Queries) ExistsByAuth(ctx context.Context, arg ExistsByAuthParams) (bool, error) {
+	row := q.db.QueryRow(ctx, existsByAuth, arg.Provider, arg.ProviderID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const existsByID = `-- name: ExistsByID :one
 SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)
 `
@@ -83,7 +102,7 @@ func (q *Queries) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 const getByID = `-- name: GetByID :one
-SELECT id, name, username, avatar_url, role, created_at, updated_at FROM users WHERE id = $1
+SELECT id, name, username, email, avatar_url, role, created_at, updated_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
@@ -93,6 +112,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.ID,
 		&i.Name,
 		&i.Username,
+		&i.Email,
 		&i.AvatarUrl,
 		&i.Role,
 		&i.CreatedAt,
@@ -101,17 +121,17 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
-const getUserIDByAuth = `-- name: GetUserIDByAuth :one
+const getIDByAuth = `-- name: GetIDByAuth :one
 SELECT user_id FROM auth WHERE provider = $1 AND provider_id = $2
 `
 
-type GetUserIDByAuthParams struct {
+type GetIDByAuthParams struct {
 	Provider   string
 	ProviderID string
 }
 
-func (q *Queries) GetUserIDByAuth(ctx context.Context, arg GetUserIDByAuthParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getUserIDByAuth, arg.Provider, arg.ProviderID)
+func (q *Queries) GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getIDByAuth, arg.Provider, arg.ProviderID)
 	var user_id uuid.UUID
 	err := row.Scan(&user_id)
 	return user_id, err
@@ -119,9 +139,15 @@ func (q *Queries) GetUserIDByAuth(ctx context.Context, arg GetUserIDByAuthParams
 
 const update = `-- name: Update :one
 UPDATE users
-SET name = $2, username = $3, avatar_url = $4, updated_at = now()
+SET name = $2, username = $3, avatar_url = $4, 
+    email = CASE
+      WHEN COALESCE(cardinality($5::varchar[]), 0) > 0 THEN
+        array_remove($5::varchar[], '')
+      ELSE email
+    END,
+    updated_at = now()
 WHERE id = $1
-    RETURNING id, name, username, avatar_url, role, created_at, updated_at
+RETURNING id, name, username, email, avatar_url, role, created_at, updated_at
 `
 
 type UpdateParams struct {
@@ -129,6 +155,7 @@ type UpdateParams struct {
 	Name      pgtype.Text
 	Username  pgtype.Text
 	AvatarUrl pgtype.Text
+	Email     []string
 }
 
 func (q *Queries) Update(ctx context.Context, arg UpdateParams) (User, error) {
@@ -137,32 +164,18 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (User, error) {
 		arg.Name,
 		arg.Username,
 		arg.AvatarUrl,
+		arg.Email,
 	)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Username,
+		&i.Email,
 		&i.AvatarUrl,
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const userExistsByAuth = `-- name: UserExistsByAuth :one
-SELECT EXISTS(SELECT 1 FROM auth WHERE provider = $1 AND provider_id = $2)
-`
-
-type UserExistsByAuthParams struct {
-	Provider   string
-	ProviderID string
-}
-
-func (q *Queries) UserExistsByAuth(ctx context.Context, arg UserExistsByAuthParams) (bool, error) {
-	row := q.db.QueryRow(ctx, userExistsByAuth, arg.Provider, arg.ProviderID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }

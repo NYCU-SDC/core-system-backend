@@ -3,6 +3,8 @@ package unit
 import (
 	"fmt"
 
+	"NYCU-SDC/core-system-backend/internal/user"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -10,42 +12,35 @@ import (
 	"golang.org/x/net/context"
 )
 
-type SimpleUser struct {
-	ID        uuid.UUID
-	Name      string
-	Username  string
-	AvatarURL string
-}
-
 // AddMember adds a member to an organization or a unit
-func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) (UnitMember, error) {
+func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, memberEmail string) (AddMemberRow, error) {
 	traceCtx, span := s.tracer.Start(ctx, fmt.Sprintf("Add%sMember", unitType.String()))
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
-	member, err := s.queries.AddMember(traceCtx, AddMemberParams{
-		UnitID:   id,
-		MemberID: memberID,
+	memberRow, err := s.queries.AddMember(traceCtx, AddMemberParams{
+		UnitID:      id,
+		MemberEmail: memberEmail,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "add member relationship")
 		span.RecordError(err)
-		return UnitMember{}, err
+		return AddMemberRow{}, err
 	}
 
 	logger.Info(fmt.Sprintf("Added %s member", unitType.String()),
-		zap.String("unit_id", member.UnitID.String()),
-		zap.String("member_id", member.MemberID.String()))
+		zap.String("unit_id", memberRow.UnitID.String()),
+		zap.String("member_id", memberRow.MemberID.String()))
 
-	return member, nil
+	return memberRow, nil
 }
 
 // ListMembers lists all members of an organization or a unit
-func (s *Service) ListMembers(ctx context.Context, id uuid.UUID) ([]SimpleUser, error) {
+func (s *Service) ListMembers(ctx context.Context, id uuid.UUID) ([]user.Profile, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListMembers")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var simpleUsers []SimpleUser
+	var simpleUsers []user.Profile
 	members, err := s.queries.ListMembers(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list org members")
@@ -53,13 +48,14 @@ func (s *Service) ListMembers(ctx context.Context, id uuid.UUID) ([]SimpleUser, 
 		return nil, err
 	}
 
-	simpleUsers = make([]SimpleUser, len(members))
+	simpleUsers = make([]user.Profile, len(members))
 	for i, member := range members {
-		simpleUsers[i] = SimpleUser{
+		simpleUsers[i] = user.Profile{
 			ID:        member.MemberID,
 			Name:      member.Name.String,
 			Username:  member.Username.String,
 			AvatarURL: member.AvatarUrl.String,
+			Email:     member.Email,
 		}
 	}
 
@@ -72,7 +68,6 @@ func (s *Service) ListMembers(ctx context.Context, id uuid.UUID) ([]SimpleUser, 
 }
 
 // ListUnitsMembers lists members for multiple units at once
-// Todo: need to refactor to use SimpleUser
 func (s *Service) ListUnitsMembers(ctx context.Context, unitIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListMultiUnitMembers")
 	defer span.End()

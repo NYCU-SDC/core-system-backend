@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255),
     username VARCHAR(255),
+    email VARCHAR(255)[] NOT NULL DEFAULT '{}',
     avatar_url VARCHAR(512),
     role VARCHAR(255)[] NOT NULL DEFAULT '{"user"}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
