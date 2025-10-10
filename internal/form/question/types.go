@@ -10,6 +10,8 @@ func NewAnswerable(q Question) (Answerable, error) {
 		return NewSingleChoice(q)
 	case QuestionTypeMultipleChoice:
 		return NewMultiChoice(q)
+	case QuestionTypeDate:
+		return NewDate(q)
 	}
 
 	return nil, ErrUnsupportedQuestionType{
