@@ -15,5 +15,5 @@ CREATE TABLE IF NOT EXISTS history
     orgName VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     ended_at TIMESTAMPTZ DEFAULT NULL,
-    PRIMARY KEY (slug, orgId)
+    PRIMARY KEY (slug, org_id)
 );

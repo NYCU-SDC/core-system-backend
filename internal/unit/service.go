@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"NYCU-SDC/core-system-backend/internal/tenant"
 	"context"
 	"fmt"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -29,9 +30,10 @@ type Querier interface {
 }
 
 type tenantStore interface {
-	Create(ctx context.Context, slug string, id uuid.UUID, ownerID uuid.UUID) (Tenant, error)
+	Create(ctx context.Context, slug string, id uuid.UUID, ownerID uuid.UUID, ownerName string) (tenant.Tenant, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
-	GetBySlug(ctx context.Context, slug string) (Tenant, error)
+	GetBySlug(ctx context.Context, slug string) (tenant.Tenant, error)
+	CreateHistory(ctx context.Context, slug string, orgID uuid.UUID, orgName string) (tenant.History, error)
 }
 type Service struct {
 	logger      *zap.Logger
@@ -100,9 +102,15 @@ func (s *Service) CreateOrganization(ctx context.Context, name string, descripti
 		return Unit{}, err
 	}
 
-	_, err = s.tenantStore.Create(traceCtx, slug, org.ID, currentUserID)
+	_, err = s.tenantStore.Create(traceCtx, slug, org.ID, currentUserID, name)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "failed to create tenant for org: %w")
+		err = databaseutil.WrapDBError(err, logger, "create tenant for org")
+		return Unit{}, err
+	}
+
+	_, err = s.tenantStore.CreateHistory(traceCtx, slug, org.ID, name)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create tenant history for org")
 		return Unit{}, err
 	}
 
@@ -116,15 +124,20 @@ func (s *Service) CreateOrganization(ctx context.Context, name string, descripti
 }
 
 // CreateUnit creates a new unit or organization
-func (s *Service) CreateUnit(ctx context.Context, name string, orgID pgtype.UUID, description string, metadata []byte) (Unit, error) {
+func (s *Service) CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateUnit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	orgTenant, err := s.tenantStore.GetBySlug(traceCtx, slug)
+	if err != nil {
+		return Unit{}, err
+	}
+
 	unit, err := s.queries.Create(traceCtx, CreateParams{
 		Name:        pgtype.Text{String: name, Valid: name != ""},
-		OrgID:       orgID,
-		ParentID:    pgtype.UUID{Valid: true, Bytes: orgID.Bytes},
+		OrgID:       pgtype.UUID{Bytes: orgTenant.ID, Valid: true},
+		ParentID:    pgtype.UUID{Bytes: orgTenant.ID, Valid: true},
 		Description: pgtype.Text{String: description, Valid: true},
 		Metadata:    metadata,
 		Type:        UnitTypeUnit,
@@ -137,7 +150,7 @@ func (s *Service) CreateUnit(ctx context.Context, name string, orgID pgtype.UUID
 
 	logger.Info(fmt.Sprintf("Created %s", unit.Type),
 		zap.String("unit_id", unit.ID.String()),
-		zap.String("org_id", orgID.String()),
+		zap.String("org_id", orgTenant.ID.String()),
 		zap.String("name", unit.Name.String),
 		zap.String("description", unit.Description.String),
 		zap.String("metadata", string(unit.Metadata)))

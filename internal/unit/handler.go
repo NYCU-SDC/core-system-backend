@@ -53,6 +53,7 @@ func NewHandler(
 	problemWriter *problem.HttpWriter,
 	store Store,
 	formService *form.Service,
+	tenantService *tenant.Service,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -60,6 +61,7 @@ func NewHandler(
 		problemWriter: problemWriter,
 		store:         store,
 		formService:   formService,
+		tenantService: tenantService,
 		tracer:        otel.Tracer("unit/handler"),
 	}
 }

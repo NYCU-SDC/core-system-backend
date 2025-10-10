@@ -26,8 +26,8 @@ WHERE id = $1;
 SELECT * FROM history WHERE slug = $1;
 
 -- name: CreateHistory :one
-INSERT INTO history (slug, org_id, orgName)
-VALUES ($1, $2, $3)
+INSERT INTO history (slug, org_id, orgName, created_at, ended_at)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateHistory :one

@@ -3,6 +3,7 @@ package tenant
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"context"
+	"time"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -55,7 +56,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (Tenant, error) {
 	return tenant, nil
 }
 
-func (s *Service) Create(ctx context.Context, slug string, id uuid.UUID, ownerID uuid.UUID) (Tenant, error) {
+func (s *Service) Create(ctx context.Context, slug string, id uuid.UUID, ownerID uuid.UUID, ownerName string) (Tenant, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := internal.WithContext(traceCtx, s.logger)
@@ -94,6 +95,16 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, slug string, dbStrat
 	}
 
 	logger.Info("tenant updated", zap.String("tenant_id", tenant.ID.String()), zap.String("db_strategy", string(tenant.DbStrategy)), zap.String("slug", slug))
+
+	// current tenant stop using the slug
+	_, err = s.query.UpdateHistory(traceCtx, UpdateHistoryParams{
+		Slug:    slug,
+		OrgID:   pgtype.UUID{Bytes: tenant.ID, Valid: true},
+		EndedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+	})
+	if err != nil {
+		return Tenant{}, err
+	}
 
 	return tenant, nil
 }
@@ -145,13 +156,13 @@ func (s *Service) GetBySlug(ctx context.Context, slug string) (Tenant, error) {
 	return org, nil
 }
 
-func deriveStatus(history []History) (bool, uuid.UUID) {
+func deriveStatus(history []History) (bool, string) {
 	for _, h := range history {
 		if !h.EndedAt.Valid {
-			return false, h.Orgid // currently assigned
+			return false, h.OrgID.String() // currently assigned
 		}
 	}
-	return true, uuid.UUID{}
+	return true, ""
 }
 
 func (s *Service) GetHistoryBySlug(ctx context.Context, slug string) ([]History, error) {
@@ -175,7 +186,12 @@ func (s *Service) GetStatusWithHistory(ctx context.Context, slug string) (bool, 
 		return true, uuid.UUID{}, nil, err
 	}
 
-	available, currentOrgID := deriveStatus(history)
+	available, currentOrgIDStr := deriveStatus(history)
+	currentOrgID, err := uuid.Parse(currentOrgIDStr)
+	if err != nil {
+		return true, uuid.UUID{}, nil, err
+	}
+
 	return available, currentOrgID, history, nil
 }
 
@@ -185,6 +201,33 @@ func (s *Service) GetStatus(ctx context.Context, slug string) (bool, uuid.UUID, 
 		return true, uuid.UUID{}, err
 	}
 
-	available, currentOrgID := deriveStatus(history)
+	available, currentOrgIDStr := deriveStatus(history)
+	currentOrgID, err := uuid.Parse(currentOrgIDStr)
+	if err != nil {
+		return true, uuid.UUID{}, err
+	}
 	return available, currentOrgID, nil
+}
+
+func (s *Service) CreateHistory(ctx context.Context, slug string, orgID uuid.UUID, orgName string) (History, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateHistory")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	history, err := s.query.CreateHistory(traceCtx, CreateHistoryParams{
+		Slug:      slug,
+		OrgID:     pgtype.UUID{Bytes: orgID, Valid: true},
+		Orgname:   pgtype.Text{String: orgName, Valid: true},
+		CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		EndedAt:   pgtype.Timestamptz{Valid: false},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create history")
+		span.RecordError(err)
+		return History{}, err
+	}
+
+	logger.Info("history created", zap.String("slug", slug), zap.String("org_id", orgID.String()), zap.String("org_name", orgName))
+
+	return history, nil
 }

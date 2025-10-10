@@ -1,0 +1,139 @@
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    depends_on:
+      - loki
+      - tempo
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`${GRAFANA_HOST}`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      # - "traefik.http.routers.grafana.entrypoints=websecure"
+      # - "traefik.http.routers.grafana.tls=true"
+      # - "traefik.http.routers.grafana.tls.certresolver=cloudflare"
+    networks:
+      - traefik
+      - observe-net
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        mkdir -p /etc/grafana/provisioning/datasources
+        cat <<EOF > /etc/grafana/provisioning/datasources/ds.yaml
+        apiVersion: 1
+        datasources:
+          - name: Loki
+            type: loki
+            url: http://loki:3100
+          - name: Tempo
+            type: tempo
+            url: http://tempo:3200
+        EOF
+        /run.sh
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    command: -config.file=/etc/loki/loki.yaml
+    ports:
+      - "3100:3100"
+    depends_on:
+      - minio
+    volumes:
+      - ./config/loki.yaml:/etc/loki/loki.yaml
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - traefik
+      - observe-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.loki.rule=Host(`${LOKI_HOST}`)"
+      - "traefik.http.routers.loki.entrypoints=web"
+      - "traefik.http.services.loki.loadbalancer.server.port=3100"
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    command: ["--config.file=/etc/tempo.yaml"]
+    ports:
+      - "4317:4317"     # gRPC for OTLP
+      - "4318:4318"     # OTLP HTTP receiver
+      - "3200:3200"     # Tempo internal HTTP server (for Grafana)
+    depends_on:
+      - minio
+    volumes:
+      - ./config/tempo.yaml:/etc/tempo.yaml
+    networks:
+      - traefik
+      - observe-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tempo.rule=Host(`${TEMPO_HOST}`)"
+      - "traefik.http.routers.tempo.entrypoints=web"
+      - "traefik.http.services.tempo.loadbalancer.server.port=3200"
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"     # S3 API
+      - "9001:9001"     # MinIO Console UI
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - traefik
+      - observe-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.minio.rule=Host(`${MINIO_HOST}`)"
+      - "traefik.http.routers.minio.entrypoints=web"
+      # - "traefik.http.routers.minio.entrypoints=websecure"
+      # - "traefik.http.routers.minio.tls=true"
+      # - "traefik.http.routers.minio.tls.certresolver=cloudflare"
+      - "traefik.http.services.minio.loadbalancer.server.port=9001"
+
+  setup-minio:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    restart: on-failure
+    entrypoint: >
+      sh -c "
+        sleep 5 &&
+        mc alias set local http://minio:9000 admin password123 &&
+        mc mb --ignore-existing local/loki-data &&
+        mc mb --ignore-existing local/tempo-data &&
+        mc ilm add local/loki-data --expiry-days 90 &&
+        mc ilm add local/tempo-data --expiry-days 90 &&
+        exit 0;
+      "
+    networks:
+      - observe-net
+
+
+volumes:
+  minio-data:
+
+networks:
+  traefik:
+    external: true
+  observe-net:

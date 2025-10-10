@@ -43,19 +43,27 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (Tenant, error) 
 }
 
 const createHistory = `-- name: CreateHistory :one
-INSERT INTO history (slug, org_id, orgName)
-VALUES ($1, $2, $3)
+INSERT INTO history (slug, org_id, orgName, created_at, ended_at)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING slug, org_id, orgname, created_at, ended_at
 `
 
 type CreateHistoryParams struct {
-	Slug    string
-	OrgID   pgtype.UUID
-	Orgname pgtype.Text
+	Slug      string
+	OrgID     pgtype.UUID
+	Orgname   pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	EndedAt   pgtype.Timestamptz
 }
 
 func (q *Queries) CreateHistory(ctx context.Context, arg CreateHistoryParams) (History, error) {
-	row := q.db.QueryRow(ctx, createHistory, arg.Slug, arg.OrgID, arg.Orgname)
+	row := q.db.QueryRow(ctx, createHistory,
+		arg.Slug,
+		arg.OrgID,
+		arg.Orgname,
+		arg.CreatedAt,
+		arg.EndedAt,
+	)
 	var i History
 	err := row.Scan(
 		&i.Slug,

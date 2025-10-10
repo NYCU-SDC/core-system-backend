@@ -143,19 +143,18 @@ func main() {
 	responseService := response.NewService(logger, dbPool)
 	submitService := submit.NewService(logger, questionService, responseService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService)
-	slugService := tenant.NewService(logger, dbPool)
 
 	// Handler
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	formHandler := form.NewHandler(logger, validator, problemWriter, formService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
-	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService)
+	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService, tenantService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
 	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService)
 	inboxHandler := inbox.NewHandler(logger, validator, problemWriter, inboxService, formService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
-	slugHandler := tenant.NewHandler(logger, validator, problemWriter, slugService)
+	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 
 	// Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -225,8 +224,8 @@ func main() {
 	mux.Handle("DELETE /api/orgs/{slug}/units/{id}/members/{member_id}", tenantAuthMiddleware.HandlerFunc(unitHandler.RemoveUnitMember))
 
 	// Slug availability and history
-	mux.Handle("GET /api/orgs/{slug}/status", tenantBasicMiddleware.HandlerFunc(slugHandler.GetStatus))
-	mux.Handle("GET /api/orgs/{slug}/history", tenantBasicMiddleware.HandlerFunc(slugHandler.GetStatusWithHistory))
+	mux.Handle("GET /api/orgs/{slug}/status", tenantBasicMiddleware.HandlerFunc(tenantHandler.GetStatus))
+	mux.Handle("GET /api/orgs/{slug}/history", tenantBasicMiddleware.HandlerFunc(tenantHandler.GetStatusWithHistory))
 
 	// List sub-units
 	mux.Handle("GET /api/orgs/{slug}/units", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnits))
