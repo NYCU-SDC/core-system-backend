@@ -22,7 +22,7 @@ type Distributor interface {
 }
 
 type FormStore interface {
-	GetByID(ctx context.Context, id uuid.UUID) (form.Form, error)
+	GetByID(ctx context.Context, id uuid.UUID) (form.GetByIDRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status form.Status, userID uuid.UUID) (form.Form, error)
 }
 

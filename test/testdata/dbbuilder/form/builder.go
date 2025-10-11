@@ -24,7 +24,7 @@ func (b Builder) Queries() *form.Queries {
 	return form.New(b.db)
 }
 
-func (b Builder) Create(opts ...Option) form.Form {
+func (b Builder) Create(opts ...Option) form.CreateRow {
 	queries := b.Queries()
 
 	p := &FactoryParams{

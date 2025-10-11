@@ -1,6 +1,7 @@
 package question
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -14,7 +15,7 @@ import (
 type Querier interface {
 	Create(ctx context.Context, params CreateParams) (Question, error)
 	Update(ctx context.Context, params UpdateParams) (Question, error)
-	Delete(ctx context.Context, params DeleteParams) error
+	Delete(ctx context.Context, params DeleteParams) (int64, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]Question, error)
 	GetByID(ctx context.Context, id uuid.UUID) (Question, error)
 }
@@ -73,16 +74,21 @@ func (s *Service) Delete(ctx context.Context, formID uuid.UUID, id uuid.UUID) er
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	err := s.queries.Delete(ctx, DeleteParams{
+	rowsAffected, err := s.queries.Delete(ctx, DeleteParams{
 		FormID: formID,
 		ID:     id,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete question")
 		span.RecordError(err)
+		return err
 	}
 
-	return err
+	if rowsAffected == 0 {
+		return internal.ErrQuestionNotFound
+	}
+
+	return nil
 }
 
 func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Answerable, error) {

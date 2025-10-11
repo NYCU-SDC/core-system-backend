@@ -22,7 +22,7 @@ type Querier interface {
 	Exists(ctx context.Context, arg ExistsParams) (bool, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Update(ctx context.Context, id uuid.UUID) error
-	Delete(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) (int64, error)
 	CreateAnswer(ctx context.Context, arg CreateAnswerParams) (Answer, error)
 	GetAnswersByQuestionID(ctx context.Context, arg GetAnswersByQuestionIDParams) ([]GetAnswersByQuestionIDRow, error)
 	GetAnswersByResponseID(ctx context.Context, responseID uuid.UUID) ([]Answer, error)
@@ -256,11 +256,15 @@ func (s Service) Delete(ctx context.Context, id uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.Delete(traceCtx, id)
+	rowsAffected, err := s.queries.Delete(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "delete response")
 		span.RecordError(err)
 		return err
+	}
+
+	if rowsAffected == 0 {
+		return internal.ErrResponseNotFound
 	}
 
 	return nil

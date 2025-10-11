@@ -36,8 +36,17 @@ var (
 	ErrOrgSlugAlreadyExists = errors.New("org slug already exists")
 	ErrUnitNotFound         = errors.New("unit not found")
 
-	// Publish Errors
-	ErrFormNotDraft = fmt.Errorf("form is not in draft status")
+	// Form Errors
+	ErrFormNotFound       = errors.New("form not found")
+	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
+	ErrFormDeadlinePassed = errors.New("form deadline has passed")
+
+	// Question Errors
+	ErrQuestionNotFound = errors.New("question not found")
+	ErrQuestionRequired = errors.New("question is required but not answered")
+
+	// Response Errors
+	ErrResponseNotFound = errors.New("response not found")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -87,9 +96,24 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrUnitNotFound):
 		return problem.NewNotFoundProblem("unit not found")
 
-	// Publish Errors
+	// Form Errors
+	case errors.Is(err, ErrFormNotFound):
+		return problem.NewNotFoundProblem("form not found")
 	case errors.Is(err, ErrFormNotDraft):
 		return problem.NewValidateProblem("form is not in draft status")
+	case errors.Is(err, ErrFormDeadlinePassed):
+		return problem.NewValidateProblem("form deadline has passed")
+
+	// Question Errors
+	case errors.Is(err, ErrQuestionNotFound):
+		return problem.NewNotFoundProblem("question not found")
+	case errors.Is(err, ErrQuestionRequired):
+		return problem.NewValidateProblem("question is required but not answered")
+
+	// Response Errors
+	case errors.Is(err, ErrResponseNotFound):
+		return problem.NewNotFoundProblem("response not found")
+
 	}
 	return problem.Problem{}
 }
