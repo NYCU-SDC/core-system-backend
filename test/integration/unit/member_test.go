@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"NYCU-SDC/core-system-backend/internal/tenant"
 	"NYCU-SDC/core-system-backend/internal/unit"
 	"NYCU-SDC/core-system-backend/test/integration"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
@@ -151,7 +152,8 @@ func TestUnitService_AddMember(t *testing.T) {
 				ctx = tc.setup(t, &params, db)
 			}
 
-			service := unit.NewService(logger, db)
+			tenantStore := tenant.NewService(logger, db)
+			service := unit.NewService(logger, db, tenantStore)
 
 			memberIDs := params.memberIDs
 			require.NotEmpty(t, memberIDs, "memberIDs must not be empty")
@@ -241,7 +243,8 @@ func TestUnitService_ListMembers(t *testing.T) {
 				ctx = tc.setup(t, &params, db)
 			}
 
-			service := unit.NewService(logger, db)
+			tenantStore := tenant.NewService(logger, db)
+			service := unit.NewService(logger, db, tenantStore)
 			members, err := service.ListMembers(ctx, params.unitID)
 
 			memberIDs := make([]uuid.UUID, len(members))
@@ -323,7 +326,8 @@ func TestUnitService_ListUnitsMembers(t *testing.T) {
 				ctx = tc.setup(t, &params, db)
 			}
 
-			service := unit.NewService(logger, db)
+			tenantStore := tenant.NewService(logger, db)
+			service := unit.NewService(logger, db, tenantStore)
 			result, err := service.ListUnitsMembers(ctx, params.unitIDs)
 
 			require.NoError(t, err)
@@ -413,7 +417,8 @@ func TestUnitService_RemoveMember(t *testing.T) {
 				ctx = tc.setup(t, &params, db)
 			}
 
-			service := unit.NewService(logger, db)
+			tenantStore := tenant.NewService(logger, db)
+			service := unit.NewService(logger, db, tenantStore)
 
 			err = service.RemoveMember(ctx, params.unitType, params.unitID, params.memberID)
 			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
