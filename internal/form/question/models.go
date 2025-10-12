@@ -265,6 +265,14 @@ type FormResponse struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type History struct {
+	Slug      string
+	OrgID     pgtype.UUID
+	Orgname   pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	EndedAt   pgtype.Timestamptz
+}
+
 type InboxMessage struct {
 	ID        uuid.UUID
 	PostedBy  uuid.UUID

@@ -1,9 +1,9 @@
 package unit
 
 import (
+	"NYCU-SDC/core-system-backend/internal/tenant"
 	"context"
 	"fmt"
-
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -30,10 +30,17 @@ type Querier interface {
 	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
 }
 
+type tenantStore interface {
+	Create(ctx context.Context, slug string, id uuid.UUID, ownerID uuid.UUID, ownerName string) (tenant.Tenant, error)
+	SlugExists(ctx context.Context, slug string) (bool, error)
+	GetBySlug(ctx context.Context, slug string) (tenant.Tenant, error)
+	CreateHistory(ctx context.Context, slug string, orgID uuid.UUID, orgName string) (tenant.History, error)
+}
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger      *zap.Logger
+	queries     Querier
+	tracer      trace.Tracer
+	tenantStore tenantStore
 }
 
 type Organization struct {
@@ -64,18 +71,29 @@ func (t Type) String() string {
 	return typeStrings[t]
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("unit/service"),
+		logger:      logger,
+		queries:     New(db),
+		tracer:      otel.Tracer("unit/service"),
+		tenantStore: tenantStore,
 	}
 }
 
-func (s *Service) CreateOrganization(ctx context.Context, name string, description string, metadata []byte) (Unit, error) {
+func (s *Service) CreateOrganization(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateOrganization")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.tenantStore.SlugExists(traceCtx, slug)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "failed to validate slug uniqueness")
+		return Unit{}, err
+	}
+	if exists {
+		err = databaseutil.WrapDBError(err, logger, "slug already in use")
+		return Unit{}, err
+	}
 
 	org, err := s.queries.Create(traceCtx, CreateParams{
 		Name:        pgtype.Text{String: name, Valid: name != ""},
@@ -90,6 +108,18 @@ func (s *Service) CreateOrganization(ctx context.Context, name string, descripti
 		return Unit{}, err
 	}
 
+	_, err = s.tenantStore.Create(traceCtx, slug, org.ID, currentUserID, name)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create tenant for org")
+		return Unit{}, err
+	}
+
+	_, err = s.tenantStore.CreateHistory(traceCtx, slug, org.ID, name)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create tenant history for org")
+		return Unit{}, err
+	}
+
 	logger.Info("Created organization",
 		zap.String("org_id", org.ID.String()),
 		zap.String("name", org.Name.String),
@@ -100,15 +130,20 @@ func (s *Service) CreateOrganization(ctx context.Context, name string, descripti
 }
 
 // CreateUnit creates a new unit or organization
-func (s *Service) CreateUnit(ctx context.Context, name string, orgID pgtype.UUID, description string, metadata []byte) (Unit, error) {
+func (s *Service) CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateUnit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	orgTenant, err := s.tenantStore.GetBySlug(traceCtx, slug)
+	if err != nil {
+		return Unit{}, err
+	}
+
 	unit, err := s.queries.Create(traceCtx, CreateParams{
 		Name:        pgtype.Text{String: name, Valid: name != ""},
-		OrgID:       orgID,
-		ParentID:    pgtype.UUID{Valid: true, Bytes: orgID.Bytes},
+		OrgID:       pgtype.UUID{Bytes: orgTenant.ID, Valid: true},
+		ParentID:    pgtype.UUID{Bytes: orgTenant.ID, Valid: true},
 		Description: pgtype.Text{String: description, Valid: true},
 		Metadata:    metadata,
 		Type:        UnitTypeUnit,
@@ -121,7 +156,7 @@ func (s *Service) CreateUnit(ctx context.Context, name string, orgID pgtype.UUID
 
 	logger.Info(fmt.Sprintf("Created %s", unit.Type),
 		zap.String("unit_id", unit.ID.String()),
-		zap.String("org_id", orgID.String()),
+		zap.String("org_id", orgTenant.ID.String()),
 		zap.String("name", unit.Name.String),
 		zap.String("description", unit.Description.String),
 		zap.String("metadata", string(unit.Metadata)))

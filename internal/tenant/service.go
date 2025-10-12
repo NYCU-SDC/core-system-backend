@@ -3,6 +3,7 @@ package tenant
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"context"
+	"time"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -21,6 +22,9 @@ type Querier interface {
 	Update(ctx context.Context, param UpdateParams) (Tenant, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetBySlug(ctx context.Context, slug string) (Tenant, error)
+	GetHistory(ctx context.Context, slug string) ([]History, error)
+	CreateHistory(ctx context.Context, arg CreateHistoryParams) (History, error)
+	UpdateHistory(ctx context.Context, arg UpdateHistoryParams) (History, error)
 }
 
 type Service struct {
@@ -52,7 +56,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (Tenant, error) {
 	return tenant, nil
 }
 
-func (s *Service) Create(ctx context.Context, slug string, id uuid.UUID, ownerID uuid.UUID) (Tenant, error) {
+func (s *Service) Create(ctx context.Context, slug string, id uuid.UUID, ownerID uuid.UUID, ownerName string) (Tenant, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := internal.WithContext(traceCtx, s.logger)
@@ -91,6 +95,16 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, slug string, dbStrat
 	}
 
 	logger.Info("tenant updated", zap.String("tenant_id", tenant.ID.String()), zap.String("db_strategy", string(tenant.DbStrategy)), zap.String("slug", slug))
+
+	// current tenant stop using the slug
+	_, err = s.query.UpdateHistory(traceCtx, UpdateHistoryParams{
+		Slug:    slug,
+		OrgID:   pgtype.UUID{Bytes: tenant.ID, Valid: true},
+		EndedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+	})
+	if err != nil {
+		return Tenant{}, err
+	}
 
 	return tenant, nil
 }
@@ -140,4 +154,80 @@ func (s *Service) GetBySlug(ctx context.Context, slug string) (Tenant, error) {
 	}
 
 	return org, nil
+}
+
+func deriveStatus(history []History) (bool, string) {
+	for _, h := range history {
+		if !h.EndedAt.Valid {
+			return false, h.OrgID.String() // currently assigned
+		}
+	}
+	return true, ""
+}
+
+func (s *Service) GetHistoryBySlug(ctx context.Context, slug string) ([]History, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetHistoryBySlug")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	history, err := s.query.GetHistory(traceCtx, slug)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get slug history")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return history, nil
+}
+
+func (s *Service) GetStatusWithHistory(ctx context.Context, slug string) (bool, uuid.UUID, []History, error) {
+	history, err := s.GetHistoryBySlug(ctx, slug)
+	if err != nil {
+		return true, uuid.UUID{}, nil, err
+	}
+
+	available, currentOrgIDStr := deriveStatus(history)
+	currentOrgID, err := uuid.Parse(currentOrgIDStr)
+	if err != nil {
+		return true, uuid.UUID{}, nil, err
+	}
+
+	return available, currentOrgID, history, nil
+}
+
+func (s *Service) GetStatus(ctx context.Context, slug string) (bool, uuid.UUID, error) {
+	history, err := s.GetHistoryBySlug(ctx, slug)
+	if err != nil {
+		return true, uuid.UUID{}, err
+	}
+
+	available, currentOrgIDStr := deriveStatus(history)
+	currentOrgID, err := uuid.Parse(currentOrgIDStr)
+	if err != nil {
+		return true, uuid.UUID{}, err
+	}
+	return available, currentOrgID, nil
+}
+
+func (s *Service) CreateHistory(ctx context.Context, slug string, orgID uuid.UUID, orgName string) (History, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateHistory")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	history, err := s.query.CreateHistory(traceCtx, CreateHistoryParams{
+		Slug:      slug,
+		OrgID:     pgtype.UUID{Bytes: orgID, Valid: true},
+		Orgname:   pgtype.Text{String: orgName, Valid: true},
+		CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		EndedAt:   pgtype.Timestamptz{Valid: false},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create history")
+		span.RecordError(err)
+		return History{}, err
+	}
+
+	logger.Info("history created", zap.String("slug", slug), zap.String("org_id", orgID.String()), zap.String("org_name", orgName))
+
+	return history, nil
 }

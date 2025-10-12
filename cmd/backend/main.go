@@ -135,7 +135,7 @@ func main() {
 	userService := user.NewService(logger, dbPool)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	tenantService := tenant.NewService(logger, dbPool)
-	unitService := unit.NewService(logger, dbPool)
+	unitService := unit.NewService(logger, dbPool, tenantService)
 	distributeService := distribute.NewService(logger, unitService)
 	formService := form.NewService(logger, dbPool)
 	questionService := question.NewService(logger, dbPool)
@@ -154,6 +154,7 @@ func main() {
 	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService)
 	inboxHandler := inbox.NewHandler(logger, validator, problemWriter, inboxService, formService, unitService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
+	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 
 	// Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -221,6 +222,10 @@ func main() {
 	mux.Handle("POST /api/orgs/{slug}/units/{id}/members", tenantAuthMiddleware.HandlerFunc(unitHandler.AddUnitMember))
 	mux.Handle("GET /api/orgs/{slug}/units/{id}/members", tenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitMembers))
 	mux.Handle("DELETE /api/orgs/{slug}/units/{id}/members/{member_id}", tenantAuthMiddleware.HandlerFunc(unitHandler.RemoveUnitMember))
+
+	// Slug availability and history
+	mux.Handle("GET /api/orgs/{slug}/status", tenantBasicMiddleware.HandlerFunc(tenantHandler.GetStatus))
+	mux.Handle("GET /api/orgs/{slug}/history", tenantBasicMiddleware.HandlerFunc(tenantHandler.GetStatusWithHistory))
 
 	// List sub-units
 	mux.Handle("GET /api/orgs/{slug}/units", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnits))

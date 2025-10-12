@@ -21,3 +21,17 @@ RETURNING *;
 -- name: Delete :exec
 DELETE FROM tenants
 WHERE id = $1;
+
+-- name: GetHistory :many
+SELECT * FROM history WHERE slug = $1;
+
+-- name: CreateHistory :one
+INSERT INTO history (slug, org_id, orgName, created_at, ended_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING *;
+
+-- name: UpdateHistory :one
+UPDATE history
+SET ended_at = $3
+WHERE slug = $1 AND org_id = $2
+RETURNING *;

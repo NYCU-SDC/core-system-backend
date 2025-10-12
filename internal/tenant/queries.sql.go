@@ -42,6 +42,39 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (Tenant, error) 
 	return i, err
 }
 
+const createHistory = `-- name: CreateHistory :one
+INSERT INTO history (slug, org_id, orgName, created_at, ended_at)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING slug, org_id, orgname, created_at, ended_at
+`
+
+type CreateHistoryParams struct {
+	Slug      string
+	OrgID     pgtype.UUID
+	Orgname   pgtype.Text
+	CreatedAt pgtype.Timestamptz
+	EndedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) CreateHistory(ctx context.Context, arg CreateHistoryParams) (History, error) {
+	row := q.db.QueryRow(ctx, createHistory,
+		arg.Slug,
+		arg.OrgID,
+		arg.Orgname,
+		arg.CreatedAt,
+		arg.EndedAt,
+	)
+	var i History
+	err := row.Scan(
+		&i.Slug,
+		&i.OrgID,
+		&i.Orgname,
+		&i.CreatedAt,
+		&i.EndedAt,
+	)
+	return i, err
+}
+
 const delete = `-- name: Delete :exec
 DELETE FROM tenants
 WHERE id = $1
@@ -95,6 +128,36 @@ func (q *Queries) GetBySlug(ctx context.Context, slug string) (Tenant, error) {
 	return i, err
 }
 
+const getHistory = `-- name: GetHistory :many
+SELECT slug, org_id, orgname, created_at, ended_at FROM history WHERE slug = $1
+`
+
+func (q *Queries) GetHistory(ctx context.Context, slug string) ([]History, error) {
+	rows, err := q.db.Query(ctx, getHistory, slug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []History
+	for rows.Next() {
+		var i History
+		if err := rows.Scan(
+			&i.Slug,
+			&i.OrgID,
+			&i.Orgname,
+			&i.CreatedAt,
+			&i.EndedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const update = `-- name: Update :one
 UPDATE tenants
 SET slug = $2, db_strategy = $3
@@ -116,6 +179,32 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Tenant, error) 
 		&i.Slug,
 		&i.DbStrategy,
 		&i.OwnerID,
+	)
+	return i, err
+}
+
+const updateHistory = `-- name: UpdateHistory :one
+UPDATE history
+SET ended_at = $3
+WHERE slug = $1 AND org_id = $2
+RETURNING slug, org_id, orgname, created_at, ended_at
+`
+
+type UpdateHistoryParams struct {
+	Slug    string
+	OrgID   pgtype.UUID
+	EndedAt pgtype.Timestamptz
+}
+
+func (q *Queries) UpdateHistory(ctx context.Context, arg UpdateHistoryParams) (History, error) {
+	row := q.db.QueryRow(ctx, updateHistory, arg.Slug, arg.OrgID, arg.EndedAt)
+	var i History
+	err := row.Scan(
+		&i.Slug,
+		&i.OrgID,
+		&i.Orgname,
+		&i.CreatedAt,
+		&i.EndedAt,
 	)
 	return i, err
 }

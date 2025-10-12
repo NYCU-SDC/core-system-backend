@@ -12,8 +12,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
@@ -25,8 +23,8 @@ import (
 )
 
 type Store interface {
-	CreateOrganization(ctx context.Context, name string, description string, metadata []byte) (Unit, error)
-	CreateUnit(ctx context.Context, name string, orgID pgtype.UUID, desc string, metadata []byte) (Unit, error)
+	CreateOrganization(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
+	CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
 	Update(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error)
@@ -190,13 +188,7 @@ func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgTenant, err := h.tenantService.GetBySlug(traceCtx, orgSlug)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org ID by slug: %w", err), h.logger)
-		return
-	}
-
-	createdUnit, err := h.store.CreateUnit(traceCtx, req.Name, pgtype.UUID{Bytes: orgTenant.ID, Valid: true}, req.Description, metadataBytes)
+	createdUnit, err := h.store.CreateUnit(traceCtx, req.Name, req.Description, orgSlug, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), h.logger)
 		return
@@ -235,25 +227,9 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exists, err := h.tenantService.SlugExists(traceCtx, req.Slug)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to validate slug uniqueness: %w", err), h.logger)
-		return
-	}
-	if exists {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("slug already in use"), h.logger)
-		return
-	}
-
-	createdOrg, err := h.store.CreateOrganization(traceCtx, req.Name, req.Description, metadataBytes)
+	createdOrg, err := h.store.CreateOrganization(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create org: %w", err), h.logger)
-		return
-	}
-
-	_, err = h.tenantService.Create(traceCtx, req.Slug, createdOrg.ID, currentUser.ID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create tenant for org: %w", err), h.logger)
 		return
 	}
 
