@@ -41,12 +41,20 @@ func (s *Service) Create(ctx context.Context, req Request, unitID uuid.UUID, use
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
+	var deadline pgtype.Timestamptz
+	if req.Deadline != nil {
+		deadline = pgtype.Timestamptz{Time: *req.Deadline, Valid: true}
+	} else {
+		deadline = pgtype.Timestamptz{Valid: false}
+	}
+
 	newForm, err := s.queries.Create(ctx, CreateParams{
-		Title:       req.Title,
-		Description: pgtype.Text{String: req.Description, Valid: true},
-		UnitID:      pgtype.UUID{Bytes: unitID, Valid: true},
-		LastEditor:  userID,
-		Deadline:    pgtype.Timestamptz{Time: *req.Deadline, Valid: true},
+		Title:          req.Title,
+		Description:    pgtype.Text{String: req.Description, Valid: true},
+		PreviewMessage: pgtype.Text{String: req.PreviewMessage, Valid: req.PreviewMessage != ""},
+		UnitID:         pgtype.UUID{Bytes: unitID, Valid: true},
+		LastEditor:     userID,
+		Deadline:       deadline,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create form")
@@ -62,12 +70,20 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
+	var deadline pgtype.Timestamptz
+	if request.Deadline != nil {
+		deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
+	} else {
+		deadline = pgtype.Timestamptz{Valid: false}
+	}
+
 	updatedForm, err := s.queries.Update(ctx, UpdateParams{
-		ID:          id,
-		Title:       request.Title,
-		Description: pgtype.Text{String: request.Description, Valid: true},
-		LastEditor:  userID,
-		Deadline:    pgtype.Timestamptz{Time: *request.Deadline, Valid: true},
+		ID:             id,
+		Title:          request.Title,
+		Description:    pgtype.Text{String: request.Description, Valid: true},
+		PreviewMessage: pgtype.Text{String: request.PreviewMessage, Valid: request.PreviewMessage != ""},
+		LastEditor:     userID,
+		Deadline:       deadline,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update form")

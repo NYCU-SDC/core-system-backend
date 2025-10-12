@@ -16,7 +16,8 @@ import (
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID) (Unit, error)
-	GetAllOrganizations(ctx context.Context) ([]Unit, error)
+	GetAllOrganizations(ctx context.Context) ([]GetAllOrganizationsRow, error)
+	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (GetOrganizationByIDWithSlugRow, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
 	Update(ctx context.Context, arg UpdateParams) (Unit, error)
@@ -40,6 +41,11 @@ type Service struct {
 	queries     Querier
 	tracer      trace.Tracer
 	tenantStore tenantStore
+}
+
+type Organization struct {
+	Unit Unit
+	Slug string
 }
 
 type Base struct {
@@ -158,7 +164,7 @@ func (s *Service) CreateUnit(ctx context.Context, name string, description strin
 	return unit, nil
 }
 
-func (s *Service) GetAllOrganizations(ctx context.Context) ([]Unit, error) {
+func (s *Service) GetAllOrganizations(ctx context.Context) ([]Organization, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetAllOrganizations")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -170,11 +176,53 @@ func (s *Service) GetAllOrganizations(ctx context.Context) ([]Unit, error) {
 		return nil, err
 	}
 
-	if organizations == nil {
-		organizations = []Unit{}
+	result := make([]Organization, 0, len(organizations))
+	for _, o := range organizations {
+		result = append(result, Organization{
+			Unit: Unit{
+				ID:          o.ID,
+				OrgID:       o.OrgID,
+				ParentID:    o.ParentID,
+				Type:        o.Type,
+				Name:        o.Name,
+				Description: o.Description,
+				Metadata:    o.Metadata,
+				CreatedAt:   o.CreatedAt,
+				UpdatedAt:   o.UpdatedAt,
+			},
+			Slug: o.Slug.String,
+		})
 	}
 
-	return organizations, nil
+	return result, nil
+}
+
+func (s *Service) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetOrganizationByIDWithSlug")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	r, err := s.queries.GetOrganizationByIDWithSlug(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "organizations", "id", id.String(), logger, "get organization by id with slug")
+		span.RecordError(err)
+		return Organization{}, err
+	}
+
+	return Organization{
+		Unit: Unit{
+			ID:          r.ID,
+			OrgID:       r.OrgID,
+			ParentID:    r.ParentID,
+			Type:        r.Type,
+			Name:        r.Name,
+			Description: r.Description,
+			Metadata:    r.Metadata,
+			CreatedAt:   r.CreatedAt,
+			UpdatedAt:   r.UpdatedAt,
+		},
+		Slug: r.Slug.String,
+	}, nil
 }
 
 // GetByID retrieves a unit by ID

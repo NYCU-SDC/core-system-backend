@@ -245,15 +245,16 @@ type Auth struct {
 }
 
 type Form struct {
-	ID          uuid.UUID
-	Title       string
-	Description pgtype.Text
-	Status      Status
-	UnitID      pgtype.UUID
-	LastEditor  uuid.UUID
-	Deadline    pgtype.Timestamptz
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID             uuid.UUID
+	Title          string
+	Description    pgtype.Text
+	PreviewMessage pgtype.Text
+	Status         Status
+	UnitID         pgtype.UUID
+	LastEditor     uuid.UUID
+	Deadline       pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
 }
 
 type FormResponse struct {

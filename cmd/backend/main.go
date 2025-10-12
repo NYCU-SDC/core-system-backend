@@ -152,7 +152,7 @@ func main() {
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService, tenantService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
 	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService)
-	inboxHandler := inbox.NewHandler(logger, validator, problemWriter, inboxService, formService)
+	inboxHandler := inbox.NewHandler(logger, validator, problemWriter, inboxService, formService, unitService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 

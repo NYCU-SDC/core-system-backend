@@ -81,18 +81,34 @@ func (q *Queries) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 const getAllOrganizations = `-- name: GetAllOrganizations :many
-SELECT id, org_id, parent_id, type, name, description, metadata, created_at, updated_at FROM units WHERE type = 'organization'
+SELECT u.id, u.org_id, u.parent_id, u.type, u.name, u.description, u.metadata, u.created_at, u.updated_at, t.slug
+FROM units u
+LEFT JOIN tenants t ON t.id = u.id
+WHERE u.type = 'organization'
 `
 
-func (q *Queries) GetAllOrganizations(ctx context.Context) ([]Unit, error) {
+type GetAllOrganizationsRow struct {
+	ID          uuid.UUID
+	OrgID       pgtype.UUID
+	ParentID    pgtype.UUID
+	Type        UnitType
+	Name        pgtype.Text
+	Description pgtype.Text
+	Metadata    []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	Slug        pgtype.Text
+}
+
+func (q *Queries) GetAllOrganizations(ctx context.Context) ([]GetAllOrganizationsRow, error) {
 	rows, err := q.db.Query(ctx, getAllOrganizations)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Unit
+	var items []GetAllOrganizationsRow
 	for rows.Next() {
-		var i Unit
+		var i GetAllOrganizationsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OrgID,
@@ -103,6 +119,7 @@ func (q *Queries) GetAllOrganizations(ctx context.Context) ([]Unit, error) {
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Slug,
 		); err != nil {
 			return nil, err
 		}
@@ -131,6 +148,44 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (Unit, error) {
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getOrganizationByIDWithSlug = `-- name: GetOrganizationByIDWithSlug :one
+SELECT u.id, u.org_id, u.parent_id, u.type, u.name, u.description, u.metadata, u.created_at, u.updated_at, t.slug
+FROM units u
+LEFT JOIN tenants t ON t.id = u.id
+WHERE u.id = $1 AND u.type = 'organization'
+`
+
+type GetOrganizationByIDWithSlugRow struct {
+	ID          uuid.UUID
+	OrgID       pgtype.UUID
+	ParentID    pgtype.UUID
+	Type        UnitType
+	Name        pgtype.Text
+	Description pgtype.Text
+	Metadata    []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	Slug        pgtype.Text
+}
+
+func (q *Queries) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (GetOrganizationByIDWithSlugRow, error) {
+	row := q.db.QueryRow(ctx, getOrganizationByIDWithSlug, id)
+	var i GetOrganizationByIDWithSlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.ParentID,
+		&i.Type,
+		&i.Name,
+		&i.Description,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Slug,
 	)
 	return i, err
 }

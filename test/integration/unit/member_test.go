@@ -21,11 +21,11 @@ func TestUnitService_AddMember(t *testing.T) {
 		memberIDs []uuid.UUID
 	}
 	testCases := []struct {
-		name      string
-		params    params
-		setup     func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
-		validate  func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.UnitMember, err error)
-		expectErr bool
+		name        string
+		params      params
+		setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
+		validate    func(t *testing.T, params params, db dbbuilder.DBTX, results []unit.UnitMember, err error)
+		expectedErr bool
 	}{
 		{
 			name: "Add member to organization",
@@ -167,7 +167,7 @@ func TestUnitService_AddMember(t *testing.T) {
 				}
 			}
 
-			require.Equal(t, tc.expectErr, encounteredErr != nil, "expected error: %v, got: %v", tc.expectErr, encounteredErr)
+			require.Equal(t, tc.expectedErr, encounteredErr != nil, "expected error: %v, got: %v", tc.expectedErr, encounteredErr)
 
 			if tc.validate != nil {
 				tc.validate(t, params, db, results, encounteredErr)
@@ -345,11 +345,11 @@ func TestUnitService_RemoveMember(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name      string
-		params    params
-		setup     func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
-		validate  func(t *testing.T, params params, db dbbuilder.DBTX)
-		expectErr bool
+		name        string
+		params      params
+		setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
+		validate    func(t *testing.T, params params, db dbbuilder.DBTX)
+		expectedErr bool
 	}{
 		{
 			name:   "Remove existing unit member",
@@ -416,7 +416,7 @@ func TestUnitService_RemoveMember(t *testing.T) {
 			service := unit.NewService(logger, db)
 
 			err = service.RemoveMember(ctx, params.unitType, params.unitID, params.memberID)
-			require.Equal(t, tc.expectErr, err != nil, "expected error: %v, got: %v", tc.expectErr, err)
+			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 
 			if tc.validate != nil {
 				tc.validate(t, params, db)

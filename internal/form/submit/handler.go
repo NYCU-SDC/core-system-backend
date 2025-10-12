@@ -6,7 +6,9 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -97,7 +99,13 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 
 	newResponse, errs := h.operator.Submit(traceCtx, formID, currentUser.ID, answerParams)
 	if errs != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		// Convert errors to strings and join them for better error handling
+		errorStrings := make([]string, len(errs))
+		for i, err := range errs {
+			errorStrings[i] = err.Error()
+		}
+		combinedErr := errors.New("form submission failed: [" + strings.Join(errorStrings, "; ") + "]")
+		h.problemWriter.WriteError(traceCtx, w, combinedErr, logger)
 		return
 	}
 

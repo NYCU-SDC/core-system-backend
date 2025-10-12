@@ -13,23 +13,25 @@ import (
 )
 
 const create = `-- name: Create :one
-INSERT INTO forms (title, description, unit_id, last_editor, deadline)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, title, description, status, unit_id, last_editor, deadline, created_at, updated_at
+INSERT INTO forms (title, description, preview_message, unit_id, last_editor, deadline)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at
 `
 
 type CreateParams struct {
-	Title       string
-	Description pgtype.Text
-	UnitID      pgtype.UUID
-	LastEditor  uuid.UUID
-	Deadline    pgtype.Timestamptz
+	Title          string
+	Description    pgtype.Text
+	PreviewMessage pgtype.Text
+	UnitID         pgtype.UUID
+	LastEditor     uuid.UUID
+	Deadline       pgtype.Timestamptz
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (Form, error) {
 	row := q.db.QueryRow(ctx, create,
 		arg.Title,
 		arg.Description,
+		arg.PreviewMessage,
 		arg.UnitID,
 		arg.LastEditor,
 		arg.Deadline,
@@ -39,6 +41,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (Form, error) {
 		&i.ID,
 		&i.Title,
 		&i.Description,
+		&i.PreviewMessage,
 		&i.Status,
 		&i.UnitID,
 		&i.LastEditor,
@@ -59,7 +62,7 @@ func (q *Queries) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 const getByID = `-- name: GetByID :one
-SELECT id, title, description, status, unit_id, last_editor, deadline, created_at, updated_at FROM forms WHERE id = $1
+SELECT id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at FROM forms WHERE id = $1
 `
 
 func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (Form, error) {
@@ -69,6 +72,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (Form, error) {
 		&i.ID,
 		&i.Title,
 		&i.Description,
+		&i.PreviewMessage,
 		&i.Status,
 		&i.UnitID,
 		&i.LastEditor,
@@ -80,7 +84,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (Form, error) {
 }
 
 const list = `-- name: List :many
-SELECT id, title, description, status, unit_id, last_editor, deadline, created_at, updated_at FROM forms ORDER BY updated_at DESC
+SELECT id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at FROM forms ORDER BY updated_at DESC
 `
 
 func (q *Queries) List(ctx context.Context) ([]Form, error) {
@@ -96,6 +100,7 @@ func (q *Queries) List(ctx context.Context) ([]Form, error) {
 			&i.ID,
 			&i.Title,
 			&i.Description,
+			&i.PreviewMessage,
 			&i.Status,
 			&i.UnitID,
 			&i.LastEditor,
@@ -114,7 +119,7 @@ func (q *Queries) List(ctx context.Context) ([]Form, error) {
 }
 
 const listByUnit = `-- name: ListByUnit :many
-SELECT id, title, description, status, unit_id, last_editor, deadline, created_at, updated_at FROM forms
+SELECT id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at FROM forms
 WHERE unit_id = $1
 ORDER BY updated_at DESC
 `
@@ -132,6 +137,7 @@ func (q *Queries) ListByUnit(ctx context.Context, unitID pgtype.UUID) ([]Form, e
 			&i.ID,
 			&i.Title,
 			&i.Description,
+			&i.PreviewMessage,
 			&i.Status,
 			&i.UnitID,
 			&i.LastEditor,
@@ -153,7 +159,7 @@ const setStatus = `-- name: SetStatus :one
 UPDATE forms
 SET status = $2, last_editor = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, title, description, status, unit_id, last_editor, deadline, created_at, updated_at
+RETURNING id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at
 `
 
 type SetStatusParams struct {
@@ -169,6 +175,7 @@ func (q *Queries) SetStatus(ctx context.Context, arg SetStatusParams) (Form, err
 		&i.ID,
 		&i.Title,
 		&i.Description,
+		&i.PreviewMessage,
 		&i.Status,
 		&i.UnitID,
 		&i.LastEditor,
@@ -181,17 +188,18 @@ func (q *Queries) SetStatus(ctx context.Context, arg SetStatusParams) (Form, err
 
 const update = `-- name: Update :one
 UPDATE forms
-SET title = $2, description = $3, last_editor = $4, deadline = $5, updated_at = now()
+SET title = $2, description = $3, preview_message = $4, last_editor = $5, deadline = $6, updated_at = now()
 WHERE id = $1
-RETURNING id, title, description, status, unit_id, last_editor, deadline, created_at, updated_at
+RETURNING id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at
 `
 
 type UpdateParams struct {
-	ID          uuid.UUID
-	Title       string
-	Description pgtype.Text
-	LastEditor  uuid.UUID
-	Deadline    pgtype.Timestamptz
+	ID             uuid.UUID
+	Title          string
+	Description    pgtype.Text
+	PreviewMessage pgtype.Text
+	LastEditor     uuid.UUID
+	Deadline       pgtype.Timestamptz
 }
 
 func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Form, error) {
@@ -199,6 +207,7 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Form, error) {
 		arg.ID,
 		arg.Title,
 		arg.Description,
+		arg.PreviewMessage,
 		arg.LastEditor,
 		arg.Deadline,
 	)
@@ -207,6 +216,7 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Form, error) {
 		&i.ID,
 		&i.Title,
 		&i.Description,
+		&i.PreviewMessage,
 		&i.Status,
 		&i.UnitID,
 		&i.LastEditor,

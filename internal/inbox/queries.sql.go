@@ -77,9 +77,18 @@ func (q *Queries) CreateUserInboxBulk(ctx context.Context, arg CreateUserInboxBu
 }
 
 const getByID = `-- name: GetByID :one
-SELECT uim.id, user_id, message_id, is_read, is_starred, is_archived, im.id, posted_by, type, content_id, created_at, updated_at
+SELECT 
+    uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived,
+    im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
+    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+    CASE WHEN im.type = 'form' THEN f.title END AS title,
+    CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
+    CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
 FROM user_inbox_messages uim
 JOIN inbox_message im ON uim.message_id = im.id
+LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
+LEFT JOIN units u ON f.unit_id = u.id
+LEFT JOIN units o ON u.org_id = o.id
 WHERE uim.id = $1 AND uim.user_id = $2
 `
 
@@ -89,18 +98,22 @@ type GetByIDParams struct {
 }
 
 type GetByIDRow struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	MessageID  uuid.UUID
-	IsRead     bool
-	IsStarred  bool
-	IsArchived bool
-	ID_2       uuid.UUID
-	PostedBy   uuid.UUID
-	Type       ContentType
-	ContentID  uuid.UUID
-	CreatedAt  pgtype.Timestamp
-	UpdatedAt  pgtype.Timestamp
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	MessageID      uuid.UUID
+	IsRead         bool
+	IsStarred      bool
+	IsArchived     bool
+	ID_2           uuid.UUID
+	PostedBy       uuid.UUID
+	Type           ContentType
+	ContentID      uuid.UUID
+	CreatedAt      pgtype.Timestamp
+	UpdatedAt      pgtype.Timestamp
+	PreviewMessage interface{}
+	Title          interface{}
+	OrgName        interface{}
+	UnitName       interface{}
 }
 
 func (q *Queries) GetByID(ctx context.Context, arg GetByIDParams) (GetByIDRow, error) {
@@ -119,30 +132,47 @@ func (q *Queries) GetByID(ctx context.Context, arg GetByIDParams) (GetByIDRow, e
 		&i.ContentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PreviewMessage,
+		&i.Title,
+		&i.OrgName,
+		&i.UnitName,
 	)
 	return i, err
 }
 
 const list = `-- name: List :many
-SELECT uim.id, user_id, message_id, is_read, is_starred, is_archived, im.id, posted_by, type, content_id, created_at, updated_at
+SELECT 
+    uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived,
+    im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
+    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+    CASE WHEN im.type = 'form' THEN f.title END AS title,
+    CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
+    CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
 FROM user_inbox_messages uim
 JOIN inbox_message im ON uim.message_id = im.id
-WHERE uim.user_id = $1
+LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
+LEFT JOIN units u ON f.unit_id = u.id
+LEFT JOIN units o ON u.org_id = o.id
+WHERE uim.user_id = $1 AND uim.is_archived = false
 `
 
 type ListRow struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	MessageID  uuid.UUID
-	IsRead     bool
-	IsStarred  bool
-	IsArchived bool
-	ID_2       uuid.UUID
-	PostedBy   uuid.UUID
-	Type       ContentType
-	ContentID  uuid.UUID
-	CreatedAt  pgtype.Timestamp
-	UpdatedAt  pgtype.Timestamp
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	MessageID      uuid.UUID
+	IsRead         bool
+	IsStarred      bool
+	IsArchived     bool
+	ID_2           uuid.UUID
+	PostedBy       uuid.UUID
+	Type           ContentType
+	ContentID      uuid.UUID
+	CreatedAt      pgtype.Timestamp
+	UpdatedAt      pgtype.Timestamp
+	PreviewMessage interface{}
+	Title          interface{}
+	OrgName        interface{}
+	UnitName       interface{}
 }
 
 func (q *Queries) List(ctx context.Context, userID uuid.UUID) ([]ListRow, error) {
@@ -167,6 +197,10 @@ func (q *Queries) List(ctx context.Context, userID uuid.UUID) ([]ListRow, error)
 			&i.ContentID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.PreviewMessage,
+			&i.Title,
+			&i.OrgName,
+			&i.UnitName,
 		); err != nil {
 			return nil, err
 		}
@@ -182,8 +216,15 @@ const updateByID = `-- name: UpdateByID :one
 UPDATE user_inbox_messages AS uim
 SET is_read = $3, is_starred = $4, is_archived = $5
 FROM inbox_message AS im
+LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
+LEFT JOIN units u ON f.unit_id = u.id
+LEFT JOIN units o ON u.org_id = o.id
 WHERE uim.message_id = im.id AND uim.id = $1 AND uim.user_id = $2
-RETURNING im.id, posted_by, type, content_id, created_at, updated_at, uim.id, user_id, message_id, is_read, is_starred, is_archived
+RETURNING uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived, im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
+CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+CASE WHEN im.type = 'form' THEN f.title END AS title,
+CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
+CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
 `
 
 type UpdateByIDParams struct {
@@ -195,18 +236,22 @@ type UpdateByIDParams struct {
 }
 
 type UpdateByIDRow struct {
-	ID         uuid.UUID
-	PostedBy   uuid.UUID
-	Type       ContentType
-	ContentID  uuid.UUID
-	CreatedAt  pgtype.Timestamp
-	UpdatedAt  pgtype.Timestamp
-	ID_2       uuid.UUID
-	UserID     uuid.UUID
-	MessageID  uuid.UUID
-	IsRead     bool
-	IsStarred  bool
-	IsArchived bool
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	MessageID      uuid.UUID
+	IsRead         bool
+	IsStarred      bool
+	IsArchived     bool
+	ID_2           uuid.UUID
+	PostedBy       uuid.UUID
+	Type           ContentType
+	ContentID      uuid.UUID
+	CreatedAt      pgtype.Timestamp
+	UpdatedAt      pgtype.Timestamp
+	PreviewMessage interface{}
+	Title          interface{}
+	OrgName        interface{}
+	UnitName       interface{}
 }
 
 func (q *Queries) UpdateByID(ctx context.Context, arg UpdateByIDParams) (UpdateByIDRow, error) {
@@ -220,17 +265,21 @@ func (q *Queries) UpdateByID(ctx context.Context, arg UpdateByIDParams) (UpdateB
 	var i UpdateByIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.PostedBy,
-		&i.Type,
-		&i.ContentID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.ID_2,
 		&i.UserID,
 		&i.MessageID,
 		&i.IsRead,
 		&i.IsStarred,
 		&i.IsArchived,
+		&i.ID_2,
+		&i.PostedBy,
+		&i.Type,
+		&i.ContentID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PreviewMessage,
+		&i.Title,
+		&i.OrgName,
+		&i.UnitName,
 	)
 	return i, err
 }

@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"go.opentelemetry.io/otel"
@@ -43,6 +44,7 @@ func (m *Middleware) AuthenticateMiddleware(handler http.HandlerFunc) http.Handl
 	return func(w http.ResponseWriter, r *http.Request) {
 		traceCtx, span := m.tracer.Start(r.Context(), "AuthenticateMiddleware")
 		defer span.End()
+		logger := logutil.WithContext(traceCtx, m.logger)
 
 		var tokenString string
 
@@ -53,13 +55,13 @@ func (m *Middleware) AuthenticateMiddleware(handler http.HandlerFunc) http.Handl
 			// Fallback to Authorization header
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				m.problemWriter.WriteError(traceCtx, w, internal.ErrMissingAuthHeader, m.logger)
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrMissingAuthHeader, logger)
 				return
 			}
 
 			fields := strings.Fields(authHeader)
 			if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") {
-				m.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, m.logger)
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
 				return
 			}
 			tokenString = fields[1]
@@ -68,7 +70,7 @@ func (m *Middleware) AuthenticateMiddleware(handler http.HandlerFunc) http.Handl
 		// Parse and validate JWT token
 		authenticatedUser, err := m.service.Parse(r.Context(), tokenString)
 		if err != nil {
-			m.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthUser, m.logger)
+			m.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthUser, logger)
 			return
 		}
 

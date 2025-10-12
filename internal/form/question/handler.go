@@ -30,7 +30,7 @@ type Response struct {
 	FormID      uuid.UUID `json:"formId"`
 	Required    bool      `json:"required"`
 	Type        string    `json:"type"`
-	Label       string    `json:"label"`
+	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Order       int32     `json:"order"`
 	Choices     []Choice  `json:"choices,omitempty"`
@@ -46,7 +46,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 		FormID:      q.FormID,
 		Required:    q.Required,
 		Type:        string(q.Type),
-		Label:       q.Title.String,
+		Title:       q.Title.String,
 		Description: q.Description.String,
 		Order:       q.Order,
 		CreatedAt:   q.CreatedAt.Time,

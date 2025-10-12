@@ -18,21 +18,23 @@ import (
 )
 
 type Request struct {
-	Title       string     `json:"title" validate:"required"`
-	Description string     `json:"description"`
-	Deadline    *time.Time `json:"deadline,omitempty"`
+	Title          string     `json:"title" validate:"required"`
+	Description    string     `json:"description"`
+	PreviewMessage string     `json:"previewMessage"`
+	Deadline       *time.Time `json:"deadline"`
 }
 
 type Response struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	Status      string     `json:"status"`
-	UnitID      string     `json:"unitId"`
-	LastEditor  string     `json:"lastEditor"`
-	Deadline    *time.Time `json:"deadline"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
+	ID             string     `json:"id"`
+	Title          string     `json:"title"`
+	Description    string     `json:"description"`
+	PreviewMessage string     `json:"previewMessage"`
+	Status         string     `json:"status"`
+	UnitID         string     `json:"unitId"`
+	LastEditor     string     `json:"lastEditor"`
+	Deadline       *time.Time `json:"deadline"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
 }
 
 // ToResponse converts a Form storage model into an API Response.
@@ -46,15 +48,16 @@ func ToResponse(form Form) Response {
 	}
 
 	return Response{
-		ID:          form.ID.String(),
-		Title:       form.Title,
-		Description: form.Description.String,
-		Status:      string(form.Status),
-		UnitID:      form.UnitID.String(),
-		LastEditor:  form.LastEditor.String(),
-		Deadline:    deadline,
-		CreatedAt:   form.CreatedAt.Time,
-		UpdatedAt:   form.UpdatedAt.Time,
+		ID:             form.ID.String(),
+		Title:          form.Title,
+		Description:    form.Description.String,
+		PreviewMessage: form.PreviewMessage.String,
+		Status:         string(form.Status),
+		UnitID:         form.UnitID.String(),
+		LastEditor:     form.LastEditor.String(),
+		Deadline:       deadline,
+		CreatedAt:      form.CreatedAt.Time,
+		UpdatedAt:      form.UpdatedAt.Time,
 	}
 }
 
