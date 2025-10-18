@@ -1,11 +1,11 @@
 -- name: CreateMessage :one
 INSERT INTO inbox_message (posted_by, type, content_id)
-VALUES ($1, $2, $3)
+VALUES (@posted_by, @type, @content_id)
 RETURNING *;
 
 -- name: CreateUserInboxBulk :many
 INSERT INTO user_inbox_messages (user_id, message_id)
-SELECT unnest($1::uuid[]), $2::uuid
+SELECT unnest(@user_ids::uuid[]), @message_id::uuid
 RETURNING *;
 
 -- name: GetByID :one
@@ -21,7 +21,7 @@ JOIN inbox_message im ON uim.message_id = im.id
 LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-WHERE uim.id = $1 AND uim.user_id = $2;
+WHERE uim.id = @user_inbox_message_id AND uim.user_id = @user_id;
 
 -- name: List :many
 SELECT 
@@ -36,16 +36,44 @@ JOIN inbox_message im ON uim.message_id = im.id
 LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-WHERE uim.user_id = $1 AND uim.is_archived = false;
+WHERE uim.user_id = @user_id
+  AND (sqlc.narg(is_read)::boolean IS NULL OR uim.is_read = sqlc.narg(is_read))
+  AND (sqlc.narg(is_starred)::boolean IS NULL OR uim.is_starred = sqlc.narg(is_starred))
+  AND (uim.is_archived = COALESCE(sqlc.narg(is_archived)::boolean, false))
+  AND (@search::text = '' OR @search::text IS NULL OR (
+    CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || @search::text || '%'
+    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || @search::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || @search::text || '%'
+  ))
+LIMIT COALESCE(@page_limit::int, 10)
+OFFSET COALESCE(@page_offset::int, 0);
+
+-- name: ListCount :one
+SELECT 
+    COUNT(*) AS total
+FROM user_inbox_messages uim
+JOIN inbox_message im ON uim.message_id = im.id
+LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
+LEFT JOIN units u ON f.unit_id = u.id
+LEFT JOIN units o ON u.org_id = o.id
+WHERE uim.user_id = @user_id
+  AND (sqlc.narg(is_read)::boolean IS NULL OR uim.is_read = sqlc.narg(is_read))
+  AND (sqlc.narg(is_starred)::boolean IS NULL OR uim.is_starred = sqlc.narg(is_starred))
+  AND (uim.is_archived = COALESCE(sqlc.narg(is_archived)::boolean, false))
+  AND (@search::text = '' OR @search::text IS NULL OR (
+    CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || @search::text || '%'
+    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || @search::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || @search::text || '%'
+  ));
 
 -- name: UpdateByID :one
 UPDATE user_inbox_messages AS uim
-SET is_read = $3, is_starred = $4, is_archived = $5
+SET is_read = @is_read, is_starred = @is_starred, is_archived = @is_archived
 FROM inbox_message AS im
 LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-WHERE uim.message_id = im.id AND uim.id = $1 AND uim.user_id = $2
+WHERE uim.message_id = im.id AND uim.id = @id AND uim.user_id = @user_id
 RETURNING uim.*, im.*,
 CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
 CASE WHEN im.type = 'form' THEN f.title END AS title,

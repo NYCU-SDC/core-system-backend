@@ -334,7 +334,7 @@ func TestInboxService_List(t *testing.T) {
 
 			service := inbox.NewService(logger, db)
 
-			result, err := service.List(ctx, params.userID)
+			result, err := service.List(ctx, params.userID, nil, 1, 10)
 			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 
 			if tc.validate != nil {

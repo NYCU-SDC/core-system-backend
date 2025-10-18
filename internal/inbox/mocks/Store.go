@@ -16,6 +16,34 @@ type Store struct {
 	mock.Mock
 }
 
+// Count provides a mock function with given fields: ctx, userID, filter
+func (_m *Store) Count(ctx context.Context, userID uuid.UUID, filter *inbox.InboxFilterRequest) (int64, error) {
+	ret := _m.Called(ctx, userID, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Count")
+	}
+
+	var r0 int64
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, *inbox.InboxFilterRequest) (int64, error)); ok {
+		return rf(ctx, userID, filter)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, *inbox.InboxFilterRequest) int64); ok {
+		r0 = rf(ctx, userID, filter)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, *inbox.InboxFilterRequest) error); ok {
+		r1 = rf(ctx, userID, filter)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetByID provides a mock function with given fields: ctx, id, userID
 func (_m *Store) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (inbox.GetByIDRow, error) {
 	ret := _m.Called(ctx, id, userID)
@@ -44,9 +72,9 @@ func (_m *Store) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (i
 	return r0, r1
 }
 
-// List provides a mock function with given fields: ctx, userID
-func (_m *Store) List(ctx context.Context, userID uuid.UUID) ([]inbox.ListRow, error) {
-	ret := _m.Called(ctx, userID)
+// List provides a mock function with given fields: ctx, userID, filter, page, size
+func (_m *Store) List(ctx context.Context, userID uuid.UUID, filter *inbox.InboxFilterRequest, page int, size int) ([]inbox.ListRow, error) {
+	ret := _m.Called(ctx, userID, filter, page, size)
 
 	if len(ret) == 0 {
 		panic("no return value specified for List")
@@ -54,19 +82,19 @@ func (_m *Store) List(ctx context.Context, userID uuid.UUID) ([]inbox.ListRow, e
 
 	var r0 []inbox.ListRow
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) ([]inbox.ListRow, error)); ok {
-		return rf(ctx, userID)
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, *inbox.InboxFilterRequest, int, int) ([]inbox.ListRow, error)); ok {
+		return rf(ctx, userID, filter, page, size)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID) []inbox.ListRow); ok {
-		r0 = rf(ctx, userID)
+	if rf, ok := ret.Get(0).(func(context.Context, uuid.UUID, *inbox.InboxFilterRequest, int, int) []inbox.ListRow); ok {
+		r0 = rf(ctx, userID, filter, page, size)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]inbox.ListRow)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
-		r1 = rf(ctx, userID)
+	if rf, ok := ret.Get(1).(func(context.Context, uuid.UUID, *inbox.InboxFilterRequest, int, int) error); ok {
+		r1 = rf(ctx, userID, filter, page, size)
 	} else {
 		r1 = ret.Error(1)
 	}

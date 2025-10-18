@@ -41,8 +41,8 @@ func (b Builder) CreateMessage(contentType inbox.ContentType, contentID, postedB
 func (b Builder) CreateUserInboxMessage(userID, messageID uuid.UUID) []inbox.UserInboxMessage {
 	queries := b.Queries()
 	messages, err := queries.CreateUserInboxBulk(context.Background(), inbox.CreateUserInboxBulkParams{
-		Column1: []uuid.UUID{userID},
-		Column2: messageID,
+		UserIds:   []uuid.UUID{userID},
+		MessageID: messageID,
 	})
 	require.NoError(b.t, err)
 	require.Len(b.t, messages, 1)
@@ -53,8 +53,8 @@ func (b Builder) CreateUserInboxMessage(userID, messageID uuid.UUID) []inbox.Use
 func (b Builder) CreateUserInboxBulk(userIDs []uuid.UUID, messageID uuid.UUID) []inbox.UserInboxMessage {
 	queries := b.Queries()
 	messages, err := queries.CreateUserInboxBulk(context.Background(), inbox.CreateUserInboxBulkParams{
-		Column1: userIDs,
-		Column2: messageID,
+		UserIds:   userIDs,
+		MessageID: messageID,
 	})
 	require.NoError(b.t, err)
 	return messages
@@ -63,7 +63,12 @@ func (b Builder) CreateUserInboxBulk(userIDs []uuid.UUID, messageID uuid.UUID) [
 // GetUserInboxMessages retrieves user inbox messages directly from the database
 func (b Builder) GetUserInboxMessages(userID uuid.UUID) []inbox.ListRow {
 	queries := b.Queries()
-	messages, err := queries.List(context.Background(), userID)
+	params := inbox.ListParams{
+		UserID:     userID,
+		PageLimit:  10,
+		PageOffset: 0,
+	}
+	messages, err := queries.List(context.Background(), params)
 	require.NoError(b.t, err)
 	return messages
 }
@@ -72,8 +77,8 @@ func (b Builder) GetUserInboxMessages(userID uuid.UUID) []inbox.ListRow {
 func (b Builder) GetUserInboxMessageByID(messageID, userID uuid.UUID) inbox.GetByIDRow {
 	queries := b.Queries()
 	message, err := queries.GetByID(context.Background(), inbox.GetByIDParams{
-		ID:     messageID,
-		UserID: userID,
+		UserInboxMessageID: messageID,
+		UserID:             userID,
 	})
 	require.NoError(b.t, err)
 	return message

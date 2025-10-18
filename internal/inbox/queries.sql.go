@@ -45,12 +45,12 @@ RETURNING id, user_id, message_id, is_read, is_starred, is_archived
 `
 
 type CreateUserInboxBulkParams struct {
-	Column1 []uuid.UUID
-	Column2 uuid.UUID
+	UserIds   []uuid.UUID
+	MessageID uuid.UUID
 }
 
 func (q *Queries) CreateUserInboxBulk(ctx context.Context, arg CreateUserInboxBulkParams) ([]UserInboxMessage, error) {
-	rows, err := q.db.Query(ctx, createUserInboxBulk, arg.Column1, arg.Column2)
+	rows, err := q.db.Query(ctx, createUserInboxBulk, arg.UserIds, arg.MessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,8 +93,8 @@ WHERE uim.id = $1 AND uim.user_id = $2
 `
 
 type GetByIDParams struct {
-	ID     uuid.UUID
-	UserID uuid.UUID
+	UserInboxMessageID uuid.UUID
+	UserID             uuid.UUID
 }
 
 type GetByIDRow struct {
@@ -117,7 +117,7 @@ type GetByIDRow struct {
 }
 
 func (q *Queries) GetByID(ctx context.Context, arg GetByIDParams) (GetByIDRow, error) {
-	row := q.db.QueryRow(ctx, getByID, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, getByID, arg.UserInboxMessageID, arg.UserID)
 	var i GetByIDRow
 	err := row.Scan(
 		&i.ID,
@@ -153,8 +153,28 @@ JOIN inbox_message im ON uim.message_id = im.id
 LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-WHERE uim.user_id = $1 AND uim.is_archived = false
+WHERE uim.user_id = $1
+  AND ($2::boolean IS NULL OR uim.is_read = $2)
+  AND ($3::boolean IS NULL OR uim.is_starred = $3)
+  AND (uim.is_archived = COALESCE($4::boolean, false))
+  AND ($5::text = '' OR $5::text IS NULL OR (
+    CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || $5::text || '%'
+  ))
+LIMIT COALESCE($7::int, 50)
+OFFSET COALESCE($6::int, 0)
 `
+
+type ListParams struct {
+	UserID     uuid.UUID
+	IsRead     pgtype.Bool
+	IsStarred  pgtype.Bool
+	IsArchived pgtype.Bool
+	Search     string
+	PageOffset int32
+	PageLimit  int32
+}
 
 type ListRow struct {
 	ID             uuid.UUID
@@ -175,8 +195,16 @@ type ListRow struct {
 	UnitName       interface{}
 }
 
-func (q *Queries) List(ctx context.Context, userID uuid.UUID) ([]ListRow, error) {
-	rows, err := q.db.Query(ctx, list, userID)
+func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
+	rows, err := q.db.Query(ctx, list,
+		arg.UserID,
+		arg.IsRead,
+		arg.IsStarred,
+		arg.IsArchived,
+		arg.Search,
+		arg.PageOffset,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -212,14 +240,54 @@ func (q *Queries) List(ctx context.Context, userID uuid.UUID) ([]ListRow, error)
 	return items, nil
 }
 
+const listCount = `-- name: ListCount :one
+SELECT 
+    COUNT(*) AS total
+FROM user_inbox_messages uim
+JOIN inbox_message im ON uim.message_id = im.id
+LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
+LEFT JOIN units u ON f.unit_id = u.id
+LEFT JOIN units o ON u.org_id = o.id
+WHERE uim.user_id = $1
+  AND ($2::boolean IS NULL OR uim.is_read = $2)
+  AND ($3::boolean IS NULL OR uim.is_starred = $3)
+  AND (uim.is_archived = COALESCE($4::boolean, false))
+  AND ($5::text = '' OR $5::text IS NULL OR (
+    CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || $5::text || '%'
+  ))
+`
+
+type ListCountParams struct {
+	UserID     uuid.UUID
+	IsRead     pgtype.Bool
+	IsStarred  pgtype.Bool
+	IsArchived pgtype.Bool
+	Search     string
+}
+
+func (q *Queries) ListCount(ctx context.Context, arg ListCountParams) (int64, error) {
+	row := q.db.QueryRow(ctx, listCount,
+		arg.UserID,
+		arg.IsRead,
+		arg.IsStarred,
+		arg.IsArchived,
+		arg.Search,
+	)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const updateByID = `-- name: UpdateByID :one
 UPDATE user_inbox_messages AS uim
-SET is_read = $3, is_starred = $4, is_archived = $5
+SET is_read = $1, is_starred = $2, is_archived = $3
 FROM inbox_message AS im
 LEFT JOIN forms f ON im.type = 'form' AND im.content_id = f.id
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-WHERE uim.message_id = im.id AND uim.id = $1 AND uim.user_id = $2
+WHERE uim.message_id = im.id AND uim.id = $4 AND uim.user_id = $5
 RETURNING uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived, im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
 CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
 CASE WHEN im.type = 'form' THEN f.title END AS title,
@@ -228,11 +296,11 @@ CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
 `
 
 type UpdateByIDParams struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
 	IsRead     bool
 	IsStarred  bool
 	IsArchived bool
+	ID         uuid.UUID
+	UserID     uuid.UUID
 }
 
 type UpdateByIDRow struct {
@@ -256,11 +324,11 @@ type UpdateByIDRow struct {
 
 func (q *Queries) UpdateByID(ctx context.Context, arg UpdateByIDParams) (UpdateByIDRow, error) {
 	row := q.db.QueryRow(ctx, updateByID,
-		arg.ID,
-		arg.UserID,
 		arg.IsRead,
 		arg.IsStarred,
 		arg.IsArchived,
+		arg.ID,
+		arg.UserID,
 	)
 	var i UpdateByIDRow
 	err := row.Scan(
