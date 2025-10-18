@@ -12,6 +12,14 @@ FROM units u
 LEFT JOIN tenants t ON t.id = u.id
 WHERE u.type = 'organization';
 
+-- name: ListOrganizationsOfUser :many
+SELECT u.*, t.slug
+FROM unit_members um
+JOIN units u ON um.unit_id = u.id
+LEFT JOIN tenants t ON t.id = u.id
+WHERE u.type = 'organization'
+    AND um.member_id = $1;
+
 -- name: GetOrganizationByIDWithSlug :one
 SELECT u.*, t.slug
 FROM units u
