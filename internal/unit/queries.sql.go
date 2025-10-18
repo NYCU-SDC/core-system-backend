@@ -256,6 +256,59 @@ func (q *Queries) ListMembers(ctx context.Context, unitID uuid.UUID) ([]ListMemb
 	return items, nil
 }
 
+const listOrganizationsOfUser = `-- name: ListOrganizationsOfUser :many
+SELECT u.id, u.org_id, u.parent_id, u.type, u.name, u.description, u.metadata, u.created_at, u.updated_at, t.slug
+FROM unit_members um
+JOIN units u ON um.unit_id = u.id
+LEFT JOIN tenants t ON t.id = u.id
+WHERE u.type = 'organization'
+    AND um.member_id = $1
+`
+
+type ListOrganizationsOfUserRow struct {
+	ID          uuid.UUID
+	OrgID       pgtype.UUID
+	ParentID    pgtype.UUID
+	Type        UnitType
+	Name        pgtype.Text
+	Description pgtype.Text
+	Metadata    []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	Slug        pgtype.Text
+}
+
+func (q *Queries) ListOrganizationsOfUser(ctx context.Context, memberID uuid.UUID) ([]ListOrganizationsOfUserRow, error) {
+	rows, err := q.db.Query(ctx, listOrganizationsOfUser, memberID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrganizationsOfUserRow
+	for rows.Next() {
+		var i ListOrganizationsOfUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.ParentID,
+			&i.Type,
+			&i.Name,
+			&i.Description,
+			&i.Metadata,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Slug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSubUnitIDs = `-- name: ListSubUnitIDs :many
 SELECT id FROM units WHERE parent_id = $1
 `
