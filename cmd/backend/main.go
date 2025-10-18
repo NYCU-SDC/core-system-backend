@@ -139,9 +139,9 @@ func main() {
 	unitService := unit.NewService(logger, dbPool)
 	distributeService := distribute.NewService(logger, unitService)
 	formService := form.NewService(logger, dbPool)
-	questionService := question.NewService(logger, dbPool)
+	questionService := question.NewService(logger, question.New(dbPool))
 	inboxService := inbox.NewService(logger, dbPool)
-	responseService := response.NewService(logger, dbPool)
+	responseService := response.NewService(logger, response.New(dbPool))
 	submitService := submit.NewService(logger, questionService, responseService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService)
 
