@@ -102,3 +102,27 @@ func (g *GoogleConfig) GetUserInfo(ctx context.Context, token *oauth2.Token) (us
 
 	return userInfo, authInfo, nil
 }
+
+// GetEmailFromToken extracts the email from the OAuth token response
+func (g *GoogleConfig) GetEmailFromToken(ctx context.Context, token *oauth2.Token) (string, error) {
+	client := g.config.Client(ctx, token)
+	response, err := client.Get("https://www.googleapis.com/oauth2/v3/userinfo")
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		_ = response.Body.Close()
+	}()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var googleUser GoogleUserInfo
+	if err := json.Unmarshal(body, &googleUser); err != nil {
+		return "", err
+	}
+
+	return googleUser.Email, nil
+}

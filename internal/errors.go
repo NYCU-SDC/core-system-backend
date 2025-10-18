@@ -28,16 +28,31 @@ var (
 	ErrInvalidAuthUser         = errors.New("invalid authenticated user")
 
 	// User Errors
-	ErrUserNotFound    = errors.New("user not found")
-	ErrNoUserInContext = errors.New("no user found in request context")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrNoUserInContext    = errors.New("no user found in request context")
+	ErrEmailAlreadyExists = errors.New("email already exists")
+
+	// OAuth Email Errors
+	ErrFailedToExtractEmail = errors.New("failed to extract email from OAuth token")
+	ErrFailedToCreateEmail  = errors.New("failed to create email record for OAuth user")
 
 	// Unit Errors
 	ErrOrgSlugNotFound      = errors.New("org slug not found")
 	ErrOrgSlugAlreadyExists = errors.New("org slug already exists")
 	ErrUnitNotFound         = errors.New("unit not found")
 
-	// Publish Errors
-	ErrFormNotDraft = fmt.Errorf("form is not in draft status")
+	// Form Errors
+	ErrFormNotFound       = errors.New("form not found")
+	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
+	ErrFormDeadlinePassed = errors.New("form deadline has passed")
+
+	// Question Errors
+	ErrQuestionNotFound = errors.New("question not found")
+	ErrQuestionRequired = errors.New("question is required but not answered")
+	ErrValidationFailed = errors.New("validation failed")
+
+	// Response Errors
+	ErrResponseNotFound = errors.New("response not found")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -78,6 +93,14 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("user not found")
 	case errors.Is(err, ErrNoUserInContext):
 		return problem.NewUnauthorizedProblem("no user found in request context")
+	case errors.Is(err, ErrEmailAlreadyExists):
+		return problem.NewValidateProblem("email already exists")
+
+	// OAuth Email Errors
+	case errors.Is(err, ErrFailedToExtractEmail):
+		return problem.NewInternalServerProblem("failed to extract email from OAuth token")
+	case errors.Is(err, ErrFailedToCreateEmail):
+		return problem.NewInternalServerProblem("failed to create email record for OAuth user")
 
 	// Unit Errors
 	case errors.Is(err, ErrOrgSlugNotFound):
@@ -87,9 +110,27 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrUnitNotFound):
 		return problem.NewNotFoundProblem("unit not found")
 
-	// Publish Errors
+	// Form Errors
+	case errors.Is(err, ErrFormNotFound):
+		return problem.NewNotFoundProblem("form not found")
 	case errors.Is(err, ErrFormNotDraft):
 		return problem.NewValidateProblem("form is not in draft status")
+	case errors.Is(err, ErrFormDeadlinePassed):
+		return problem.NewValidateProblem("form deadline has passed")
+
+	// Question Errors
+	case errors.Is(err, ErrQuestionNotFound):
+		return problem.NewNotFoundProblem("question not found")
+	case errors.Is(err, ErrQuestionRequired):
+		return problem.NewValidateProblem("question is required but not answered")
+
+	// Response Errors
+	case errors.Is(err, ErrResponseNotFound):
+		return problem.NewNotFoundProblem("response not found")
+
+	// Validation Errors
+	case errors.Is(err, ErrValidationFailed):
+		return problem.NewValidateProblem("validation failed")
 	}
 	return problem.Problem{}
 }

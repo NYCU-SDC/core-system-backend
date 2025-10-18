@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
@@ -53,4 +54,14 @@ func (b Builder) Create(opts ...Option) user.User {
 	require.NoError(b.t, err)
 
 	return userRow
+}
+
+// CreateEmail creates an email record for a user
+func (b Builder) CreateEmail(userID uuid.UUID, email string) {
+	queries := b.Queries()
+	_, err := queries.CreateEmail(context.Background(), user.CreateEmailParams{
+		UserID: userID,
+		Value:  email,
+	})
+	require.NoError(b.t, err)
 }

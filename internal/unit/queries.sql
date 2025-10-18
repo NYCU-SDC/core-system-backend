@@ -44,19 +44,27 @@ SELECT * FROM units WHERE parent_id = $1;
 SELECT id FROM units WHERE parent_id = $1;
 
 -- name: AddMember :one
-INSERT INTO unit_members (unit_id, member_id)
-VALUES ($1, $2)
-ON CONFLICT (unit_id, member_id) DO UPDATE
-    SET member_id = EXCLUDED.member_id
-RETURNING *;
+WITH inserted_member AS (
+    INSERT INTO unit_members (unit_id, member_id)
+    SELECT sqlc.arg(unit_id), user_emails.user_id
+    FROM user_emails
+        WHERE user_emails.value = sqlc.arg(member_email)
+    ON CONFLICT (unit_id, member_id) DO UPDATE
+        SET member_id = EXCLUDED.member_id
+    RETURNING *
+)
+SELECT um.*, u.name, u.username, u.avatar_url
+FROM inserted_member um
+LEFT JOIN users u ON u.id = um.member_id;
 
 -- name: ListMembers :many
 SELECT m.member_id,
        u.name,
        u.username,
-       u.avatar_url
+       u.avatar_url,
+       u.emails
 FROM unit_members m
-JOIN users u ON u.id = m.member_id
+JOIN users_with_emails u ON u.id = m.member_id
 WHERE m.unit_id = $1;
 
 -- name: ListUnitsMembers :many

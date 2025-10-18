@@ -160,7 +160,23 @@ func (h *Handler) GetMessageContent(ctx context.Context, contentType ContentType
 			span.RecordError(err)
 			return form.Response{}, err
 		}
-		response := form.ToResponse(currentForm)
+		response := form.ToResponse(form.Form{
+			ID:             currentForm.ID,
+			Title:          currentForm.Title,
+			Description:    currentForm.Description,
+			PreviewMessage: currentForm.PreviewMessage,
+			Status:         currentForm.Status,
+			UnitID:         currentForm.UnitID,
+			LastEditor:     currentForm.LastEditor,
+			Deadline:       currentForm.Deadline,
+			CreatedAt:      currentForm.CreatedAt,
+			UpdatedAt:      currentForm.UpdatedAt,
+		}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
+			ID:        currentForm.LastEditor,
+			Name:      currentForm.LastEditorName,
+			Username:  currentForm.LastEditorUsername,
+			AvatarUrl: currentForm.LastEditorAvatarUrl,
+		}, user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
 		return response, nil
 	case ContentTypeText:
 		return nil, nil

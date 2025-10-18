@@ -14,7 +14,7 @@ services:
       ENV: "snapshot"
       HOST: "0.0.0.0"
       BASE_URL: "https://$VERSION.core-system.sdc.nycu.club"
-      OAUTH_PROXY_BASE_URL: "https://oauth-proxy.eng.sdc.nycu.club"
+      OAUTH_PROXY_BASE_URL: "https://oauth-proxy.sdc.nycu.club"
       OAUTH_PROXY_SECRET: ${OAUTH_PROXY_TOKEN}
       DATABASE_URL: postgres://postgres:password@postgres:5432/core_system?sslmode=disable
       MIGRATION_SOURCE: file:///app/migrations

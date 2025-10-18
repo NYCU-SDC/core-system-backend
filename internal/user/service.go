@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/url"
 
+	"NYCU-SDC/core-system-backend/internal"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -15,18 +17,29 @@ import (
 
 type Querier interface {
 	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
-	GetByID(ctx context.Context, id uuid.UUID) (User, error)
-	GetUserIDByAuth(ctx context.Context, arg GetUserIDByAuthParams) (uuid.UUID, error)
-	UserExistsByAuth(ctx context.Context, arg UserExistsByAuthParams) (bool, error)
+	GetByID(ctx context.Context, id uuid.UUID) (UsersWithEmail, error)
+	GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.UUID, error)
+	ExistsByAuth(ctx context.Context, arg ExistsByAuthParams) (bool, error)
 	Create(ctx context.Context, arg CreateParams) (User, error)
 	CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, error)
 	Update(ctx context.Context, arg UpdateParams) (User, error)
+	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
+	ExistsEmail(ctx context.Context, arg ExistsEmailParams) (bool, error)
+	CreateEmail(ctx context.Context, arg CreateEmailParams) (UserEmail, error)
 }
 
 type Service struct {
 	logger  *zap.Logger
 	queries Querier
 	tracer  trace.Tracer
+}
+
+type Profile struct {
+	ID        uuid.UUID
+	Name      string
+	Username  string
+	AvatarURL string
+	Emails    []string
 }
 
 func NewService(logger *zap.Logger, db DBTX) *Service {
@@ -51,18 +64,18 @@ func (s *Service) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
 	return exists, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (User, error) {
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (UsersWithEmail, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetByID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	currentUser, err := s.queries.GetByID(traceCtx, id)
+	user, err := s.queries.GetByID(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
-		return User{}, err
+		return UsersWithEmail{}, err
 	}
-	return currentUser, nil
+	return user, nil
 }
 
 func resolveAvatarUrl(name, avatarUrl string) string {
@@ -77,7 +90,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.UserExistsByAuth(traceCtx, UserExistsByAuthParams{
+	exists, err := s.queries.ExistsByAuth(traceCtx, ExistsByAuthParams{
 		Provider:   oauthProvider,
 		ProviderID: oauthProviderID,
 	})
@@ -88,7 +101,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	}
 
 	if exists {
-		existingUserID, err := s.queries.GetUserIDByAuth(traceCtx, GetUserIDByAuthParams{
+		existingUserID, err := s.queries.GetIDByAuth(traceCtx, GetIDByAuthParams{
 			Provider:   oauthProvider,
 			ProviderID: oauthProviderID,
 		})
@@ -150,4 +163,55 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 
 	logger.Debug("Created auth entry", zap.String("user_id", newUser.ID.String()), zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
 	return newUser.ID, err
+}
+
+func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email string) error {
+	traceCtx, span := s.tracer.Start(ctx, "CreateEmail")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Check if email already exists
+	exists, err := s.queries.ExistsEmail(traceCtx, ExistsEmailParams{
+		UserID: userID,
+		Value:  email,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check email existence")
+		span.RecordError(err)
+		return err
+	}
+
+	if exists {
+		err = internal.ErrEmailAlreadyExists
+		span.RecordError(err)
+		return err
+	}
+
+	// Create email record
+	_, err = s.queries.CreateEmail(traceCtx, CreateEmailParams{
+		UserID: userID,
+		Value:  email,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create email")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetEmailsByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	emails, err := s.queries.GetEmailsByID(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get emails by user id")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return emails, nil
 }

@@ -25,26 +25,49 @@ type Request struct {
 }
 
 type Response struct {
-	ID             string     `json:"id"`
-	Title          string     `json:"title"`
-	Description    string     `json:"description"`
-	PreviewMessage string     `json:"previewMessage"`
-	Status         string     `json:"status"`
-	UnitID         string     `json:"unitId"`
-	LastEditor     string     `json:"lastEditor"`
-	Deadline       *time.Time `json:"deadline"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
+	ID             string               `json:"id"`
+	Title          string               `json:"title"`
+	Description    string               `json:"description"`
+	PreviewMessage string               `json:"previewMessage"`
+	Status         string               `json:"status"`
+	UnitID         string               `json:"unitId"`
+	OrgID          string               `json:"orgId"`
+	LastEditor     user.ProfileResponse `json:"lastEditor"`
+	Deadline       *time.Time           `json:"deadline"`
+	CreatedAt      time.Time            `json:"createdAt"`
+	UpdatedAt      time.Time            `json:"updatedAt"`
 }
 
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline is null when empty/invalid.
-func ToResponse(form Form) Response {
+func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
 	var deadline *time.Time
+	var editorName string
+	var editorUsername string
+	var editorAvatarURL string
+
 	if form.Deadline.Valid {
 		deadline = &form.Deadline.Time
 	} else {
 		deadline = nil
+	}
+
+	if editor.Name.Valid {
+		editorName = editor.Name.String
+	} else {
+		editorName = ""
+	}
+
+	if editor.Username.Valid {
+		editorUsername = editor.Username.String
+	} else {
+		editorUsername = ""
+	}
+
+	if editor.AvatarUrl.Valid {
+		editorAvatarURL = editor.AvatarUrl.String
+	} else {
+		editorAvatarURL = ""
 	}
 
 	return Response{
@@ -53,19 +76,29 @@ func ToResponse(form Form) Response {
 		Description:    form.Description.String,
 		PreviewMessage: form.PreviewMessage.String,
 		Status:         string(form.Status),
-		UnitID:         form.UnitID.String(),
-		LastEditor:     form.LastEditor.String(),
-		Deadline:       deadline,
-		CreatedAt:      form.CreatedAt.Time,
-		UpdatedAt:      form.UpdatedAt.Time,
+		UnitID:         unitName,
+		OrgID:          orgName,
+		LastEditor: user.ProfileResponse{
+			ID:        editor.ID,
+			Name:      editorName,
+			Username:  editorUsername,
+			Emails:    emails,
+			AvatarURL: editorAvatarURL,
+		},
+		Deadline:  deadline,
+		CreatedAt: form.CreatedAt.Time,
+		UpdatedAt: form.UpdatedAt.Time,
 	}
 }
 
 type Store interface {
-	Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (Form, error)
+	Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error)
+	Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (UpdateRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetByID(ctx context.Context, id uuid.UUID) (Form, error)
-	List(ctx context.Context) ([]Form, error)
+	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	List(ctx context.Context) ([]ListRow, error)
+	ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUnitRow, error)
+	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
 }
 
 type Handler struct {
@@ -123,7 +156,23 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := ToResponse(currentForm)
+	response := ToResponse(Form{
+		ID:             currentForm.ID,
+		Title:          currentForm.Title,
+		Description:    currentForm.Description,
+		PreviewMessage: currentForm.PreviewMessage,
+		Status:         currentForm.Status,
+		UnitID:         currentForm.UnitID,
+		LastEditor:     currentForm.LastEditor,
+		Deadline:       currentForm.Deadline,
+		CreatedAt:      currentForm.CreatedAt,
+		UpdatedAt:      currentForm.UpdatedAt,
+	}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
+		ID:        currentForm.LastEditor,
+		Name:      currentForm.LastEditorName,
+		Username:  currentForm.LastEditorUsername,
+		AvatarUrl: currentForm.LastEditorAvatarUrl,
+	}, user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
@@ -166,7 +215,23 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := ToResponse(currentForm)
+	response := ToResponse(Form{
+		ID:             currentForm.ID,
+		Title:          currentForm.Title,
+		Description:    currentForm.Description,
+		PreviewMessage: currentForm.PreviewMessage,
+		Status:         currentForm.Status,
+		UnitID:         currentForm.UnitID,
+		LastEditor:     currentForm.LastEditor,
+		Deadline:       currentForm.Deadline,
+		CreatedAt:      currentForm.CreatedAt,
+		UpdatedAt:      currentForm.UpdatedAt,
+	}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
+		ID:        currentForm.LastEditor,
+		Name:      currentForm.LastEditorName,
+		Username:  currentForm.LastEditorUsername,
+		AvatarUrl: currentForm.LastEditorAvatarUrl,
+	}, user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
@@ -183,7 +248,110 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]Response, 0, len(forms))
 	for _, form := range forms {
-		responses = append(responses, ToResponse(form))
+		responses = append(responses, ToResponse(Form{
+			ID:             form.ID,
+			Title:          form.Title,
+			Description:    form.Description,
+			PreviewMessage: form.PreviewMessage,
+			Status:         form.Status,
+		}, form.UnitName.String, form.OrgName.String, user.User{
+			ID:        form.LastEditor,
+			Name:      form.LastEditorName,
+			Username:  form.LastEditorUsername,
+			AvatarUrl: form.LastEditorAvatarUrl,
+		}, user.ConvertEmailsToSlice(form.LastEditorEmail)))
 	}
+	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
+}
+
+func (h *Handler) CreateUnderUnitHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnderUnitHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var req Request
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	unitIDStr := r.PathValue("unitId")
+	currentUnitID, err := handlerutil.ParseUUID(unitIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	newForm, err := h.store.Create(traceCtx, req, currentUnitID, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := ToResponse(Form{
+		ID:             newForm.ID,
+		Title:          newForm.Title,
+		Description:    newForm.Description,
+		PreviewMessage: newForm.PreviewMessage,
+		Status:         newForm.Status,
+		UnitID:         newForm.UnitID,
+		LastEditor:     newForm.LastEditor,
+		Deadline:       newForm.Deadline,
+		CreatedAt:      newForm.CreatedAt,
+		UpdatedAt:      newForm.UpdatedAt,
+	}, newForm.UnitName.String, newForm.OrgName.String, user.User{
+		ID:        newForm.LastEditor,
+		Name:      newForm.LastEditorName,
+		Username:  newForm.LastEditorUsername,
+		AvatarUrl: newForm.LastEditorAvatarUrl,
+	}, user.ConvertEmailsToSlice(newForm.LastEditorEmail))
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
+}
+
+func (h *Handler) ListByUnitHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListByUnitHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	unitIDStr := r.PathValue("unitId")
+	unitID, err := handlerutil.ParseUUID(unitIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	forms, err := h.store.ListByUnit(traceCtx, unitID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	responses := make([]Response, len(forms))
+	for i, currentForm := range forms {
+		responses[i] = ToResponse(Form{
+			ID:             currentForm.ID,
+			Title:          currentForm.Title,
+			Description:    currentForm.Description,
+			PreviewMessage: currentForm.PreviewMessage,
+			Status:         currentForm.Status,
+			UnitID:         currentForm.UnitID,
+			LastEditor:     currentForm.LastEditor,
+			Deadline:       currentForm.Deadline,
+			CreatedAt:      currentForm.CreatedAt,
+			UpdatedAt:      currentForm.UpdatedAt,
+		}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
+			ID:        currentForm.LastEditor,
+			Name:      currentForm.LastEditorName,
+			Username:  currentForm.LastEditorUsername,
+			AvatarUrl: currentForm.LastEditorAvatarUrl,
+		}, user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+	}
+
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
 }

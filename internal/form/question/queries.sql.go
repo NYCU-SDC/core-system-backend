@@ -54,7 +54,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (Question, error
 	return i, err
 }
 
-const delete = `-- name: Delete :exec
+const delete = `-- name: Delete :execrows
 DELETE FROM questions WHERE form_id = $1 AND id = $2
 `
 
@@ -63,9 +63,12 @@ type DeleteParams struct {
 	ID     uuid.UUID
 }
 
-func (q *Queries) Delete(ctx context.Context, arg DeleteParams) error {
-	_, err := q.db.Exec(ctx, delete, arg.FormID, arg.ID)
-	return err
+func (q *Queries) Delete(ctx context.Context, arg DeleteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, delete, arg.FormID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getByID = `-- name: GetByID :one

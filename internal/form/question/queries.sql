@@ -9,7 +9,7 @@ SET required = $3, type = $4, title = $5, description = $6, metadata = $7, "orde
 WHERE form_id = $1 AND id = $2
     RETURNING *;
 
--- name: Delete :exec
+-- name: Delete :execrows
 DELETE FROM questions WHERE form_id = $1 AND id = $2;
 
 -- name: ListByFormID :many
