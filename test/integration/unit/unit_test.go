@@ -190,6 +190,18 @@ func TestUnitService_ListAllUnitsOfUser(t *testing.T) {
 				return context.Background()
 			},
 		},
+		{
+			name:   "Return empty when user has no organizations",
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
+				userB := userbuilder.New(t, db)
+				user := userB.Create(userbuilder.WithName("user-without-org"))
+
+				params.userID = user.ID
+				params.expected = []uuid.UUID{}
+				return context.Background()
+			},
+		},
 	}
 
 	resourceManager, logger, err := integration.GetOrInitResource()
