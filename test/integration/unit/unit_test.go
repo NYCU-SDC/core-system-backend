@@ -189,6 +189,7 @@ func TestUnitService_ListAllUnitsOfUser(t *testing.T) {
 				params.expected = []uuid.UUID{orgOne.ID, orgTwo.ID}
 				return context.Background()
 			},
+			expectedErr: false,
 		},
 		{
 			name:   "Return empty when user has no organizations",
@@ -201,6 +202,12 @@ func TestUnitService_ListAllUnitsOfUser(t *testing.T) {
 				params.expected = []uuid.UUID{}
 				return context.Background()
 			},
+			expectedErr: false,
+		},
+		{
+			name:        "Error when user ID is invalid",
+			params:      params{userID: uuid.New(), expected: []uuid.UUID{}},
+			expectedErr: false,
 		},
 	}
 
@@ -231,7 +238,7 @@ func TestUnitService_ListAllUnitsOfUser(t *testing.T) {
 				orgIDs[i] = org.Unit.ID
 			}
 
-			require.NoError(t, err)
+			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			require.ElementsMatch(t, params.expected, orgIDs)
 		})
 	}
