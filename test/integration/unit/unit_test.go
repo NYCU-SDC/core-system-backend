@@ -161,6 +161,70 @@ func TestUnitService_Create(t *testing.T) {
 	}
 }
 
+func TestUnitService_ListAllUnitsOfUser(t *testing.T) {
+	type params struct {
+		userID   uuid.UUID
+		expected []uuid.UUID
+	}
+	testCases := []struct {
+		name        string
+		params      params
+		setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
+		expectedErr bool
+	}{
+		{
+			name:   "List all organizations of user",
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
+				userB := userbuilder.New(t, db)
+				unitB := unitbuilder.New(t, db)
+				user := userB.Create(userbuilder.WithName("current-user"))
+				orgOne := unitB.Create(unit.UnitTypeOrganization)
+				orgTwo := unitB.Create(unit.UnitTypeOrganization)
+
+				unitB.AddMember(orgOne.ID, user.ID)
+				unitB.AddMember(orgTwo.ID, user.ID)
+
+				params.userID = user.ID
+				params.expected = []uuid.UUID{orgOne.ID, orgTwo.ID}
+				return context.Background()
+			},
+		},
+	}
+
+	resourceManager, logger, err := integration.GetOrInitResource()
+	if err != nil {
+		t.Fatalf("failed to get resource manager: %v", err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, rollback, err := resourceManager.SetupPostgres()
+			if err != nil {
+				t.Fatalf("failed to setup postgres: %v", err)
+			}
+			defer rollback()
+
+			ctx := context.Background()
+			params := tc.params
+			if tc.setup != nil {
+				ctx = tc.setup(t, &params, db)
+			}
+
+			service := unit.NewService(logger, db)
+			orgs, err := service.ListOrganizationsOfUser(ctx, params.userID)
+
+			orgIDs := make([]uuid.UUID, len(orgs))
+			for i, org := range orgs {
+				orgIDs[i] = org.Unit.ID
+			}
+
+			require.NoError(t, err)
+			require.ElementsMatch(t, params.expected, orgIDs)
+		})
+	}
+}
+
 func TestUnitService_ListSubUnits(t *testing.T) {
 	type params struct {
 		parentID uuid.UUID
