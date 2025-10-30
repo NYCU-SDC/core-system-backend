@@ -179,11 +179,12 @@ func TestUnitService_ListAllUnitsOfUser(t *testing.T) {
 				userB := userbuilder.New(t, db)
 				unitB := unitbuilder.New(t, db)
 				user := userB.Create(userbuilder.WithName("current-user"))
+				userB.CreateEmail(user.ID, "test@example.com")
 				orgOne := unitB.Create(unit.UnitTypeOrganization)
 				orgTwo := unitB.Create(unit.UnitTypeOrganization)
 
-				unitB.AddMember(orgOne.ID, user.ID)
-				unitB.AddMember(orgTwo.ID, user.ID)
+				unitB.AddMember(orgOne.ID, "test@example.com")
+				unitB.AddMember(orgTwo.ID, "test@example.com")
 
 				params.userID = user.ID
 				params.expected = []uuid.UUID{orgOne.ID, orgTwo.ID}
@@ -230,7 +231,7 @@ func TestUnitService_ListAllUnitsOfUser(t *testing.T) {
 				ctx = tc.setup(t, &params, db)
 			}
 
-			service := unit.NewService(logger, db)
+			service := unit.NewService(logger, db, tenant.NewService(logger, db))
 			orgs, err := service.ListOrganizationsOfUser(ctx, params.userID)
 
 			orgIDs := make([]uuid.UUID, len(orgs))
