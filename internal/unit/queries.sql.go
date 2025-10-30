@@ -257,12 +257,13 @@ func (q *Queries) ListMembers(ctx context.Context, unitID uuid.UUID) ([]ListMemb
 }
 
 const listOrganizationsOfUser = `-- name: ListOrganizationsOfUser :many
-SELECT u.id, u.org_id, u.parent_id, u.type, u.name, u.description, u.metadata, u.created_at, u.updated_at, t.slug
+SELECT u.id, u.org_id, u.parent_id, u.type, u.name, u.description, u.metadata, u.created_at, u.updated_at, sh.slug
 FROM unit_members um
 JOIN units u ON um.unit_id = u.id
-LEFT JOIN tenants t ON t.id = u.id
+LEFT JOIN slug_history sh ON sh.org_id = u.id
 WHERE u.type = 'organization'
     AND um.member_id = $1
+    AND sh.ended_at IS NULL
 `
 
 type ListOrganizationsOfUserRow struct {

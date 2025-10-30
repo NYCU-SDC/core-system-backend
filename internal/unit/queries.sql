@@ -13,12 +13,13 @@ LEFT JOIN slug_history sh ON sh.org_id = u.id
 WHERE u.type = 'organization' AND sh.ended_at IS NULL;
 
 -- name: ListOrganizationsOfUser :many
-SELECT u.*, t.slug
+SELECT u.*, sh.slug
 FROM unit_members um
 JOIN units u ON um.unit_id = u.id
-LEFT JOIN tenants t ON t.id = u.id
+LEFT JOIN slug_history sh ON sh.org_id = u.id
 WHERE u.type = 'organization'
-    AND um.member_id = $1;
+    AND um.member_id = $1
+    AND sh.ended_at IS NULL;
 
 -- name: GetOrganizationByIDWithSlug :one
 SELECT u.*, sh.slug

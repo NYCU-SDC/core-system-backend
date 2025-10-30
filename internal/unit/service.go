@@ -188,7 +188,6 @@ func (s *Service) GetAllOrganizations(ctx context.Context) ([]Organization, erro
 	return result, nil
 }
 
-// ListOrganizationsOfUser Returns empty organization list when user_id not found
 func (s *Service) ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID) ([]Organization, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListOrganizationsOfUser")
 	defer span.End()
