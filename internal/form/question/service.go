@@ -30,10 +30,10 @@ type Service struct {
 	tracer  trace.Tracer
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, queries Querier) *Service {
 	return &Service{
 		logger:  logger,
-		queries: New(db),
+		queries: queries,
 		tracer:  otel.Tracer("question/service"),
 	}
 }

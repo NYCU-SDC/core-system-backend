@@ -38,10 +38,10 @@ type Service struct {
 	tracer  trace.Tracer
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, queries Querier) *Service {
 	return &Service{
 		logger:  logger,
-		queries: New(db),
+		queries: queries,
 		tracer:  otel.Tracer("response/service"),
 	}
 }
@@ -161,6 +161,7 @@ func (s Service) Update(ctx context.Context, formID uuid.UUID, userID uuid.UUID,
 				span.RecordError(err)
 				return FormResponse{}, err
 			}
+			continue
 		}
 
 		// if answer exists, check if it is the same as the new answer

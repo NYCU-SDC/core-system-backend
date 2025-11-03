@@ -1,0 +1,43 @@
+all: false
+dir: '{{.InterfaceDir}}'
+filename: '{{.InterfaceName}}.go'
+force-file-write: true
+formatter: goimports
+include-auto-generated: false
+log-level: info
+structname: '{{.Mock}}{{.InterfaceName}}'
+pkgname: '{{.SrcPackageName}}'
+recursive: false
+require-template-schema-exists: true
+template: testify
+template-schema: '{{.Template}}.schema.json'
+
+packages:
+  NYCU-SDC/core-system-backend/internal/form/response:
+    interfaces:
+      Querier:
+        config:
+          inpackage: false
+          pkgname: mocks
+          dir: "{{.InterfaceDir}}/mocks"
+
+  NYCU-SDC/core-system-backend/internal/form/submit:
+    interfaces:
+      QuestionStore:
+        config:
+          inpackage: false
+          pkgname: mocks
+          dir: "{{.InterfaceDir}}/mocks"
+      FormResponseStore:
+        config:
+          inpackage: false
+          pkgname: mocks
+          dir: "{{.InterfaceDir}}/mocks"
+
+  NYCU-SDC/core-system-backend/internal/form/question:
+    interfaces:
+      Querier:
+        config:
+          inpackage: false
+          pkgname: mocks
+          dir: "{{.InterfaceDir}}/mocks"
