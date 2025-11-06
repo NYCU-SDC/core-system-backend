@@ -17,6 +17,7 @@ type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]GetAllOrganizationsRow, error)
+	ListOrganizationsOfUser(ctx context.Context, memberID uuid.UUID) ([]ListOrganizationsOfUserRow, error)
 	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (GetOrganizationByIDWithSlugRow, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
@@ -173,6 +174,38 @@ func (s *Service) GetAllOrganizations(ctx context.Context) ([]Organization, erro
 				ID:          o.ID,
 				OrgID:       o.OrgID,
 				ParentID:    o.ParentID,
+				Type:        o.Type,
+				Name:        o.Name,
+				Description: o.Description,
+				Metadata:    o.Metadata,
+				CreatedAt:   o.CreatedAt,
+				UpdatedAt:   o.UpdatedAt,
+			},
+			Slug: o.Slug.String,
+		})
+	}
+
+	return result, nil
+}
+
+func (s *Service) ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID) ([]Organization, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListOrganizationsOfUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	organizations, err := s.queries.ListOrganizationsOfUser(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "organizations", "member_id", userID.String(), logger, "get all organizations of user")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	result := make([]Organization, 0, len(organizations))
+	for _, o := range organizations {
+		result = append(result, Organization{
+			Unit: Unit{
+				ID:          o.ID,
+				OrgID:       o.OrgID,
 				Type:        o.Type,
 				Name:        o.Name,
 				Description: o.Description,
