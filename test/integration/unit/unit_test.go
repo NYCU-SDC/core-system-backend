@@ -161,6 +161,90 @@ func TestUnitService_Create(t *testing.T) {
 	}
 }
 
+func TestUnitService_ListAllUnitsOfUser(t *testing.T) {
+	type params struct {
+		userID   uuid.UUID
+		expected []uuid.UUID
+	}
+	testCases := []struct {
+		name        string
+		params      params
+		setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
+		expectedErr bool
+	}{
+		{
+			name:   "List all organizations of user",
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
+				userB := userbuilder.New(t, db)
+				unitB := unitbuilder.New(t, db)
+				user := userB.Create(userbuilder.WithName("current-user"))
+				userB.CreateEmail(user.ID, "test@example.com")
+				orgOne := unitB.Create(unit.UnitTypeOrganization)
+				orgTwo := unitB.Create(unit.UnitTypeOrganization)
+
+				unitB.AddMember(orgOne.ID, "test@example.com")
+				unitB.AddMember(orgTwo.ID, "test@example.com")
+
+				params.userID = user.ID
+				params.expected = []uuid.UUID{orgOne.ID, orgTwo.ID}
+				return context.Background()
+			},
+			expectedErr: false,
+		},
+		{
+			name:   "Return empty when user has no organizations",
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
+				userB := userbuilder.New(t, db)
+				user := userB.Create(userbuilder.WithName("user-without-org"))
+
+				params.userID = user.ID
+				params.expected = []uuid.UUID{}
+				return context.Background()
+			},
+			expectedErr: false,
+		},
+		{
+			name:        "Error when user ID is invalid",
+			params:      params{userID: uuid.New(), expected: []uuid.UUID{}},
+			expectedErr: false,
+		},
+	}
+
+	resourceManager, logger, err := integration.GetOrInitResource()
+	if err != nil {
+		t.Fatalf("failed to get resource manager: %v", err)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, rollback, err := resourceManager.SetupPostgres()
+			if err != nil {
+				t.Fatalf("failed to setup postgres: %v", err)
+			}
+			defer rollback()
+
+			ctx := context.Background()
+			params := tc.params
+			if tc.setup != nil {
+				ctx = tc.setup(t, &params, db)
+			}
+
+			service := unit.NewService(logger, db, tenant.NewService(logger, db))
+			orgs, err := service.ListOrganizationsOfUser(ctx, params.userID)
+
+			orgIDs := make([]uuid.UUID, len(orgs))
+			for i, org := range orgs {
+				orgIDs[i] = org.Unit.ID
+			}
+
+			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
+			require.ElementsMatch(t, params.expected, orgIDs)
+		})
+	}
+}
+
 func TestUnitService_ListSubUnits(t *testing.T) {
 	type params struct {
 		parentID uuid.UUID
