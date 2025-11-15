@@ -29,6 +29,8 @@ type Store interface {
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
 	ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID) ([]Organization, error)
 	Update(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error)
+	UpdateOrg(ctx context.Context, originalSlug string, slug string, name string, description string, dbStrategy string, metadata []byte) (Unit, error)
+	UpdateUnit(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error)
 	Delete(ctx context.Context, id uuid.UUID, unitType Type) error
 	AddParent(ctx context.Context, id uuid.UUID, parentID uuid.UUID) (Unit, error)
 	ListSubUnits(ctx context.Context, id uuid.UUID, unitType Type) ([]Unit, error)
@@ -327,31 +329,6 @@ func (h *Handler) GetAllOrganizations(w http.ResponseWriter, r *http.Request) {
 
 	orgResponses := make([]OrganizationResponse, 0, len(organizationsWithSlug))
 	for _, org := range organizationsWithSlug {
-		orgResponses = append(orgResponses, convertOrgResponse(org.Unit, org.Slug))
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, orgResponses)
-}
-
-func (h *Handler) ListOrganizationsOfCurrentUser(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ListOrganizationsOfCurrentUser")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	currentUser, ok := user.GetFromContext(traceCtx)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
-		return
-	}
-
-	organizationsOfUser, err := h.store.ListOrganizationsOfUser(traceCtx, currentUser.ID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get all organizations of user: %w", err), logger)
-		return
-	}
-
-	orgResponses := make([]OrganizationResponse, 0, len(organizationsOfUser))
-	for _, org := range organizationsOfUser {
 		orgResponses = append(orgResponses, convertOrgResponse(org.Unit, org.Slug))
 	}
 

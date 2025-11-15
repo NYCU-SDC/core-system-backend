@@ -2,6 +2,7 @@ package unit
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/tenant"
 	"context"
 	"fmt"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -11,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+	"regexp"
 )
 
 type Querier interface {
@@ -305,8 +307,75 @@ func (s *Service) ListSubUnitIDs(ctx context.Context, id uuid.UUID, unitType Typ
 	return subUnitIDs, nil
 }
 
-// Update updates the base fields of a unit
-func (s *Service) Update(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error) {
+// UpdateOrg updates the fields of an organization
+func (s *Service) UpdateOrg(ctx context.Context, originalSlug string, slug string, name string, description string, dbStrategy string, metadata []byte) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateUnit")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	_, orgID, err := s.tenantStore.GetSlugStatus(traceCtx, originalSlug)
+	if err != nil {
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
+	if slug != originalSlug {
+		matched, err := regexp.MatchString(slugPattern, slug)
+		if err != nil || !matched {
+			span.RecordError(err)
+			return Unit{}, internal.ErrOrgSlugInvalid
+		}
+
+		exists, err := s.tenantStore.SlugExists(traceCtx, slug)
+		if err != nil {
+			span.RecordError(err)
+			return Unit{}, err
+		}
+
+		if exists {
+			span.RecordError(internal.ErrOrgSlugAlreadyExists)
+			return Unit{}, internal.ErrOrgSlugAlreadyExists
+		}
+	}
+
+	var tenantDbStrategy tenant.DbStrategy
+
+	if dbStrategy == "" || dbStrategy == string(DbStrategyShared) {
+		tenantDbStrategy = "shared"
+	} else if dbStrategy == string(DbStrategyIsolated) {
+		tenantDbStrategy = "isolated"
+	}
+
+	_, err = s.tenantStore.Update(traceCtx, orgID, slug, tenantDbStrategy)
+	if err != nil {
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
+	unit, err := s.queries.Update(traceCtx, UpdateParams{
+		ID:          orgID,
+		Name:        pgtype.Text{String: name, Valid: name != ""},
+		Description: pgtype.Text{String: description, Valid: true},
+		Metadata:    metadata,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "update unit")
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
+	logger.Info("Updated unit",
+		zap.String("unitID", unit.ID.String()),
+		zap.String("unitName", unit.Name.String),
+		zap.String("unitDescription", unit.Description.String),
+		zap.ByteString("unitMetadata", unit.Metadata),
+	)
+
+	return unit, nil
+}
+
+// UpdateUnit updates the fields of a unit
+func (s *Service) UpdateUnit(ctx context.Context, id uuid.UUID, name string, description string, metadata []byte) (Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateUnit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)

@@ -39,6 +39,7 @@ var (
 	// Unit Errors
 	ErrOrgSlugNotFound      = errors.New("org slug not found")
 	ErrOrgSlugAlreadyExists = errors.New("org slug already exists")
+	ErrOrgSlugInvalid       = errors.New("org slug is invalid")
 	ErrUnitNotFound         = errors.New("unit not found")
 	ErrSlugNotBelongToUnit  = errors.New("slug not belong to unit")
 
@@ -115,6 +116,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("org slug not found")
 	case errors.Is(err, ErrOrgSlugAlreadyExists):
 		return problem.NewValidateProblem("org slug already exists")
+	case errors.Is(err, ErrOrgSlugInvalid):
+		return problem.NewValidateProblem("org slug is invalid")
 	case errors.Is(err, ErrUnitNotFound):
 		return problem.NewNotFoundProblem("unit not found")
 	case errors.Is(err, ErrSlugNotBelongToUnit):
