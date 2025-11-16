@@ -415,8 +415,6 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Slug Validator
-
 	updatedOrg, err := h.store.UpdateOrg(traceCtx, slug, req.Slug, req.Name, req.Description, req.DbStrategy, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to update organization: %w", err), logger)
