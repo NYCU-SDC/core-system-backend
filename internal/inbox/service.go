@@ -45,31 +45,61 @@ func (s *Service) Create(ctx context.Context, contentType ContentType, contentID
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	serviceName := "Create"
+
+	entryParams := map[string]interface{}{
+		"content_type":    contentType,
+		"content_id":      contentID.String(),
+		"posted_by":       postByUnitID.String(),
+		"recipient_count": len(userIDs),
+	}
+	tracker := logutil.StartMethod(traceCtx, logger, serviceName, entryParams)
+
+	dbParamsMsg := map[string]interface{}{
+		"type":       contentType,
+		"content_id": contentID.String(),
+		"posted_by":  postByUnitID.String(),
+	}
+	dbOpMsg := "CreateMessage"
+	msgDBTracker := logutil.StartDBOperation(traceCtx, logger, dbOpMsg, dbParamsMsg)
+
 	message, err := s.queries.CreateMessage(traceCtx, CreateMessageParams{
 		Type:      contentType,
 		ContentID: contentID,
 		PostedBy:  postByUnitID,
 	})
+
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create inbox message")
+		err = databaseutil.WrapDBErrorWithTracker(err, msgDBTracker, "create inbox message")
 		span.RecordError(err)
 		return uuid.Nil, err
 	}
 
+	msgDBTracker.SuccessWrite(message.ID.String())
+
+	dbParamsBulk := map[string]interface{}{
+		"user_ids":   userIDs,
+		"message_id": message.ID.String(),
+	}
+	dbOpBulk := "CreateUserInboxBulk"
+	bulkDBTracker := logutil.StartDBOperation(traceCtx, logger, dbOpBulk, dbParamsBulk)
 	_, err = s.queries.CreateUserInboxBulk(traceCtx, CreateUserInboxBulkParams{
 		UserIds:   userIDs,
 		MessageID: message.ID,
 	})
+
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create user inbox messages in bulk")
+		err = databaseutil.WrapDBErrorWithTracker(err, bulkDBTracker, "create user inbox messages in bulk")
 		span.RecordError(err)
 		return uuid.Nil, err
 	}
 
-	logger.Info("Created inbox message",
-		zap.String("message_id", message.ID.String()),
-		zap.Int("recipients", len(userIDs)),
-	)
+	bulkDBTracker.SuccessWriteBulk(len(userIDs))
+
+	tracker.Complete(map[string]interface{}{
+		"message_id":      message.ID.String(),
+		"recipient_count": len(userIDs),
+	})
 
 	return message.ID, nil
 }
