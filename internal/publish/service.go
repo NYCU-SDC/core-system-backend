@@ -79,10 +79,6 @@ func (s *Service) GetRecipients(ctx context.Context, selection Selection) ([]uui
 			return nil, wrappedErr
 		}
 
-		logger.Debug("Retrieved org recipients",
-			zap.String("org_id", selection.OrgID.String()),
-			zap.Int("recipient_count", len(orgUsers)),
-		)
 		users = append(users, orgUsers...)
 	} else if len(selection.UnitIDs) > 0 {
 		unitUsers, err := s.distributor.GetRecipients(ctx, selection.UnitIDs)
@@ -92,10 +88,6 @@ func (s *Service) GetRecipients(ctx context.Context, selection Selection) ([]uui
 			return nil, wrappedErr
 		}
 
-		logger.Debug("Retrieved unit recipients",
-			zap.Int("unit_count", len(selection.UnitIDs)),
-			zap.Int("recipient_count", len(unitUsers)),
-		)
 		users = append(users, unitUsers...)
 	}
 
@@ -163,12 +155,6 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []u
 		span.RecordError(wrappedErr)
 		return wrappedErr
 	}
-
-	logger.Debug("Recipients retrieved for form publish",
-		zap.String("form_id", formID.String()),
-		zap.Int("recipient_count", len(recipientIDs)),
-		zap.Int("unit_count", len(unitIDs)),
-	)
 
 	_, err = s.inbox.Create(ctx, inbox.ContentTypeForm, formID, recipientIDs, unitID)
 	if err != nil {
