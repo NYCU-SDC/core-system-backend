@@ -2,6 +2,7 @@ package unit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"NYCU-SDC/core-system-backend/internal/user"
@@ -12,12 +13,22 @@ import (
 	"go.uber.org/zap"
 )
 
+var ErrLastAdminCannotBeRemoved = errors.New("cannot remove the last admin")
+
 // AddMember adds a member to an organization or a unit
 func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, memberEmail string) (AddMemberRow, error) {
 	traceCtx, span := s.tracer.Start(ctx, fmt.Sprintf("Add%sMember", unitType.String()))
 	defer span.End()
 
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	adminCount, err := s.queries.CountAdmins(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "count admins")
+		span.RecordError(err)
+		return AddMemberRow{}, err
+	}
+
 	memberRow, err := s.queries.AddMember(traceCtx, AddMemberParams{
 		UnitID:      id,
 		MemberEmail: memberEmail,
@@ -28,9 +39,29 @@ func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, me
 		return AddMemberRow{}, err
 	}
 
+	if adminCount == 0 {
+		err = s.queries.UpdateMemberRole(traceCtx, UpdateMemberRoleParams{
+			UnitID:   id,
+			MemberID: memberRow.MemberID,
+			Role:     UnitRoleAdmin,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "set first member as admin")
+			span.RecordError(err)
+			return AddMemberRow{}, err
+		}
+
+		memberRow.Role = UnitRoleAdmin
+		logger.Info("First member added, set as admin",
+			zap.String("unit_id", id.String()),
+			zap.String("member_id", memberRow.MemberID.String()))
+
+	}
+
 	logger.Info(fmt.Sprintf("Added %s member", unitType.String()),
 		zap.String("unit_id", memberRow.UnitID.String()),
-		zap.String("member_id", memberRow.MemberID.String()))
+		zap.String("member_id", memberRow.MemberID.String()),
+		zap.String("role", string(memberRow.Role)))
 
 	return memberRow, nil
 }
@@ -107,7 +138,31 @@ func (s *Service) RemoveMember(ctx context.Context, unitType Type, id uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.RemoveMember(traceCtx, RemoveMemberParams{
+	role, err := s.queries.GetMemberRole(traceCtx, GetMemberRoleParams{
+		UnitID:   id,
+		MemberID: memberID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get member role")
+		span.RecordError(err)
+		return err
+	}
+
+	if role == UnitRoleAdmin {
+		adminCount, err := s.queries.CountAdmins(traceCtx, id)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "count admins")
+			span.RecordError(err)
+			return err
+		}
+
+		if adminCount <= 1 {
+			span.RecordError(ErrLastAdminCannotBeRemoved)
+			return ErrLastAdminCannotBeRemoved
+		}
+	}
+
+	err = s.queries.RemoveMember(traceCtx, RemoveMemberParams{
 		UnitID:   id,
 		MemberID: memberID,
 	})

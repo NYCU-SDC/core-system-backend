@@ -16,8 +16,11 @@ CREATE TABLE IF NOT EXISTS units (
 
 CREATE INDEX idx_units_parent_id ON units(parent_id);
 
+CREATE TYPE unit_role AS ENUM ('admin', 'member');
+
 CREATE TABLE IF NOT EXISTS unit_members (
     unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
     member_id UUID,
+    role unit_role NOT NULL DEFAULT 'member',
     PRIMARY KEY (unit_id, member_id)
 );

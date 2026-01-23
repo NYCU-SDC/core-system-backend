@@ -3,6 +3,7 @@ package main
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth"
+	"NYCU-SDC/core-system-backend/internal/auth/casbin"
 	"NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/cors"
 	"NYCU-SDC/core-system-backend/internal/distribute"
@@ -176,6 +177,15 @@ func main() {
 	tenantBasicMiddleware := basicMiddleware.Append(tenantMiddleware.Middleware)
 	tenantAuthMiddleware := authMiddleware.Append(tenantMiddleware.Middleware)
 
+	casbin.Init()
+
+	if casbin.Enforcer == nil {
+		logger.Fatal("casbin enforcer init failed")
+	}
+	//Casbin Middleware
+	casbinAuthMiddleware := auth.NewMiddleware(logger, casbin.Enforcer, unitService, tenantService)
+	tenantCasbinAuthMiddleware := tenantAuthMiddleware.Append(casbinAuthMiddleware.Middleware)
+
 	// HTTP Server
 	mux := http.NewServeMux()
 
@@ -206,22 +216,25 @@ func main() {
 
 	// Unit routes
 	mux.Handle("POST /api/orgs", authMiddleware.HandlerFunc(unitHandler.CreateOrg))
-	mux.Handle("POST /api/orgs/{slug}/units", tenantAuthMiddleware.HandlerFunc(unitHandler.CreateUnit))
+	mux.Handle("POST /api/orgs/{slug}/units", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.CreateUnit))
 	mux.Handle("GET /api/orgs/{slug}", tenantBasicMiddleware.HandlerFunc(unitHandler.GetOrgByID))
 	mux.Handle("GET /api/orgs", basicMiddleware.HandlerFunc(unitHandler.GetAllOrganizations))
 	mux.Handle("GET /api/orgs/me", authMiddleware.HandlerFunc(unitHandler.ListOrganizationsOfCurrentUser))
 	mux.Handle("GET /api/orgs/{slug}/units/{id}", tenantBasicMiddleware.HandlerFunc(unitHandler.GetUnitByID))
 	mux.Handle("POST /api/orgs/relations", authMiddleware.HandlerFunc(unitHandler.AddParentChild))
-	mux.Handle("PUT /api/orgs/{slug}", tenantAuthMiddleware.HandlerFunc(unitHandler.UpdateOrg))
-	mux.Handle("PUT /api/orgs/{slug}/units/{id}", tenantAuthMiddleware.HandlerFunc(unitHandler.UpdateUnit))
-	mux.Handle("DELETE /api/orgs/{slug}", tenantAuthMiddleware.HandlerFunc(unitHandler.DeleteOrg))
-	mux.Handle("DELETE /api/orgs/{slug}/units/{id}", tenantAuthMiddleware.HandlerFunc(unitHandler.DeleteUnit))
+	mux.Handle("PUT /api/orgs/{slug}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.UpdateOrg))
+	mux.Handle("PUT /api/orgs/{slug}/units/{id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.UpdateUnit))
+	mux.Handle("DELETE /api/orgs/{slug}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.DeleteOrg))
+	mux.Handle("DELETE /api/orgs/{slug}/units/{id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.DeleteUnit))
 	mux.Handle("POST /api/orgs/{slug}/members", tenantAuthMiddleware.HandlerFunc(unitHandler.AddOrgMember))
 	mux.Handle("GET /api/orgs/{slug}/members", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgMembers))
-	mux.Handle("DELETE /api/orgs/{slug}/members/{member_id}", tenantAuthMiddleware.HandlerFunc(unitHandler.RemoveOrgMember))
+	mux.Handle("DELETE /api/orgs/{slug}/members/{member_id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.RemoveOrgMember))
 	mux.Handle("POST /api/orgs/{slug}/units/{id}/members", tenantAuthMiddleware.HandlerFunc(unitHandler.AddUnitMember))
 	mux.Handle("GET /api/orgs/{slug}/units/{id}/members", tenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitMembers))
-	mux.Handle("DELETE /api/orgs/{slug}/units/{id}/members/{member_id}", tenantAuthMiddleware.HandlerFunc(unitHandler.RemoveUnitMember))
+	mux.Handle("DELETE /api/orgs/{slug}/units/{id}/members/{member_id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.RemoveUnitMember))
+	//TODO
+	//mux.Handle("PATCH /api/orgs/{slug}/members/{member_id}", tenantAuthMiddleware.HandlerFunc(unitHandler.))
+	//mux.Handle("PATCH /api/orgs/{slug}/units/{id}/members/{member_id}", tenantAuthMiddleware.HandlerFunc(unitHandler.))
 
 	// Slug availability and history
 	mux.Handle("GET /api/orgs/{slug}/status", basicMiddleware.HandlerFunc(tenantHandler.GetStatus))
@@ -240,7 +253,7 @@ func main() {
 	mux.Handle("DELETE /api/forms/{id}", authMiddleware.HandlerFunc(formHandler.DeleteHandler))
 	mux.Handle("POST /api/forms/recipients/preview", authMiddleware.HandlerFunc(publishHandler.PreviewForm))
 	mux.Handle("POST /api/forms/{id}/publish", authMiddleware.HandlerFunc(publishHandler.PublishForm))
-	mux.Handle("POST /api/orgs/{slug}/units/{unitId}/forms", tenantAuthMiddleware.HandlerFunc(formHandler.CreateUnderUnitHandler))
+	mux.Handle("POST /api/orgs/{slug}/units/{unitId}/forms", tenantCasbinAuthMiddleware.HandlerFunc(formHandler.CreateUnderUnitHandler))
 	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/forms", tenantBasicMiddleware.HandlerFunc(formHandler.ListByUnitHandler))
 
 	// Question routes

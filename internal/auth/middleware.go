@@ -18,24 +18,30 @@ import (
 type unitReader interface {
 	GetMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID) (unit.UnitRole, error)
 }
+type tenantReader interface {
+	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
+}
 
 type Middleware struct {
-	tracer   trace.Tracer
-	logger   *zap.Logger
-	enforcer *casbin.Enforcer
-	unitSvc  unitReader
+	tracer    trace.Tracer
+	logger    *zap.Logger
+	enforcer  *casbin.Enforcer
+	unitSvc   unitReader
+	tenantSvc tenantReader
 }
 
 func NewMiddleware(
 	logger *zap.Logger,
 	enforcer *casbin.Enforcer,
 	unitSvc unitReader,
+	tenantSvc tenantReader,
 ) *Middleware {
 	return &Middleware{
-		tracer:   otel.Tracer("auth/middleware"),
-		logger:   logger,
-		enforcer: enforcer,
-		unitSvc:  unitSvc,
+		tracer:    otel.Tracer("auth/middleware"),
+		logger:    logger,
+		enforcer:  enforcer,
+		unitSvc:   unitSvc,
+		tenantSvc: tenantSvc,
 	}
 }
 
@@ -52,15 +58,34 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		unitIDStr := r.PathValue("unitId")
-		if unitIDStr == "" {
-			next(w, r)
-			return
-		}
+		var unitID uuid.UUID
+		if unitIDStr := r.PathValue("unitId"); unitIDStr != "" {
+			//unit
+			parsed, err := uuid.Parse(unitIDStr)
+			if err != nil {
+				http.Error(w, "invalid unit id", http.StatusBadRequest)
+				return
+			}
+			unitID = parsed
 
-		unitID, err := uuid.Parse(unitIDStr)
-		if err != nil {
-			http.Error(w, "invalid unit id", http.StatusBadRequest)
+		} else if slug := r.PathValue("slug"); slug != "" {
+			//org
+			available, orgID, err := m.tenantSvc.GetSlugStatus(traceCtx, slug)
+			if err != nil {
+				logger.Error("get slug status failed", zap.Error(err))
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+			// available == true means slug NOT exists
+			if available {
+				http.Error(w, "org not found", http.StatusNotFound)
+				return
+			}
+
+			unitID = orgID
+
+		} else {
+			next(w, r)
 			return
 		}
 
@@ -84,7 +109,7 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			string(role), // admin / member
 			domain,
 		)
-		
+
 		allowed, err := m.enforcer.Enforce(
 			userID,
 			domain,
