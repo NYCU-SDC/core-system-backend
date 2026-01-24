@@ -92,13 +92,28 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 		deadline = pgtype.Timestamptz{Valid: false}
 	}
 
+	var publishTime pgtype.Timestamptz
+	if request.PublishTime != nil {
+		publishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
+	} else {
+		publishTime = pgtype.Timestamptz{Valid: false}
+	}
+
 	updatedForm, err := s.queries.Update(ctx, UpdateParams{
-		ID:             id,
-		Title:          request.Title,
-		Description:    pgtype.Text{String: request.Description, Valid: true},
-		PreviewMessage: pgtype.Text{String: request.PreviewMessage, Valid: request.PreviewMessage != ""},
-		LastEditor:     userID,
-		Deadline:       deadline,
+		ID:                     id,
+		Title:                  request.Title,
+		Description:            pgtype.Text{String: request.Description, Valid: true},
+		PreviewMessage:         pgtype.Text{String: request.PreviewMessage, Valid: request.PreviewMessage != ""},
+		LastEditor:             userID,
+		Deadline:               deadline,
+		PublishTime:            publishTime,
+		MessageAfterSubmission: request.MessageAfterSubmission,
+		GoogleSheetUrl:         pgtype.Text{String: request.GoogleSheetUrl, Valid: true},
+		Visibility:             request.Visibility,
+		DressingColor:          pgtype.Text{String: request.Dressing.Color, Valid: true},
+		DressingHeaderFont:     pgtype.Text{String: request.Dressing.HeaderFont, Valid: true},
+		DressingQuestionFont:   pgtype.Text{String: request.Dressing.QuestionFont, Valid: true},
+		DressingTextFont:       pgtype.Text{String: request.Dressing.TextFont, Valid: true},
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update form")
