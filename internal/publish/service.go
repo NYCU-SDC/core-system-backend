@@ -107,12 +107,11 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []u
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	params := map[string]interface{}{
-		"form_id":        formID.String(),
-		"editor":         editor.String(),
-		"unit_ids_count": len(unitIDs),
-	}
-	tracker := logutil.StartMethod(ctx, logger, methodName, params)
+	tracker := logutil.StartMethod(ctx, logger, methodName, map[string]interface{}{
+		"form_id":  formID.String(),
+		"editor":   editor.String(),
+		"unit_ids": unitIDs,
+	})
 
 	// check form existence and status
 	targetForm, err := s.store.GetByID(ctx, formID)

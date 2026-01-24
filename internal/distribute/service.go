@@ -59,7 +59,7 @@ func (s *Service) GetRecipients(ctx context.Context, unitIDs []uuid.UUID) ([]uui
 	logger := logutil.WithContext(ctx, s.logger)
 
 	tracker := logutil.StartMethod(ctx, logger, methodName, map[string]interface{}{
-		"unitIDs": len(unitIDs),
+		"unit_ids": unitIDs,
 	})
 
 	all := make([]uuid.UUID, 0)
