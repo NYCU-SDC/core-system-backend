@@ -55,10 +55,20 @@ func (s *Service) Create(ctx context.Context, req Request, unitID uuid.UUID, use
 		publishTime = pgtype.Timestamptz{Valid: false}
 	}
 
+	preview := req.PreviewMessage
+	if preview == "" && req.Description != "" {
+		runes := []rune(req.Description)
+		if len(runes) > 25 {
+			preview = string(runes[:25])
+		} else {
+			preview = req.Description
+		}
+	}
+
 	newForm, err := s.queries.Create(ctx, CreateParams{
 		Title:                  req.Title,
 		Description:            pgtype.Text{String: req.Description, Valid: true},
-		PreviewMessage:         pgtype.Text{String: req.PreviewMessage, Valid: req.PreviewMessage != ""},
+		PreviewMessage:         pgtype.Text{String: preview, Valid: preview != ""},
 		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
 		LastEditor:             userID,
 		Deadline:               deadline,
@@ -99,11 +109,21 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 		publishTime = pgtype.Timestamptz{Valid: false}
 	}
 
+	preview := request.PreviewMessage
+	if preview == "" && request.Description != "" {
+		runes := []rune(request.Description)
+		if len(runes) > 25 {
+			preview = string(runes[:25])
+		} else {
+			preview = request.Description
+		}
+	}
+
 	updatedForm, err := s.queries.Update(ctx, UpdateParams{
 		ID:                     id,
 		Title:                  request.Title,
 		Description:            pgtype.Text{String: request.Description, Valid: true},
-		PreviewMessage:         pgtype.Text{String: request.PreviewMessage, Valid: request.PreviewMessage != ""},
+		PreviewMessage:         pgtype.Text{String: preview, Valid: preview != ""},
 		LastEditor:             userID,
 		Deadline:               deadline,
 		PublishTime:            publishTime,
