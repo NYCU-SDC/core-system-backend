@@ -17,29 +17,48 @@ import (
 	"go.uber.org/zap"
 )
 
+type DressingRequest struct {
+	Color        string `json:"color"`
+	HeaderFont   string `json:"headerFont"`
+	QuestionFont string `json:"questionFont"`
+	TextFont     string `json:"textFont"`
+}
+
 type Request struct {
-	Title          string     `json:"title" validate:"required"`
-	Description    string     `json:"description"`
-	PreviewMessage string     `json:"previewMessage"`
-	Deadline       *time.Time `json:"deadline"`
+	Title                  string          `json:"title" validate:"required"`
+	Description            string          `json:"description"`
+	PreviewMessage         string          `json:"previewMessage"`
+	Deadline               *time.Time      `json:"deadline"`
+	PublishTime            *time.Time      `json:"publishTime"`
+	MessageAfterSubmission string          `json:"messageAfterSubmission"`
+	GoogleSheetUrl         string          `json:"googleSheetUrl"`
+	Visibility             Visibility      `json:"visibility"`
+	CoverImageUrl          string          `json:"coverImageUrl"`
+	Dressing               DressingRequest `json:"dressing"`
 }
 
 type Response struct {
-	ID             string               `json:"id"`
-	Title          string               `json:"title"`
-	Description    string               `json:"description"`
-	PreviewMessage string               `json:"previewMessage"`
-	Status         string               `json:"status"`
-	UnitID         string               `json:"unitId"`
-	OrgID          string               `json:"orgId"`
-	LastEditor     user.ProfileResponse `json:"lastEditor"`
-	Deadline       *time.Time           `json:"deadline"`
-	CreatedAt      time.Time            `json:"createdAt"`
-	UpdatedAt      time.Time            `json:"updatedAt"`
+	ID                     string               `json:"id"`
+	Title                  string               `json:"title"`
+	Description            string               `json:"description"`
+	PreviewMessage         string               `json:"previewMessage"`
+	Status                 string               `json:"status"`
+	UnitID                 string               `json:"unitId"`
+	OrgID                  string               `json:"orgId"`
+	LastEditor             user.ProfileResponse `json:"lastEditor"`
+	Deadline               *time.Time           `json:"deadline"`
+	CreatedAt              time.Time            `json:"createdAt"`
+	UpdatedAt              time.Time            `json:"updatedAt"`
+	PublishTime            *time.Time           `json:"publishTime"`
+	MessageAfterSubmission string               `json:"messageAfterSubmission"`
+	GoogleSheetUrl         string               `json:"googleSheetUrl"`
+	Visibility             Visibility           `json:"visibility"`
+	CoverImageUrl          string               `json:"coverImageUrl"`
+	Dressing               DressingRequest      `json:"dressing"`
 }
 
 // ToResponse converts a Form storage model into an API Response.
-// Ensures deadline is null when empty/invalid.
+// Ensures deadline, publishTime is null when empty/invalid.
 func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
 	var deadline *time.Time
 
@@ -47,6 +66,13 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		deadline = &form.Deadline.Time
 	} else {
 		deadline = nil
+	}
+
+	var publishTime *time.Time
+	if form.PublishTime.Valid {
+		publishTime = &form.PublishTime.Time
+	} else {
+		publishTime = nil
 	}
 
 	return Response{
@@ -64,9 +90,20 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 			Emails:    emails,
 			AvatarURL: editor.AvatarUrl.String,
 		},
-		Deadline:  deadline,
-		CreatedAt: form.CreatedAt.Time,
-		UpdatedAt: form.UpdatedAt.Time,
+		Deadline:               deadline,
+		CreatedAt:              form.CreatedAt.Time,
+		UpdatedAt:              form.UpdatedAt.Time,
+		MessageAfterSubmission: form.MessageAfterSubmission,
+		Visibility:             form.Visibility,
+		GoogleSheetUrl:         form.GoogleSheetUrl.String,
+		PublishTime:            publishTime,
+		CoverImageUrl:          form.CoverImageUrl.String,
+		Dressing: DressingRequest{
+			Color:        form.DressingColor.String,
+			HeaderFont:   form.DressingHeaderFont.String,
+			QuestionFont: form.DressingQuestionFont.String,
+			TextFont:     form.DressingTextFont.String,
+		},
 	}
 }
 

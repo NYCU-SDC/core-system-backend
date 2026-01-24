@@ -14,12 +14,31 @@ import (
 
 const create = `-- name: Create :one
 WITH created AS (
-    INSERT INTO forms (title, description, preview_message, unit_id, last_editor, deadline)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at
+    INSERT INTO forms (
+                       title,
+                       description,
+                       preview_message,
+                       unit_id,
+                       last_editor,
+                       deadline,
+                       publish_time,
+                       message_after_submission,
+                       google_sheet_url,
+                       visibility,
+                       dressing_color,
+                       dressing_header_font,
+                       dressing_question_font,
+                       dressing_text_font
+                       )
+    VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11, $12, $13, $14
+    )
+    RETURNING id, title, description, preview_message, message_after_submission, status, unit_id, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font
 )
 SELECT 
-    f.id, f.title, f.description, f.preview_message, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at,
+    f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
     usr.name as last_editor_name,
@@ -33,31 +52,48 @@ LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 `
 
 type CreateParams struct {
-	Title          string
-	Description    pgtype.Text
-	PreviewMessage pgtype.Text
-	UnitID         pgtype.UUID
-	LastEditor     uuid.UUID
-	Deadline       pgtype.Timestamptz
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	UnitID                 pgtype.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	PublishTime            pgtype.Timestamptz
+	MessageAfterSubmission string
+	GoogleSheetUrl         pgtype.Text
+	Visibility             Visibility
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
 }
 
 type CreateRow struct {
-	ID                  uuid.UUID
-	Title               string
-	Description         pgtype.Text
-	PreviewMessage      pgtype.Text
-	Status              Status
-	UnitID              pgtype.UUID
-	LastEditor          uuid.UUID
-	Deadline            pgtype.Timestamptz
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	UnitName            pgtype.Text
-	OrgName             pgtype.Text
-	LastEditorName      pgtype.Text
-	LastEditorUsername  pgtype.Text
-	LastEditorAvatarUrl pgtype.Text
-	LastEditorEmail     interface{}
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	MessageAfterSubmission string
+	Status                 Status
+	UnitID                 pgtype.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Visibility             Visibility
+	GoogleSheetUrl         pgtype.Text
+	PublishTime            pgtype.Timestamptz
+	CoverImageUrl          pgtype.Text
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+	UnitName               pgtype.Text
+	OrgName                pgtype.Text
+	LastEditorName         pgtype.Text
+	LastEditorUsername     pgtype.Text
+	LastEditorAvatarUrl    pgtype.Text
+	LastEditorEmail        interface{}
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, error) {
@@ -68,6 +104,14 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, erro
 		arg.UnitID,
 		arg.LastEditor,
 		arg.Deadline,
+		arg.PublishTime,
+		arg.MessageAfterSubmission,
+		arg.GoogleSheetUrl,
+		arg.Visibility,
+		arg.DressingColor,
+		arg.DressingHeaderFont,
+		arg.DressingQuestionFont,
+		arg.DressingTextFont,
 	)
 	var i CreateRow
 	err := row.Scan(
@@ -75,12 +119,21 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, erro
 		&i.Title,
 		&i.Description,
 		&i.PreviewMessage,
+		&i.MessageAfterSubmission,
 		&i.Status,
 		&i.UnitID,
 		&i.LastEditor,
 		&i.Deadline,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Visibility,
+		&i.GoogleSheetUrl,
+		&i.PublishTime,
+		&i.CoverImageUrl,
+		&i.DressingColor,
+		&i.DressingHeaderFont,
+		&i.DressingQuestionFont,
+		&i.DressingTextFont,
 		&i.UnitName,
 		&i.OrgName,
 		&i.LastEditorName,
@@ -102,7 +155,7 @@ func (q *Queries) Delete(ctx context.Context, id uuid.UUID) error {
 
 const getByID = `-- name: GetByID :one
 SELECT 
-    f.id, f.title, f.description, f.preview_message, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at,
+    f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
     usr.name as last_editor_name,
@@ -117,22 +170,31 @@ WHERE f.id = $1
 `
 
 type GetByIDRow struct {
-	ID                  uuid.UUID
-	Title               string
-	Description         pgtype.Text
-	PreviewMessage      pgtype.Text
-	Status              Status
-	UnitID              pgtype.UUID
-	LastEditor          uuid.UUID
-	Deadline            pgtype.Timestamptz
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	UnitName            pgtype.Text
-	OrgName             pgtype.Text
-	LastEditorName      pgtype.Text
-	LastEditorUsername  pgtype.Text
-	LastEditorAvatarUrl pgtype.Text
-	LastEditorEmail     interface{}
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	MessageAfterSubmission string
+	Status                 Status
+	UnitID                 pgtype.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Visibility             Visibility
+	GoogleSheetUrl         pgtype.Text
+	PublishTime            pgtype.Timestamptz
+	CoverImageUrl          pgtype.Text
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+	UnitName               pgtype.Text
+	OrgName                pgtype.Text
+	LastEditorName         pgtype.Text
+	LastEditorUsername     pgtype.Text
+	LastEditorAvatarUrl    pgtype.Text
+	LastEditorEmail        interface{}
 }
 
 func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error) {
@@ -143,12 +205,21 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 		&i.Title,
 		&i.Description,
 		&i.PreviewMessage,
+		&i.MessageAfterSubmission,
 		&i.Status,
 		&i.UnitID,
 		&i.LastEditor,
 		&i.Deadline,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Visibility,
+		&i.GoogleSheetUrl,
+		&i.PublishTime,
+		&i.CoverImageUrl,
+		&i.DressingColor,
+		&i.DressingHeaderFont,
+		&i.DressingQuestionFont,
+		&i.DressingTextFont,
 		&i.UnitName,
 		&i.OrgName,
 		&i.LastEditorName,
@@ -161,7 +232,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 
 const list = `-- name: List :many
 SELECT 
-    f.id, f.title, f.description, f.preview_message, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at,
+    f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
     usr.name as last_editor_name,
@@ -176,22 +247,31 @@ ORDER BY f.updated_at DESC
 `
 
 type ListRow struct {
-	ID                  uuid.UUID
-	Title               string
-	Description         pgtype.Text
-	PreviewMessage      pgtype.Text
-	Status              Status
-	UnitID              pgtype.UUID
-	LastEditor          uuid.UUID
-	Deadline            pgtype.Timestamptz
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	UnitName            pgtype.Text
-	OrgName             pgtype.Text
-	LastEditorName      pgtype.Text
-	LastEditorUsername  pgtype.Text
-	LastEditorAvatarUrl pgtype.Text
-	LastEditorEmail     interface{}
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	MessageAfterSubmission string
+	Status                 Status
+	UnitID                 pgtype.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Visibility             Visibility
+	GoogleSheetUrl         pgtype.Text
+	PublishTime            pgtype.Timestamptz
+	CoverImageUrl          pgtype.Text
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+	UnitName               pgtype.Text
+	OrgName                pgtype.Text
+	LastEditorName         pgtype.Text
+	LastEditorUsername     pgtype.Text
+	LastEditorAvatarUrl    pgtype.Text
+	LastEditorEmail        interface{}
 }
 
 func (q *Queries) List(ctx context.Context) ([]ListRow, error) {
@@ -208,12 +288,21 @@ func (q *Queries) List(ctx context.Context) ([]ListRow, error) {
 			&i.Title,
 			&i.Description,
 			&i.PreviewMessage,
+			&i.MessageAfterSubmission,
 			&i.Status,
 			&i.UnitID,
 			&i.LastEditor,
 			&i.Deadline,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Visibility,
+			&i.GoogleSheetUrl,
+			&i.PublishTime,
+			&i.CoverImageUrl,
+			&i.DressingColor,
+			&i.DressingHeaderFont,
+			&i.DressingQuestionFont,
+			&i.DressingTextFont,
 			&i.UnitName,
 			&i.OrgName,
 			&i.LastEditorName,
@@ -233,7 +322,7 @@ func (q *Queries) List(ctx context.Context) ([]ListRow, error) {
 
 const listByUnit = `-- name: ListByUnit :many
 SELECT 
-    f.id, f.title, f.description, f.preview_message, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at,
+    f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
     usr.name as last_editor_name,
@@ -249,22 +338,31 @@ ORDER BY f.updated_at DESC
 `
 
 type ListByUnitRow struct {
-	ID                  uuid.UUID
-	Title               string
-	Description         pgtype.Text
-	PreviewMessage      pgtype.Text
-	Status              Status
-	UnitID              pgtype.UUID
-	LastEditor          uuid.UUID
-	Deadline            pgtype.Timestamptz
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	UnitName            pgtype.Text
-	OrgName             pgtype.Text
-	LastEditorName      pgtype.Text
-	LastEditorUsername  pgtype.Text
-	LastEditorAvatarUrl pgtype.Text
-	LastEditorEmail     interface{}
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	MessageAfterSubmission string
+	Status                 Status
+	UnitID                 pgtype.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Visibility             Visibility
+	GoogleSheetUrl         pgtype.Text
+	PublishTime            pgtype.Timestamptz
+	CoverImageUrl          pgtype.Text
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+	UnitName               pgtype.Text
+	OrgName                pgtype.Text
+	LastEditorName         pgtype.Text
+	LastEditorUsername     pgtype.Text
+	LastEditorAvatarUrl    pgtype.Text
+	LastEditorEmail        interface{}
 }
 
 func (q *Queries) ListByUnit(ctx context.Context, unitID pgtype.UUID) ([]ListByUnitRow, error) {
@@ -281,12 +379,21 @@ func (q *Queries) ListByUnit(ctx context.Context, unitID pgtype.UUID) ([]ListByU
 			&i.Title,
 			&i.Description,
 			&i.PreviewMessage,
+			&i.MessageAfterSubmission,
 			&i.Status,
 			&i.UnitID,
 			&i.LastEditor,
 			&i.Deadline,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Visibility,
+			&i.GoogleSheetUrl,
+			&i.PublishTime,
+			&i.CoverImageUrl,
+			&i.DressingColor,
+			&i.DressingHeaderFont,
+			&i.DressingQuestionFont,
+			&i.DressingTextFont,
 			&i.UnitName,
 			&i.OrgName,
 			&i.LastEditorName,
@@ -308,7 +415,7 @@ const setStatus = `-- name: SetStatus :one
 UPDATE forms
 SET status = $2, last_editor = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at
+RETURNING id, title, description, preview_message, message_after_submission, status, unit_id, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font
 `
 
 type SetStatusParams struct {
@@ -325,12 +432,21 @@ func (q *Queries) SetStatus(ctx context.Context, arg SetStatusParams) (Form, err
 		&i.Title,
 		&i.Description,
 		&i.PreviewMessage,
+		&i.MessageAfterSubmission,
 		&i.Status,
 		&i.UnitID,
 		&i.LastEditor,
 		&i.Deadline,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Visibility,
+		&i.GoogleSheetUrl,
+		&i.PublishTime,
+		&i.CoverImageUrl,
+		&i.DressingColor,
+		&i.DressingHeaderFont,
+		&i.DressingQuestionFont,
+		&i.DressingTextFont,
 	)
 	return i, err
 }
@@ -338,12 +454,26 @@ func (q *Queries) SetStatus(ctx context.Context, arg SetStatusParams) (Form, err
 const update = `-- name: Update :one
 WITH updated AS (
     UPDATE forms
-    SET title = $2, description = $3, preview_message = $4, last_editor = $5, deadline = $6, updated_at = now()
+    SET
+        title = $2,
+        description = $3,
+        preview_message = $4,
+        last_editor = $5,
+        deadline = $6,
+        publish_time = $7,
+        message_after_submission = $8,
+        google_sheet_url = $9,
+        visibility = $10,
+        dressing_color = $11,
+        dressing_header_font = $12,
+        dressing_question_font = $13,
+        dressing_text_font = $14,
+        updated_at = now()
     WHERE forms.id = $1
-    RETURNING id, title, description, preview_message, status, unit_id, last_editor, deadline, created_at, updated_at
+    RETURNING id, title, description, preview_message, message_after_submission, status, unit_id, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font
 )
 SELECT 
-    f.id, f.title, f.description, f.preview_message, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at,
+    f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
     usr.name as last_editor_name,
@@ -357,31 +487,48 @@ LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 `
 
 type UpdateParams struct {
-	ID             uuid.UUID
-	Title          string
-	Description    pgtype.Text
-	PreviewMessage pgtype.Text
-	LastEditor     uuid.UUID
-	Deadline       pgtype.Timestamptz
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	PublishTime            pgtype.Timestamptz
+	MessageAfterSubmission string
+	GoogleSheetUrl         pgtype.Text
+	Visibility             Visibility
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
 }
 
 type UpdateRow struct {
-	ID                  uuid.UUID
-	Title               string
-	Description         pgtype.Text
-	PreviewMessage      pgtype.Text
-	Status              Status
-	UnitID              pgtype.UUID
-	LastEditor          uuid.UUID
-	Deadline            pgtype.Timestamptz
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	UnitName            pgtype.Text
-	OrgName             pgtype.Text
-	LastEditorName      pgtype.Text
-	LastEditorUsername  pgtype.Text
-	LastEditorAvatarUrl pgtype.Text
-	LastEditorEmail     interface{}
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	MessageAfterSubmission string
+	Status                 Status
+	UnitID                 pgtype.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Visibility             Visibility
+	GoogleSheetUrl         pgtype.Text
+	PublishTime            pgtype.Timestamptz
+	CoverImageUrl          pgtype.Text
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+	UnitName               pgtype.Text
+	OrgName                pgtype.Text
+	LastEditorName         pgtype.Text
+	LastEditorUsername     pgtype.Text
+	LastEditorAvatarUrl    pgtype.Text
+	LastEditorEmail        interface{}
 }
 
 func (q *Queries) Update(ctx context.Context, arg UpdateParams) (UpdateRow, error) {
@@ -392,6 +539,14 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (UpdateRow, erro
 		arg.PreviewMessage,
 		arg.LastEditor,
 		arg.Deadline,
+		arg.PublishTime,
+		arg.MessageAfterSubmission,
+		arg.GoogleSheetUrl,
+		arg.Visibility,
+		arg.DressingColor,
+		arg.DressingHeaderFont,
+		arg.DressingQuestionFont,
+		arg.DressingTextFont,
 	)
 	var i UpdateRow
 	err := row.Scan(
@@ -399,12 +554,21 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (UpdateRow, erro
 		&i.Title,
 		&i.Description,
 		&i.PreviewMessage,
+		&i.MessageAfterSubmission,
 		&i.Status,
 		&i.UnitID,
 		&i.LastEditor,
 		&i.Deadline,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Visibility,
+		&i.GoogleSheetUrl,
+		&i.PublishTime,
+		&i.CoverImageUrl,
+		&i.DressingColor,
+		&i.DressingHeaderFont,
+		&i.DressingQuestionFont,
+		&i.DressingTextFont,
 		&i.UnitName,
 		&i.OrgName,
 		&i.LastEditorName,

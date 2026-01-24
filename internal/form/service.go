@@ -48,13 +48,28 @@ func (s *Service) Create(ctx context.Context, req Request, unitID uuid.UUID, use
 		deadline = pgtype.Timestamptz{Valid: false}
 	}
 
+	var publishTime pgtype.Timestamptz
+	if req.PublishTime != nil {
+		publishTime = pgtype.Timestamptz{Time: *req.PublishTime, Valid: true}
+	} else {
+		publishTime = pgtype.Timestamptz{Valid: false}
+	}
+
 	newForm, err := s.queries.Create(ctx, CreateParams{
-		Title:          req.Title,
-		Description:    pgtype.Text{String: req.Description, Valid: true},
-		PreviewMessage: pgtype.Text{String: req.PreviewMessage, Valid: req.PreviewMessage != ""},
-		UnitID:         pgtype.UUID{Bytes: unitID, Valid: true},
-		LastEditor:     userID,
-		Deadline:       deadline,
+		Title:                  req.Title,
+		Description:            pgtype.Text{String: req.Description, Valid: true},
+		PreviewMessage:         pgtype.Text{String: req.PreviewMessage, Valid: req.PreviewMessage != ""},
+		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
+		LastEditor:             userID,
+		Deadline:               deadline,
+		PublishTime:            publishTime,
+		MessageAfterSubmission: req.MessageAfterSubmission,
+		GoogleSheetUrl:         pgtype.Text{String: req.GoogleSheetUrl, Valid: true},
+		Visibility:             req.Visibility,
+		DressingColor:          pgtype.Text{String: req.Dressing.Color, Valid: true},
+		DressingHeaderFont:     pgtype.Text{String: req.Dressing.HeaderFont, Valid: true},
+		DressingQuestionFont:   pgtype.Text{String: req.Dressing.QuestionFont, Valid: true},
+		DressingTextFont:       pgtype.Text{String: req.Dressing.TextFont, Valid: true},
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create form")

@@ -1,7 +1,26 @@
 -- name: Create :one
 WITH created AS (
-    INSERT INTO forms (title, description, preview_message, unit_id, last_editor, deadline)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO forms (
+                       title,
+                       description,
+                       preview_message,
+                       unit_id,
+                       last_editor,
+                       deadline,
+                       publish_time,
+                       message_after_submission,
+                       google_sheet_url,
+                       visibility,
+                       dressing_color,
+                       dressing_header_font,
+                       dressing_question_font,
+                       dressing_text_font
+                       )
+    VALUES (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11, $12, $13, $14
+    )
     RETURNING *
 )
 SELECT 
@@ -20,7 +39,21 @@ LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;
 -- name: Update :one
 WITH updated AS (
     UPDATE forms
-    SET title = $2, description = $3, preview_message = $4, last_editor = $5, deadline = $6, updated_at = now()
+    SET
+        title = $2,
+        description = $3,
+        preview_message = $4,
+        last_editor = $5,
+        deadline = $6,
+        publish_time = $7,
+        message_after_submission = $8,
+        google_sheet_url = $9,
+        visibility = $10,
+        dressing_color = $11,
+        dressing_header_font = $12,
+        dressing_question_font = $13,
+        dressing_text_font = $14,
+        updated_at = now()
     WHERE forms.id = $1
     RETURNING *
 )
