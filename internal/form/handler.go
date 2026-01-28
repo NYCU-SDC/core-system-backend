@@ -25,16 +25,16 @@ type DressingRequest struct {
 }
 
 type Request struct {
-	Title                  string          `json:"title" validate:"required"`
-	Description            string          `json:"description"`
-	PreviewMessage         string          `json:"previewMessage"`
-	Deadline               *time.Time      `json:"deadline"`
-	PublishTime            *time.Time      `json:"publishTime"`
-	MessageAfterSubmission string          `json:"messageAfterSubmission"`
-	GoogleSheetUrl         string          `json:"googleSheetUrl"`
-	Visibility             Visibility      `json:"visibility"`
-	CoverImageUrl          string          `json:"coverImageUrl"`
-	Dressing               DressingRequest `json:"dressing"`
+	Title                  string           `json:"title" validate:"required"`
+	Description            string           `json:"description" validate:"required"`
+	PreviewMessage         string           `json:"previewMessage"`
+	Deadline               *time.Time       `json:"deadline"`
+	PublishTime            *time.Time       `json:"publishTime"`
+	MessageAfterSubmission string           `json:"messageAfterSubmission" validate:"required"`
+	GoogleSheetUrl         string           `json:"googleSheetUrl"`
+	Visibility             Visibility       `json:"visibility" validate:"required,oneof=public private"`
+	CoverImageUrl          string           `json:"coverImageUrl"`
+	Dressing               *DressingRequest `json:"dressing"`
 }
 
 type Response struct {
@@ -245,16 +245,25 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := ToResponse(Form{
-		ID:             currentForm.ID,
-		Title:          currentForm.Title,
-		Description:    currentForm.Description,
-		PreviewMessage: currentForm.PreviewMessage,
-		Status:         currentForm.Status,
-		UnitID:         currentForm.UnitID,
-		LastEditor:     currentForm.LastEditor,
-		Deadline:       currentForm.Deadline,
-		CreatedAt:      currentForm.CreatedAt,
-		UpdatedAt:      currentForm.UpdatedAt,
+		ID:                     currentForm.ID,
+		Title:                  currentForm.Title,
+		Description:            currentForm.Description,
+		PreviewMessage:         currentForm.PreviewMessage,
+		Status:                 currentForm.Status,
+		UnitID:                 currentForm.UnitID,
+		LastEditor:             currentForm.LastEditor,
+		Deadline:               currentForm.Deadline,
+		CreatedAt:              currentForm.CreatedAt,
+		UpdatedAt:              currentForm.UpdatedAt,
+		MessageAfterSubmission: currentForm.MessageAfterSubmission,
+		Visibility:             currentForm.Visibility,
+		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
+		PublishTime:            currentForm.PublishTime,
+		CoverImageUrl:          currentForm.CoverImageUrl,
+		DressingColor:          currentForm.DressingColor,
+		DressingHeaderFont:     currentForm.DressingHeaderFont,
+		DressingQuestionFont:   currentForm.DressingQuestionFont,
+		DressingTextFont:       currentForm.DressingTextFont,
 	},
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
@@ -282,11 +291,20 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	responses := make([]Response, 0, len(forms))
 	for _, form := range forms {
 		responses = append(responses, ToResponse(Form{
-			ID:             form.ID,
-			Title:          form.Title,
-			Description:    form.Description,
-			PreviewMessage: form.PreviewMessage,
-			Status:         form.Status,
+			ID:                     form.ID,
+			Title:                  form.Title,
+			Description:            form.Description,
+			PreviewMessage:         form.PreviewMessage,
+			Status:                 form.Status,
+			MessageAfterSubmission: form.MessageAfterSubmission,
+			Visibility:             form.Visibility,
+			GoogleSheetUrl:         form.GoogleSheetUrl,
+			PublishTime:            form.PublishTime,
+			CoverImageUrl:          form.CoverImageUrl,
+			DressingColor:          form.DressingColor,
+			DressingHeaderFont:     form.DressingHeaderFont,
+			DressingQuestionFont:   form.DressingQuestionFont,
+			DressingTextFont:       form.DressingTextFont,
 		},
 			form.UnitName.String,
 			form.OrgName.String,
@@ -332,16 +350,25 @@ func (h *Handler) CreateUnderUnitHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	response := ToResponse(Form{
-		ID:             newForm.ID,
-		Title:          newForm.Title,
-		Description:    newForm.Description,
-		PreviewMessage: newForm.PreviewMessage,
-		Status:         newForm.Status,
-		UnitID:         newForm.UnitID,
-		LastEditor:     newForm.LastEditor,
-		Deadline:       newForm.Deadline,
-		CreatedAt:      newForm.CreatedAt,
-		UpdatedAt:      newForm.UpdatedAt,
+		ID:                     newForm.ID,
+		Title:                  newForm.Title,
+		Description:            newForm.Description,
+		PreviewMessage:         newForm.PreviewMessage,
+		Status:                 newForm.Status,
+		UnitID:                 newForm.UnitID,
+		LastEditor:             newForm.LastEditor,
+		Deadline:               newForm.Deadline,
+		CreatedAt:              newForm.CreatedAt,
+		UpdatedAt:              newForm.UpdatedAt,
+		MessageAfterSubmission: newForm.MessageAfterSubmission,
+		Visibility:             newForm.Visibility,
+		GoogleSheetUrl:         newForm.GoogleSheetUrl,
+		PublishTime:            newForm.PublishTime,
+		CoverImageUrl:          newForm.CoverImageUrl,
+		DressingColor:          newForm.DressingColor,
+		DressingHeaderFont:     newForm.DressingHeaderFont,
+		DressingQuestionFont:   newForm.DressingQuestionFont,
+		DressingTextFont:       newForm.DressingTextFont,
 	},
 		newForm.UnitName.String,
 		newForm.OrgName.String,
@@ -376,16 +403,25 @@ func (h *Handler) ListByUnitHandler(w http.ResponseWriter, r *http.Request) {
 	responses := make([]Response, len(forms))
 	for i, currentForm := range forms {
 		responses[i] = ToResponse(Form{
-			ID:             currentForm.ID,
-			Title:          currentForm.Title,
-			Description:    currentForm.Description,
-			PreviewMessage: currentForm.PreviewMessage,
-			Status:         currentForm.Status,
-			UnitID:         currentForm.UnitID,
-			LastEditor:     currentForm.LastEditor,
-			Deadline:       currentForm.Deadline,
-			CreatedAt:      currentForm.CreatedAt,
-			UpdatedAt:      currentForm.UpdatedAt,
+			ID:                     currentForm.ID,
+			Title:                  currentForm.Title,
+			Description:            currentForm.Description,
+			PreviewMessage:         currentForm.PreviewMessage,
+			Status:                 currentForm.Status,
+			UnitID:                 currentForm.UnitID,
+			LastEditor:             currentForm.LastEditor,
+			Deadline:               currentForm.Deadline,
+			CreatedAt:              currentForm.CreatedAt,
+			UpdatedAt:              currentForm.UpdatedAt,
+			MessageAfterSubmission: currentForm.MessageAfterSubmission,
+			Visibility:             currentForm.Visibility,
+			GoogleSheetUrl:         currentForm.GoogleSheetUrl,
+			PublishTime:            currentForm.PublishTime,
+			CoverImageUrl:          currentForm.CoverImageUrl,
+			DressingColor:          currentForm.DressingColor,
+			DressingHeaderFont:     currentForm.DressingHeaderFont,
+			DressingQuestionFont:   currentForm.DressingQuestionFont,
+			DressingTextFont:       currentForm.DressingTextFont,
 		}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
 			ID:        currentForm.LastEditor,
 			Name:      currentForm.LastEditorName,

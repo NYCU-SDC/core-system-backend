@@ -36,50 +36,63 @@ func NewService(logger *zap.Logger, db DBTX) *Service {
 	}
 }
 
-func (s *Service) Create(ctx context.Context, req Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
+func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
 	ctx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
 	var deadline pgtype.Timestamptz
-	if req.Deadline != nil {
-		deadline = pgtype.Timestamptz{Time: *req.Deadline, Valid: true}
+	if request.Deadline != nil {
+		deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
 	} else {
 		deadline = pgtype.Timestamptz{Valid: false}
 	}
 
 	var publishTime pgtype.Timestamptz
-	if req.PublishTime != nil {
-		publishTime = pgtype.Timestamptz{Time: *req.PublishTime, Valid: true}
+	if request.PublishTime != nil {
+		publishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
 	} else {
 		publishTime = pgtype.Timestamptz{Valid: false}
 	}
 
-	preview := req.PreviewMessage
-	if preview == "" && req.Description != "" {
-		runes := []rune(req.Description)
+	preview := request.PreviewMessage
+	if preview == "" && request.Description != "" {
+		runes := []rune(request.Description)
 		if len(runes) > 25 {
 			preview = string(runes[:25])
 		} else {
-			preview = req.Description
+			preview = request.Description
 		}
 	}
 
+	var dressingColor, dressingHeaderFont, dressingQuestionFont, dressingTextFont pgtype.Text
+	if request.Dressing != nil {
+		dressingColor = pgtype.Text{String: request.Dressing.Color, Valid: request.Dressing.Color != ""}
+		dressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: request.Dressing.HeaderFont != ""}
+		dressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: request.Dressing.QuestionFont != ""}
+		dressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: request.Dressing.TextFont != ""}
+	} else {
+		dressingColor = pgtype.Text{Valid: false}
+		dressingHeaderFont = pgtype.Text{Valid: false}
+		dressingQuestionFont = pgtype.Text{Valid: false}
+		dressingTextFont = pgtype.Text{Valid: false}
+	}
+
 	newForm, err := s.queries.Create(ctx, CreateParams{
-		Title:                  req.Title,
-		Description:            pgtype.Text{String: req.Description, Valid: true},
+		Title:                  request.Title,
+		Description:            pgtype.Text{String: request.Description, Valid: true},
 		PreviewMessage:         pgtype.Text{String: preview, Valid: preview != ""},
 		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
 		LastEditor:             userID,
 		Deadline:               deadline,
 		PublishTime:            publishTime,
-		MessageAfterSubmission: req.MessageAfterSubmission,
-		GoogleSheetUrl:         pgtype.Text{String: req.GoogleSheetUrl, Valid: true},
-		Visibility:             req.Visibility,
-		DressingColor:          pgtype.Text{String: req.Dressing.Color, Valid: true},
-		DressingHeaderFont:     pgtype.Text{String: req.Dressing.HeaderFont, Valid: true},
-		DressingQuestionFont:   pgtype.Text{String: req.Dressing.QuestionFont, Valid: true},
-		DressingTextFont:       pgtype.Text{String: req.Dressing.TextFont, Valid: true},
+		MessageAfterSubmission: request.MessageAfterSubmission,
+		GoogleSheetUrl:         pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""},
+		Visibility:             request.Visibility,
+		DressingColor:          dressingColor,
+		DressingHeaderFont:     dressingHeaderFont,
+		DressingQuestionFont:   dressingQuestionFont,
+		DressingTextFont:       dressingTextFont,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create form")
@@ -119,6 +132,19 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 		}
 	}
 
+	var dressingColor, dressingHeaderFont, dressingQuestionFont, dressingTextFont pgtype.Text
+	if request.Dressing != nil {
+		dressingColor = pgtype.Text{String: request.Dressing.Color, Valid: request.Dressing.Color != ""}
+		dressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: request.Dressing.HeaderFont != ""}
+		dressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: request.Dressing.QuestionFont != ""}
+		dressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: request.Dressing.TextFont != ""}
+	} else {
+		dressingColor = pgtype.Text{Valid: false}
+		dressingHeaderFont = pgtype.Text{Valid: false}
+		dressingQuestionFont = pgtype.Text{Valid: false}
+		dressingTextFont = pgtype.Text{Valid: false}
+	}
+
 	updatedForm, err := s.queries.Update(ctx, UpdateParams{
 		ID:                     id,
 		Title:                  request.Title,
@@ -128,12 +154,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 		Deadline:               deadline,
 		PublishTime:            publishTime,
 		MessageAfterSubmission: request.MessageAfterSubmission,
-		GoogleSheetUrl:         pgtype.Text{String: request.GoogleSheetUrl, Valid: true},
+		GoogleSheetUrl:         pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""},
 		Visibility:             request.Visibility,
-		DressingColor:          pgtype.Text{String: request.Dressing.Color, Valid: true},
-		DressingHeaderFont:     pgtype.Text{String: request.Dressing.HeaderFont, Valid: true},
-		DressingQuestionFont:   pgtype.Text{String: request.Dressing.QuestionFont, Valid: true},
-		DressingTextFont:       pgtype.Text{String: request.Dressing.TextFont, Valid: true},
+		DressingColor:          dressingColor,
+		DressingHeaderFont:     dressingHeaderFont,
+		DressingQuestionFont:   dressingQuestionFont,
+		DressingTextFont:       dressingTextFont,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update form")
