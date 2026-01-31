@@ -138,31 +138,7 @@ func (s *Service) RemoveMember(ctx context.Context, unitType Type, id uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	role, err := s.queries.GetMemberRole(traceCtx, GetMemberRoleParams{
-		UnitID:   id,
-		MemberID: memberID,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get member role")
-		span.RecordError(err)
-		return err
-	}
-
-	if role == UnitRoleAdmin {
-		adminCount, err := s.queries.CountAdmins(traceCtx, id)
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "count admins")
-			span.RecordError(err)
-			return err
-		}
-
-		if adminCount <= 1 {
-			span.RecordError(ErrLastAdminCannotBeRemoved)
-			return ErrLastAdminCannotBeRemoved
-		}
-	}
-
-	err = s.queries.RemoveMember(traceCtx, RemoveMemberParams{
+	err := s.queries.RemoveMember(traceCtx, RemoveMemberParams{
 		UnitID:   id,
 		MemberID: memberID,
 	})
