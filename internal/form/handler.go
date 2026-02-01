@@ -484,7 +484,15 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			logutil.WithContext(traceCtx, logger).Warn(
+				"failed to close cover image file",
+				zap.String("form_id", id.String()),
+				zap.Error(err),
+			)
+		}
+	}()
 
 	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil {
