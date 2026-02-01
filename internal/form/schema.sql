@@ -30,3 +30,10 @@ CREATE TABLE IF NOT EXISTS forms (
     dressing_text_font TEXT
 );
 
+CREATE TABLE IF NOT EXISTS form_covers (
+    form_id UUID PRIMARY KEY REFERENCES forms(id) ON DELETE CASCADE,
+    image_data BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+

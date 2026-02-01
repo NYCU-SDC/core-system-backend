@@ -124,3 +124,21 @@ UPDATE forms
 SET status = $2, last_editor = $3, updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: UploadCoverImage :one
+WITH upsert AS (
+    INSERT INTO form_covers (form_id, image_data)
+    VALUES ($1, $2)
+    ON CONFLICT (form_id) DO UPDATE
+        SET image_data = EXCLUDED.image_data,
+            updated_at = now()
+    RETURNING form_id
+)
+UPDATE forms
+SET cover_image_url = $3,
+    updated_at = now()
+WHERE id = (SELECT form_id FROM upsert)
+RETURNING id;
+
+-- name: GetCoverImage :one
+SELECT image_data FROM form_covers WHERE form_id = $1;

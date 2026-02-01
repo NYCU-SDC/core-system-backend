@@ -2,6 +2,9 @@ package form
 
 import (
 	"context"
+	"errors"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
+	"github.com/jackc/pgx/v5"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -20,6 +23,8 @@ type Querier interface {
 	List(ctx context.Context) ([]ListRow, error)
 	ListByUnit(ctx context.Context, unitID pgtype.UUID) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
+	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
+	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
 }
 
 type Service struct {
@@ -247,4 +252,45 @@ func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status Status, us
 	}
 
 	return updated, nil
+}
+
+func (s *Service) UploadCoverImage(ctx context.Context, formID uuid.UUID, imageData []byte, coverImageURL string) error {
+	ctx, span := s.tracer.Start(ctx, "UploadCoverImage")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	_, err := s.queries.UploadCoverImage(ctx, UploadCoverImageParams{
+		FormID:    formID,
+		ImageData: imageData,
+		CoverImageUrl: pgtype.Text{
+			String: coverImageURL,
+			Valid:  coverImageURL != "",
+		},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return handlerutil.NewNotFoundError("forms", "id", formID.String(), "form not found")
+		}
+		err = databaseutil.WrapDBError(err, logger, "check form existence")
+		span.RecordError(err)
+		return err
+	}
+	return nil
+
+}
+
+func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	ctx, span := s.tracer.Start(ctx, "GetCoverImage")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	imageData, err := s.queries.GetCoverImage(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get form cover image")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return imageData, nil
+
 }

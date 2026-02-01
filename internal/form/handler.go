@@ -4,6 +4,8 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -55,6 +57,10 @@ type Response struct {
 	Visibility             Visibility           `json:"visibility"`
 	CoverImageUrl          string               `json:"coverImageUrl"`
 	Dressing               DressingRequest      `json:"dressing"`
+}
+
+type CoverUploadResponse struct {
+	ImageURL string `json:"imageUrl"`
 }
 
 // ToResponse converts a Form storage model into an API Response.
@@ -115,6 +121,8 @@ type Store interface {
 	List(ctx context.Context) ([]ListRow, error)
 	ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
+	UploadCoverImage(ctx context.Context, id uuid.UUID, data []byte, coverImageURL string) error
+	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
 }
 
 type Handler struct {
@@ -431,4 +439,86 @@ func (h *Handler) ListByUnitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
+}
+
+func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UploadCoverImageHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("id")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	const maxBytes int64 = 2 << 20 // 2MB
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+
+	if err := r.ParseMultipartForm(maxBytes); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	file, _, err := r.FormFile("coverImage")
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	defer file.Close()
+
+	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if int64(len(imageBytes)) > maxBytes {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// WebP validation
+	if len(imageBytes) < 12 ||
+		string(imageBytes[0:4]) != "RIFF" ||
+		string(imageBytes[8:12]) != "WEBP" {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	coverImageURL := fmt.Sprintf("/api/forms/%s/cover", id.String())
+
+	if err := h.store.UploadCoverImage(traceCtx, id, imageBytes, coverImageURL); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, CoverUploadResponse{ImageURL: coverImageURL})
+}
+
+func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetCoverImageHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("id")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	imageData, err := h.store.GetCoverImage(traceCtx, id)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/webp")
+	_, err = w.Write(imageData)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
 }

@@ -242,6 +242,8 @@ func main() {
 	mux.Handle("POST /api/forms/{id}/publish", authMiddleware.HandlerFunc(publishHandler.PublishForm))
 	mux.Handle("POST /api/orgs/{slug}/units/{unitId}/forms", tenantAuthMiddleware.HandlerFunc(formHandler.CreateUnderUnitHandler))
 	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/forms", tenantBasicMiddleware.HandlerFunc(formHandler.ListByUnitHandler))
+	mux.Handle("POST /api/forms/{id}/cover", authMiddleware.HandlerFunc(formHandler.UploadCoverImageHandler))
+	mux.Handle("GET /api/forms/{id}/cover", authMiddleware.HandlerFunc(formHandler.GetCoverImageHandler))
 
 	// Question routes
 	mux.Handle("GET /api/forms/{formId}/questions", authMiddleware.HandlerFunc(questionHandler.ListHandler))
