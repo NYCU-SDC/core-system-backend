@@ -125,6 +125,14 @@ type Store interface {
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
 }
 
+type tenantStore interface {
+	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
+}
+
+type tenantStore interface {
+	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
+}
+
 type Handler struct {
 	logger *zap.Logger
 	tracer trace.Tracer
@@ -132,7 +140,8 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	store Store
+	store       Store
+	tenantStore tenantStore
 }
 
 func NewHandler(
@@ -140,6 +149,7 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	store Store,
+	tenantStore tenantStore,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -147,6 +157,7 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 		store:         store,
+		tenantStore:   tenantStore,
 	}
 }
 
@@ -327,20 +338,13 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
 }
 
-func (h *Handler) CreateUnderUnitHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnderUnitHandler")
+func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnderOrgHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req Request
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	unitIDStr := r.PathValue("unitId")
-	currentUnitID, err := handlerutil.ParseUUID(unitIDStr)
-	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -351,7 +355,19 @@ func (h *Handler) CreateUnderUnitHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	newForm, err := h.store.Create(traceCtx, req, currentUnitID, currentUser.ID)
+	slug, err := internal.GetSlugFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		return
+	}
+
+	_, orgID, err := h.tenantStore.GetSlugStatus(traceCtx, slug)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org ID by slug: %w", err), logger)
+		return
+	}
+
+	newForm, err := h.store.Create(traceCtx, req, orgID, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -390,19 +406,24 @@ func (h *Handler) CreateUnderUnitHandler(w http.ResponseWriter, r *http.Request)
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
 }
 
-func (h *Handler) ListByUnitHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ListByUnitHandler")
+func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListByOrgHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	unitIDStr := r.PathValue("unitId")
-	unitID, err := handlerutil.ParseUUID(unitIDStr)
+	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
 		return
 	}
 
-	forms, err := h.store.ListByUnit(traceCtx, unitID)
+	_, orgID, err := h.tenantStore.GetSlugStatus(traceCtx, slug)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org ID by slug: %w", err), logger)
+		return
+	}
+
+	forms, err := h.store.ListByUnit(traceCtx, orgID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

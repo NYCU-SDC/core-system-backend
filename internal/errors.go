@@ -62,6 +62,9 @@ var (
 
 	// Response Errors
 	ErrResponseNotFound = errors.New("response not found")
+
+	// Workflow Errors
+	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -156,6 +159,10 @@ func ErrorHandler(err error) problem.Problem {
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
+
+	// Workflow Errors
+	case errors.Is(err, ErrWorkflowValidationFailed):
+		return problem.NewValidateProblem("workflow validation failed")
 	}
 	return problem.Problem{}
 }

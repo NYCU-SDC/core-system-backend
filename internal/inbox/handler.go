@@ -23,7 +23,6 @@ import (
 	"go.uber.org/zap"
 )
 
-//go:generate mockery --name Store
 type Store interface {
 	List(ctx context.Context, userID uuid.UUID, filter *FilterRequest, page int, size int) ([]ListRow, error)
 	Count(ctx context.Context, userID uuid.UUID, filter *FilterRequest) (int64, error)

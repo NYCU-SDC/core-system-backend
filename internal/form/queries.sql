@@ -22,6 +22,28 @@ WITH created AS (
         $11, $12, $13, $14
     )
     RETURNING *
+),
+workflow_created AS (
+    INSERT INTO workflow_versions (form_id, last_editor, workflow)
+    SELECT 
+        id, 
+        last_editor,
+        jsonb_build_array(
+            jsonb_build_object(
+                'id', start_node_id,
+                'label', '開始表單',
+                'type', 'start',
+                'next', end_node_id
+            ),
+            jsonb_build_object(
+                'id', end_node_id,
+                'label', '確認/送出',
+                'type', 'end'
+            )
+        )
+    FROM created, LATERAL (
+        SELECT gen_random_uuid() AS start_node_id, gen_random_uuid() AS end_node_id
+    ) AS node_ids
 )
 SELECT 
     f.*,

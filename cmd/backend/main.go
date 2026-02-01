@@ -10,6 +10,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/submit"
+	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/internal/inbox"
 	"NYCU-SDC/core-system-backend/internal/jwt"
 	"NYCU-SDC/core-system-backend/internal/publish"
@@ -144,11 +145,12 @@ func main() {
 	responseService := response.NewService(logger, dbPool)
 	submitService := submit.NewService(logger, formService, questionService, responseService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService)
+	workflowService := workflow.NewService(logger, dbPool, questionService)
 
 	// Handler
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	formHandler := form.NewHandler(logger, validator, problemWriter, formService)
+	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService, tenantService, userService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
@@ -156,6 +158,7 @@ func main() {
 	inboxHandler := inbox.NewHandler(logger, validator, problemWriter, inboxService, formService, unitService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
+	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
 
 	// Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -240,8 +243,8 @@ func main() {
 	mux.Handle("DELETE /api/forms/{id}", authMiddleware.HandlerFunc(formHandler.DeleteHandler))
 	mux.Handle("POST /api/forms/recipients/preview", authMiddleware.HandlerFunc(publishHandler.PreviewForm))
 	mux.Handle("POST /api/forms/{id}/publish", authMiddleware.HandlerFunc(publishHandler.PublishForm))
-	mux.Handle("POST /api/orgs/{slug}/units/{unitId}/forms", tenantAuthMiddleware.HandlerFunc(formHandler.CreateUnderUnitHandler))
-	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/forms", tenantBasicMiddleware.HandlerFunc(formHandler.ListByUnitHandler))
+	mux.Handle("POST /api/orgs/{slug}/forms", tenantAuthMiddleware.HandlerFunc(formHandler.CreateUnderOrgHandler))
+	mux.Handle("GET /api/orgs/{slug}/forms", tenantBasicMiddleware.HandlerFunc(formHandler.ListByOrgHandler))
 	mux.Handle("POST /api/forms/{id}/cover", authMiddleware.HandlerFunc(formHandler.UploadCoverImageHandler))
 	mux.Handle("GET /api/forms/{id}/cover", authMiddleware.HandlerFunc(formHandler.GetCoverImageHandler))
 
@@ -257,6 +260,13 @@ func main() {
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.GetHandler))
 	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.DeleteHandler))
 	mux.Handle("GET /api/forms/{formId}/questions/{questionId}", authMiddleware.HandlerFunc(responseHandler.GetAnswersByQuestionIDHandler))
+
+	// Workflow routes
+	mux.Handle("GET /api/forms/{id}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetWorkflow))
+	mux.Handle("PUT /api/forms/{id}/workflow", authMiddleware.HandlerFunc(workflowHandler.UpdateWorkflow))
+	mux.Handle("POST /api/forms/{id}/workflow/activate", authMiddleware.HandlerFunc(workflowHandler.ActivateWorkflow))
+	mux.Handle("POST /api/forms/{formId}/workflow/nodes", authMiddleware.HandlerFunc(workflowHandler.CreateNode))
+	mux.Handle("DELETE /api/forms/{formId}/workflow/nodes/{nodeId}", authMiddleware.HandlerFunc(workflowHandler.DeleteNode))
 
 	// User Inbox message route
 	mux.Handle("GET /api/inbox", authMiddleware.HandlerFunc(inboxHandler.ListHandler))
