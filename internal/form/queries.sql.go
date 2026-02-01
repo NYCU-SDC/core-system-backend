@@ -230,6 +230,17 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	return i, err
 }
 
+const getCoverImage = `-- name: GetCoverImage :one
+SELECT image_data FROM form_covers WHERE form_id = $1
+`
+
+func (q *Queries) GetCoverImage(ctx context.Context, formID uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getCoverImage, formID)
+	var image_data []byte
+	err := row.Scan(&image_data)
+	return image_data, err
+}
+
 const list = `-- name: List :many
 SELECT 
     f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
@@ -577,4 +588,33 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (UpdateRow, erro
 		&i.LastEditorEmail,
 	)
 	return i, err
+}
+
+const uploadCoverImage = `-- name: UploadCoverImage :one
+WITH upsert AS (
+    INSERT INTO form_covers (form_id, image_data)
+    VALUES ($1, $2)
+    ON CONFLICT (form_id) DO UPDATE
+        SET image_data = EXCLUDED.image_data,
+            updated_at = now()
+    RETURNING form_id
+)
+UPDATE forms
+SET cover_image_url = $3,
+    updated_at = now()
+WHERE id = (SELECT form_id FROM upsert)
+RETURNING id
+`
+
+type UploadCoverImageParams struct {
+	FormID        uuid.UUID
+	ImageData     []byte
+	CoverImageUrl pgtype.Text
+}
+
+func (q *Queries) UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, uploadCoverImage, arg.FormID, arg.ImageData, arg.CoverImageUrl)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }

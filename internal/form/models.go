@@ -308,6 +308,13 @@ type Form struct {
 	DressingTextFont       pgtype.Text
 }
 
+type FormCover struct {
+	FormID    uuid.UUID
+	ImageData []byte
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type FormResponse struct {
 	ID          uuid.UUID
 	FormID      uuid.UUID
