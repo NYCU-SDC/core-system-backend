@@ -129,10 +129,6 @@ type tenantStore interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 }
 
-type tenantStore interface {
-	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
-}
-
 type Handler struct {
 	logger *zap.Logger
 	tracer trace.Tracer
