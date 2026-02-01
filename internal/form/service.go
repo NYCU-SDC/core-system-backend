@@ -271,7 +271,7 @@ func (s *Service) UploadCoverImage(ctx context.Context, formID uuid.UUID, imageD
 		if errors.Is(err, pgx.ErrNoRows) {
 			return handlerutil.NewNotFoundError("forms", "id", formID.String(), "form not found")
 		}
-		err = databaseutil.WrapDBError(err, logger, "check form existence")
+		err = databaseutil.WrapDBError(err, logger, "upload cover image")
 		span.RecordError(err)
 		return err
 	}
