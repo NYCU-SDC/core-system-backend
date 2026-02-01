@@ -36,6 +36,28 @@ WITH created AS (
         $11, $12, $13, $14
     )
     RETURNING id, title, description, preview_message, message_after_submission, status, unit_id, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font
+),
+workflow_created AS (
+    INSERT INTO workflow_versions (form_id, last_editor, workflow)
+    SELECT 
+        id, 
+        last_editor,
+        jsonb_build_array(
+            jsonb_build_object(
+                'id', start_node_id,
+                'label', '開始表單',
+                'type', 'start',
+                'next', end_node_id
+            ),
+            jsonb_build_object(
+                'id', end_node_id,
+                'label', '確認/送出',
+                'type', 'end'
+            )
+        )
+    FROM created, LATERAL (
+        SELECT gen_random_uuid() AS start_node_id, gen_random_uuid() AS end_node_id
+    ) AS node_ids
 )
 SELECT 
     f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
