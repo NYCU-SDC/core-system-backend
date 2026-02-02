@@ -2,6 +2,7 @@ package casbin
 
 import (
 	"log"
+	"os"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
@@ -12,16 +13,26 @@ import (
 var Enforcer *casbin.Enforcer
 
 func Init() {
-	m, err := model.NewModelFromFile("internal/auth/casbin/model.conf")
-	if err != nil {
-		log.Fatal(err)
+	modelPath := os.Getenv("CASBIN_MODEL_PATH")
+	policyPath := os.Getenv("CASBIN_POLICY_PATH")
+
+	if modelPath == "" {
+		modelPath = "internal/auth/casbin/model.conf"
+	}
+	if policyPath == "" {
+		policyPath = "internal/auth/casbin/policy.csv"
 	}
 
-	a := fileadapter.NewAdapter("internal/auth/casbin/policy.csv")
+	m, err := model.NewModelFromFile(modelPath)
+	if err != nil {
+		log.Fatalf("failed to load casbin model (%s): %v", modelPath, err)
+	}
+
+	a := fileadapter.NewAdapter(policyPath)
 
 	e, err := casbin.NewEnforcer(m, a)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("failed to create casbin enforcer: %v", err)
 	}
 
 	e.AddFunction("keyMatch2", func(args ...interface{}) (interface{}, error) {
