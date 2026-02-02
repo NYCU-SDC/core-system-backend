@@ -54,6 +54,19 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
   - engine: "postgresql"
+    queries: "./internal/form/workflow/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "workflow"
+        out: "./internal/form/workflow"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
     queries: "./internal/user/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:

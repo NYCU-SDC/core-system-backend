@@ -96,6 +96,50 @@ func (ns NullDbStrategy) Value() (driver.Value, error) {
 	return string(ns.DbStrategy), nil
 }
 
+type NodeType string
+
+const (
+	NodeTypeSection   NodeType = "section"
+	NodeTypeEnd       NodeType = "end"
+	NodeTypeStart     NodeType = "start"
+	NodeTypeCondition NodeType = "condition"
+)
+
+func (e *NodeType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = NodeType(s)
+	case string:
+		*e = NodeType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for NodeType: %T", src)
+	}
+	return nil
+}
+
+type NullNodeType struct {
+	NodeType NodeType
+	Valid    bool // Valid is true if NodeType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullNodeType) Scan(value interface{}) error {
+	if value == nil {
+		ns.NodeType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.NodeType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullNodeType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.NodeType), nil
+}
+
 type QuestionType string
 
 const (
@@ -139,6 +183,48 @@ func (ns NullQuestionType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.QuestionType), nil
+}
+
+type SectionProgress string
+
+const (
+	SectionProgressDraft     SectionProgress = "draft"
+	SectionProgressSubmitted SectionProgress = "submitted"
+)
+
+func (e *SectionProgress) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SectionProgress(s)
+	case string:
+		*e = SectionProgress(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SectionProgress: %T", src)
+	}
+	return nil
+}
+
+type NullSectionProgress struct {
+	SectionProgress SectionProgress
+	Valid           bool // Valid is true if SectionProgress is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSectionProgress) Scan(value interface{}) error {
+	if value == nil {
+		ns.SectionProgress, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SectionProgress.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSectionProgress) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SectionProgress), nil
 }
 
 type Status string
@@ -336,6 +422,16 @@ type RefreshToken struct {
 	ExpirationDate pgtype.Timestamptz
 }
 
+type Section struct {
+	ID          uuid.UUID
+	FormID      uuid.UUID
+	Title       pgtype.Text
+	Progress    SectionProgress
+	Description pgtype.Text
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type SlugHistory struct {
 	ID        int32
 	Slug      string
@@ -403,4 +499,14 @@ type UsersWithEmail struct {
 	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 	Emails    interface{}
+}
+
+type WorkflowVersion struct {
+	ID         uuid.UUID
+	FormID     uuid.UUID
+	LastEditor uuid.UUID
+	IsActive   bool
+	Workflow   []byte
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
 }

@@ -151,27 +151,22 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 
 	redirectURL := r.URL.Query().Get("r")
 
+	// Determine callback URL based on oauth proxy configuration
+	callbackURL := ""
 	if h.oauthProxyBaseURL != "" {
-		callbackURL := fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", h.baseURL, providerName)
-
-		state, err := h.jwtIssuer.NewState(traceCtx, "core-system", h.environment, callbackURL, redirectURL)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
-			return
-		}
-
-		authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
-		http.Redirect(w, r, authURL, http.StatusFound)
-	} else {
-		state, err := h.jwtIssuer.NewState(traceCtx, "core-system", h.environment, "", redirectURL)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
-			return
-		}
-
-		authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
-		http.Redirect(w, r, authURL, http.StatusFound)
+		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", h.baseURL, providerName)
 	}
+
+	// Create JWT state for OAuth flow
+	state, err := h.jwtIssuer.NewState(traceCtx, "core-system", h.environment, callbackURL, redirectURL)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
+		return
+	}
+
+	// Generate OAuth authorization URL and redirect
+	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
+	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
 func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
@@ -314,14 +309,21 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	// Inactivate the current refresh token from cookie
 	refreshTokenCookie, err := r.Cookie(RefreshTokenCookieName)
-	if err == nil && refreshTokenCookie.Value != "" {
-		refreshTokenID, err := uuid.Parse(refreshTokenCookie.Value)
-		if err == nil {
-			err = h.jwtStore.InactivateRefreshToken(traceCtx, refreshTokenID)
-			if err != nil {
-				logger.Warn("Failed to inactivate refresh token during logout", zap.Error(err))
-			}
-		}
+	if err != nil {
+		logger.Error("Failed to get refresh token cookie during logout", zap.Error(err))
+		return
+	}
+
+	refreshTokenID, err := uuid.Parse(refreshTokenCookie.Value)
+	if err != nil {
+		logger.Error("Invalid refresh token format during logout", zap.Error(err))
+		return
+	}
+
+	err = h.jwtStore.InactivateRefreshToken(traceCtx, refreshTokenID)
+	if err != nil {
+		logger.Warn("Failed to inactivate refresh token during logout", zap.Error(err))
+		return
 	}
 
 	h.clearAccessAndRefreshCookies(w)
