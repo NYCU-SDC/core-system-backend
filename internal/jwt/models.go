@@ -311,6 +311,48 @@ func (ns NullUnitType) Value() (driver.Value, error) {
 	return string(ns.UnitType), nil
 }
 
+type Visibility string
+
+const (
+	VisibilityPublic  Visibility = "public"
+	VisibilityPrivate Visibility = "private"
+)
+
+func (e *Visibility) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = Visibility(s)
+	case string:
+		*e = Visibility(s)
+	default:
+		return fmt.Errorf("unsupported scan type for Visibility: %T", src)
+	}
+	return nil
+}
+
+type NullVisibility struct {
+	Visibility Visibility
+	Valid      bool // Valid is true if Visibility is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullVisibility) Scan(value interface{}) error {
+	if value == nil {
+		ns.Visibility, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.Visibility.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullVisibility) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.Visibility), nil
+}
+
 type Answer struct {
 	ID         uuid.UUID
 	ResponseID uuid.UUID
@@ -331,16 +373,32 @@ type Auth struct {
 }
 
 type Form struct {
-	ID             uuid.UUID
-	Title          string
-	Description    pgtype.Text
-	PreviewMessage pgtype.Text
-	Status         Status
-	UnitID         pgtype.UUID
-	LastEditor     uuid.UUID
-	Deadline       pgtype.Timestamptz
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	MessageAfterSubmission string
+	Status                 Status
+	UnitID                 pgtype.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Visibility             Visibility
+	GoogleSheetUrl         pgtype.Text
+	PublishTime            pgtype.Timestamptz
+	CoverImageUrl          pgtype.Text
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+}
+
+type FormCover struct {
+	FormID    uuid.UUID
+	ImageData []byte
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 type FormResponse struct {
