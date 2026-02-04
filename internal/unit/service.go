@@ -5,6 +5,8 @@ import (
 	"NYCU-SDC/core-system-backend/internal/tenant"
 	"context"
 	"fmt"
+	"regexp"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -12,7 +14,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"regexp"
 )
 
 type Querier interface {
@@ -31,6 +32,10 @@ type Querier interface {
 	ListMembers(ctx context.Context, unitID uuid.UUID) ([]ListMembersRow, error)
 	ListUnitsMembers(ctx context.Context, unitIDs []uuid.UUID) ([]ListUnitsMembersRow, error)
 	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
+
+	CountAdmins(ctx context.Context, unitID uuid.UUID) (int64, error)
+	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error)
+	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
 }
 
 type Service struct {
@@ -444,4 +449,28 @@ func (s *Service) AddParent(ctx context.Context, id uuid.UUID, parentID uuid.UUI
 	logger.Info("Added parent-child relationship", zap.String("parentID", parentID.String()), zap.String("id", id.String()))
 
 	return result, nil
+}
+
+func (s *Service) GetMemberRole(
+	ctx context.Context,
+	unitID uuid.UUID,
+	memberID uuid.UUID,
+) (UnitRole, error) {
+
+	traceCtx, span := s.tracer.Start(ctx, "GetMemberRole")
+	defer span.End()
+
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	role, err := s.queries.GetMemberRole(traceCtx, GetMemberRoleParams{
+		UnitID:   unitID,
+		MemberID: memberID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get member role")
+		span.RecordError(err)
+		return "", err
+	}
+
+	return role, nil
 }
