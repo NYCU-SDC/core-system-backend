@@ -2,6 +2,7 @@ package form
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/font"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"fmt"
@@ -20,10 +21,10 @@ import (
 )
 
 type DressingRequest struct {
-	Color        string `json:"color"`
-	HeaderFont   string `json:"headerFont"`
-	QuestionFont string `json:"questionFont"`
-	TextFont     string `json:"textFont"`
+	Color        string `json:"color" validate:"omitempty,hexcolor"`
+	HeaderFont   string `json:"headerFont" validate:"omitempty,font"`
+	QuestionFont string `json:"questionFont" validate:"omitempty,font"`
+	TextFont     string `json:"textFont" validate:"omitempty,font"`
 }
 
 type Request struct {
@@ -546,4 +547,18 @@ func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+}
+
+func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetFontsHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	fonts, err := font.List()
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, fonts)
 }
