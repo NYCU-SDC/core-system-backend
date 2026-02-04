@@ -6,5 +6,5 @@ p, admin, *, /api/orgs/:slug, DELETE, allow
 p, admin, *, /api/orgs/:slug/members/:memberId, DELETE, allow
 p, admin, *, /api/orgs/:slug/units/:unitId/members/:memberId, DELETE, allow
 
-p, member, *, /api/orgs/:slug/units/:unitId/forms, POST, allow
-p, admin,  *, /api/orgs/:slug/units/:unitId/forms, POST, allow
+p, member, *, /api/orgs/:slug/forms, POST, allow
+p, admin,  *, /api/orgs/:slug/forms, POST, allow
