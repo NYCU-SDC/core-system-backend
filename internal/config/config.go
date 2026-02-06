@@ -2,6 +2,7 @@ package config
 
 import (
 	googleOauth "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
+	nycuOauth "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
 	"errors"
 	"flag"
 	"fmt"
@@ -38,6 +39,7 @@ type Config struct {
 	OtelCollectorUrl          string                  `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
 	AllowOrigins              []string                `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
 	GoogleOauth               googleOauth.GoogleOauth `yaml:"google_oauth"`
+	NYCUOauth                 nycuOauth.NYCUOauth     `yaml:"nycu_oauth"`
 
 	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
@@ -134,6 +136,7 @@ func Load() (Config, *LogBuffer) {
 		RefreshTokenExpirationStr: "720h",
 		OtelCollectorUrl:          "",
 		GoogleOauth:               googleOauth.GoogleOauth{},
+		NYCUOauth:                 nycuOauth.NYCUOauth{},
 	}
 
 	var err error
@@ -206,6 +209,11 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		GoogleOauth: googleOauth.GoogleOauth{
 			ClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		
+		},
+		NYCUOauth: nycuOauth.NYCUOauth{
+			ClientID:     os.Getenv("NYCU_OAUTH_CLIENT_ID"),
+			ClientSecret: os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
 		},
 	}
 
@@ -226,6 +234,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientID, "google_oauth_client_id", "", "Google OAuth client ID")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientSecret, "google_oauth_client_secret", "", "Google OAuth client secret")
+	flag.StringVar(&flagConfig.NYCUOauth.ClientID, "nycu_oauth_client_id", "", "NYCU OAuth client ID")
+	flag.StringVar(&flagConfig.NYCUOauth.ClientSecret, "nycu_oauth_client_secret", "", "NYCU OAuth client secret")
 
 	flag.Parse()
 

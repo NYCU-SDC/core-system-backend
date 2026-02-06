@@ -98,15 +98,16 @@ func NewHandler(
 	accessTokenExpiration time.Duration,
 	refreshTokenExpiration time.Duration,
 	googleOauthConfig oauthprovider.GoogleOauth,
+	nycuOauthConfig oauthprovider.NYCUOauth,
 ) *Handler {
-	var oauthCallbackURL string
+	getCallbackURL := func(provider string) string {
 	if oauthProxyBaseURL != "" {
-		logger.Info("Using OAuth proxy base URL", zap.String("oauthProxyBaseURL", oauthProxyBaseURL))
-		oauthCallbackURL = fmt.Sprintf("%s/api/auth/google/callback", oauthProxyBaseURL)
-	} else {
-		logger.Info("Using base URL for OAuth callback", zap.String("baseURL", baseURL))
-		oauthCallbackURL = fmt.Sprintf("%s/api/auth/login/oauth/google/callback", baseURL)
+		return fmt.Sprintf("%s/api/auth/%s/callback", oauthProxyBaseURL, provider)
 	}
+    return fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseURL, provider)
+}
+	googleOauthCallbackURL := getCallbackURL("google")
+	nycuOauthCallbackURL := getCallbackURL("nycu")
 
 	return &Handler{
 		logger: logger,
@@ -127,7 +128,12 @@ func NewHandler(
 			"google": oauthprovider.NewGoogleConfig(
 				googleOauthConfig.ClientID,
 				googleOauthConfig.ClientSecret,
-				oauthCallbackURL,
+				googleOauthCallbackURL,
+			),
+			"nycu": oauthprovider.NewNYCUConfig(
+				nycuOauthConfig.ClientID,
+				nycuOauthConfig.ClientSecret,
+				nycuOauthCallbackURL,
 			),
 		},
 

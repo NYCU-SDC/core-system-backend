@@ -146,7 +146,7 @@ func main() {
 	publishService := publish.NewService(logger, distributeService, formService, inboxService)
 
 	// Handler
-	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth)
+	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	formHandler := form.NewHandler(logger, validator, problemWriter, formService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
