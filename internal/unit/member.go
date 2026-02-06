@@ -42,12 +42,18 @@ func (s *Service) ListMembers(ctx context.Context, id uuid.UUID) ([]user.Profile
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	dbParams := map[string]interface{}{
+		"id": id,
+	}
+	tracker := logutil.StartDBOperation(traceCtx, logger, "ListMembers", dbParams)
+
 	members, err := s.queries.ListMembers(traceCtx, id)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "list members")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "list members")
 		span.RecordError(err)
 		return nil, err
 	}
+	tracker.SuccessRead(len(members), id.String())
 
 	if members == nil {
 		members = []ListMembersRow{}
@@ -64,11 +70,6 @@ func (s *Service) ListMembers(ctx context.Context, id uuid.UUID) ([]user.Profile
 		})
 	}
 
-	logger.Info("Listed unit members",
-		zap.String("id", id.String()),
-		zap.Int("count", len(profiles)),
-	)
-
 	return profiles, nil
 }
 
@@ -83,20 +84,23 @@ func (s *Service) ListUnitsMembers(ctx context.Context, unitIDs []uuid.UUID) (ma
 		return membersMap, nil
 	}
 
+	dbParams := map[string]interface{}{
+		"unit_ids": unitIDs,
+	}
+	tracker := logutil.StartDBOperation(traceCtx, logger, "ListUnitsMembers", dbParams)
+
 	rows, err := s.queries.ListUnitsMembers(traceCtx, unitIDs)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "list multiple unit members")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "list multiple unit members")
 		span.RecordError(err)
 		return nil, err
 	}
 
+	tracker.SuccessRead(len(rows), "")
+
 	for _, row := range rows {
 		membersMap[row.UnitID] = append(membersMap[row.UnitID], row.MemberID)
 	}
-
-	logger.Info("Listed multiple unit members",
-		zap.Int("unit_count", len(membersMap)),
-		zap.String("unit_ids", fmt.Sprintf("%v", unitIDs)))
 
 	return membersMap, nil
 }

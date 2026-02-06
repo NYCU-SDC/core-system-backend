@@ -71,6 +71,15 @@ func (s *Service) Create(ctx context.Context, req Request, unitID uuid.UUID, use
 		deadline = pgtype.Timestamptz{Valid: false}
 	}
 
+	dbParams := map[string]interface{}{
+		"title":           req.Title,
+		"description":     req.Description,
+		"preview_message": req.PreviewMessage,
+		"unit_id":         unitID.String(),
+		"last_editor":     userID.String(),
+	}
+	tracker := logutil.StartDBOperation(ctx, logger, "Create", dbParams)
+
 	newForm, err := s.queries.Create(ctx, CreateParams{
 		Title:          req.Title,
 		Description:    pgtype.Text{String: req.Description, Valid: true},
@@ -80,10 +89,12 @@ func (s *Service) Create(ctx context.Context, req Request, unitID uuid.UUID, use
 		Deadline:       deadline,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create form")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "create form")
 		span.RecordError(err)
 		return CreateRow{}, err
 	}
+
+	tracker.SuccessWrite(newForm.ID.String())
 
 	return newForm, nil
 }
@@ -100,6 +111,15 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 		deadline = pgtype.Timestamptz{Valid: false}
 	}
 
+	dbParams := map[string]interface{}{
+		"id":              id.String(),
+		"title":           request.Title,
+		"description":     request.Description,
+		"preview_message": request.PreviewMessage,
+		"last_editor":     userID.String(),
+	}
+	tracker := logutil.StartDBOperation(ctx, logger, "Update", dbParams)
+
 	updatedForm, err := s.queries.Update(ctx, UpdateParams{
 		ID:             id,
 		Title:          request.Title,
@@ -109,10 +129,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 		Deadline:       deadline,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "update form")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "update form")
 		span.RecordError(err)
 		return UpdateRow{}, err
 	}
+
+	tracker.SuccessWrite(id.String())
 
 	return updatedForm, nil
 }
@@ -122,27 +144,40 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
+	dbParams := map[string]interface{}{
+		"id": id.String(),
+	}
+	tracker := logutil.StartDBOperation(ctx, logger, "Delete", dbParams)
+
 	err := s.queries.Delete(ctx, id)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "delete form")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "delete form")
 		span.RecordError(err)
 		return err
 	}
+	tracker.SuccessWrite(id.String())
 
 	return nil
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error) {
-	ctx, span := s.tracer.Start(ctx, "GetFormByID")
+	ctx, span := s.tracer.Start(ctx, "GetByID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
+	dbParams := map[string]interface{}{
+		"id": id.String(),
+	}
+	tracker := logutil.StartDBOperation(ctx, logger, "GetByID", dbParams)
+
 	currentForm, err := s.queries.GetByID(ctx, id)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get form by id")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "get form by id")
 		span.RecordError(err)
 		return GetByIDRow{}, err
 	}
+
+	tracker.SuccessRead(1, id.String())
 
 	return currentForm, nil
 }
@@ -152,12 +187,16 @@ func (s *Service) List(ctx context.Context) ([]ListRow, error) {
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
+	tracker := logutil.StartDBOperation(ctx, logger, "List", nil)
+
 	forms, err := s.queries.List(ctx)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "list forms")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "list forms")
 		span.RecordError(err)
 		return []ListRow{}, err
 	}
+
+	tracker.SuccessRead(len(forms), "")
 
 	return forms, nil
 }
@@ -167,12 +206,19 @@ func (s *Service) ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUni
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
+	dbParams := map[string]interface{}{
+		"unit_id": unitID.String(),
+	}
+	tracker := logutil.StartDBOperation(ctx, logger, "ListByUnit", dbParams)
+
 	forms, err := s.queries.ListByUnit(ctx, pgtype.UUID{Bytes: unitID, Valid: true})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "list forms by unit")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "list forms by unit")
 		span.RecordError(err)
 		return []ListByUnitRow{}, err
 	}
+
+	tracker.SuccessRead(len(forms), unitID.String())
 
 	return forms, nil
 }
@@ -182,16 +228,25 @@ func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status Status, us
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
+	dbParams := map[string]interface{}{
+		"id":          id.String(),
+		"status":      string(status),
+		"last_editor": userID.String(),
+	}
+	tracker := logutil.StartDBOperation(ctx, logger, "SetStatus", dbParams)
+
 	updated, err := s.queries.SetStatus(ctx, SetStatusParams{
 		ID:         id,
 		Status:     status,
 		LastEditor: userID,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "set form status")
+		err = databaseutil.WrapDBErrorWithTracker(err, tracker, "set form status")
 		span.RecordError(err)
 		return Form{}, err
 	}
+
+	tracker.SuccessWrite(id.String())
 
 	return updated, nil
 }
