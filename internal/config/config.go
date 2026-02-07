@@ -1,7 +1,7 @@
 package config
 
 import (
-	googleOauth "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
+	Oauth "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
 	"errors"
 	"flag"
 	"fmt"
@@ -37,7 +37,8 @@ type Config struct {
 	RefreshTokenExpirationStr string                  `yaml:"refresh_token_expiration" envconfig:"REFRESH_TOKEN_EXPIRATION"`
 	OtelCollectorUrl          string                  `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
 	AllowOrigins              []string                `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
-	GoogleOauth               googleOauth.GoogleOauth `yaml:"google_oauth"`
+	GoogleOauth               Oauth.GoogleOauth `yaml:"google_oauth"`
+	NYCUOauth                 Oauth.NYCUOauth     `yaml:"nycu_oauth"`
 
 	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
@@ -133,7 +134,8 @@ func Load() (Config, *LogBuffer) {
 		AccessTokenExpirationStr:  "15m",
 		RefreshTokenExpirationStr: "720h",
 		OtelCollectorUrl:          "",
-		GoogleOauth:               googleOauth.GoogleOauth{},
+		GoogleOauth:               Oauth.GoogleOauth{},
+		NYCUOauth:                 Oauth.NYCUOauth{},
 	}
 
 	var err error
@@ -203,9 +205,14 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		MigrationSource:   os.Getenv("MIGRATION_SOURCE"),
 		OtelCollectorUrl:  os.Getenv("OTEL_COLLECTOR_URL"),
-		GoogleOauth: googleOauth.GoogleOauth{
+		GoogleOauth: Oauth.GoogleOauth{
 			ClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		
+		},
+		NYCUOauth: Oauth.NYCUOauth{
+			ClientID:     os.Getenv("NYCU_OAUTH_CLIENT_ID"),
+			ClientSecret: os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
 		},
 	}
 
@@ -226,6 +233,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientID, "google_oauth_client_id", "", "Google OAuth client ID")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientSecret, "google_oauth_client_secret", "", "Google OAuth client secret")
+	flag.StringVar(&flagConfig.NYCUOauth.ClientID, "nycu_oauth_client_id", "", "NYCU OAuth client ID")
+	flag.StringVar(&flagConfig.NYCUOauth.ClientSecret, "nycu_oauth_client_secret", "", "NYCU OAuth client secret")
 
 	flag.Parse()
 
