@@ -847,6 +847,7 @@ func stripNestedPrefixes(line string) string {
 
 	// Strip static prefixes
 	staticPrefixes := []string{
+		"reachability validation failed: ",
 		"graph validation failed: ",
 		"invalid node references found: ",
 	}
@@ -879,7 +880,7 @@ func extractNodeID(line string) *string {
 
 // extractValidationType determines the validation error category from a message.
 func extractValidationType(msg string) ValidationInfoType {
-	if strings.Contains(msg, "graph validation failed") {
+	if strings.Contains(msg, "reachability validation failed") || strings.Contains(msg, "graph validation failed") {
 		return ValidationTypeGraph
 	}
 	if strings.Contains(msg, "node at index") || strings.HasPrefix(msg, "node ") ||
