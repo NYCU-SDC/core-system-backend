@@ -49,7 +49,13 @@ type Response struct {
 }
 
 type SectionResponse struct {
-	Section   Section
+	ID          uuid.UUID `json:"id"`
+	FormID      uuid.UUID `json:"formId"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+}
+type ListResponse struct {
+	Section   SectionResponse
 	Questions []Response
 }
 
@@ -351,9 +357,14 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responses := make([]SectionResponse, len(sectionWithQuestions))
+	responses := make([]ListResponse, len(sectionWithQuestions))
 	for i, s := range sectionWithQuestions {
-		responses[i].Section = sectionWithQuestions[i].Section
+		responses[i].Section = SectionResponse{
+			ID:          s.Section.ID,
+			FormID:      s.Section.FormID,
+			Title:       s.Section.Title.String,
+			Description: s.Section.Description.String,
+		}
 		for _, q := range s.Questions {
 			response, err := ToResponse(q)
 			if err != nil {

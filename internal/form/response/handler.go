@@ -1,8 +1,13 @@
 package response
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/shared"
+	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"NYCU-SDC/core-system-backend/internal"
@@ -23,6 +28,11 @@ type QuestionAnswerForGetResponse struct {
 	Answer     string `json:"answer" validate:"required"`
 }
 
+type QuestionResponse struct {
+	ID                 string            `json:"id" validate:"required"`
+	QuestionAnswerPair shared.AnswerJSON `json:"questionAnswerPairs" validate:"required"`
+}
+
 type AnswerForQuestionResponse struct {
 	ID          string    `json:"id" validate:"required,uuid"`
 	ResponseID  string    `json:"responseId" validate:"required,uuid"`
@@ -37,6 +47,10 @@ type Response struct {
 	SubmittedBy string    `json:"submittedBy" validate:"required,uuid"`
 	CreatedAt   time.Time `json:"createdAt" validate:"required,datetime"`
 	UpdatedAt   time.Time `json:"updatedAt" validate:"required,datetime"`
+}
+
+type CreateResponse struct {
+	ID string `json:"id" validate:"required,uuid"`
 }
 
 type ListResponse struct {
@@ -62,7 +76,10 @@ type Store interface {
 	Get(ctx context.Context, formID uuid.UUID, responseID uuid.UUID) (FormResponse, []Answer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
-	GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUID, formID uuid.UUID) ([]GetAnswersByQuestionIDRow, error)
+	GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUID, responseID uuid.UUID) (Answer, error)
+	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
+	UpdateAnswer(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error)
+	CreateOrUpdate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error)
 }
 
 type QuestionStore interface {
@@ -159,7 +176,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 
 		questionAnswerResponses[i] = QuestionAnswerForGetResponse{
 			QuestionID: q.Question().ID.String(),
-			Answer:     answer.Value,
+			Answer:     string(answer.Value),
 		}
 	}
 
@@ -195,14 +212,14 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
 
-// GetAnswersByQuestionIDHandler gets answers by question id
+// GetAnswersByQuestionIDHandler retrieves an answer and converts choice IDs to names
 func (h *Handler) GetAnswersByQuestionIDHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetAnswersByQuestionIDHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	responseIDStr := r.PathValue("responseId")
+	responseID, err := internal.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -215,31 +232,102 @@ func (h *Handler) GetAnswersByQuestionIDHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	answers, err := h.store.GetAnswersByQuestionID(traceCtx, questionID, formID)
+	derivedQuestion, err := h.questionStore.GetByID(traceCtx, questionID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	currentQuestion, err := h.questionStore.GetByID(traceCtx, questionID)
+	// Validate that the question has a source ID
+	if !derivedQuestion.Question().SourceID.Valid {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("question does not have a source ID"), logger)
+		return
+	}
+
+	sourceQuestionID := derivedQuestion.Question().SourceID.Bytes
+
+	// Fetch the answer to the source question from this response
+	answer, err := h.store.GetAnswersByQuestionID(traceCtx, sourceQuestionID, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	questionAnswerResponse := AnswersForQuestionResponse{
-		Question: currentQuestion.Question(),
-		Answers:  make([]AnswerForQuestionResponse, len(answers)),
+	// Fetch the source question to get its choices metadata
+	sourceQuestion, err := h.questionStore.GetByID(traceCtx, sourceQuestionID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
-	for i, answer := range answers {
-		questionAnswerResponse.Answers[i] = AnswerForQuestionResponse{
-			ID:          answer.ID.String(),
-			ResponseID:  answer.ResponseID.String(),
-			SubmittedBy: answer.SubmittedBy.String(),
-			Value:       answer.Value,
-			CreatedAt:   answer.CreatedAt.Time,
-			UpdatedAt:   answer.UpdatedAt.Time,
+
+	// Extract choices from the source question's metadata
+	choices, err := question.ExtractChoices(sourceQuestion.Question().Metadata)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Build a map for quick ID-to-name lookup
+	choiceMap := make(map[uuid.UUID]string, len(choices))
+	for _, choice := range choices {
+		choiceMap[choice.ID] = choice.Name
+	}
+
+	// Parse the answer value as a JSON array of choice IDs
+	var choiceIDs []string
+	if err := json.Unmarshal(answer.Value, &choiceIDs); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to parse answer value: %w", err), logger)
+		return
+	}
+
+	// Convert choice IDs to choice names
+	choiceNames := make([]string, 0, len(choiceIDs))
+	for _, idStr := range choiceIDs {
+		choiceID, err := uuid.Parse(strings.TrimSpace(idStr))
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid choice ID in answer: %w", err), logger)
+			return
+		}
+
+		if name, ok := choiceMap[choiceID]; ok {
+			choiceNames = append(choiceNames, name)
 		}
 	}
-	handlerutil.WriteJSONResponse(w, http.StatusOK, questionAnswerResponse)
+
+	response := QuestionResponse{
+		ID: responseIDStr,
+		QuestionAnswerPair: shared.AnswerJSON{
+			QuestionID:   questionIDStr,
+			QuestionType: string(answer.Type),
+			Value:        choiceNames,
+		},
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// CreateHandler create an empty responses
+func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	formIDStr := r.PathValue("formId")
+	formID, err := internal.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	}
+
+	response, err := h.store.Create(traceCtx, formID, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, CreateResponse{ID: response.ID.String()})
 }

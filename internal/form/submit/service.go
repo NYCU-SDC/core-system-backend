@@ -7,7 +7,10 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -18,6 +21,7 @@ import (
 )
 
 type QuestionStore interface {
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]question.Answerable, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithQuestions, error)
 }
 
@@ -93,8 +97,8 @@ func (s *Service) Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID
 					found = true
 					answeredQuestionIDs[ans.QuestionID] = true
 
-					// Validate answer value
-					err := q.Validate(ans.Value)
+					// Validate answer value (value is already a string from SubmitHandler)
+					err := q.Validate(string(ans.Value))
 					if err != nil {
 						validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
 					}
@@ -135,4 +139,141 @@ func (s *Service) Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID
 	}
 
 	return result, nil
+}
+
+// Update handles a user's partial update (patch) for a form response.
+// This is used when users are progressively filling out a form section by section.
+// It performs the following steps:
+// 1. Collects all questionIds from the submitted answers.
+// 2. Batch queries ONLY the questions being answered (efficient!).
+// 3. Validates the submitted answers against the corresponding questions.
+//   - Performs data validation (character count, host-defined conditions, etc.)
+//   - If validation fails, accumulates the errors but continues processing.
+//   - Filters out answers that are valid and can be saved.
+//
+// 4. Saves all VALID answers even if some answers failed validation.
+// 5. Returns the response and any validation errors that occurred.
+//
+// Returns the form response and a list of validation errors (empty if all valid).
+func (s *Service) Update(ctx context.Context, userID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error) {
+	traceCtx, span := s.tracer.Start(ctx, "Update")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Validate we have at least one answer
+	if len(answers) == 0 {
+		return response.FormResponse{}, []error{fmt.Errorf("no answers provided")}
+	}
+
+	// Collect all question IDs from answers
+	questionIDs := make([]uuid.UUID, 0, len(answers))
+	for _, ans := range answers {
+		qid, err := internal.ParseUUID(ans.QuestionID)
+		if err != nil {
+			return response.FormResponse{}, []error{fmt.Errorf("invalid question ID %s: %w", ans.QuestionID, err)}
+		}
+		questionIDs = append(questionIDs, qid)
+	}
+
+	// Batch query ONLY the questions being answered
+	questionAnswerables, err := s.questionStore.GetByIDs(traceCtx, questionIDs)
+	if err != nil {
+		return response.FormResponse{}, []error{fmt.Errorf("failed to get questions: %w", err)}
+	}
+
+	if len(questionAnswerables) == 0 {
+		return response.FormResponse{}, []error{fmt.Errorf("no valid questions found")}
+	}
+
+	// Get formID from first question (assume all questions belong to the same form)
+	formID := questionAnswerables[0].FormID()
+
+	// Build question map for fast lookup
+	questionMap := make(map[string]question.Answerable)
+	for _, answerable := range questionAnswerables {
+		questionMap[answerable.Question().ID.String()] = answerable
+	}
+
+	// Validate answers and separate valid from invalid ones
+	var questionTypes []response.QuestionType
+	var validAnswers []shared.AnswerParam
+	validationErrors := make([]error, 0)
+	for _, ans := range answers {
+		answerable, found := questionMap[ans.QuestionID]
+		if !found {
+			validationErrors = append(validationErrors, fmt.Errorf("question with ID %s not found", ans.QuestionID))
+			continue
+		}
+
+		validationValue, err := convertAnswerValueForValidation(ans.Value, answerable.Question().Type)
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("invalid value format for question ID %s: %w", ans.QuestionID, err))
+		}
+
+		// Validate answer value (eg. words、host condition)
+		err = answerable.Validate(validationValue)
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
+		}
+
+		// Add ALL answers (even those with validation errors) to save as draft
+		validAnswers = append(validAnswers, ans)
+		questionTypes = append(questionTypes, response.QuestionType(answerable.Question().Type))
+	}
+
+	logger.Info("answers processed",
+		zap.Int("answeredQuestions", len(validAnswers)),
+		zap.Int("validationErrors", len(validationErrors)),
+	)
+
+	// If there are no answers at all, return fatal error
+	if len(validAnswers) == 0 {
+		logger.Warn("no valid answers to save", zap.String("formID", formID.String()), zap.Int("totalAnswers", len(answers)))
+		return response.FormResponse{}, []error{fmt.Errorf("no valid questions found for provided answers")}
+	}
+
+	// Save all answers as draft
+	result, err := s.responseStore.CreateOrUpdate(traceCtx, formID, userID, validAnswers, questionTypes)
+	if err != nil {
+		logger.Error("failed to create or update form response", zap.Error(err), zap.String("formID", formID.String()), zap.String("userID", userID.String()))
+		span.RecordError(err)
+		return response.FormResponse{}, []error{err}
+	}
+
+	// TODO: Update section progress to 'submitted' when section is complete
+	// Section completion should be checked when user explicitly clicks "Next" or "Submit Section"
+	// At that time, we should:
+	// 1. Query all questions in the section
+	// 2. Check if all required questions have valid answers
+	// 3. Update section progress to 'submitted' if complete
+
+	// Return the saved response along with any validation errors
+	// Frontend can show errors but the draft is saved
+	return result, validationErrors
+}
+
+// convertAnswerValueForValidation converts a JSONB value (json.RawMessage) to the format expected by validation methods
+func convertAnswerValueForValidation(rawValue json.RawMessage, questionType question.QuestionType) (string, error) {
+	if len(rawValue) == 0 || string(rawValue) == "null" {
+		return "", nil
+	}
+
+	switch questionType {
+	case "LINEAR_SCALE", "RATING":
+		var scaleValue int32
+		if err := json.Unmarshal(rawValue, &scaleValue); err != nil {
+			return "", fmt.Errorf("failed to parse scale value: %w", err)
+		}
+		return strconv.FormatInt(int64(scaleValue), 10), nil
+
+	case "OAUTH_CONNECT":
+		return string(rawValue), nil
+
+	default:
+		var stringArray []string
+		if err := json.Unmarshal(rawValue, &stringArray); err != nil {
+			return "", fmt.Errorf("failed to parse answer value as string array: %w", err)
+		}
+		return strings.Join(stringArray, ";"), nil
+	}
 }

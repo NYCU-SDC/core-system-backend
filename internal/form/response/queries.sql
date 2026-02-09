@@ -23,7 +23,7 @@ ORDER BY submitted_at DESC NULLS LAST;
 
 -- name: Update :exec
 UPDATE form_responses
-SET updated_at = now()
+SET updated_at = now(), progress = $2
 WHERE id = $1;
 
 -- name: Delete :exec
@@ -43,11 +43,10 @@ SELECT * FROM answers
 WHERE response_id = $1
 ORDER BY created_at ASC;
 
--- name: GetAnswersByQuestionID :many
-SELECT a.*, r.form_id, r.submitted_by FROM answers a
-JOIN form_responses r ON a.response_id = r.id
-WHERE a.question_id = $1 AND r.form_id = $2
-ORDER BY a.created_at ASC;
+-- name: GetAnswersByQuestionID :one
+SELECT * FROM answers
+WHERE question_id = $1 AND response_id = $2
+ORDER BY created_at ASC;
 
 -- name: DeleteAnswersByResponseID :exec
 DELETE FROM answers 

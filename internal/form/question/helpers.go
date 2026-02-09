@@ -1,7 +1,7 @@
 package question
 
 // ToQuestion converts GetByIDRow to Question
-func (r GetByIDRow) ToQuestion() Question {
+func (r GetByIDsRow) ToQuestion() Question {
 	return Question{
 		ID:          r.ID,
 		SectionID:   r.SectionID,

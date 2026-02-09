@@ -123,7 +123,7 @@ ORDER BY
     s.id ASC,
     q."order" ASC;
 
--- name: GetByID :one
+-- name: GetByIDs :many
 SELECT 
     q.id,
     q.section_id,
@@ -139,4 +139,5 @@ SELECT
     s.form_id
 FROM questions q
 JOIN sections s ON q.section_id = s.id
-WHERE q.id = $1;
+WHERE q.id = ANY($1::uuid[])
+ORDER BY q."order" ASC;

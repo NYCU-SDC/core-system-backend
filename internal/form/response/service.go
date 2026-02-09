@@ -21,10 +21,10 @@ type Querier interface {
 	GetByFormIDAndSubmittedBy(ctx context.Context, arg GetByFormIDAndSubmittedByParams) (FormResponse, error)
 	Exists(ctx context.Context, arg ExistsParams) (bool, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
-	Update(ctx context.Context, id uuid.UUID) error
+	Update(ctx context.Context, arg UpdateParams) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	CreateAnswer(ctx context.Context, arg CreateAnswerParams) (Answer, error)
-	GetAnswersByQuestionID(ctx context.Context, arg GetAnswersByQuestionIDParams) ([]GetAnswersByQuestionIDRow, error)
+	GetAnswersByQuestionID(ctx context.Context, arg GetAnswersByQuestionIDParams) (Answer, error)
 	GetAnswersByResponseID(ctx context.Context, responseID uuid.UUID) ([]Answer, error)
 	UpdateAnswer(ctx context.Context, arg UpdateAnswerParams) (Answer, error)
 	AnswerExists(ctx context.Context, arg AnswerExistsParams) (bool, error)
@@ -70,14 +70,14 @@ func (s Service) CreateOrUpdate(ctx context.Context, formID uuid.UUID, userID uu
 	}
 
 	if exists {
-		return s.Update(traceCtx, formID, userID, answers, questionType)
+		return s.UpdateAnswer(traceCtx, formID, userID, answers, questionType)
 	} else {
-		return s.Create(traceCtx, formID, userID, answers, questionType)
+		return s.CreateAnswer(traceCtx, formID, userID, answers, questionType)
 	}
 }
 
-// Create creates a new response and answers for a given form and user
-func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error) {
+// Create creates a new response for a given form and user
+func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -92,31 +92,11 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID,
 		return FormResponse{}, err
 	}
 
-	for i, answer := range answers {
-		questionID, err := internal.ParseUUID(answer.QuestionID)
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "parse question id")
-			span.RecordError(err)
-			return FormResponse{}, err
-		}
-
-		_, err = s.queries.CreateAnswer(traceCtx, CreateAnswerParams{
-			ResponseID: newResponse.ID,
-			QuestionID: questionID,
-			Type:       questionType[i],
-			Value:      answer.Value,
-		})
-		if err != nil {
-			err = databaseutil.WrapDBErrorWithKeyValue(err, "answer", "response_id", newResponse.ID.String(), logger, "create answer")
-			span.RecordError(err)
-			return FormResponse{}, err
-		}
-	}
-
 	return newResponse, nil
 }
 
-func (s Service) Update(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error) {
+// UpdateAnswer updates the answers of the response
+func (s Service) UpdateAnswer(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -200,13 +180,56 @@ func (s Service) Update(ctx context.Context, formID uuid.UUID, userID uuid.UUID,
 	}
 
 	// update the value of updated_at of response
-	err = s.queries.Update(traceCtx, currentResponse.ID)
+	err = s.queries.Update(traceCtx, UpdateParams{
+		ID:       currentResponse.ID,
+		Progress: currentResponse.Progress,
+	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", currentResponse.ID.String(), logger, "update response")
 		span.RecordError(err)
 		return FormResponse{}, err
 	}
 	return currentResponse, nil
+}
+
+// CreateAnswer creates a new answer for a given response
+func (s Service) CreateAnswer(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateAnswer")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	newResponse, err := s.queries.Create(traceCtx, CreateParams{
+		FormID:      formID,
+		SubmittedBy: userID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create answer")
+		span.RecordError(err)
+		return FormResponse{}, err
+	}
+
+	for i, answer := range answers {
+		questionID, err := internal.ParseUUID(answer.QuestionID)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "parse question id")
+			span.RecordError(err)
+			return FormResponse{}, err
+		}
+
+		_, err = s.queries.CreateAnswer(traceCtx, CreateAnswerParams{
+			ResponseID: newResponse.ID,
+			QuestionID: questionID,
+			Type:       questionType[i],
+			Value:      answer.Value,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBErrorWithKeyValue(err, "answer", "response_id", newResponse.ID.String(), logger, "create answer")
+			span.RecordError(err)
+			return FormResponse{}, err
+		}
+	}
+
+	return newResponse, nil
 }
 
 // Get retrieves a response and answers by id
@@ -268,25 +291,25 @@ func (s Service) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // GetAnswersByQuestionID retrieves all answers for a given question
-func (s Service) GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUID, formID uuid.UUID) ([]GetAnswersByQuestionIDRow, error) {
+func (s Service) GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUID, responseID uuid.UUID) (Answer, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetAnswersByQuestionID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	rows, err := s.queries.GetAnswersByQuestionID(traceCtx, GetAnswersByQuestionIDParams{
+	row, err := s.queries.GetAnswersByQuestionID(traceCtx, GetAnswersByQuestionIDParams{
 		QuestionID: questionID,
-		FormID:     formID,
+		ResponseID: responseID,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "answer", "question_id", questionID.String(), logger, "get answers by question id")
 		span.RecordError(err)
-		return []GetAnswersByQuestionIDRow{}, err
+		return Answer{}, err
 	}
 
-	return rows, nil
+	return row, nil
 }
 
-func (s *Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
+func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
 	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)

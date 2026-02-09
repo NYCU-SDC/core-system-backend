@@ -1,6 +1,7 @@
 package question
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"cmp"
 	"context"
 	"slices"
@@ -19,7 +20,7 @@ type Querier interface {
 	UpdateOrder(ctx context.Context, params UpdateOrderParams) (UpdateOrderRow, error)
 	DeleteAndReorder(ctx context.Context, arg DeleteAndReorderParams) error
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]ListByFormIDRow, error)
-	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error)
 }
 
 type Answerable interface {
@@ -184,13 +185,48 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Answerable, error)
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	row, err := s.queries.GetByID(ctx, id)
+	rows, err := s.queries.GetByIDs(ctx, []uuid.UUID{id})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get question by id")
 		span.RecordError(err)
 		return nil, err
 	}
 
+	if len(rows) == 0 {
+		return nil, internal.ErrNotFound
+	}
+
+	row := rows[0]
 	q := row.ToQuestion()
 	return NewAnswerable(q, row.FormID)
+}
+
+func (s *Service) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]Answerable, error) {
+	ctx, span := s.tracer.Start(ctx, "GetByIDs")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	rows, err := s.queries.GetByIDs(ctx, ids)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get question by an array of ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	if len(rows) == 0 {
+		return nil, internal.ErrNotFound
+	}
+
+	result := make([]Answerable, len(rows))
+	for i, row := range rows {
+		q := row.ToQuestion()
+		answerable, err := NewAnswerable(q, row.FormID)
+		if err != nil {
+			span.RecordError(err)
+			return nil, err
+		}
+		result[i] = answerable
+	}
+
+	return result, nil
 }

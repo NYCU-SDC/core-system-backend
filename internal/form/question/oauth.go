@@ -35,8 +35,30 @@ func (o OAuthConnect) FormID() uuid.UUID {
 }
 
 func (o OAuthConnect) Validate(value string) error {
-	// TODO
-	return errors.New("not implemented")
+	if value == "" {
+		return fmt.Errorf("oauth value cannot be empty")
+	}
+
+	var oauthData struct {
+		AvatarURL string `json:"avatar_url"`
+		Username  string `json:"username"`
+	}
+
+	if err := json.Unmarshal([]byte(value), &oauthData); err != nil {
+		return fmt.Errorf("invalid oauth JSON structure: %w", err)
+	}
+
+	// Validate required fields
+	if oauthData.Username == "" {
+		return fmt.Errorf("oauth username cannot be empty")
+	}
+
+	if oauthData.AvatarURL == "" {
+		return fmt.Errorf("oauth avatar_url cannot be empty")
+	}
+
+	// TODO: Provider-specific validation (e.g., GitHub username format, Google username format)
+	return nil
 }
 
 func NewOAuthConnect(q Question, formID uuid.UUID) (OAuthConnect, error) {
