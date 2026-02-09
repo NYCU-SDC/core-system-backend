@@ -4,12 +4,14 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/tenant"
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -33,7 +35,7 @@ type Querier interface {
 	ListUnitsMembers(ctx context.Context, unitIDs []uuid.UUID) ([]ListUnitsMembersRow, error)
 	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
 
-	CountAdmins(ctx context.Context, unitID uuid.UUID) (int64, error)
+	CountMembersByRole(ctx context.Context, arg CountMembersByRoleParams) (int64, error)
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
 }
@@ -467,6 +469,10 @@ func (s *Service) GetMemberRole(
 		MemberID: memberID,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", internal.ErrPermissionDenied
+		}
+
 		err = databaseutil.WrapDBError(err, logger, "get member role")
 		span.RecordError(err)
 		return "", err

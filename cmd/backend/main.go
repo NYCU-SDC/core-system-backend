@@ -180,14 +180,15 @@ func main() {
 	tenantBasicMiddleware := basicMiddleware.Append(tenantMiddleware.Middleware)
 	tenantAuthMiddleware := authMiddleware.Append(tenantMiddleware.Middleware)
 
-	casbin.Init()
-
-	if casbin.Enforcer == nil {
-		logger.Fatal("casbin enforcer init failed")
+	casbinCfg := casbin.LoadConfig()
+	enforcer, err := casbin.NewEnforcer(casbinCfg)
+	if err != nil {
+		logger.Fatal("Failed to initialize casbin enforcer", zap.Error(err))
 	}
+
 	//Casbin Middleware
-	casbinAuthMiddleware := auth.NewMiddleware(logger, casbin.Enforcer, unitService, tenantService)
-	tenantCasbinAuthMiddleware := tenantAuthMiddleware.Append(casbinAuthMiddleware.Middleware)
+	casbinMiddleware := casbin.NewMiddleware(logger, problemWriter, enforcer, unitService, tenantService)
+	tenantCasbinAuthMiddleware := tenantAuthMiddleware.Append(casbinMiddleware.Middleware)
 
 	// HTTP Server
 	mux := http.NewServeMux()

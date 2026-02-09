@@ -55,14 +55,19 @@ func (q *Queries) AddMember(ctx context.Context, arg AddMemberParams) (AddMember
 	return i, err
 }
 
-const countAdmins = `-- name: CountAdmins :one
+const countMembersByRole = `-- name: CountMembersByRole :one
 SELECT COUNT(*)
 FROM unit_members
-WHERE unit_id = $1 AND role = 'admin'
+WHERE unit_id = $1 AND role = $2
 `
 
-func (q *Queries) CountAdmins(ctx context.Context, unitID uuid.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countAdmins, unitID)
+type CountMembersByRoleParams struct {
+	UnitID uuid.UUID
+	Role   UnitRole
+}
+
+func (q *Queries) CountMembersByRole(ctx context.Context, arg CountMembersByRoleParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countMembersByRole, arg.UnitID, arg.Role)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

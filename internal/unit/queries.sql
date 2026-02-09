@@ -96,10 +96,10 @@ UPDATE unit_members
 SET role = $3
 WHERE unit_id = $1 AND member_id = $2;
 
--- name: CountAdmins :one
+-- name: CountMembersByRole :one
 SELECT COUNT(*)
 FROM unit_members
-WHERE unit_id = $1 AND role = 'admin';
+WHERE unit_id = $1 AND role = $2;
 
 -- name: GetMemberRole :one
 SELECT role

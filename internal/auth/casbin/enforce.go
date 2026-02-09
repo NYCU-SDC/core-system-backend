@@ -1,7 +1,7 @@
 package casbin
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/casbin/casbin/v2"
@@ -10,9 +10,12 @@ import (
 	"github.com/casbin/casbin/v2/util"
 )
 
-var Enforcer *casbin.Enforcer
+type Config struct {
+	ModelPath  string
+	PolicyPath string
+}
 
-func Init() {
+func LoadConfig() Config {
 	modelPath := os.Getenv("CASBIN_MODEL_PATH")
 	policyPath := os.Getenv("CASBIN_POLICY_PATH")
 
@@ -23,16 +26,23 @@ func Init() {
 		policyPath = "internal/auth/casbin/policy.csv"
 	}
 
-	m, err := model.NewModelFromFile(modelPath)
+	return Config{
+		ModelPath:  modelPath,
+		PolicyPath: policyPath,
+	}
+}
+
+func NewEnforcer(cfg Config) (*casbin.Enforcer, error) {
+	m, err := model.NewModelFromFile(cfg.ModelPath)
 	if err != nil {
-		log.Fatalf("failed to load casbin model (%s): %v", modelPath, err)
+		return nil, fmt.Errorf("load casbin model (%s): %w", cfg.ModelPath, err)
 	}
 
-	a := fileadapter.NewAdapter(policyPath)
+	a := fileadapter.NewAdapter(cfg.PolicyPath)
 
 	e, err := casbin.NewEnforcer(m, a)
 	if err != nil {
-		log.Fatalf("failed to create casbin enforcer: %v", err)
+		return nil, fmt.Errorf("create casbin enforcer: %w", err)
 	}
 
 	e.AddFunction("keyMatch2", func(args ...interface{}) (interface{}, error) {
@@ -41,6 +51,9 @@ func Init() {
 		return util.KeyMatch2(key1, key2), nil
 	})
 
-	_ = e.LoadPolicy()
-	Enforcer = e
+	if err := e.LoadPolicy(); err != nil {
+		return nil, fmt.Errorf("load casbin policy (%s): %w", cfg.PolicyPath, err)
+	}
+
+	return e, nil
 }

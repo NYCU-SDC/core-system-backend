@@ -1,6 +1,7 @@
-package auth
+package casbin
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
 	"net/http"
 
@@ -8,6 +9,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/user"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
+	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/casbin/casbin/v2"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
@@ -18,30 +20,34 @@ import (
 type unitReader interface {
 	GetMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID) (unit.UnitRole, error)
 }
+
 type tenantReader interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 }
 
 type Middleware struct {
-	tracer    trace.Tracer
-	logger    *zap.Logger
-	enforcer  *casbin.Enforcer
-	unitSvc   unitReader
-	tenantSvc tenantReader
+	tracer        trace.Tracer
+	logger        *zap.Logger
+	enforcer      *casbin.Enforcer
+	unitReader    unitReader
+	tenantReader  tenantReader
+	problemWriter *problem.HttpWriter
 }
 
 func NewMiddleware(
 	logger *zap.Logger,
+	problemWriter *problem.HttpWriter,
 	enforcer *casbin.Enforcer,
-	unitSvc unitReader,
-	tenantSvc tenantReader,
+	unitReader unitReader,
+	tenantReader tenantReader,
 ) *Middleware {
 	return &Middleware{
-		tracer:    otel.Tracer("auth/middleware"),
-		logger:    logger,
-		enforcer:  enforcer,
-		unitSvc:   unitSvc,
-		tenantSvc: tenantSvc,
+		tracer:        otel.Tracer("auth/middleware"),
+		logger:        logger,
+		enforcer:      enforcer,
+		unitReader:    unitReader,
+		tenantReader:  tenantReader,
+		problemWriter: problemWriter,
 	}
 }
 
@@ -54,31 +60,31 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 
 		u, ok := user.GetFromContext(traceCtx)
 		if !ok {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			m.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
 			return
 		}
 
 		var unitID uuid.UUID
 		if unitIDStr := r.PathValue("unitId"); unitIDStr != "" {
-			//unit
+			// unit
 			parsed, err := uuid.Parse(unitIDStr)
 			if err != nil {
-				http.Error(w, "invalid unit id", http.StatusBadRequest)
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrValidationFailed, logger)
 				return
 			}
 			unitID = parsed
 
 		} else if slug := r.PathValue("slug"); slug != "" {
-			//org
-			available, orgID, err := m.tenantSvc.GetSlugStatus(traceCtx, slug)
+			// org
+			available, orgID, err := m.tenantReader.GetSlugStatus(traceCtx, slug)
 			if err != nil {
 				logger.Error("get slug status failed", zap.Error(err))
-				http.Error(w, "internal error", http.StatusInternalServerError)
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
 				return
 			}
 			// available == true means slug NOT exists
 			if available {
-				http.Error(w, "org not found", http.StatusNotFound)
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
 				return
 			}
 
@@ -89,36 +95,30 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		role, err := m.unitSvc.GetMemberRole(traceCtx, unitID, u.ID)
+		role, err := m.unitReader.GetMemberRole(traceCtx, unitID, u.ID)
 		if err != nil {
-			logger.Warn("not unit member",
+			logger.Warn("permission denied (not unit member)",
 				zap.String("user_id", u.ID.String()),
 				zap.String("unit_id", unitID.String()),
 			)
-			http.Error(w, "forbidden", http.StatusForbidden)
+			m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
 			return
 		}
 
 		userID := u.ID.String()
+		subject := string(role)
 		domain := unitID.String()
 
-		_, _ = m.enforcer.DeleteRolesForUserInDomain(userID, domain)
-
-		_, _ = m.enforcer.AddGroupingPolicy(
-			userID,
-			string(role), // admin / member
-			domain,
-		)
-
 		allowed, err := m.enforcer.Enforce(
-			userID,
+			subject,
 			domain,
 			r.URL.Path,
 			r.Method,
 		)
+
 		if err != nil {
 			logger.Error("casbin enforce error", zap.Error(err))
-			http.Error(w, "internal error", 500)
+			m.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
 			return
 		}
 
@@ -128,9 +128,9 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 				zap.String("unit_id", domain),
 				zap.String("path", r.URL.Path),
 				zap.String("method", r.Method),
-				zap.String("role", string(role)),
+				zap.String("role", subject),
 			)
-			http.Error(w, "permission denied", http.StatusForbidden)
+			m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
 			return
 		}
 

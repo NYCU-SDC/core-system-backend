@@ -22,7 +22,14 @@ func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, me
 
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	adminCount, err := s.queries.CountAdmins(traceCtx, id)
+	adminCount, err := s.queries.CountMembersByRole(
+		traceCtx,
+		CountMembersByRoleParams{
+			UnitID: id,
+			Role:   UnitRoleAdmin,
+		},
+	)
+
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "count admins")
 		span.RecordError(err)
