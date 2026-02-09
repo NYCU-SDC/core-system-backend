@@ -3,10 +3,10 @@ package form
 import (
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"context"
-	"slices"
 	"errors"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5"
+	"slices"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -27,25 +27,6 @@ type Querier interface {
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
-}
-
-type ResponseStore interface {
-	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]response.FormResponse, error)
-}
-
-type UserFormStatus string
-
-const (
-	UserFormStatusNotStarted UserFormStatus = "NOT_STARTED"
-	UserFormStatusInProgress UserFormStatus = "IN_PROGRESS"
-	UserFormStatusCompleted  UserFormStatus = "COMPLETED"
-)
-
-type UserForm struct {
-	FormID   uuid.UUID
-	Title    string
-	Deadline pgtype.Timestamptz
-	Status   UserFormStatus
 }
 
 type ResponseStore interface {
