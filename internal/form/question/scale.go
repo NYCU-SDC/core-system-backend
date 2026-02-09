@@ -92,10 +92,6 @@ func NewLinearScale(q Question, formID uuid.UUID) (LinearScale, error) {
 		return LinearScale{}, ErrMetadataBroken{QuestionID: q.ID.String(), RawData: metadata, Message: "could not extract linear scale options from metadata"}
 	}
 
-	if linearScale.MinVal >= linearScale.MaxVal {
-		return LinearScale{}, ErrMetadataBroken{QuestionID: q.ID.String(), RawData: metadata, Message: "minVal must be less than maxVal"}
-	}
-
 	return LinearScale{
 		question:      q,
 		formID:        formID,
@@ -149,14 +145,6 @@ func NewRating(q Question, formID uuid.UUID) (Rating, error) {
 		return Rating{}, ErrMetadataBroken{QuestionID: q.ID.String(), RawData: metadata, Message: "could not extract rating options from metadata"}
 	}
 
-	if rating.MinVal >= rating.MaxVal {
-		return Rating{}, ErrMetadataBroken{QuestionID: q.ID.String(), RawData: metadata, Message: "minVal must be less than maxVal"}
-	}
-
-	if !validIcons[rating.Icon] {
-		return Rating{}, ErrMetadataBroken{QuestionID: q.ID.String(), RawData: metadata, Message: "invalid icon"}
-	}
-
 	return Rating{
 		question:      q,
 		formID:        formID,
@@ -173,12 +161,20 @@ func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {
 		return nil, fmt.Errorf("minVal (%d) must be less than maxVal (%d)", option.MinVal, option.MaxVal)
 	}
 
-	if option.MinVal < 1 || option.MinVal > 7 {
-		return nil, fmt.Errorf("minVal must be between 1 and 7, got %d", option.MinVal)
+	if option.MinVal != 0 && option.MaxVal != 1 {
+		return nil, ErrMetadataValidate{
+			QuestionID: string(QuestionTypeLinearScale),
+			RawData:    []byte(fmt.Sprintf("%v", option)),
+			Message:    "minVal must be 0 or 1",
+		}
 	}
 
-	if option.MaxVal < 1 || option.MaxVal > 7 {
-		return nil, fmt.Errorf("maxVal must be between 1 and 7, got %d", option.MaxVal)
+	if option.MaxVal < 2 || option.MaxVal > 10 {
+		return nil, ErrMetadataValidate{
+			QuestionID: string(QuestionTypeLinearScale),
+			RawData:    []byte(fmt.Sprintf("%v", option)),
+			Message:    "maxVal must be between 2 and 10",
+		}
 	}
 
 	metadata := map[string]any{
@@ -197,16 +193,28 @@ func GenerateRatingMetadata(option ScaleOption) ([]byte, error) {
 		return nil, fmt.Errorf("minVal (%d) must be less than maxVal (%d)", option.MinVal, option.MaxVal)
 	}
 
-	if option.MinVal < 1 {
-		return nil, fmt.Errorf("minVal must be at least 1 for rating, got %d", option.MinVal)
+	if option.MinVal != 0 && option.MaxVal != 1 {
+		return nil, ErrMetadataValidate{
+			QuestionID: string(QuestionTypeRating),
+			RawData:    []byte(fmt.Sprintf("%v", option)),
+			Message:    "minVal must be 0 or 1",
+		}
 	}
 
-	if option.MaxVal > 10 {
-		return nil, fmt.Errorf("maxVal must be at most 10 for rating, got %d", option.MaxVal)
+	if option.MaxVal < 2 || option.MaxVal > 10 {
+		return nil, ErrMetadataValidate{
+			QuestionID: string(QuestionTypeRating),
+			RawData:    []byte(fmt.Sprintf("%v", option)),
+			Message:    "maxVal must be between 2 and 10",
+		}
 	}
 
 	if !validIcons[option.Icon] {
-		return nil, fmt.Errorf("invalid icon: %s", option.Icon)
+		return nil, ErrMetadataValidate{
+			QuestionID: string(QuestionTypeRating),
+			RawData:    []byte(fmt.Sprintf("%v", option)),
+			Message:    "invalid icon",
+		}
 	}
 
 	metadata := map[string]any{
