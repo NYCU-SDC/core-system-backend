@@ -39,6 +39,9 @@ type Config struct {
 	AllowOrigins              []string                `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
 	GoogleOauth               googleOauth.GoogleOauth `yaml:"google_oauth"`
 
+	CasbinModelPath  string `yaml:"casbin_model_path"  envconfig:"CASBIN_MODEL_PATH"`
+	CasbinPolicyPath string `yaml:"casbin_policy_path" envconfig:"CASBIN_POLICY_PATH"`
+
 	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
 }
@@ -134,6 +137,8 @@ func Load() (Config, *LogBuffer) {
 		RefreshTokenExpirationStr: "720h",
 		OtelCollectorUrl:          "",
 		GoogleOauth:               googleOauth.GoogleOauth{},
+		CasbinModelPath:           "internal/auth/casbin/model.conf",
+		CasbinPolicyPath:          "internal/auth/casbin/policy.csv",
 	}
 
 	var err error
@@ -207,6 +212,8 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 			ClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
 		},
+		CasbinModelPath:  os.Getenv("CASBIN_MODEL_PATH"),
+		CasbinPolicyPath: os.Getenv("CASBIN_POLICY_PATH"),
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -226,6 +233,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientID, "google_oauth_client_id", "", "Google OAuth client ID")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientSecret, "google_oauth_client_secret", "", "Google OAuth client secret")
+	flag.StringVar(&flagConfig.CasbinModelPath, "casbin_model_path", "", "casbin model path")
+	flag.StringVar(&flagConfig.CasbinPolicyPath, "casbin_policy_path", "", "casbin policy path")
 
 	flag.Parse()
 

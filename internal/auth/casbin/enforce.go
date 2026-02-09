@@ -2,7 +2,6 @@ package casbin
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
@@ -13,23 +12,6 @@ import (
 type Config struct {
 	ModelPath  string
 	PolicyPath string
-}
-
-func LoadConfig() Config {
-	modelPath := os.Getenv("CASBIN_MODEL_PATH")
-	policyPath := os.Getenv("CASBIN_POLICY_PATH")
-
-	if modelPath == "" {
-		modelPath = "internal/auth/casbin/model.conf"
-	}
-	if policyPath == "" {
-		policyPath = "internal/auth/casbin/policy.csv"
-	}
-
-	return Config{
-		ModelPath:  modelPath,
-		PolicyPath: policyPath,
-	}
 }
 
 func NewEnforcer(cfg Config) (*casbin.Enforcer, error) {

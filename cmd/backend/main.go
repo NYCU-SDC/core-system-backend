@@ -180,7 +180,10 @@ func main() {
 	tenantBasicMiddleware := basicMiddleware.Append(tenantMiddleware.Middleware)
 	tenantAuthMiddleware := authMiddleware.Append(tenantMiddleware.Middleware)
 
-	casbinCfg := casbin.LoadConfig()
+	casbinCfg := casbin.Config{
+		ModelPath:  cfg.CasbinModelPath,
+		PolicyPath: cfg.CasbinPolicyPath,
+	}
 	enforcer, err := casbin.NewEnforcer(casbinCfg)
 	if err != nil {
 		logger.Fatal("Failed to initialize casbin enforcer", zap.Error(err))
