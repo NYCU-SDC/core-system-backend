@@ -3,9 +3,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255),
-    username VARCHAR(255),
+    username VARCHAR(255) UNIQUE,
     avatar_url VARCHAR(512),
     role VARCHAR(255)[] NOT NULL DEFAULT '{"user"}',
+    is_onboarded BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -35,9 +36,10 @@ SELECT
     u.username,
     u.avatar_url,
     u.role,
+    u.is_onboarded,
     u.created_at,
     u.updated_at,
     COALESCE(array_agg(e.value) FILTER (WHERE e.value IS NOT NULL), ARRAY[]::text[]) as emails
 FROM users u
 LEFT JOIN user_emails e ON u.id = e.user_id
-GROUP BY u.id, u.name, u.username, u.avatar_url, u.role, u.created_at, u.updated_at;
+GROUP BY u.id, u.name, u.username, u.avatar_url, u.role, u.is_onboarded, u.created_at, u.updated_at;

@@ -40,19 +40,13 @@ CREATE TABLE IF NOT EXISTS slug_history
     ended_at TIMESTAMPTZ DEFAULT null
 );CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    is_active BOOLEAN DEFAULT TRUE,
-    expiration_date TIMESTAMPTZ NOT NULL
-);CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255),
-    username VARCHAR(255),
+    username VARCHAR(255) UNIQUE,
     avatar_url VARCHAR(512),
     role VARCHAR(255)[] NOT NULL DEFAULT '{"user"}',
+    is_onboarded BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -82,12 +76,13 @@ SELECT
     u.username,
     u.avatar_url,
     u.role,
+    u.is_onboarded,
     u.created_at,
     u.updated_at,
     COALESCE(array_agg(e.value) FILTER (WHERE e.value IS NOT NULL), ARRAY[]::text[]) as emails
 FROM users u
 LEFT JOIN user_emails e ON u.id = e.user_id
-GROUP BY u.id, u.name, u.username, u.avatar_url, u.role, u.created_at, u.updated_at;CREATE EXTENSION IF NOT EXISTS pgcrypto;
+GROUP BY u.id, u.name, u.username, u.avatar_url, u.role, u.is_onboarded, u.created_at, u.updated_at;CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TYPE unit_type AS ENUM ('organization', 'unit');
 
@@ -110,10 +105,55 @@ CREATE TABLE IF NOT EXISTS unit_members (
     member_id UUID,
     PRIMARY KEY (unit_id, member_id)
 );
+CREATE TYPE db_strategy AS ENUM ('shared', 'isolated');
+
+CREATE TABLE IF NOT EXISTS tenants
+(
+    id UUID PRIMARY KEY REFERENCES units(id) ON DELETE CASCADE,
+    db_strategy db_strategy NOT NULL,
+    owner_id UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS slug_history
+(
+    id SERIAL PRIMARY KEY,
+    slug TEXT NOT NULL,
+    org_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at TIMESTAMPTZ DEFAULT null
+);CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT TRUE,
+    expiration_date TIMESTAMPTZ NOT NULL
+);-- Node type enum for workflow nodes
+CREATE TYPE node_type AS ENUM(
+    'section',
+    'end',
+    'start',
+    'condition'
+);
+
+CREATE TABLE IF NOT EXISTS workflow_versions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    last_editor UUID NOT NULL REFERENCES users(id),
+    is_active BOOLEAN NOT NULL DEFAULT false,
+    workflow JSONB NOT NULL DEFAULT '[]'::JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_workflow_versions_is_active ON workflow_versions(form_id, is_active) WHERE is_active = true;
+
+CREATE INDEX idx_workflow_versions_latest ON workflow_versions(form_id, updated_at DESC);
 CREATE TABLE IF NOT EXISTS form_responses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
     submitted_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    submitted_at TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -188,18 +228,27 @@ CREATE TYPE question_type AS ENUM(
     'long_text',
     'single_choice',
     'multiple_choice',
-    'date'
+    'date',
+    'dropdown',
+    'detailed_multiple_choice',
+    'upload_file',
+    'linear_scale',
+    'rating',
+    'ranking',
+    'oauth_connect',
+    'hyperlink'
 );
 
 CREATE TABLE IF NOT EXISTS questions(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    section_id UUID NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
     required BOOLEAN NOT NULL,
     type question_type NOT NULL,
     title TEXT,
     description TEXT,
     metadata JSONB DEFAULT '{}'::JSONB,
     "order" INTEGER NOT NULL,
+    source_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );-- Node type enum for workflow nodes
@@ -218,8 +267,31 @@ CREATE TABLE IF NOT EXISTS workflow_versions (
     workflow JSONB NOT NULL DEFAULT '[]'::JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);CREATE TYPE content_type AS ENUM(
+    'text',
+    'form'
+);
+
+CREATE TABLE IF NOT EXISTS inbox_message(
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    posted_by UUID NOT NULL references units(id),
+    type content_type NOT NULL,
+    content_id UUID NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS user_inbox_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL references users(id) ON DELETE CASCADE,
+    message_id UUID NOT NULL references inbox_message(id) ON DELETE CASCADE,
+    is_read boolean NOT NULL DEFAULT false,
+    is_starred boolean NOT NULL DEFAULT false,
+    is_archived boolean NOT NULL DEFAULT false
 );
 
 CREATE INDEX idx_workflow_versions_is_active ON workflow_versions(form_id, is_active) WHERE is_active = true;
 
 CREATE INDEX idx_workflow_versions_latest ON workflow_versions(form_id, updated_at DESC);
+

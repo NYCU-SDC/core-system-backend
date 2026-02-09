@@ -1,9 +1,11 @@
 package user
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
+	"errors"
+	"fmt"
 	"net/url"
-
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -199,8 +201,50 @@ func (s *Service) GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get emails by user id")
 		span.RecordError(err)
+
 		return nil, err
 	}
 
 	return emails, nil
+}
+
+func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username string) (User, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Onboarding")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	userInfo, err := s.queries.GetByID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get user by id")
+		span.RecordError(err)
+		return User{}, internal.ErrDatabaseError
+	}
+
+	if userInfo.IsOnboarded {
+		err := internal.ErrUserOnboarded
+		logger.Warn(fmt.Sprintf("%s: user_id=%s", err.Error(), id.String()))
+		return User{}, err
+	}
+	user, err := s.queries.Update(traceCtx, UpdateParams{
+		ID: id,
+		Name: pgtype.Text{
+			String: name,
+			Valid:  name != "",
+		},
+		Username: pgtype.Text{
+			String: username,
+			Valid:  username != "",
+		},
+		AvatarUrl:   userInfo.AvatarUrl,
+		IsOnboarded: true,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "update user information")
+		if errors.Is(err, databaseutil.ErrUniqueViolation) {
+			return User{}, internal.ErrUsernameConflict
+		}
+		span.RecordError(err)
+		return User{}, internal.ErrDatabaseError
+	}
+	return user, nil
 }

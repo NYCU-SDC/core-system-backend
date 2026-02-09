@@ -30,6 +30,7 @@ type Querier interface {
 	AnswerExists(ctx context.Context, arg AnswerExistsParams) (bool, error)
 	CheckAnswerContent(ctx context.Context, arg CheckAnswerContentParams) (bool, error)
 	GetAnswerID(ctx context.Context, arg GetAnswerIDParams) (uuid.UUID, error)
+	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
 }
 
 type Service struct {
@@ -283,4 +284,19 @@ func (s Service) GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUI
 	}
 
 	return rows, nil
+}
+
+func (s *Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	responses, err := s.queries.ListBySubmittedBy(ctx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list responses by submitted by")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return responses, nil
 }

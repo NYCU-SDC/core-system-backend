@@ -2,7 +2,6 @@ package workflow_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -12,71 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/zap"
 )
-
-// mockQuerier is a mock implementation of workflow.Querier interface
-type mockQuerier struct {
-	mock.Mock
-}
-
-func (m *mockQuerier) Get(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error) {
-	args := m.Called(ctx, formID)
-	return args.Get(0).(workflow.GetRow), args.Error(1)
-}
-
-func (m *mockQuerier) Update(ctx context.Context, arg workflow.UpdateParams) (workflow.UpdateRow, error) {
-	args := m.Called(ctx, arg)
-	return args.Get(0).(workflow.UpdateRow), args.Error(1)
-}
-
-func (m *mockQuerier) CreateNode(ctx context.Context, arg workflow.CreateNodeParams) (workflow.CreateNodeRow, error) {
-	args := m.Called(ctx, arg)
-	return args.Get(0).(workflow.CreateNodeRow), args.Error(1)
-}
-
-func (m *mockQuerier) DeleteNode(ctx context.Context, arg workflow.DeleteNodeParams) ([]byte, error) {
-	args := m.Called(ctx, arg)
-	return args.Get(0).([]byte), args.Error(1)
-}
-
-func (m *mockQuerier) Activate(ctx context.Context, arg workflow.ActivateParams) (workflow.ActivateRow, error) {
-	args := m.Called(ctx, arg)
-	return args.Get(0).(workflow.ActivateRow), args.Error(1)
-}
-
-// mockValidator is a mock implementation of workflow.Validator interface
-type mockValidator struct {
-	mock.Mock
-}
-
-func (m *mockValidator) Activate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore workflow.QuestionStore) error {
-	args := m.Called(ctx, formID, workflow, questionStore)
-	return args.Error(0)
-}
-
-func (m *mockValidator) Validate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore workflow.QuestionStore) error {
-	args := m.Called(ctx, formID, workflow, questionStore)
-	return args.Error(0)
-}
-
-func (m *mockValidator) ValidateNodeIDsUnchanged(ctx context.Context, currentWorkflow, newWorkflow []byte) error {
-	args := m.Called(ctx, currentWorkflow, newWorkflow)
-	return args.Error(0)
-}
-
-func (m *mockValidator) ValidateUpdateNodeIDs(ctx context.Context, currentWorkflow, newWorkflow []byte) error {
-	args := m.Called(ctx, currentWorkflow, newWorkflow)
-	return args.Error(0)
-}
-
-// createTestService creates a workflow.Service with mocked dependencies
-func createTestService(t *testing.T, logger *zap.Logger, tracer trace.Tracer, mockQuerier *mockQuerier, mockValidator *mockValidator, questionStore workflow.QuestionStore) *workflow.Service {
-	t.Helper()
-	return workflow.NewServiceForTesting(logger, tracer, mockQuerier, mockValidator, questionStore)
-}
 
 func TestService_Activate(t *testing.T) {
 	t.Parallel()
@@ -94,13 +31,13 @@ func TestService_Activate(t *testing.T) {
 		{
 			name: "successful activation with simple workflow",
 			params: Params{
-				workflowJSON: createSimpleValidWorkflow(t),
+				workflowJSON: createWorkflow_SimpleValid(t),
 			},
 		},
 		{
 			name: "successful activation with complex workflow",
 			params: Params{
-				workflowJSON: createComplexValidWorkflow(t),
+				workflowJSON: createWorkflow_ComplexValid(t),
 			},
 		},
 	}
@@ -165,7 +102,7 @@ func TestService_Update(t *testing.T) {
 		{
 			name: "successful update with simple workflow",
 			params: Params{
-				workflowJSON: createSimpleValidWorkflow(t),
+				workflowJSON: createWorkflow_SimpleValid(t),
 			},
 			expectErr: false,
 		},
@@ -240,7 +177,7 @@ func TestService_CreateNode(t *testing.T) {
 		{
 			name: "invalid node type parameter - start",
 			params: Params{
-				workflowJSON:  createSimpleValidWorkflow(t),
+				workflowJSON:  createWorkflow_SimpleValid(t),
 				nodeType:      workflow.NodeTypeStart,
 				questionStore: nil,
 			},
@@ -249,7 +186,7 @@ func TestService_CreateNode(t *testing.T) {
 		{
 			name: "invalid node type parameter - end",
 			params: Params{
-				workflowJSON:  createSimpleValidWorkflow(t),
+				workflowJSON:  createWorkflow_SimpleValid(t),
 				nodeType:      workflow.NodeTypeEnd,
 				questionStore: nil,
 			},
@@ -258,7 +195,7 @@ func TestService_CreateNode(t *testing.T) {
 		{
 			name: "invalid node type parameter - empty string",
 			params: Params{
-				workflowJSON:  createSimpleValidWorkflow(t),
+				workflowJSON:  createWorkflow_SimpleValid(t),
 				nodeType:      workflow.NodeType(""),
 				questionStore: nil,
 			},
@@ -267,7 +204,7 @@ func TestService_CreateNode(t *testing.T) {
 		{
 			name: "invalid node type parameter - unknown type",
 			params: Params{
-				workflowJSON:  createSimpleValidWorkflow(t),
+				workflowJSON:  createWorkflow_SimpleValid(t),
 				nodeType:      workflow.NodeType("unknown"),
 				questionStore: nil,
 			},
@@ -276,7 +213,7 @@ func TestService_CreateNode(t *testing.T) {
 		{
 			name: "valid workflow - simple section creation",
 			params: Params{
-				workflowJSON:  createSimpleValidWorkflow(t),
+				workflowJSON:  createWorkflow_SimpleValid(t),
 				nodeType:      workflow.NodeTypeSection,
 				questionStore: nil,
 			},
@@ -285,7 +222,7 @@ func TestService_CreateNode(t *testing.T) {
 		{
 			name: "valid workflow - condition node creation",
 			params: Params{
-				workflowJSON:  createSimpleValidWorkflow(t),
+				workflowJSON:  createWorkflow_SimpleValid(t),
 				nodeType:      workflow.NodeTypeCondition,
 				questionStore: nil,
 			},
@@ -367,7 +304,7 @@ func TestService_Get(t *testing.T) {
 					FormID:     formID,
 					LastEditor: uuid.New(),
 					IsActive:   false,
-					Workflow:   createSimpleValidWorkflow(t),
+					Workflow:   createWorkflow_SimpleValid(t),
 				}
 				mq.On("Get", mock.Anything, formID).Return(expectedRow, nil).Once()
 			},
@@ -423,7 +360,7 @@ func TestService_DeleteNode(t *testing.T) {
 		{
 			name: "valid workflow - simple workflow after deletion",
 			params: Params{
-				workflowJSON:  createSimpleValidWorkflow(t),
+				workflowJSON:  createWorkflow_SimpleValid(t),
 				nodeID:        uuid.New(),
 				questionStore: nil,
 			},
@@ -486,7 +423,7 @@ func TestService_GetWorkflow_ValidationErrors(t *testing.T) {
 		{
 			name:         "validation passes - returns empty info array",
 			formID:       uuid.New(),
-			workflowJSON: createSimpleValidWorkflow(t),
+			workflowJSON: createWorkflow_SimpleValid(t),
 			setupMock: func(mv *mockValidator, formID uuid.UUID, workflow []byte) {
 				mv.On("Activate", mock.Anything, formID, workflow, mock.Anything).Return(nil).Once()
 			},
@@ -496,7 +433,7 @@ func TestService_GetWorkflow_ValidationErrors(t *testing.T) {
 		{
 			name:         "parsing - nested joined errors",
 			formID:       uuid.New(),
-			workflowJSON: createSimpleValidWorkflow(t),
+			workflowJSON: createWorkflow_SimpleValid(t),
 			setupMock: func(mv *mockValidator, formID uuid.UUID, workflow []byte) {
 				startID := uuid.New()
 				err1 := fmt.Errorf("start node '%s' must have a 'next' field", startID.String())
@@ -512,7 +449,7 @@ func TestService_GetWorkflow_ValidationErrors(t *testing.T) {
 		{
 			name:         "parsing - multiple unreachable nodes with individual node IDs",
 			formID:       uuid.New(),
-			workflowJSON: createSimpleValidWorkflow(t),
+			workflowJSON: createWorkflow_SimpleValid(t),
 			setupMock: func(mv *mockValidator, formID uuid.UUID, workflow []byte) {
 				unreachableID1 := uuid.New()
 				unreachableID2 := uuid.New()
@@ -563,82 +500,4 @@ func TestService_GetWorkflow_ValidationErrors(t *testing.T) {
 			mockValidator.AssertExpectations(t)
 		})
 	}
-}
-
-// Helper functions to create test workflows
-
-func createSimpleValidWorkflow(t *testing.T) []byte {
-	t.Helper()
-	startID := uuid.New()
-	endID := uuid.New()
-	return createWorkflowJSON(t, []map[string]interface{}{
-		{
-			"id":    startID.String(),
-			"type":  "start",
-			"label": "Start",
-			"next":  endID.String(),
-		},
-		{
-			"id":    endID.String(),
-			"type":  "end",
-			"label": "End",
-		},
-	})
-}
-
-func createComplexValidWorkflow(t *testing.T) []byte {
-	t.Helper()
-	startID := uuid.New()
-	sectionID := uuid.New()
-	conditionID := uuid.New()
-	endID := uuid.New()
-	referenceNodeID := uuid.New()
-
-	workflowJSON, err := json.Marshal([]map[string]interface{}{
-		{
-			"id":    startID.String(),
-			"type":  "start",
-			"label": "Start",
-			"next":  sectionID.String(),
-		},
-		{
-			"id":    sectionID.String(),
-			"type":  "section",
-			"label": "Section",
-			"next":  conditionID.String(),
-		},
-		{
-			"id":        conditionID.String(),
-			"type":      "condition",
-			"label":     "Condition",
-			"nextTrue":  endID.String(),
-			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  referenceNodeID.String(),
-				"key":     "answer",
-				"pattern": "yes",
-			},
-		},
-		{
-			"id":    referenceNodeID.String(),
-			"type":  "section",
-			"label": "Reference Section",
-			"next":  conditionID.String(),
-		},
-		{
-			"id":    endID.String(),
-			"type":  "end",
-			"label": "End",
-		},
-	})
-	require.NoError(t, err)
-	return workflowJSON
-}
-
-func createWorkflowJSON(t *testing.T, nodes []map[string]interface{}) []byte {
-	t.Helper()
-	json, err := json.Marshal(nodes)
-	require.NoError(t, err)
-	return json
 }
