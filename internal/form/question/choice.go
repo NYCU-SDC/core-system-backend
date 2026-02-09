@@ -10,21 +10,28 @@ import (
 )
 
 type ChoiceOption struct {
-	Name string `json:"name" validate:"required"`
+	Name        string `json:"name" validate:"required"`
+	Description string `json:"description"`
 }
 
 type Choice struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
 }
 
 type SingleChoice struct {
 	question Question
+	formID   uuid.UUID
 	Choices  []Choice
 }
 
 func (s SingleChoice) Question() Question {
 	return s.question
+}
+
+func (s SingleChoice) FormID() uuid.UUID {
+	return s.formID
 }
 
 func (s SingleChoice) Validate(value string) error {
@@ -44,8 +51,13 @@ func (s SingleChoice) Validate(value string) error {
 	}
 }
 
-func NewSingleChoice(q Question) (SingleChoice, error) {
+func NewSingleChoice(q Question, formID uuid.UUID) (SingleChoice, error) {
 	metadata := q.Metadata
+
+	if q.SourceID.Valid && metadata == nil {
+		return SingleChoice{question: q, formID: formID, Choices: []Choice{}}, nil
+	}
+
 	if metadata == nil {
 		return SingleChoice{}, errors.New("metadata is nil")
 	}
@@ -87,17 +99,23 @@ func NewSingleChoice(q Question) (SingleChoice, error) {
 
 	return SingleChoice{
 		question: q,
+		formID:   formID,
 		Choices:  choices,
 	}, nil
 }
 
 type MultiChoice struct {
 	question Question
+	formID   uuid.UUID
 	Choices  []Choice
 }
 
 func (m MultiChoice) Question() Question {
 	return m.question
+}
+
+func (m MultiChoice) FormID() uuid.UUID {
+	return m.formID
 }
 
 func (m MultiChoice) Validate(value string) error {
@@ -131,8 +149,13 @@ func (m MultiChoice) Validate(value string) error {
 	return nil
 }
 
-func NewMultiChoice(q Question) (MultiChoice, error) {
+func NewMultiChoice(q Question, formID uuid.UUID) (MultiChoice, error) {
 	metadata := q.Metadata
+
+	if q.SourceID.Valid && metadata == nil {
+		return MultiChoice{question: q, formID: formID, Choices: []Choice{}}, nil
+	}
+
 	if metadata == nil {
 		return MultiChoice{}, errors.New("metadata is nil")
 	}
@@ -174,20 +197,194 @@ func NewMultiChoice(q Question) (MultiChoice, error) {
 
 	return MultiChoice{
 		question: q,
+		formID:   formID,
 		Choices:  choices,
 	}, nil
 }
 
-// Creates and validates metadata JSON for choice-based questions
-func GenerateMetadata(questionType string, choiceOptions []ChoiceOption) ([]byte, error) {
-	// For non-choice questions, return empty metadata
-	if questionType != "single_choice" && questionType != "multiple_choice" {
-		if len(choiceOptions) > 0 {
-			return nil, ErrUnsupportedQuestionType{QuestionType: questionType}
-		}
-		return json.Marshal(map[string]any{})
+type DetailedMultiChoice struct {
+	question Question
+	formID   uuid.UUID
+	Choices  []Choice
+}
+
+func (m DetailedMultiChoice) Question() Question {
+	return m.question
+}
+
+func (m DetailedMultiChoice) FormID() uuid.UUID {
+	return m.formID
+}
+
+func (m DetailedMultiChoice) Validate(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil // No value means no selection
 	}
 
+	ids := strings.Split(value, ";")
+	for _, v := range ids {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+
+		valid := false
+		for _, choice := range m.Choices {
+			if choice.ID.String() == v {
+				valid = true
+				break
+			}
+		}
+
+		if !valid {
+			return ErrInvalidChoiceID{
+				QuestionID: m.question.ID.String(),
+				ChoiceID:   v,
+			}
+		}
+	}
+
+	return nil
+}
+
+func NewDetailedMultiChoice(q Question, formID uuid.UUID) (DetailedMultiChoice, error) {
+	metadata := q.Metadata
+	if metadata == nil {
+		return DetailedMultiChoice{}, errors.New("metadata is nil")
+	}
+
+	choices, err := ExtractChoices(metadata)
+	if err != nil {
+		return DetailedMultiChoice{}, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    metadata,
+			Message:    "could not extract choices from metadata",
+		}
+	}
+
+	if len(choices) == 0 {
+		return DetailedMultiChoice{}, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    metadata,
+			Message:    "no choices found in metadata",
+		}
+	}
+
+	for _, choice := range choices {
+		if choice.ID == uuid.Nil {
+			return DetailedMultiChoice{}, ErrMetadataBroken{
+				QuestionID: q.ID.String(),
+				RawData:    metadata,
+				Message:    "choice ID cannot be nil",
+			}
+		}
+
+		if strings.TrimSpace(choice.Name) == "" {
+			return DetailedMultiChoice{}, ErrMetadataBroken{
+				QuestionID: q.ID.String(),
+				RawData:    metadata,
+				Message:    "choice name cannot be empty",
+			}
+		}
+	}
+
+	return DetailedMultiChoice{
+		question: q,
+		formID:   formID,
+		Choices:  choices,
+	}, nil
+}
+
+type Ranking struct {
+	question Question
+	formID   uuid.UUID
+	Rank     []Choice
+}
+
+func (r Ranking) Question() Question {
+	return r.question
+}
+
+func (r Ranking) FormID() uuid.UUID {
+	return r.formID
+}
+
+func (r Ranking) Validate(value string) error {
+	ids := strings.Split(value, ";")
+	for _, v := range ids {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+
+		valid := false
+		for _, choice := range r.Rank {
+			if choice.ID.String() == v {
+				valid = true
+				break
+			}
+		}
+
+		if !valid {
+			return ErrInvalidChoiceID{
+				QuestionID: r.question.ID.String(),
+				ChoiceID:   v,
+			}
+		}
+	}
+
+	return nil
+}
+
+func NewRanking(q Question, formID uuid.UUID) (Ranking, error) {
+	metadata := q.Metadata
+
+	if q.SourceID.Valid && metadata == nil {
+		return Ranking{question: q, formID: formID, Rank: []Choice{}}, nil
+	}
+
+	if metadata == nil {
+		return Ranking{}, errors.New("metadata is nil")
+	}
+
+	choices, err := ExtractChoices(metadata)
+	if err != nil {
+		return Ranking{}, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    metadata,
+			Message:    "could not extract rank from metadata",
+		}
+	}
+
+	if len(choices) == 0 {
+		return Ranking{}, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    metadata,
+			Message:    "no choices found in metadata",
+		}
+	}
+
+	rank := make([]Choice, len(choices))
+	for _, choice := range choices {
+		if choice.ID == uuid.Nil {
+			return Ranking{}, ErrMetadataBroken{
+				QuestionID: q.ID.String(),
+				RawData:    metadata,
+				Message:    "choice ID cannot be nil",
+			}
+		}
+		rank = append(rank, choice)
+	}
+
+	return Ranking{
+		question: q,
+		formID:   formID,
+		Rank:     rank,
+	}, nil
+}
+
+// Creates and validates metadata JSON for choice-based questions
+func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) ([]byte, error) {
 	// For choice questions, require at least one choice
 	if len(choiceOptions) == 0 {
 		return nil, ErrMetadataValidate{
@@ -209,8 +406,26 @@ func GenerateMetadata(questionType string, choiceOptions []ChoiceOption) ([]byte
 			}
 		}
 		choices[i] = Choice{
-			ID:   uuid.New(),
-			Name: name,
+			ID:          uuid.New(),
+			Name:        name,
+			Description: strings.TrimSpace(option.Description),
+		}
+	}
+
+	if questionType == "detailed_multiple_choice" {
+		hasDescription := false
+		for _, choice := range choices {
+			if strings.TrimSpace(choice.Description) != "" {
+				hasDescription = true
+				break
+			}
+		}
+		if !hasDescription {
+			return nil, ErrMetadataValidate{
+				QuestionID: questionType,
+				RawData:    []byte(fmt.Sprintf("%v", choiceOptions)),
+				Message:    "detailed multiple choice requires at least one choice with description",
+			}
 		}
 	}
 

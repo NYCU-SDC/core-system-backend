@@ -25,3 +25,9 @@ func WithRole(role []string) Option {
 		p.Role = role
 	}
 }
+
+func WithIsOnboarded(isOnboarded bool) Option {
+    return func(p *FactoryParams) {
+        p.IsOnboarded = isOnboarded
+    }
+}

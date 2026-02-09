@@ -1,7 +1,9 @@
 package form
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/response"
 	"context"
+	"slices"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -22,17 +24,38 @@ type Querier interface {
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 }
 
-type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+type ResponseStore interface {
+	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]response.FormResponse, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+type UserFormStatus string
+
+const (
+	UserFormStatusNotStarted UserFormStatus = "NOT_STARTED"
+	UserFormStatusInProgress UserFormStatus = "IN_PROGRESS"
+	UserFormStatusCompleted  UserFormStatus = "COMPLETED"
+)
+
+type UserForm struct {
+	FormID   uuid.UUID
+	Title    string
+	Deadline pgtype.Timestamptz
+	Status   UserFormStatus
+}
+
+type Service struct {
+	logger        *zap.Logger
+	queries       Querier
+	tracer        trace.Tracer
+	responseStore ResponseStore
+}
+
+func NewService(logger *zap.Logger, db DBTX, responseStore ResponseStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("forms/service"),
+		logger:        logger,
+		queries:       New(db),
+		tracer:        otel.Tracer("forms/service"),
+		responseStore: responseStore,
 	}
 }
 
@@ -171,4 +194,81 @@ func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status Status, us
 	}
 
 	return updated, nil
+}
+
+func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]UserForm, error) {
+	ctx, span := s.tracer.Start(ctx, "ListFormsOfUser")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	responses, err := s.responseStore.ListBySubmittedBy(ctx, userID)
+	if err != nil {
+		span.RecordError(err)
+		return []UserForm{}, err
+	}
+
+	formStatusMap := make(map[uuid.UUID]UserFormStatus)
+	for _, response := range responses {
+		status := UserFormStatusInProgress
+		if response.SubmittedAt.Valid {
+			status = UserFormStatusCompleted
+		}
+		formStatusMap[response.FormID] = status
+	}
+
+	allForms := make(map[uuid.UUID]ListByUnitRow)
+	for _, unitID := range unitIDs {
+		forms, err := s.queries.ListByUnit(ctx, pgtype.UUID{Bytes: unitID, Valid: true})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "list forms by unit")
+			span.RecordError(err)
+			return []UserForm{}, err
+		}
+
+		for _, form := range forms {
+			allForms[form.ID] = form
+		}
+	}
+
+	userForms := make([]UserForm, 0, len(allForms))
+	for formID, form := range allForms {
+		status, exists := formStatusMap[formID]
+		if !exists {
+			status = UserFormStatusNotStarted
+		}
+
+		userForms = append(userForms, UserForm{
+			FormID:   formID,
+			Title:    form.Title,
+			Deadline: form.Deadline,
+			Status:   status,
+		})
+	}
+
+	slices.SortFunc(userForms, func(a, b UserForm) int {
+
+		if a.Deadline.Valid != b.Deadline.Valid {
+			if a.Deadline.Valid {
+				return -1
+			}
+			return 1
+		}
+
+		if a.Deadline.Valid {
+			if n := a.Deadline.Time.Compare(b.Deadline.Time); n != 0 {
+				return n
+			}
+		}
+
+		if a.Title < b.Title {
+			return -1
+		}
+		if a.Title > b.Title {
+			return 1
+		}
+
+		return 0
+	})
+
+	return userForms, nil
 }

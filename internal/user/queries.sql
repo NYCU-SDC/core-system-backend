@@ -1,19 +1,19 @@
 -- name: Create :one
-INSERT INTO users (name, username, avatar_url, role)
-VALUES ($1, $2, $3, $4) 
+INSERT INTO users (name, username, avatar_url, role, is_onboarded)
+VALUES ($1, $2, $3, $4, $5) 
 RETURNING *;
 
 -- name: ExistsByID :one
 SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);
 
 -- name: GetByID :one
-SELECT id, name, username, avatar_url, role, created_at, updated_at, emails
+SELECT id, name, username, avatar_url, role, is_onboarded, created_at, updated_at, emails
 FROM users_with_emails
 WHERE id = $1;
 
 -- name: Update :one
 UPDATE users
-SET name = $2, username = $3, avatar_url = $4, 
+SET name = $2, username = $3, avatar_url = $4, is_onboarded = $5,
     updated_at = now()
 WHERE id = $1
 RETURNING *;

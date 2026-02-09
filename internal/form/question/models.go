@@ -143,11 +143,19 @@ func (ns NullNodeType) Value() (driver.Value, error) {
 type QuestionType string
 
 const (
-	QuestionTypeShortText      QuestionType = "short_text"
-	QuestionTypeLongText       QuestionType = "long_text"
-	QuestionTypeSingleChoice   QuestionType = "single_choice"
-	QuestionTypeMultipleChoice QuestionType = "multiple_choice"
-	QuestionTypeDate           QuestionType = "date"
+	QuestionTypeShortText              QuestionType = "short_text"
+	QuestionTypeLongText               QuestionType = "long_text"
+	QuestionTypeSingleChoice           QuestionType = "single_choice"
+	QuestionTypeMultipleChoice         QuestionType = "multiple_choice"
+	QuestionTypeDate                   QuestionType = "date"
+	QuestionTypeDropdown               QuestionType = "dropdown"
+	QuestionTypeDetailedMultipleChoice QuestionType = "detailed_multiple_choice"
+	QuestionTypeUploadFile             QuestionType = "upload_file"
+	QuestionTypeLinearScale            QuestionType = "linear_scale"
+	QuestionTypeRating                 QuestionType = "rating"
+	QuestionTypeRanking                QuestionType = "ranking"
+	QuestionTypeOauthConnect           QuestionType = "oauth_connect"
+	QuestionTypeHyperlink              QuestionType = "hyperlink"
 )
 
 func (e *QuestionType) Scan(src interface{}) error {
@@ -389,6 +397,7 @@ type FormResponse struct {
 	ID          uuid.UUID
 	FormID      uuid.UUID
 	SubmittedBy uuid.UUID
+	SubmittedAt pgtype.Timestamptz
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
@@ -404,13 +413,14 @@ type InboxMessage struct {
 
 type Question struct {
 	ID          uuid.UUID
-	FormID      uuid.UUID
+	SectionID   uuid.UUID
 	Required    bool
 	Type        QuestionType
 	Title       pgtype.Text
 	Description pgtype.Text
 	Metadata    []byte
 	Order       int32
+	SourceID    pgtype.UUID
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
@@ -465,13 +475,14 @@ type UnitMember struct {
 }
 
 type User struct {
-	ID        uuid.UUID
-	Name      pgtype.Text
-	Username  pgtype.Text
-	AvatarUrl pgtype.Text
-	Role      []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	ID          uuid.UUID
+	Name        pgtype.Text
+	Username    pgtype.Text
+	AvatarUrl   pgtype.Text
+	Role        []string
+	IsOnboarded bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type UserEmail struct {
@@ -491,14 +502,15 @@ type UserInboxMessage struct {
 }
 
 type UsersWithEmail struct {
-	ID        uuid.UUID
-	Name      pgtype.Text
-	Username  pgtype.Text
-	AvatarUrl pgtype.Text
-	Role      []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-	Emails    interface{}
+	ID          uuid.UUID
+	Name        pgtype.Text
+	Username    pgtype.Text
+	AvatarUrl   pgtype.Text
+	Role        []string
+	IsOnboarded bool
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	Emails      interface{}
 }
 
 type WorkflowVersion struct {

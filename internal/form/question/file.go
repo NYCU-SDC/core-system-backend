@@ -1,0 +1,282 @@
+package question
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/google/uuid"
+)
+
+// FileType represents allowed file extensions
+type FileType string
+
+const (
+	// Documents
+	FileTypeTxt  FileType = "txt"
+	FileTypeMd   FileType = "md"
+	FileTypeDoc  FileType = "doc"
+	FileTypeDocx FileType = "docx"
+	FileTypeOdt  FileType = "odt"
+	FileTypeRtf  FileType = "rtf"
+
+	// Presentations
+	FileTypePpt  FileType = "ppt"
+	FileTypePptx FileType = "pptx"
+	FileTypeOdp  FileType = "odp"
+
+	// Spreadsheets
+	FileTypeXls  FileType = "xls"
+	FileTypeXlsx FileType = "xlsx"
+	FileTypeOds  FileType = "ods"
+	FileTypeCsv  FileType = "csv"
+
+	// Vector Graphics
+	FileTypeSvg FileType = "svg"
+	FileTypeAi  FileType = "ai"
+	FileTypeEps FileType = "eps"
+
+	// PDF
+	FileTypePdf FileType = "pdf"
+
+	// Images
+	FileTypeJpg  FileType = "jpg"
+	FileTypeJpeg FileType = "jpeg"
+	FileTypePng  FileType = "png"
+	FileTypeWebp FileType = "webp"
+	FileTypeGif  FileType = "gif"
+	FileTypeTiff FileType = "tiff"
+	FileTypeBmp  FileType = "bmp"
+	FileTypeHeic FileType = "heic"
+	FileTypeRaw  FileType = "raw"
+
+	// Videos
+	FileTypeMp4  FileType = "mp4"
+	FileTypeWebm FileType = "webm"
+	FileTypeMov  FileType = "mov"
+	FileTypeMkv  FileType = "mkv"
+	FileTypeAvi  FileType = "avi"
+
+	// Audio
+	FileTypeMp3  FileType = "mp3"
+	FileTypeWav  FileType = "wav"
+	FileTypeM4a  FileType = "m4a"
+	FileTypeAac  FileType = "aac"
+	FileTypeOgg  FileType = "ogg"
+	FileTypeFlac FileType = "flac"
+
+	// Archive
+	FileTypeZip FileType = "zip"
+)
+
+// FileSizeLimit represents maximum file size
+type FileSizeLimit string
+
+const (
+	FileSizeLimit1MB   FileSizeLimit = "1MB"
+	FileSizeLimit5MB   FileSizeLimit = "5MB"
+	FileSizeLimit10MB  FileSizeLimit = "10MB"
+	FileSizeLimit100MB FileSizeLimit = "100MB"
+	FileSizeLimit1GB   FileSizeLimit = "1GB"
+)
+
+// UploadFileOption represents the request from frontend
+type UploadFileOption struct {
+	AllowedFileTypes []string `json:"allowedFileTypes" validate:"required"`
+	MaxFileAmount    int32    `json:"maxFileAmount" validate:"required"`
+	MaxFileSizeLimit string   `json:"maxFileSizeLimit" validate:"required"`
+}
+
+// UploadFileMetadata represents the metadata stored in DB
+type UploadFileMetadata struct {
+	AllowedFileTypes []FileType    `json:"allowedFileTypes"`
+	MaxFileAmount    int32         `json:"maxFileAmount"`
+	MaxFileSizeLimit FileSizeLimit `json:"maxFileSizeLimit"`
+}
+
+type UploadFile struct {
+	question         Question
+	formID           uuid.UUID
+	AllowedFileTypes []FileType
+	MaxFileAmount    int32
+	MaxFileSizeLimit FileSizeLimit
+}
+
+func (u UploadFile) Question() Question {
+	return u.question
+}
+
+func (u UploadFile) FormID() uuid.UUID {
+	return u.formID
+}
+
+func (u UploadFile) Validate(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil // Empty is allowed if not required
+	}
+
+	// value should be JSON array of file URLs or IDs
+	// Example: ["file-id-1", "file-id-2"]
+	var fileIDs []string
+	if err := json.Unmarshal([]byte(value), &fileIDs); err != nil {
+		return fmt.Errorf("invalid file upload value format: %w", err)
+	}
+
+	// Check max file amount
+	if int32(len(fileIDs)) > u.MaxFileAmount {
+		return fmt.Errorf("too many files: %d (max: %d)", len(fileIDs), u.MaxFileAmount)
+	}
+
+	return nil
+}
+
+func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
+	if q.Metadata == nil {
+		return UploadFile{}, errors.New("metadata is nil")
+	}
+
+	uploadFile, err := ExtractUploadFile(q.Metadata)
+	if err != nil {
+		return UploadFile{}, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    q.Metadata,
+			Message:    "could not extract upload file from metadata",
+		}
+	}
+
+	// Validate metadata
+	if len(uploadFile.AllowedFileTypes) == 0 {
+		return UploadFile{}, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    q.Metadata,
+			Message:    "allowedFileTypes cannot be empty",
+		}
+	}
+
+	if uploadFile.MaxFileAmount < 1 || uploadFile.MaxFileAmount > 10 {
+		return UploadFile{}, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    q.Metadata,
+			Message:    fmt.Sprintf("maxFileAmount must be between 1 and 10, got: %d", uploadFile.MaxFileAmount),
+		}
+	}
+
+	if !isValidFileSizeLimit(uploadFile.MaxFileSizeLimit) {
+		return UploadFile{}, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    q.Metadata,
+			Message:    fmt.Sprintf("invalid maxFileSizeLimit: %s", uploadFile.MaxFileSizeLimit),
+		}
+	}
+
+	return UploadFile{
+		question:         q,
+		formID:           formID,
+		AllowedFileTypes: uploadFile.AllowedFileTypes,
+		MaxFileAmount:    uploadFile.MaxFileAmount,
+		MaxFileSizeLimit: uploadFile.MaxFileSizeLimit,
+	}, nil
+}
+
+// GenerateUploadFileMetadata generates metadata for upload file question
+func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
+	if len(option.AllowedFileTypes) == 0 {
+		return nil, errors.New("allowedFileTypes cannot be empty")
+	}
+
+	if option.MaxFileAmount < 1 || option.MaxFileAmount > 10 {
+		return nil, fmt.Errorf("maxFileAmount must be between 1 and 10, got: %d", option.MaxFileAmount)
+	}
+
+	// Validate and convert file types
+	fileTypes := make([]FileType, len(option.AllowedFileTypes))
+	for i, ft := range option.AllowedFileTypes {
+		fileType := FileType(strings.ToLower(strings.TrimSpace(ft)))
+		if !isValidFileType(fileType) {
+			return nil, fmt.Errorf("invalid file type: %s", ft)
+		}
+		fileTypes[i] = fileType
+	}
+
+	// Validate file size limit
+	sizeLimit := FileSizeLimit(option.MaxFileSizeLimit)
+	if !isValidFileSizeLimit(sizeLimit) {
+		return nil, fmt.Errorf("invalid file size limit: %s", option.MaxFileSizeLimit)
+	}
+
+	metadata := map[string]any{
+		"uploadFile": UploadFileMetadata{
+			AllowedFileTypes: fileTypes,
+			MaxFileAmount:    option.MaxFileAmount,
+			MaxFileSizeLimit: sizeLimit,
+		},
+	}
+
+	return json.Marshal(metadata)
+}
+
+// isValidFileType checks if the file type is allowed
+func isValidFileType(ft FileType) bool {
+	validTypes := []FileType{
+		// Documents
+		FileTypeTxt, FileTypeMd, FileTypeDoc, FileTypeDocx, FileTypeOdt, FileTypeRtf,
+		// Presentations
+		FileTypePpt, FileTypePptx, FileTypeOdp,
+		// Spreadsheets
+		FileTypeXls, FileTypeXlsx, FileTypeOds, FileTypeCsv,
+		// Vector Graphics
+		FileTypeSvg, FileTypeAi, FileTypeEps,
+		// PDF
+		FileTypePdf,
+		// Images
+		FileTypeJpg, FileTypeJpeg, FileTypePng, FileTypeWebp, FileTypeGif,
+		FileTypeTiff, FileTypeBmp, FileTypeHeic, FileTypeRaw,
+		// Videos
+		FileTypeMp4, FileTypeWebm, FileTypeMov, FileTypeMkv, FileTypeAvi,
+		// Audio
+		FileTypeMp3, FileTypeWav, FileTypeM4a, FileTypeAac, FileTypeOgg, FileTypeFlac,
+		// Archive
+		FileTypeZip,
+	}
+
+	for _, valid := range validTypes {
+		if ft == valid {
+			return true
+		}
+	}
+	return false
+}
+
+// isValidFileSizeLimit checks if the file size limit is valid
+func isValidFileSizeLimit(limit FileSizeLimit) bool {
+	validLimits := []FileSizeLimit{
+		FileSizeLimit1MB,
+		FileSizeLimit5MB,
+		FileSizeLimit10MB,
+		FileSizeLimit100MB,
+		FileSizeLimit1GB,
+	}
+
+	for _, valid := range validLimits {
+		if limit == valid {
+			return true
+		}
+	}
+	return false
+}
+
+func ExtractUploadFile(data []byte) (UploadFileMetadata, error) {
+	var partial map[string]json.RawMessage
+	if err := json.Unmarshal(data, &partial); err != nil {
+		return UploadFileMetadata{}, fmt.Errorf("could not parse partial json: %w", err)
+	}
+
+	var metadata UploadFileMetadata
+	if raw, ok := partial["uploadFile"]; ok {
+		if err := json.Unmarshal(raw, &metadata); err != nil {
+			return UploadFileMetadata{}, fmt.Errorf("could not parse upload file: %w", err)
+		}
+	}
+	return metadata, nil
+}

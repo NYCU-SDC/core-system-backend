@@ -31,6 +31,9 @@ var (
 	ErrUserNotFound       = errors.New("user not found")
 	ErrNoUserInContext    = errors.New("no user found in request context")
 	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrUserOnboarded      = errors.New("user already onboarded")
+	ErrUsernameConflict   = errors.New("user name already taken")
+	ErrDatabaseError      = errors.New("database error")
 
 	// OAuth Email Errors
 	ErrFailedToExtractEmail = errors.New("failed to extract email from OAuth token")
@@ -56,9 +59,11 @@ var (
 	ErrFormDeadlinePassed = errors.New("form deadline has passed")
 
 	// Question Errors
-	ErrQuestionNotFound = errors.New("question not found")
-	ErrQuestionRequired = errors.New("question is required but not answered")
-	ErrValidationFailed = errors.New("validation failed")
+	ErrQuestionNotFound           = errors.New("question not found")
+	ErrQuestionRequired           = errors.New("question is required but not answered")
+	ErrValidationFailed           = errors.New("validation failed")
+	ErrInvalidSourceIDWithChoices = errors.New("cannot specify both source_id and choices")
+	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
 
 	// Response Errors
 	ErrResponseNotFound = errors.New("response not found")
@@ -107,6 +112,12 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewUnauthorizedProblem("no user found in request context")
 	case errors.Is(err, ErrEmailAlreadyExists):
 		return problem.NewValidateProblem("email already exists")
+	case errors.Is(err, ErrUserOnboarded):
+		return problem.NewValidateProblem("user already onboarded")
+	case errors.Is(err, ErrUsernameConflict):
+		return problem.NewValidateProblem("username already taken")
+	case errors.Is(err, ErrDatabaseError):
+		return problem.NewBadRequestProblem("database error")
 
 	// OAuth Email Errors
 	case errors.Is(err, ErrFailedToExtractEmail):
@@ -151,6 +162,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("question not found")
 	case errors.Is(err, ErrQuestionRequired):
 		return problem.NewValidateProblem("question is required but not answered")
+	case errors.Is(err, ErrInvalidSourceIDWithChoices):
+		return problem.NewBadRequestProblem("cannot specify both source_id and choices")
+	case errors.Is(err, ErrInvalidSourceIDForType):
+		return problem.NewBadRequestProblem("source_id is not supported for this question type")
 
 	// Response Errors
 	case errors.Is(err, ErrResponseNotFound):

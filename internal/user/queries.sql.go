@@ -13,16 +13,17 @@ import (
 )
 
 const create = `-- name: Create :one
-INSERT INTO users (name, username, avatar_url, role)
-VALUES ($1, $2, $3, $4) 
-RETURNING id, name, username, avatar_url, role, created_at, updated_at
+INSERT INTO users (name, username, avatar_url, role, is_onboarded)
+VALUES ($1, $2, $3, $4, $5) 
+RETURNING id, name, username, avatar_url, role, is_onboarded, created_at, updated_at
 `
 
 type CreateParams struct {
-	Name      pgtype.Text
-	Username  pgtype.Text
-	AvatarUrl pgtype.Text
-	Role      []string
+	Name        pgtype.Text
+	Username    pgtype.Text
+	AvatarUrl   pgtype.Text
+	Role        []string
+	IsOnboarded bool
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
@@ -31,6 +32,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
 		arg.Username,
 		arg.AvatarUrl,
 		arg.Role,
+		arg.IsOnboarded,
 	)
 	var i User
 	err := row.Scan(
@@ -39,6 +41,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
 		&i.Username,
 		&i.AvatarUrl,
 		&i.Role,
+		&i.IsOnboarded,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -115,7 +118,7 @@ func (q *Queries) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 const getByID = `-- name: GetByID :one
-SELECT id, name, username, avatar_url, role, created_at, updated_at, emails
+SELECT id, name, username, avatar_url, role, is_onboarded, created_at, updated_at, emails
 FROM users_with_emails
 WHERE id = $1
 `
@@ -129,6 +132,7 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (UsersWithEmail, er
 		&i.Username,
 		&i.AvatarUrl,
 		&i.Role,
+		&i.IsOnboarded,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Emails,
@@ -178,17 +182,18 @@ func (q *Queries) GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.
 
 const update = `-- name: Update :one
 UPDATE users
-SET name = $2, username = $3, avatar_url = $4, 
+SET name = $2, username = $3, avatar_url = $4, is_onboarded = $5,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, username, avatar_url, role, created_at, updated_at
+RETURNING id, name, username, avatar_url, role, is_onboarded, created_at, updated_at
 `
 
 type UpdateParams struct {
-	ID        uuid.UUID
-	Name      pgtype.Text
-	Username  pgtype.Text
-	AvatarUrl pgtype.Text
+	ID          uuid.UUID
+	Name        pgtype.Text
+	Username    pgtype.Text
+	AvatarUrl   pgtype.Text
+	IsOnboarded bool
 }
 
 func (q *Queries) Update(ctx context.Context, arg UpdateParams) (User, error) {
@@ -197,6 +202,7 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (User, error) {
 		arg.Name,
 		arg.Username,
 		arg.AvatarUrl,
+		arg.IsOnboarded,
 	)
 	var i User
 	err := row.Scan(
@@ -205,6 +211,7 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (User, error) {
 		&i.Username,
 		&i.AvatarUrl,
 		&i.Role,
+		&i.IsOnboarded,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
