@@ -497,7 +497,7 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 
 	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageTooLarge, logger)
 		return
 	}
 	if int64(len(imageBytes)) > maxBytes {
@@ -509,7 +509,7 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	if len(imageBytes) < 12 ||
 		string(imageBytes[0:4]) != "RIFF" ||
 		string(imageBytes[8:12]) != "WEBP" {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageInvalidFormat, logger)
 		return
 	}
 

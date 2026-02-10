@@ -54,9 +54,11 @@ var (
 	ErrSearchTooLong              = errors.New("search string exceeds maximum length")
 
 	// Form Errors
-	ErrFormNotFound       = errors.New("form not found")
-	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
-	ErrFormDeadlinePassed = errors.New("form deadline has passed")
+	ErrFormNotFound            = errors.New("form not found")
+	ErrFormNotDraft            = fmt.Errorf("form is not in draft status")
+	ErrFormDeadlinePassed      = errors.New("form deadline has passed")
+	ErrCoverImageTooLarge      = errors.New("cover image exceeds maximum size")
+	ErrCoverImageInvalidFormat = errors.New("cover image format is invalid")
 
 	// Question Errors
 	ErrQuestionNotFound           = errors.New("question not found")
@@ -142,6 +144,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("form not found")
 	case errors.Is(err, ErrFormNotDraft):
 		return problem.NewValidateProblem("form is not in draft status")
+	case errors.Is(err, ErrCoverImageTooLarge):
+		return problem.NewValidateProblem("cover image exceeds maximum size (max 2MB)")
+	case errors.Is(err, ErrCoverImageInvalidFormat):
+		return problem.NewValidateProblem("cover image must be a WebP file")
 
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):
