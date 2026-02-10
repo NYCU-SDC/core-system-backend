@@ -70,6 +70,7 @@ var (
 
 	// Workflow Errors
 	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
+	ErrWorkflowNotActive        = errors.New("workflow is not active")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -178,6 +179,8 @@ func ErrorHandler(err error) problem.Problem {
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
+	case errors.Is(err, ErrWorkflowNotActive):
+		return problem.NewValidateProblem("workflow is not active")
 	}
 	return problem.Problem{}
 }

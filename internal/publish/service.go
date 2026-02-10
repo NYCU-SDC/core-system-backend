@@ -9,6 +9,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 
 	"NYCU-SDC/core-system-backend/internal/form"
+	"NYCU-SDC/core-system-backend/internal/form/workflow"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
@@ -30,6 +31,10 @@ type InboxPort interface {
 	Create(ctx context.Context, contentType inbox.ContentType, contentID uuid.UUID, userIDs []uuid.UUID, postByUnitID uuid.UUID) (uuid.UUID, error)
 }
 
+type WorkflowStore interface {
+	Get(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error)
+}
+
 type Selection struct {
 	OrgID   uuid.UUID
 	UnitIDs []uuid.UUID
@@ -41,6 +46,7 @@ type Service struct {
 	distributor Distributor
 	store       FormStore
 	inbox       InboxPort
+	workflow    WorkflowStore
 }
 
 func NewService(
@@ -48,6 +54,7 @@ func NewService(
 	distributor Distributor,
 	store FormStore,
 	inbox InboxPort,
+	workflow WorkflowStore,
 ) *Service {
 	return &Service{
 		logger:      logger,
@@ -55,6 +62,7 @@ func NewService(
 		distributor: distributor,
 		store:       store,
 		inbox:       inbox,
+		workflow:    workflow,
 	}
 }
 
@@ -103,6 +111,19 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []u
 
 	if targetForm.Status != form.StatusDraft {
 		err = internal.ErrFormNotDraft
+		span.RecordError(err)
+		return "", err
+	}
+
+	// check workflow is active
+	workflowVersion, err := s.workflow.Get(ctx, formID)
+	if err != nil {
+		span.RecordError(err)
+		return "", err
+	}
+
+	if !workflowVersion.IsActive {
+		err = internal.ErrWorkflowNotActive
 		span.RecordError(err)
 		return "", err
 	}
