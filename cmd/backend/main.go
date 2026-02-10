@@ -145,8 +145,8 @@ func main() {
 	responseService := response.NewService(logger, dbPool)
 	formService := form.NewService(logger, dbPool, responseService)
 	submitService := submit.NewService(logger, formService, questionService, responseService)
-	publishService := publish.NewService(logger, distributeService, formService, inboxService)
 	workflowService := workflow.NewService(logger, dbPool, questionService)
+	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
 	// Handler
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
