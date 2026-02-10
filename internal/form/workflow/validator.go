@@ -358,15 +358,11 @@ func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]int
 func validateRequiredNodeTypes(startNodeCount, endNodeCount int) []error {
 	var validationErrors []error
 
-	if startNodeCount == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("workflow must contain exactly one start node, found %d", startNodeCount))
-	} else if startNodeCount > 1 {
+	if startNodeCount != 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("workflow must contain exactly one start node, found %d", startNodeCount))
 	}
 
-	if endNodeCount == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("workflow must contain exactly one end node, found %d", endNodeCount))
-	} else if endNodeCount > 1 {
+	if endNodeCount != 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("workflow must contain exactly one end node, found %d", endNodeCount))
 	}
 
