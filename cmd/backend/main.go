@@ -156,7 +156,7 @@ func main() {
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
 	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService)
 	inboxHandler := inbox.NewHandler(logger, validator, problemWriter, inboxService, formService, unitService)
-	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
+	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService, cfg.BaseURL)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
 
