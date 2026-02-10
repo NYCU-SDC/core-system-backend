@@ -114,31 +114,8 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []u
 		return err
 	}
 
-	unitID, err := uuid.Parse(targetForm.UnitID.String())
-	if err != nil {
-		logger.Error("failed to parse unit ID", zap.Error(err))
-		span.RecordError(err)
-		return err
-	}
-
-	recipientIDs, err := s.GetRecipients(ctx, Selection{
-		UnitIDs: unitIDs,
-	})
-	if err != nil {
-		span.RecordError(err)
-		return err
-	}
-
-	_, err = s.inbox.Create(ctx, inbox.ContentTypeForm, formID, recipientIDs, unitID)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "creating inbox messages for published form")
-		span.RecordError(err)
-		return err
-	}
-
 	logger.Info("Form published",
 		zap.String("form_id", formID.String()),
-		zap.Int("recipients", len(unitIDs)),
 		zap.String("editor", editor.String()),
 	)
 	return nil
