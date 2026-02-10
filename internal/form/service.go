@@ -64,19 +64,23 @@ func NewService(logger *zap.Logger, db DBTX, responseStore ResponseStore) *Servi
 	}
 }
 
-func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
-	ctx, span := s.tracer.Start(ctx, "Create")
-	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
-
-	var deadline pgtype.Timestamptz
+func buildFormFieldsFromRequest(request Request) (
+	description pgtype.Text,
+	previewMessage pgtype.Text,
+	deadline pgtype.Timestamptz,
+	publishTime pgtype.Timestamptz,
+	googleSheetURL pgtype.Text,
+	messageAfterSubmission string,
+	visibility Visibility,
+	dressingColor, dressingHeaderFont, dressingQuestionFont, dressingTextFont pgtype.Text,
+	title string,
+) {
 	if request.Deadline != nil {
 		deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
 	} else {
 		deadline = pgtype.Timestamptz{Valid: false}
 	}
 
-	var publishTime pgtype.Timestamptz
 	if request.PublishTime != nil {
 		publishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
 	} else {
@@ -93,7 +97,6 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 		}
 	}
 
-	var dressingColor, dressingHeaderFont, dressingQuestionFont, dressingTextFont pgtype.Text
 	if request.Dressing != nil {
 		dressingColor = pgtype.Text{String: request.Dressing.Color, Valid: request.Dressing.Color != ""}
 		dressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: request.Dressing.HeaderFont != ""}
@@ -106,17 +109,38 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 		dressingTextFont = pgtype.Text{Valid: false}
 	}
 
+	return pgtype.Text{String: request.Description, Valid: true},
+		pgtype.Text{String: preview, Valid: preview != ""},
+		deadline,
+		publishTime,
+		pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""},
+		request.MessageAfterSubmission,
+		request.Visibility,
+		dressingColor, dressingHeaderFont, dressingQuestionFont, dressingTextFont,
+		request.Title
+}
+
+func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
+	ctx, span := s.tracer.Start(ctx, "Create")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	description, previewMessage, deadline, publishTime, googleSheetURL,
+		messageAfterSubmission, visibility,
+		dressingColor, dressingHeaderFont, dressingQuestionFont, dressingTextFont,
+		title := buildFormFieldsFromRequest(request)
+
 	newForm, err := s.queries.Create(ctx, CreateParams{
-		Title:                  request.Title,
-		Description:            pgtype.Text{String: request.Description, Valid: true},
-		PreviewMessage:         pgtype.Text{String: preview, Valid: preview != ""},
+		Title:                  title,
+		Description:            description,
+		PreviewMessage:         previewMessage,
 		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
 		LastEditor:             userID,
 		Deadline:               deadline,
 		PublishTime:            publishTime,
-		MessageAfterSubmission: request.MessageAfterSubmission,
-		GoogleSheetUrl:         pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""},
-		Visibility:             request.Visibility,
+		MessageAfterSubmission: messageAfterSubmission,
+		GoogleSheetUrl:         googleSheetURL,
+		Visibility:             visibility,
 		DressingColor:          dressingColor,
 		DressingHeaderFont:     dressingHeaderFont,
 		DressingQuestionFont:   dressingQuestionFont,
@@ -136,54 +160,22 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	var deadline pgtype.Timestamptz
-	if request.Deadline != nil {
-		deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
-	} else {
-		deadline = pgtype.Timestamptz{Valid: false}
-	}
-
-	var publishTime pgtype.Timestamptz
-	if request.PublishTime != nil {
-		publishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
-	} else {
-		publishTime = pgtype.Timestamptz{Valid: false}
-	}
-
-	preview := request.PreviewMessage
-	if preview == "" && request.Description != "" {
-		runes := []rune(request.Description)
-		if len(runes) > 25 {
-			preview = string(runes[:25])
-		} else {
-			preview = request.Description
-		}
-	}
-
-	var dressingColor, dressingHeaderFont, dressingQuestionFont, dressingTextFont pgtype.Text
-	if request.Dressing != nil {
-		dressingColor = pgtype.Text{String: request.Dressing.Color, Valid: request.Dressing.Color != ""}
-		dressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: request.Dressing.HeaderFont != ""}
-		dressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: request.Dressing.QuestionFont != ""}
-		dressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: request.Dressing.TextFont != ""}
-	} else {
-		dressingColor = pgtype.Text{Valid: false}
-		dressingHeaderFont = pgtype.Text{Valid: false}
-		dressingQuestionFont = pgtype.Text{Valid: false}
-		dressingTextFont = pgtype.Text{Valid: false}
-	}
+	description, previewMessage, deadline, publishTime, googleSheetURL,
+		messageAfterSubmission, visibility,
+		dressingColor, dressingHeaderFont, dressingQuestionFont, dressingTextFont,
+		title := buildFormFieldsFromRequest(request)
 
 	updatedForm, err := s.queries.Update(ctx, UpdateParams{
 		ID:                     id,
-		Title:                  request.Title,
-		Description:            pgtype.Text{String: request.Description, Valid: true},
-		PreviewMessage:         pgtype.Text{String: preview, Valid: preview != ""},
+		Title:                  title,
+		Description:            description,
+		PreviewMessage:         previewMessage,
 		LastEditor:             userID,
 		Deadline:               deadline,
 		PublishTime:            publishTime,
-		MessageAfterSubmission: request.MessageAfterSubmission,
-		GoogleSheetUrl:         pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""},
-		Visibility:             request.Visibility,
+		MessageAfterSubmission: messageAfterSubmission,
+		GoogleSheetUrl:         googleSheetURL,
+		Visibility:             visibility,
 		DressingColor:          dressingColor,
 		DressingHeaderFont:     dressingHeaderFont,
 		DressingQuestionFont:   dressingQuestionFont,
