@@ -88,7 +88,7 @@ func (s *Service) GetRecipients(ctx context.Context, selection Selection) ([]uui
 }
 
 // PublishForm not Publish is because maybe we will publish something else in future
-func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []uuid.UUID, editor uuid.UUID) error {
+func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []uuid.UUID, editor uuid.UUID) (form.Visibility, error) {
 	ctx, span := s.tracer.Start(ctx, "PublishForm")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -98,25 +98,25 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []u
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "getting form by id")
 		span.RecordError(err)
-		return err
+		return "", err
 	}
 
 	if targetForm.Status != form.StatusDraft {
 		err = internal.ErrFormNotDraft
 		span.RecordError(err)
-		return err
+		return "", err
 	}
 
-	_, err = s.store.SetStatus(ctx, formID, form.StatusPublished, editor)
+	updatedForm, err := s.store.SetStatus(ctx, formID, form.StatusPublished, editor)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "setting form status = published")
 		span.RecordError(err)
-		return err
+		return "", err
 	}
 
 	logger.Info("Form published",
 		zap.String("form_id", formID.String()),
 		zap.String("editor", editor.String()),
 	)
-	return nil
+	return updatedForm.Visibility, nil
 }

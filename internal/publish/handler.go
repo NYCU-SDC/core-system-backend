@@ -4,7 +4,9 @@ import (
 	"net/http"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/user"
+	"fmt"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -25,12 +27,18 @@ type Request struct {
 	UnitIDs []uuid.UUID `json:"unitIds"`
 }
 
+type PublishFormResponse struct {
+	URL        string          `json:"url"`
+	Visibility form.Visibility `json:"visibility"`
+}
+
 type Handler struct {
 	logger        *zap.Logger
 	tracer        trace.Tracer
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
+	baseURL string
 	service *Service
 }
 
@@ -39,6 +47,7 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	service *Service,
+	baseURL string,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -46,6 +55,7 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 		service:       service,
+		baseURL:       baseURL,
 	}
 }
 
@@ -93,10 +103,14 @@ func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.PublishForm(ctx, formID, req.UnitIDs, currentUser.ID); err != nil {
+	visibility, err := h.service.PublishForm(ctx, formID, req.UnitIDs, currentUser.ID)
+	if err != nil {
 		h.problemWriter.WriteError(ctx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
+	handlerutil.WriteJSONResponse(w, http.StatusOK, PublishFormResponse{
+		URL:        fmt.Sprintf("%s/forms/%s", h.baseURL, formID.String()),
+		Visibility: visibility,
+	})
 }
