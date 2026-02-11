@@ -147,7 +147,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 				Message:    err.Error(),
 			}
 		}
-		response.OauthConnect = string(provider)
+		response.OauthConnect = strings.ToUpper(string(provider))
 	}
 
 	return response, nil

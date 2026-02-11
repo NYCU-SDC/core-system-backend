@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -57,7 +58,6 @@ func (o OAuthConnect) Validate(value string) error {
 		return fmt.Errorf("oauth avatar_url cannot be empty")
 	}
 
-	// TODO: Provider-specific validation (e.g., GitHub username format, Google username format)
 	return nil
 }
 
@@ -100,7 +100,7 @@ func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 		}
 	}
 
-	oauthProvider := OauthProvider(provider)
+	oauthProvider := OauthProvider(strings.ToLower(provider))
 	if !validOauthProviders[oauthProvider] {
 		return nil, fmt.Errorf("invalid OAuth provider: %s", provider)
 	}
