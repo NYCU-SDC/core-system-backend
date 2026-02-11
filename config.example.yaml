@@ -39,5 +39,5 @@ google_oauth:
   client_id: "your-google-oauth-client-id"
   client_secret: "your-google-oauth-client-secret"
 
-# Allowed list of emails for onboarding (only these emails can onboard)
-allow_onboarding_list: "useremail1, useremail2, useremail3"
+# Allowed list of emails for onboarding, use comma to separate multiple emails
+allow_onboarding_list:
