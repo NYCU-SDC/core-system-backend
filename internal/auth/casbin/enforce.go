@@ -20,22 +20,23 @@ func NewEnforcer(cfg Config) (*casbin.Enforcer, error) {
 		return nil, fmt.Errorf("load casbin model (%s): %w", cfg.ModelPath, err)
 	}
 
-	a := fileadapter.NewAdapter(cfg.PolicyPath)
+	adapter := fileadapter.NewAdapter(cfg.PolicyPath)
 
-	e, err := casbin.NewEnforcer(m, a)
+	enforcer, err := casbin.NewEnforcer(m, adapter)
 	if err != nil {
 		return nil, fmt.Errorf("create casbin enforcer: %w", err)
 	}
 
-	e.AddFunction("keyMatch2", func(args ...interface{}) (interface{}, error) {
+	enforcer.AddFunction("keyMatch2", func(args ...interface{}) (interface{}, error) {
 		key1 := args[0].(string)
 		key2 := args[1].(string)
 		return util.KeyMatch2(key1, key2), nil
 	})
 
-	if err := e.LoadPolicy(); err != nil {
+	err = enforcer.LoadPolicy()
+	if err != nil {
 		return nil, fmt.Errorf("load casbin policy (%s): %w", cfg.PolicyPath, err)
 	}
 
-	return e, nil
+	return enforcer, nil
 }

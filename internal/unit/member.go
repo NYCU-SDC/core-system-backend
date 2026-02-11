@@ -2,7 +2,6 @@ package unit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"NYCU-SDC/core-system-backend/internal/user"
@@ -12,8 +11,6 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
-
-var ErrLastAdminCannotBeRemoved = errors.New("cannot remove the last admin")
 
 // AddMember adds a member to an organization or a unit
 func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, memberEmail string) (AddMemberRow, error) {
@@ -62,7 +59,6 @@ func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, me
 		logger.Info("First member added, set as admin",
 			zap.String("unit_id", id.String()),
 			zap.String("member_id", memberRow.MemberID.String()))
-
 	}
 
 	logger.Info(fmt.Sprintf("Added %s member", unitType.String()),

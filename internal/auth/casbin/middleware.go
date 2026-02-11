@@ -65,25 +65,30 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		var unitID uuid.UUID
-		if unitIDStr := r.PathValue("unitId"); unitIDStr != "" {
+		unitIDStr := r.PathValue("unitId")
+		slug := r.PathValue("slug")
+
+		if unitIDStr != "" {
 			// unit
 			parsed, err := uuid.Parse(unitIDStr)
 			if err != nil {
+				logger.Error("get uuid failed", zap.Error(err))
 				m.problemWriter.WriteError(traceCtx, w, internal.ErrValidationFailed, logger)
 				return
 			}
 			unitID = parsed
 
-		} else if slug := r.PathValue("slug"); slug != "" {
+		} else if slug != "" {
 			// org
-			available, orgID, err := m.tenantReader.GetSlugStatus(traceCtx, slug)
+			notexist, orgID, err := m.tenantReader.GetSlugStatus(traceCtx, slug)
 			if err != nil {
 				logger.Error("get slug status failed", zap.Error(err))
 				m.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
 				return
 			}
-			// available == true means slug NOT exists
-			if available {
+
+			if notexist {
+				logger.Warn("slug not exists", zap.String("slug", slug))
 				m.problemWriter.WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
 				return
 			}
