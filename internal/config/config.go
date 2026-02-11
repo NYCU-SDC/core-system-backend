@@ -38,6 +38,7 @@ type Config struct {
 	OtelCollectorUrl          string                  `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
 	AllowOrigins              []string                `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
 	GoogleOauth               googleOauth.GoogleOauth `yaml:"google_oauth"`
+	AllowOnboardingList       string                `yaml:"allow_onboarding_list" envconfig:"ALLOW_ONBOARDING_LIST"`
 
 	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
@@ -134,6 +135,7 @@ func Load() (Config, *LogBuffer) {
 		RefreshTokenExpirationStr: "720h",
 		OtelCollectorUrl:          "",
 		GoogleOauth:               googleOauth.GoogleOauth{},
+		AllowOnboardingList:       "",
 	}
 
 	var err error
@@ -207,6 +209,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 			ClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
 		},
+		AllowOnboardingList: os.Getenv("ALLOW_ONBOARDING_LIST"),
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -226,6 +229,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientID, "google_oauth_client_id", "", "Google OAuth client ID")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientSecret, "google_oauth_client_secret", "", "Google OAuth client secret")
+	flag.StringVar(&flagConfig.AllowOnboardingList, "allow_onboarding_list", "", "Allowed list of emails for onboarding")
 
 	flag.Parse()
 
