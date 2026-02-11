@@ -2,13 +2,16 @@ package unit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/user"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
 
@@ -23,6 +26,13 @@ func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, me
 		MemberEmail: memberEmail,
 	})
 	if err != nil {
+		// Check if the error is due to email not found (no rows returned)
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = fmt.Errorf("%w: %s", internal.ErrMemberEmailNotFound, memberEmail)
+			span.RecordError(err)
+			return AddMemberRow{}, err
+		}
+
 		err = databaseutil.WrapDBError(err, logger, "add member relationship")
 		span.RecordError(err)
 		return AddMemberRow{}, err

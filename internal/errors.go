@@ -45,6 +45,8 @@ var (
 	ErrOrgSlugInvalid       = errors.New("org slug is invalid")
 	ErrUnitNotFound         = errors.New("unit not found")
 	ErrSlugNotBelongToUnit  = errors.New("slug not belong to unit")
+	ErrInvalidEmailFormat   = errors.New("invalid email format")
+	ErrMemberEmailNotFound  = errors.New("member email not found")
 
 	// Inbox Errors
 	ErrInvalidIsReadParameter     = errors.New("invalid isRead parameter")
@@ -137,6 +139,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("unit not found")
 	case errors.Is(err, ErrSlugNotBelongToUnit):
 		return problem.NewNotFoundProblem("slug not belong to unit")
+	case errors.Is(err, ErrInvalidEmailFormat):
+		return problem.NewValidateProblem("invalid email format")
+	case errors.Is(err, ErrMemberEmailNotFound):
+		return problem.NewBadRequestProblem("member email not found")
 
 	// Form Errors
 	case errors.Is(err, ErrFormNotFound):
