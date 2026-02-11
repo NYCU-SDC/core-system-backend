@@ -282,7 +282,6 @@ func main() {
 	// Workflow routes
 	mux.Handle("GET /api/forms/{id}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetWorkflow))
 	mux.Handle("PUT /api/forms/{id}/workflow", authMiddleware.HandlerFunc(workflowHandler.UpdateWorkflow))
-	mux.Handle("POST /api/forms/{id}/workflow/activate", authMiddleware.HandlerFunc(workflowHandler.ActivateWorkflow))
 	mux.Handle("POST /api/forms/{formId}/workflow/nodes", authMiddleware.HandlerFunc(workflowHandler.CreateNode))
 	mux.Handle("DELETE /api/forms/{formId}/workflow/nodes/{nodeId}", authMiddleware.HandlerFunc(workflowHandler.DeleteNode))
 
