@@ -497,11 +497,11 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 
 	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageTooLarge, logger)
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to read cover image: %w", err), logger)
 		return
 	}
 	if int64(len(imageBytes)) > maxBytes {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageTooLarge, logger)
 		return
 	}
 
