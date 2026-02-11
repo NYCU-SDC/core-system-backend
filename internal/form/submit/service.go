@@ -240,15 +240,6 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, answers []shared
 		return response.FormResponse{}, []error{err}
 	}
 
-	// TODO: Update section progress to 'submitted' when section is complete
-	// Section completion should be checked when user explicitly clicks "Next" or "Submit Section"
-	// At that time, we should:
-	// 1. Query all questions in the section
-	// 2. Check if all required questions have valid answers
-	// 3. Update section progress to 'submitted' if complete
-
-	// Return the saved response along with any validation errors
-	// Frontend can show errors but the draft is saved
 	return result, validationErrors
 }
 

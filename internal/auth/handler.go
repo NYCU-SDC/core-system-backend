@@ -55,7 +55,7 @@ type OAuthProvider interface {
 	GetUserInfo(ctx context.Context, token *oauth2.Token) (user.User, user.Auth, string, error)
 }
 
-type callBackInfo struct {
+type CallBackInfo struct {
 	code       string
 	oauthError string
 	redirectTo string
@@ -89,6 +89,7 @@ func NewHandler(
 	userStore UserStore,
 	jwtIssuer JWTIssuer,
 	jwtStore JWTStore,
+	providers map[string]OAuthProvider,
 
 	baseURL string,
 	oauthProxyBaseURL string,
@@ -97,17 +98,7 @@ func NewHandler(
 
 	accessTokenExpiration time.Duration,
 	refreshTokenExpiration time.Duration,
-	googleOauthConfig oauthprovider.GoogleOauth,
 ) *Handler {
-	var oauthCallbackURL string
-	if oauthProxyBaseURL != "" {
-		logger.Info("Using OAuth proxy base URL", zap.String("oauthProxyBaseURL", oauthProxyBaseURL))
-		oauthCallbackURL = fmt.Sprintf("%s/api/auth/google/callback", oauthProxyBaseURL)
-	} else {
-		logger.Info("Using base URL for OAuth callback", zap.String("baseURL", baseURL))
-		oauthCallbackURL = fmt.Sprintf("%s/api/auth/login/oauth/google/callback", baseURL)
-	}
-
 	return &Handler{
 		logger: logger,
 		tracer: otel.Tracer("auth/handler"),
@@ -123,13 +114,7 @@ func NewHandler(
 		userStore: userStore,
 		jwtIssuer: jwtIssuer,
 		jwtStore:  jwtStore,
-		provider: map[string]OAuthProvider{
-			"google": oauthprovider.NewGoogleConfig(
-				googleOauthConfig.ClientID,
-				googleOauthConfig.ClientSecret,
-				oauthCallbackURL,
-			),
-		},
+		provider:  providers,
 
 		accessTokenExpiration:  accessTokenExpiration,
 		refreshTokenExpiration: refreshTokenExpiration,
@@ -182,7 +167,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the OAuth2 code and state from the request
-	callbackInfo, err := h.getCallBackInfo(traceCtx, r.URL)
+	callbackInfo, err := h.GetCallBackInfo(traceCtx, r.URL)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidCallbackInfo, err), logger)
 		return
@@ -285,17 +270,17 @@ func (h *Handler) generateJWT(ctx context.Context, userID uuid.UUID) (string, st
 	return jwtToken, refreshToken.ID.String(), nil
 }
 
-func (h *Handler) getCallBackInfo(ctx context.Context, url *url.URL) (callBackInfo, error) {
+func (h *Handler) GetCallBackInfo(ctx context.Context, url *url.URL) (CallBackInfo, error) {
 	code := url.Query().Get("code")
 	state := url.Query().Get("state")
 	oauthError := url.Query().Get("error")
 
 	redirectURL, err := h.jwtIssuer.ParseState(ctx, state)
 	if err != nil {
-		return callBackInfo{}, err
+		return CallBackInfo{}, err
 	}
 
-	return callBackInfo{
+	return CallBackInfo{
 		code:       code,
 		oauthError: oauthError,
 		redirectTo: redirectURL,
@@ -482,4 +467,92 @@ func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter) {
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 	})
+}
+
+// CreateOAuthProvider creates a single OAuth provider with a specific callback URL
+func CreateOAuthProvider(
+	providerName string,
+	callbackURL string,
+	googleOauthConfig oauthprovider.GoogleOauth,
+	githubOauthConfig oauthprovider.GitHubOauth,
+) OAuthProvider {
+	switch providerName {
+	case "google":
+		if googleOauthConfig.ClientID != "" && googleOauthConfig.ClientSecret != "" {
+			return oauthprovider.NewGoogleConfig(
+				googleOauthConfig.ClientID,
+				googleOauthConfig.ClientSecret,
+				callbackURL,
+			)
+		}
+	case "github":
+		if githubOauthConfig.ClientID != "" && githubOauthConfig.ClientSecret != "" {
+			return oauthprovider.NewGitHubConfig(
+				githubOauthConfig.ClientID,
+				githubOauthConfig.ClientSecret,
+				callbackURL,
+			)
+		}
+	}
+	return nil
+}
+
+// CreateAuthProviders creates OAuth providers for user authentication (login)
+func CreateAuthProviders(
+	logger *zap.Logger,
+	baseURL string,
+	oauthProxyBaseURL string,
+	googleOauthConfig oauthprovider.GoogleOauth,
+	githubOauthConfig oauthprovider.GitHubOauth,
+) map[string]OAuthProvider {
+	providers := make(map[string]OAuthProvider)
+
+	// Google OAuth configuration for authentication
+	var googleCallbackURL string
+	if oauthProxyBaseURL != "" {
+		googleCallbackURL = fmt.Sprintf("%s/api/auth/login/oauth/google/callback", oauthProxyBaseURL)
+	} else {
+		googleCallbackURL = fmt.Sprintf("%s/api/auth/login/oauth/google/callback", baseURL)
+	}
+
+	if provider := CreateOAuthProvider("google", googleCallbackURL, googleOauthConfig, githubOauthConfig); provider != nil {
+		providers["google"] = provider
+		logger.Info("Google OAuth provider configured for auth", zap.String("callbackURL", googleCallbackURL))
+	}
+
+	if len(providers) == 0 {
+		logger.Warn("No OAuth providers configured for authentication")
+	}
+
+	return providers
+}
+
+// CreateQuestionOAuthProviders creates OAuth providers for form questions
+func CreateQuestionOAuthProviders(
+	logger *zap.Logger,
+	baseURL string,
+	googleOauthConfig oauthprovider.GoogleOauth,
+	githubOauthConfig oauthprovider.GitHubOauth,
+) map[string]OAuthProvider {
+	providers := make(map[string]OAuthProvider)
+
+	// Google OAuth configuration for questions
+	googleCallbackURL := fmt.Sprintf("%s/api/oauth/questions/google/callback", baseURL)
+	if provider := CreateOAuthProvider("google", googleCallbackURL, googleOauthConfig, githubOauthConfig); provider != nil {
+		providers["google"] = provider
+		logger.Info("Google OAuth provider configured for questions", zap.String("callbackURL", googleCallbackURL))
+	}
+
+	// GitHub OAuth configuration for questions
+	githubCallbackURL := fmt.Sprintf("%s/api/oauth/questions/github/callback", baseURL)
+	if provider := CreateOAuthProvider("github", githubCallbackURL, googleOauthConfig, githubOauthConfig); provider != nil {
+		providers["github"] = provider
+		logger.Info("GitHub OAuth provider configured for questions", zap.String("callbackURL", githubCallbackURL))
+	}
+
+	if len(providers) == 0 {
+		logger.Warn("No OAuth providers configured for questions")
+	}
+
+	return providers
 }

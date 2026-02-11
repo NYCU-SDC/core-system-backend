@@ -147,13 +147,19 @@ func main() {
 	publishService := publish.NewService(logger, distributeService, formService, inboxService)
 	workflowService := workflow.NewService(logger, dbPool, questionService)
 
+	// OAuth Providers - separated by use case
+	// Auth providers: Only Google (for user login)
+	authProviders := auth.CreateAuthProviders(logger, cfg.BaseURL, cfg.OauthProxyBaseURL, cfg.GoogleOauth, cfg.GitHubOauth)
+	// Question providers: Google + GitHub (for OAuth connect questions)
+	questionProviders := auth.CreateQuestionOAuthProviders(logger, cfg.BaseURL, cfg.GoogleOauth, cfg.GitHubOauth)
+
 	// Handler
-	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth)
+	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, authProviders, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService, tenantService, userService)
-	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
+	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService, questionProviders)
 	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService)
 	inboxHandler := inbox.NewHandler(logger, validator, problemWriter, inboxService, formService, unitService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
@@ -262,6 +268,10 @@ func main() {
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.GetHandler))
 	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.DeleteHandler))
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(responseHandler.GetAnswersByQuestionIDHandler))
+
+	// OAuth question routes
+	mux.Handle("GET /api/oauth/questions/{provider}", authMiddleware.HandlerFunc(responseHandler.OauthQuestionHandler))
+	mux.Handle("GET /api/oauth/questions/{provider}/callback", authMiddleware.HandlerFunc(responseHandler.OauthQuestionCallback))
 
 	// Workflow routes
 	mux.Handle("GET /api/forms/{id}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetWorkflow))

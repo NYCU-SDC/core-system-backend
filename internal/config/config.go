@@ -1,13 +1,15 @@
 package config
 
 import (
-	googleOauth "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	googleOauth "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
+	oauthprovider "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
 
 	configutil "github.com/NYCU-SDC/summer/pkg/config"
 	"github.com/google/uuid"
@@ -23,21 +25,22 @@ var ErrDatabaseURLRequired = errors.New("database_url is required")
 type Config struct {
 	// Dev mode disables strict cookie policies by using SameSite=None
 	// instead of SameSite=Strict, allowing cross-site requests during development.
-	Dev                       bool                    `yaml:"dev"                envconfig:"DEV"`
-	Debug                     bool                    `yaml:"debug"              envconfig:"DEBUG"`
-	Host                      string                  `yaml:"host"               envconfig:"HOST"`
-	Port                      string                  `yaml:"port"               envconfig:"PORT"`
-	BaseURL                   string                  `yaml:"base_url"          envconfig:"BASE_URL"`
-	OauthProxyBaseURL         string                  `yaml:"oauth_proxy_base_url" envconfig:"OAUTH_PROXY_BASE_URL"`
-	OauthProxySecret          string                  `yaml:"oauth_proxy_secret" envconfig:"OAUTH_PROXY_SECRET"`
-	Secret                    string                  `yaml:"secret"             envconfig:"SECRET"`
-	DatabaseURL               string                  `yaml:"database_url"       envconfig:"DATABASE_URL"`
-	MigrationSource           string                  `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
-	AccessTokenExpirationStr  string                  `yaml:"access_token_expiration" envconfig:"ACCESS_TOKEN_EXPIRATION"`
-	RefreshTokenExpirationStr string                  `yaml:"refresh_token_expiration" envconfig:"REFRESH_TOKEN_EXPIRATION"`
-	OtelCollectorUrl          string                  `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
-	AllowOrigins              []string                `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
-	GoogleOauth               googleOauth.GoogleOauth `yaml:"google_oauth"`
+	Dev                       bool                      `yaml:"dev"                envconfig:"DEV"`
+	Debug                     bool                      `yaml:"debug"              envconfig:"DEBUG"`
+	Host                      string                    `yaml:"host"               envconfig:"HOST"`
+	Port                      string                    `yaml:"port"               envconfig:"PORT"`
+	BaseURL                   string                    `yaml:"base_url"          envconfig:"BASE_URL"`
+	OauthProxyBaseURL         string                    `yaml:"oauth_proxy_base_url" envconfig:"OAUTH_PROXY_BASE_URL"`
+	OauthProxySecret          string                    `yaml:"oauth_proxy_secret" envconfig:"OAUTH_PROXY_SECRET"`
+	Secret                    string                    `yaml:"secret"             envconfig:"SECRET"`
+	DatabaseURL               string                    `yaml:"database_url"       envconfig:"DATABASE_URL"`
+	MigrationSource           string                    `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
+	AccessTokenExpirationStr  string                    `yaml:"access_token_expiration" envconfig:"ACCESS_TOKEN_EXPIRATION"`
+	RefreshTokenExpirationStr string                    `yaml:"refresh_token_expiration" envconfig:"REFRESH_TOKEN_EXPIRATION"`
+	OtelCollectorUrl          string                    `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
+	AllowOrigins              []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
+	GoogleOauth               googleOauth.GoogleOauth   `yaml:"google_oauth"`
+	GitHubOauth               oauthprovider.GitHubOauth `yaml:"github_oauth"`
 
 	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
@@ -134,6 +137,7 @@ func Load() (Config, *LogBuffer) {
 		RefreshTokenExpirationStr: "720h",
 		OtelCollectorUrl:          "",
 		GoogleOauth:               googleOauth.GoogleOauth{},
+		GitHubOauth:               oauthprovider.GitHubOauth{},
 	}
 
 	var err error
@@ -226,6 +230,8 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.OtelCollectorUrl, "otel_collector_url", "", "OpenTelemetry collector URL")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientID, "google_oauth_client_id", "", "Google OAuth client ID")
 	flag.StringVar(&flagConfig.GoogleOauth.ClientSecret, "google_oauth_client_secret", "", "Google OAuth client secret")
+	flag.StringVar(&flagConfig.GitHubOauth.ClientID, "github_oauth_client_id", "", "GitHub OAuth client ID")
+	flag.StringVar(&flagConfig.GitHubOauth.ClientSecret, "github_oauth_client_secret", "", "GitHub OAuth client secret")
 
 	flag.Parse()
 

@@ -38,3 +38,8 @@ otel_collector_url: ""
 google_oauth:
   client_id: "your-google-oauth-client-id"
   client_secret: "your-google-oauth-client-secret"
+
+# GitHub OAuth credentials
+github_oauth:
+  client_id: "your-github-oauth-client-id"
+  client_secret: "your-github-oauth-client-secret"
