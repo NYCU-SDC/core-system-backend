@@ -6,7 +6,6 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/user"
-	"fmt"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -28,7 +27,6 @@ type Request struct {
 }
 
 type PublishFormResponse struct {
-	URL        string          `json:"url"`
 	Visibility form.Visibility `json:"visibility"`
 }
 
@@ -110,7 +108,6 @@ func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, PublishFormResponse{
-		URL:        fmt.Sprintf("%s/forms/%s", h.baseURL, formID.String()),
 		Visibility: visibility,
 	})
 }
