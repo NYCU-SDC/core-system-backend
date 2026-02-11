@@ -226,7 +226,7 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 		span.RecordError(err)
 		return User{}, internal.ErrDatabaseError
 	}
-	var isAllowed bool = false
+	isAllowed := false
 	for _, userEmail := range userEmails{
 		if IsAllowed(userEmail) {
 			isAllowed = true
