@@ -82,6 +82,7 @@ func (s *Service) CreateEmpty(ctx context.Context, formID uuid.UUID, userID uuid
 	traceCtx, span := s.tracer.Start(ctx, "CreateEmpty")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
 	// Check if user already has a response for this form
 	exists, err := s.queries.Exists(traceCtx, ExistsParams{
 		FormID:      formID,
@@ -92,12 +93,14 @@ func (s *Service) CreateEmpty(ctx context.Context, formID uuid.UUID, userID uuid
 		span.RecordError(err)
 		return FormResponse{}, err
 	}
+
 	if exists {
 		err = fmt.Errorf("user already has a response for this form")
 		logger.Error("Failed to create empty response", zap.Error(err), zap.String("formID", formID.String()), zap.String("userID", userID.String()))
 		span.RecordError(err)
 		return FormResponse{}, internal.ErrResponseAlreadyExists
 	}
+
 	// Create empty response
 	newResponse, err := s.queries.Create(traceCtx, CreateParams{
 		FormID:      formID,
@@ -108,6 +111,7 @@ func (s *Service) CreateEmpty(ctx context.Context, formID uuid.UUID, userID uuid
 		span.RecordError(err)
 		return FormResponse{}, err
 	}
+
 	return newResponse, nil
 }
 

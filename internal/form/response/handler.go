@@ -255,6 +255,7 @@ func (h *Handler) CreateFormResponseHandler(w http.ResponseWriter, r *http.Reque
 	traceCtx, span := h.tracer.Start(r.Context(), "CreateFormResponseHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
+
 	// Extract form ID from path
 	formIDStr := r.PathValue("formId")
 	formID, err := internal.ParseUUID(formIDStr)
@@ -262,18 +263,21 @@ func (h *Handler) CreateFormResponseHandler(w http.ResponseWriter, r *http.Reque
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+
 	// Get authenticated user
 	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
 		return
 	}
+
 	// Create empty response
 	newResponse, err := h.store.CreateEmpty(traceCtx, formID, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+
 	// Return response with 201 Created
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, CreateResponse{
 		ID: newResponse.ID.String(),
