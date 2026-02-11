@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -37,6 +39,16 @@ type Response struct {
 	Deadline       *time.Time           `json:"deadline"`
 	CreatedAt      time.Time            `json:"createdAt"`
 	UpdatedAt      time.Time            `json:"updatedAt"`
+}
+type GoogleSheetEmailResponse struct {
+	Email string `json:"email"`
+}
+type GoogleSheetVerifyRequest struct {
+	GoogleSheetURL string `json:"googleSheetUrl" validate:"required"`
+}
+
+type GoogleSheetVerifyResponse struct {
+	IsValid bool `json:"isValid"`
 }
 
 // ToResponse converts a Form storage model into an API Response.
@@ -367,4 +379,80 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
+}
+
+func (h *Handler) GetGoogleSheetEmailHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetGoogleSheetEmailHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	type emailGetter interface {
+		GetServiceAccountEmail() string
+	}
+	getter, ok := h.store.(emailGetter)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+		return
+	}
+
+	email := getter.GetServiceAccountEmail()
+	if email == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, GoogleSheetEmailResponse{Email: email})
+}
+
+func (h *Handler) VerifyGoogleSheetHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "VerifyGoogleSheetHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var req GoogleSheetVerifyRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	spreadsheetID, err := extractSpreadsheetID(req.GoogleSheetURL)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	type verifier interface {
+		VerifySpreadsheetReadable(ctx context.Context, spreadsheetID string) error
+	}
+	v, ok := h.store.(verifier)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+		return
+	}
+
+	if err := v.VerifySpreadsheetReadable(traceCtx, spreadsheetID); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, GoogleSheetVerifyResponse{IsValid: true})
+}
+
+func extractSpreadsheetID(sheetURL string) (string, error) {
+	u, err := url.Parse(sheetURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid url: %w", err)
+	}
+
+	parts := strings.Split(u.Path, "/")
+	// /spreadsheets/d/<id>/edit
+	for i := 0; i < len(parts); i++ {
+		if parts[i] == "spreadsheets" && i+2 < len(parts) && parts[i+1] == "d" {
+			id := parts[i+2]
+			if id != "" {
+				return id, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("invalid Google Sheets URL")
 }

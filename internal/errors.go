@@ -56,9 +56,11 @@ var (
 	ErrSearchTooLong              = errors.New("search string exceeds maximum length")
 
 	// Form Errors
-	ErrFormNotFound       = errors.New("form not found")
-	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
-	ErrFormDeadlinePassed = errors.New("form deadline has passed")
+	ErrFormNotFound            = errors.New("form not found")
+	ErrFormNotDraft            = fmt.Errorf("form is not in draft status")
+	ErrFormDeadlinePassed      = errors.New("form deadline has passed")
+	ErrGoogleSheetURLInvalid   = errors.New("invalid google sheet url format")
+	ErrGoogleSheetAccessDenied = errors.New("cannot access google sheet")
 
 	// Question Errors
 	ErrQuestionNotFound           = errors.New("question not found")
@@ -149,6 +151,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("form not found")
 	case errors.Is(err, ErrFormNotDraft):
 		return problem.NewValidateProblem("form is not in draft status")
+	case errors.Is(err, ErrGoogleSheetURLInvalid):
+		return problem.NewValidateProblem("invalid google sheet url format")
+	case errors.Is(err, ErrGoogleSheetAccessDenied):
+		return problem.NewValidateProblem("cannot access google sheet, please share with service account")
 
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):

@@ -156,6 +156,16 @@ jobs:
                     "path": "/google-oauth",
                     "secret_name": "CLIENT_SECRET",
                     "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/google-sheets",
+                    "secret_name": "SERVICE_ACCOUNT_EMAIL",
+                    "env_name": "GOOGLE_SERVICE_ACCOUNT_EMAIL"
+                  },
+                  {
+                    "path": "/google-sheets",
+                    "secret_name": "SERVICE_ACCOUNT_KEY",
+                    "env_name": "GOOGLE_SERVICE_ACCOUNT_KEY"
                   }
                 ]
               }
@@ -211,6 +221,16 @@ jobs:
                     "path": "/google-oauth",
                     "secret_name": "CLIENT_SECRET",
                     "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/google-sheets",
+                    "secret_name": "SERVICE_ACCOUNT_EMAIL",
+                    "env_name": "GOOGLE_SERVICE_ACCOUNT_EMAIL"
+                  },
+                  {
+                    "path": "/google-sheets",
+                    "secret_name": "SERVICE_ACCOUNT_KEY",
+                    "env_name": "GOOGLE_SERVICE_ACCOUNT_KEY"
                   }
                 ]
               }

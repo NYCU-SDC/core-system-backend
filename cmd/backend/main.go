@@ -263,6 +263,8 @@ func main() {
 	mux.Handle("DELETE /api/forms/{id}", authMiddleware.HandlerFunc(formHandler.DeleteHandler))
 
 	mux.Handle("GET /api/orgs/{slug}/forms", tenantBasicMiddleware.HandlerFunc(formHandler.ListByOrgHandler))
+	mux.Handle("GET /api/forms/google-sheet-email", authMiddleware.HandlerFunc(formHandler.GetGoogleSheetEmailHandler))
+	mux.Handle("POST /api/forms/google-sheet/verify", authMiddleware.HandlerFunc(formHandler.VerifyGoogleSheetHandler))
 	mux.Handle("POST /api/forms/{id}/publish", authMiddleware.HandlerFunc(publishHandler.PublishForm))
 	mux.Handle("POST /api/forms/recipients/preview", authMiddleware.HandlerFunc(publishHandler.PreviewForm))
 

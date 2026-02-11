@@ -1,8 +1,11 @@
 package form
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"context"
+	"fmt"
+	"os"
 	"slices"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -12,6 +15,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+
+	"google.golang.org/api/option"
+	"google.golang.org/api/sheets/v4"
 )
 
 type Querier interface {
@@ -271,4 +277,55 @@ func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, user
 	})
 
 	return userForms, nil
+}
+
+func (s *Service) GetServiceAccountEmail() string {
+	return os.Getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL")
+}
+
+func (s *Service) VerifySpreadsheetReadable(ctx context.Context, spreadsheetID string) error {
+	ctx, span := s.tracer.Start(ctx, "VerifySpreadsheetReadable")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	serviceAccountKey := os.Getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
+	if serviceAccountKey == "" {
+		err := fmt.Errorf("GOOGLE_SERVICE_ACCOUNT_KEY is not set")
+		span.RecordError(err)
+		logger.Error("missing google service account key", zap.Error(err))
+		return err
+	}
+
+	// initialize google sheets api client
+	srv, err := sheets.NewService(
+		ctx,
+		option.WithCredentialsJSON([]byte(serviceAccountKey)),
+		option.WithScopes(sheets.SpreadsheetsScope),
+	)
+	if err != nil {
+		err = fmt.Errorf("failed to create sheets service: %w", err)
+		span.RecordError(err)
+		logger.Error("failed to create sheets service", zap.Error(err))
+		return err
+	}
+
+	// try to access
+	_, err = srv.Spreadsheets.Get(spreadsheetID).
+		Fields("spreadsheetId").
+		Context(ctx).
+		Do()
+	if err != nil {
+		email := s.GetServiceAccountEmail()
+		if email != "" {
+			err = fmt.Errorf("%w: %s", internal.ErrGoogleSheetAccessDenied, email)
+		} else {
+			err = fmt.Errorf("failed to access spreadsheet: %w", err)
+		}
+
+		span.RecordError(err)
+		logger.Warn("failed to access spreadsheet", zap.String("spreadsheet_id", spreadsheetID), zap.Error(err))
+		return err
+	}
+
+	return nil
 }
