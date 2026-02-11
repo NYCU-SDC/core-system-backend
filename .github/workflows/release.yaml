@@ -158,6 +158,16 @@ jobs:
                     "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
                   },
                   {
+                    "path": "/nycu-oauth",
+                    "secret_name": "CLIENT_ID",
+                    "env_name": "NYCU_OAUTH_CLIENT_ID"
+                  },
+                  {
+                    "path": "/nycu-oauth",
+                    "secret_name": "CLIENT_SECRET",
+                    "env_name": "NYCU_OAUTH_CLIENT_SECRET"
+                  },
+                  {
                     "path": "/google-sheets",
                     "secret_name": "SERVICE_ACCOUNT_EMAIL",
                     "env_name": "GOOGLE_SERVICE_ACCOUNT_EMAIL"
@@ -221,6 +231,16 @@ jobs:
                     "path": "/google-oauth",
                     "secret_name": "CLIENT_SECRET",
                     "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/nycu-oauth",
+                    "secret_name": "CLIENT_ID",
+                    "env_name": "NYCU_OAUTH_CLIENT_ID"
+                  },
+                  {
+                    "path": "/nycu-oauth",
+                    "secret_name": "CLIENT_SECRET",
+                    "env_name": "NYCU_OAUTH_CLIENT_SECRET"
                   },
                   {
                     "path": "/google-sheets",
