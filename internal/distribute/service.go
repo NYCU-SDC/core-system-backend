@@ -1,11 +1,11 @@
 package distribute
 
 import (
-	"NYCU-SDC/core-system-backend/internal"
-	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
+	"fmt"
 
-	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	"NYCU-SDC/core-system-backend/internal/user"
+
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
@@ -36,17 +36,13 @@ func NewService(logger *zap.Logger, store UnitStore) *Service {
 func (s *Service) GetOrgRecipients(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetOrgRecipients")
 	defer span.End()
-	logger := internal.WithContext(traceCtx, s.logger)
 
 	recipients, err := s.store.ListMembers(traceCtx, orgID)
 	if err != nil {
-		return nil, err
+		wrappedErr := fmt.Errorf("failed to fetch org members: %w", err)
+		span.RecordError(wrappedErr)
+		return nil, wrappedErr
 	}
-
-	logger.Debug("Organization recipients resolved",
-		zap.String("org_id", orgID.String()),
-		zap.Int("recipients_count", len(recipients)),
-	)
 
 	ids := make([]uuid.UUID, 0, len(recipients))
 	for _, r := range recipients {
@@ -57,22 +53,31 @@ func (s *Service) GetOrgRecipients(ctx context.Context, orgID uuid.UUID) ([]uuid
 }
 
 func (s *Service) GetRecipients(ctx context.Context, unitIDs []uuid.UUID) ([]uuid.UUID, error) {
-	ctx, span := s.tracer.Start(ctx, "GetRecipients")
+	methodName := "GetRecipients"
+	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
+
+	tracker := logutil.StartMethod(ctx, logger, methodName, map[string]interface{}{
+		"unit_ids": unitIDs,
+	})
 
 	all := make([]uuid.UUID, 0)
 
 	memberMap, err := s.store.ListUnitsMembers(ctx, unitIDs)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "list units members")
-		span.RecordError(err)
-		return nil, err
+		wrappedErr := fmt.Errorf("failed to fetch unit members: %w", err)
+		span.RecordError(wrappedErr)
+		return nil, wrappedErr
 	}
 
 	for _, ms := range memberMap {
 		all = append(all, ms...)
 	}
+
+	logger.Debug("Processing recipients calculation",
+		zap.Int("raw_total_count", len(all)),
+	)
 
 	seen := make(map[uuid.UUID]struct{}, len(all))
 	uniq := make([]uuid.UUID, 0, len(all))
@@ -84,10 +89,9 @@ func (s *Service) GetRecipients(ctx context.Context, unitIDs []uuid.UUID) ([]uui
 		uniq = append(uniq, id)
 	}
 
-	logger.Debug("Recipients resolved",
-		zap.Int("unit_count", len(unitIDs)),
-		zap.Int("unique_recipients", len(uniq)),
-	)
+	tracker.Complete(map[string]interface{}{
+		"recipients_count": len(uniq),
+	})
 
 	return uniq, nil
 }

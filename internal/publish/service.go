@@ -1,11 +1,12 @@
 package publish
 
 import (
+	"context"
+	"fmt"
+
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/inbox"
-	"context"
 
-	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 
 	"NYCU-SDC/core-system-backend/internal/form"
@@ -59,49 +60,73 @@ func NewService(
 }
 
 func (s *Service) GetRecipients(ctx context.Context, selection Selection) ([]uuid.UUID, error) {
-	ctx, span := s.tracer.Start(ctx, "GetRecipients")
+	methodName := "GetRecipients"
+	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
+
+	tracker := logutil.StartMethod(ctx, logger, methodName, map[string]interface{}{
+		"selection": selection,
+	},
+	)
 
 	var users []uuid.UUID
 	if selection.OrgID != uuid.Nil {
 		orgUsers, err := s.distributor.GetOrgRecipients(ctx, selection.OrgID)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "getting org recipients")
-			span.RecordError(err)
-			return nil, err
+			wrappedErr := fmt.Errorf("failed to resolve org recipients: %w", err)
+			span.RecordError(wrappedErr)
+			return nil, wrappedErr
 		}
+
 		users = append(users, orgUsers...)
 	} else if len(selection.UnitIDs) > 0 {
 		unitUsers, err := s.distributor.GetRecipients(ctx, selection.UnitIDs)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "getting unit recipients")
-			span.RecordError(err)
-			return nil, err
+			wrappedErr := fmt.Errorf("failed to resolve unit recipients: %w", err)
+			span.RecordError(wrappedErr)
+			return nil, wrappedErr
 		}
+
 		users = append(users, unitUsers...)
 	}
 
 	// can add some verify method here
+
+	tracker.Complete(map[string]interface{}{
+		"recipient_count": len(users),
+	})
 
 	return users, nil
 }
 
 // PublishForm not Publish is because maybe we will publish something else in future
 func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []uuid.UUID, editor uuid.UUID) error {
-	ctx, span := s.tracer.Start(ctx, "PublishForm")
+	methodName := "PublishForm"
+	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
+
+	tracker := logutil.StartMethod(ctx, logger, methodName, map[string]interface{}{
+		"form_id":  formID.String(),
+		"editor":   editor.String(),
+		"unit_ids": unitIDs,
+	})
 
 	// check form existence and status
 	targetForm, err := s.store.GetByID(ctx, formID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "getting form by id")
-		span.RecordError(err)
-		return err
+		wrappedErr := fmt.Errorf("failed to retrieve target form: %w", err)
+		span.RecordError(wrappedErr)
+		return wrappedErr
 	}
 
 	if targetForm.Status != form.StatusDraft {
+		logger.Warn("Form is not in draft status",
+			zap.String("form_id", formID.String()),
+			zap.String("current_status", string(targetForm.Status)),
+			zap.String("expected_status", string(form.StatusDraft)),
+		)
 		err = internal.ErrFormNotDraft
 		span.RecordError(err)
 		return err
@@ -109,9 +134,9 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []u
 
 	_, err = s.store.SetStatus(ctx, formID, form.StatusPublished, editor)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "setting form status = published")
-		span.RecordError(err)
-		return err
+		wrappedErr := fmt.Errorf("failed to update form status: %w", err)
+		span.RecordError(wrappedErr)
+		return wrappedErr
 	}
 
 	unitID, err := uuid.Parse(targetForm.UnitID.String())
@@ -125,21 +150,20 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []u
 		UnitIDs: unitIDs,
 	})
 	if err != nil {
-		span.RecordError(err)
-		return err
+		wrappedErr := fmt.Errorf("failed to calculate recipient list: %w", err)
+		span.RecordError(wrappedErr)
+		return wrappedErr
 	}
 
 	_, err = s.inbox.Create(ctx, inbox.ContentTypeForm, formID, recipientIDs, unitID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "creating inbox messages for published form")
-		span.RecordError(err)
-		return err
+		wrappedErr := fmt.Errorf("failed to dispatch inbox notifications: %w", err)
+		span.RecordError(wrappedErr)
+		return wrappedErr
 	}
 
-	logger.Info("Form published",
-		zap.String("form_id", formID.String()),
-		zap.Int("recipients", len(unitIDs)),
-		zap.String("editor", editor.String()),
-	)
+	tracker.Complete(map[string]interface{}{
+		"recipient_count": len(recipientIDs),
+	})
 	return nil
 }
