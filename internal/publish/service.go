@@ -33,6 +33,7 @@ type InboxPort interface {
 
 type WorkflowStore interface {
 	Get(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error)
+	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (workflow.ActivateRow, error)
 }
 
 type Selection struct {
@@ -96,6 +97,11 @@ func (s *Service) GetRecipients(ctx context.Context, selection Selection) ([]uui
 }
 
 // PublishForm not Publish is because maybe we will publish something else in future
+// This method is responsible for:
+//  1. Ensuring the form is in draft status
+//  2. Ensuring there is a latest workflow stored for the form
+//  3. Activating that latest workflow from DB
+//  4. Publishing the form
 func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []uuid.UUID, editor uuid.UUID) (form.Visibility, error) {
 	ctx, span := s.tracer.Start(ctx, "PublishForm")
 	defer span.End()
@@ -115,17 +121,29 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []u
 		return "", err
 	}
 
-	// check workflow is active
-	workflowVersion, err := s.workflow.Get(ctx, formID)
+	// Always activate the latest stored workflow before publishing.
+	// This uses the workflow stored in DB instead of expecting the client
+	// to provide workflow JSON.
+	latestWorkflow, err := s.workflow.Get(ctx, formID)
 	if err != nil {
 		span.RecordError(err)
 		return "", err
 	}
 
-	if !workflowVersion.IsActive {
-		err = internal.ErrWorkflowNotActive
+	activatedVersion, err := s.workflow.Activate(ctx, formID, editor, latestWorkflow.Workflow)
+	if err != nil {
+		logger.Error("failed to activate workflow during publish", zap.Error(err), zap.String("formId", formID.String()))
 		span.RecordError(err)
 		return "", err
+	}
+
+	if !activatedVersion.IsActive {
+		logger.Error("workflow activation returned inactive version",
+			zap.String("formId", formID.String()),
+			zap.String("versionId", activatedVersion.ID.String()),
+			zap.Bool("isActive", activatedVersion.IsActive))
+		span.RecordError(internal.ErrWorkflowNotActive)
+		return "", internal.ErrWorkflowNotActive
 	}
 
 	updatedForm, err := s.store.SetStatus(ctx, formID, form.StatusPublished, editor)
