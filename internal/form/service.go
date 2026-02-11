@@ -299,8 +299,8 @@ func (s *Service) VerifySpreadsheetReadable(ctx context.Context, spreadsheetID s
 	// initialize google sheets api client
 	srv, err := sheets.NewService(
 		ctx,
-		option.WithCredentialsJSON([]byte(serviceAccountKey)),
-		option.WithScopes(sheets.SpreadsheetsScope),
+		option.WithAuthCredentialsJSON(option.ServiceAccount, []byte(serviceAccountKey)),
+		option.WithScopes(sheets.SpreadsheetsReadonlyScope),
 	)
 	if err != nil {
 		err = fmt.Errorf("failed to create sheets service: %w", err)
