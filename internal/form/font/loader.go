@@ -29,7 +29,8 @@ func loadOnce() {
 	dec := json.NewDecoder(bytes.NewReader(fontsJSON))
 	dec.DisallowUnknownFields()
 
-	if err := dec.Decode(&fonts); err != nil {
+	err := dec.Decode(&fonts)
+	if err != nil {
 		loadErr = fmt.Errorf("font: failed to decode fonts.json: %w", err)
 		return
 	}
@@ -72,6 +73,7 @@ func IsValidID(id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	_, ok := m[id]
 	return ok, nil
 }
@@ -81,6 +83,7 @@ func NameByID(id string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
+
 	name, ok := m[id]
 	return name, ok, nil
 }
