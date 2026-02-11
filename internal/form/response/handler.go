@@ -1,6 +1,7 @@
 package response
 
 import (
+	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"net/http"
 	"time"
@@ -58,11 +59,16 @@ type AnswersForQuestionResponse struct {
 	Answers  []AnswerForQuestionResponse `json:"answers" validate:"required,dive"`
 }
 
+type CreateResponse struct {
+	ID string `json:"id" validate:"required,uuid"`
+}
+
 type Store interface {
 	Get(ctx context.Context, formID uuid.UUID, responseID uuid.UUID) (FormResponse, []Answer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
 	GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUID, formID uuid.UUID) ([]GetAnswersByQuestionIDRow, error)
+	CreateEmpty(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 }
 
 type QuestionStore interface {
@@ -242,4 +248,38 @@ func (h *Handler) GetAnswersByQuestionIDHandler(w http.ResponseWriter, r *http.R
 		}
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, questionAnswerResponse)
+}
+
+// CreateFormResponseHandler creates an empty response for a form
+func (h *Handler) CreateFormResponseHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateFormResponseHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	// Extract form ID from path
+	formIDStr := r.PathValue("formId")
+	formID, err := internal.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Get authenticated user
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	// Create empty response
+	newResponse, err := h.store.CreateEmpty(traceCtx, formID, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Return response with 201 Created
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, CreateResponse{
+		ID: newResponse.ID.String(),
+	})
 }

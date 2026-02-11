@@ -194,7 +194,7 @@ func (h *Handler) CreateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, createNodeResponse{
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, createNodeResponse{
 		ID:    created.NodeID.String(),
 		Type:  string(created.NodeType),
 		Label: created.NodeLabel,
