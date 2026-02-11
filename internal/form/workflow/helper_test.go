@@ -423,14 +423,39 @@ func createMockAnswerable(t *testing.T, formID uuid.UUID, questionType question.
 		Order:    1,
 	}
 
-	if questionType == question.QuestionTypeSingleChoice || questionType == question.QuestionTypeMultipleChoice {
-		metadata, err := question.GenerateChoiceMetadata(string(questionType), []question.ChoiceOption{
+	switch {
+	case question.ContainsType(question.ChoiceTypes, questionType):
+		choiceOptions := []question.ChoiceOption{
 			{Name: "Option 1"},
 			{Name: "Option 2"},
+		}
+		if questionType == question.QuestionTypeDetailedMultipleChoice {
+			choiceOptions[0] = question.ChoiceOption{Name: "Option 1", Description: "Description for option 1"}
+		}
+		metadata, err := question.GenerateChoiceMetadata(string(questionType), choiceOptions)
+		require.NoError(t, err)
+		q.Metadata = metadata
+	case questionType == question.QuestionTypeLinearScale:
+		metadata, err := question.GenerateLinearScaleMetadata(question.ScaleOption{MinVal: 1, MaxVal: 5})
+		require.NoError(t, err)
+		q.Metadata = metadata
+	case questionType == question.QuestionTypeRating:
+		metadata, err := question.GenerateRatingMetadata(question.ScaleOption{Icon: "star", MinVal: 1, MaxVal: 5})
+		require.NoError(t, err)
+		q.Metadata = metadata
+	case questionType == question.QuestionTypeOauthConnect:
+		metadata, err := question.GenerateOauthConnectMetadata("google")
+		require.NoError(t, err)
+		q.Metadata = metadata
+	case questionType == question.QuestionTypeUploadFile:
+		metadata, err := question.GenerateUploadFileMetadata(question.UploadFileOption{
+			AllowedFileTypes: []string{"pdf"},
+			MaxFileAmount:    1,
+			MaxFileSizeLimit: "10MB",
 		})
 		require.NoError(t, err)
 		q.Metadata = metadata
-	} else {
+	default:
 		q.Metadata = []byte("{}")
 	}
 
