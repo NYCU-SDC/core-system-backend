@@ -80,14 +80,14 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 
 		} else if slug != "" {
 			// org
-			notexist, orgID, err := m.tenantReader.GetSlugStatus(traceCtx, slug)
+			exist, orgID, err := m.tenantReader.GetSlugStatus(traceCtx, slug)
 			if err != nil {
 				logger.Error("get slug status failed", zap.Error(err))
 				m.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
 				return
 			}
 
-			if notexist {
+			if !exist {
 				logger.Warn("slug not exists", zap.String("slug", slug))
 				m.problemWriter.WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
 				return
