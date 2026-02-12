@@ -4,9 +4,10 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"context"
 	"errors"
+	"slices"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5"
-	"slices"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -369,7 +370,6 @@ func (s *Service) UploadCoverImage(ctx context.Context, formID uuid.UUID, imageD
 	}
 
 	return nil
-
 }
 
 func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error) {
@@ -385,5 +385,4 @@ func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, erro
 	}
 
 	return imageData, nil
-
 }
