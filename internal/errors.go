@@ -40,11 +40,14 @@ var (
 	ErrFailedToCreateEmail  = errors.New("failed to create email record for OAuth user")
 
 	// Unit Errors
-	ErrOrgSlugNotFound      = errors.New("org slug not found")
-	ErrOrgSlugAlreadyExists = errors.New("org slug already exists")
-	ErrOrgSlugInvalid       = errors.New("org slug is invalid")
-	ErrUnitNotFound         = errors.New("unit not found")
-	ErrSlugNotBelongToUnit  = errors.New("slug not belong to unit")
+	ErrOrgSlugNotFound       = errors.New("org slug not found")
+	ErrOrgSlugAlreadyExists  = errors.New("org slug already exists")
+	ErrOrgSlugInvalid        = errors.New("org slug is invalid")
+	ErrUnitNotFound          = errors.New("unit not found")
+	ErrSlugNotBelongToUnit   = errors.New("slug not belong to unit")
+	ErrInvalidEmailFormat    = errors.New("invalid email format")
+	ErrMemberEmailNotFound   = errors.New("member email not found")
+	ErrCannotRemoveLastAdmin = errors.New("cannot remove the last admin of the unit")
 
 	// Inbox Errors
 	ErrInvalidIsReadParameter     = errors.New("invalid isRead parameter")
@@ -68,7 +71,8 @@ var (
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
 
 	// Response Errors
-	ErrResponseNotFound = errors.New("response not found")
+	ErrResponseNotFound      = errors.New("response not found")
+	ErrResponseAlreadyExists = errors.New("user already has a response for this form")
 
 	// Workflow Errors
 	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
@@ -138,6 +142,12 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("unit not found")
 	case errors.Is(err, ErrSlugNotBelongToUnit):
 		return problem.NewNotFoundProblem("slug not belong to unit")
+	case errors.Is(err, ErrInvalidEmailFormat):
+		return problem.NewValidateProblem("invalid email format")
+	case errors.Is(err, ErrMemberEmailNotFound):
+		return problem.NewBadRequestProblem("member email not found")
+	case errors.Is(err, ErrCannotRemoveLastAdmin):
+		return problem.NewValidateProblem("cannot remove the last admin of the unit")
 
 	// Form Errors
 	case errors.Is(err, ErrFormNotFound):
@@ -176,6 +186,8 @@ func ErrorHandler(err error) problem.Problem {
 	// Response Errors
 	case errors.Is(err, ErrResponseNotFound):
 		return problem.NewNotFoundProblem("response not found")
+	case errors.Is(err, ErrResponseAlreadyExists):
+		return problem.NewValidateProblem("user already has a response for this form")
 
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):

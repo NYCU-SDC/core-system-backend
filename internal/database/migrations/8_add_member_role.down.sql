@@ -1,0 +1,4 @@
+ALTER TABLE unit_members
+DROP COLUMN IF EXISTS role;
+
+DROP TYPE IF EXISTS unit_role;

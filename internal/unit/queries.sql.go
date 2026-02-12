@@ -20,9 +20,9 @@ WITH inserted_member AS (
         WHERE user_emails.value = $2
     ON CONFLICT (unit_id, member_id) DO UPDATE
         SET member_id = EXCLUDED.member_id
-    RETURNING unit_id, member_id
+    RETURNING unit_id, member_id, role
 )
-SELECT um.unit_id, um.member_id, u.name, u.username, u.avatar_url
+SELECT um.unit_id, um.member_id, um.role, u.name, u.username, u.avatar_url
 FROM inserted_member um
 LEFT JOIN users u ON u.id = um.member_id
 `
@@ -35,6 +35,7 @@ type AddMemberParams struct {
 type AddMemberRow struct {
 	UnitID    uuid.UUID
 	MemberID  uuid.UUID
+	Role      UnitRole
 	Name      pgtype.Text
 	Username  pgtype.Text
 	AvatarUrl pgtype.Text
@@ -46,11 +47,43 @@ func (q *Queries) AddMember(ctx context.Context, arg AddMemberParams) (AddMember
 	err := row.Scan(
 		&i.UnitID,
 		&i.MemberID,
+		&i.Role,
 		&i.Name,
 		&i.Username,
 		&i.AvatarUrl,
 	)
 	return i, err
+}
+
+const countMembers = `-- name: CountMembers :one
+SELECT COUNT(*)
+FROM unit_members
+WHERE unit_id = $1
+`
+
+func (q *Queries) CountMembers(ctx context.Context, unitID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countMembers, unitID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countMembersByRole = `-- name: CountMembersByRole :one
+SELECT COUNT(*)
+FROM unit_members
+WHERE unit_id = $1 AND role = $2
+`
+
+type CountMembersByRoleParams struct {
+	UnitID uuid.UUID
+	Role   UnitRole
+}
+
+func (q *Queries) CountMembersByRole(ctx context.Context, arg CountMembersByRoleParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countMembersByRole, arg.UnitID, arg.Role)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const create = `-- name: Create :one
@@ -173,6 +206,24 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (Unit, error) {
 	return i, err
 }
 
+const getMemberRole = `-- name: GetMemberRole :one
+SELECT role
+FROM unit_members
+WHERE unit_id = $1 AND member_id = $2
+`
+
+type GetMemberRoleParams struct {
+	UnitID   uuid.UUID
+	MemberID uuid.UUID
+}
+
+func (q *Queries) GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error) {
+	row := q.db.QueryRow(ctx, getMemberRole, arg.UnitID, arg.MemberID)
+	var role UnitRole
+	err := row.Scan(&role)
+	return role, err
+}
+
 const getOrganizationByIDWithSlug = `-- name: GetOrganizationByIDWithSlug :one
 SELECT u.id, u.org_id, u.parent_id, u.type, u.name, u.description, u.metadata, u.created_at, u.updated_at, sh.slug
 FROM units u
@@ -213,6 +264,7 @@ func (q *Queries) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID)
 
 const listMembers = `-- name: ListMembers :many
 SELECT m.member_id,
+       m.role,
        u.name,
        u.username,
        u.avatar_url,
@@ -224,6 +276,7 @@ WHERE m.unit_id = $1
 
 type ListMembersRow struct {
 	MemberID  uuid.UUID
+	Role      UnitRole
 	Name      pgtype.Text
 	Username  pgtype.Text
 	AvatarUrl pgtype.Text
@@ -241,6 +294,7 @@ func (q *Queries) ListMembers(ctx context.Context, unitID uuid.UUID) ([]ListMemb
 		var i ListMembersRow
 		if err := rows.Scan(
 			&i.MemberID,
+			&i.Role,
 			&i.Name,
 			&i.Username,
 			&i.AvatarUrl,
@@ -371,6 +425,7 @@ func (q *Queries) ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Uni
 const listUnitsMembers = `-- name: ListUnitsMembers :many
 SELECT m.unit_id,
        m.member_id,
+       m.role,
        u.name,
        u.username,
        u.avatar_url
@@ -382,6 +437,7 @@ WHERE m.unit_id = ANY($1::uuid[])
 type ListUnitsMembersRow struct {
 	UnitID    uuid.UUID
 	MemberID  uuid.UUID
+	Role      UnitRole
 	Name      pgtype.Text
 	Username  pgtype.Text
 	AvatarUrl pgtype.Text
@@ -399,6 +455,7 @@ func (q *Queries) ListUnitsMembers(ctx context.Context, dollar_1 []uuid.UUID) ([
 		if err := rows.Scan(
 			&i.UnitID,
 			&i.MemberID,
+			&i.Role,
 			&i.Name,
 			&i.Username,
 			&i.AvatarUrl,
@@ -464,6 +521,23 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Unit, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateMemberRole = `-- name: UpdateMemberRole :exec
+UPDATE unit_members
+SET role = $3
+WHERE unit_id = $1 AND member_id = $2
+`
+
+type UpdateMemberRoleParams struct {
+	UnitID   uuid.UUID
+	MemberID uuid.UUID
+	Role     UnitRole
+}
+
+func (q *Queries) UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error {
+	_, err := q.db.Exec(ctx, updateMemberRole, arg.UnitID, arg.MemberID, arg.Role)
+	return err
 }
 
 const updateParent = `-- name: UpdateParent :one

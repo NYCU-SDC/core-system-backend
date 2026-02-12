@@ -190,6 +190,120 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 			},
 			expectedErr: false,
 		},
+		// Choice types: dropdown, detailed_multiple_choice, ranking
+		{
+			name: "valid condition rule with source=choice and dropdown question",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeDropdown),
+						},
+					}
+			},
+			expectedErr: false,
+		},
+		{
+			name: "valid condition rule with source=choice and detailed_multiple_choice question",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeDetailedMultipleChoice),
+						},
+					}
+			},
+			expectedErr: false,
+		},
+		{
+			name: "valid condition rule with source=choice and ranking question",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeRanking),
+						},
+					}
+			},
+			expectedErr: false,
+		},
+		// NonChoice types: hyperlink, upload_file, oauth_connect, linear_scale, rating
+		{
+			name: "valid condition rule with source=nonChoice and hyperlink question",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeHyperlink),
+						},
+					}
+			},
+			expectedErr: false,
+		},
+		{
+			name: "valid condition rule with source=nonChoice and upload_file question",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeUploadFile),
+						},
+					}
+			},
+			expectedErr: false,
+		},
+		{
+			name: "valid condition rule with source=nonChoice and oauth_connect question",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeOauthConnect),
+						},
+					}
+			},
+			expectedErr: false,
+		},
+		{
+			name: "valid condition rule with source=nonChoice and linear_scale question",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeLinearScale),
+						},
+					}
+			},
+			expectedErr: false,
+		},
+		{
+			name: "valid condition rule with source=nonChoice and rating question",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeRating),
+						},
+					}
+			},
+			expectedErr: false,
+		},
 	}
 
 	validator := workflow.NewValidator()

@@ -91,7 +91,7 @@ func NewValidator() Validator {
 // - Array structure
 // - Node structure and required fields
 // - Valid node types
-// - Graph connectivity (all nodes are reachable)
+// - Reachability (all nodes are reachable)
 // - Condition rule question IDs exist and types match
 // Returns all validation errors if validation fails
 func (v workflowValidator) Activate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore QuestionStore) error {
@@ -110,20 +110,20 @@ func (v workflowValidator) Activate(ctx context.Context, formID uuid.UUID, workf
 		return err
 	}
 
-	err = formatWorkflowValidationErrors(validationErrors)
+	err = formatValidationErrors(validationErrors)
 	if err != nil {
 		return err
 	}
 
 	if nodeMap != nil {
-		err := validateGraphConnectivity(nodes, nodeMap)
+		err := validateReachability(nodes, nodeMap)
 		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("graph validation failed: %w", err))
+			validationErrors = append(validationErrors, fmt.Errorf("reachability validation failed: %w", err))
 		}
 	}
 
 	if len(validationErrors) > 0 {
-		return fmt.Errorf("workflow validation failed: %w", errors.Join(validationErrors...))
+		return fmt.Errorf("validation failed: %w", errors.Join(validationErrors...))
 	}
 	return nil
 }
@@ -145,21 +145,21 @@ func (v workflowValidator) Validate(ctx context.Context, formID uuid.UUID, workf
 		return err
 	}
 
-	err = formatWorkflowValidationErrors(validationErrors)
+	err = formatValidationErrors(validationErrors)
 	if err != nil {
 		return err
 	}
 
 	if nodeMap != nil {
-		err := validateGraphReferences(nodes, nodeMap)
+		err := validateReference(nodes, nodeMap)
 		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("graph validation failed: %w", err))
+			validationErrors = append(validationErrors, fmt.Errorf("graph references validation failed: %w", err))
 		}
 
 		// Validate that condition nodes don't reference sections that come after them
 		err = validateConditionSectionOrder(nodes)
 		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("graph validation failed: %w", err))
+			validationErrors = append(validationErrors, fmt.Errorf("condition section order validation failed: %w", err))
 		}
 
 		if questionStore != nil {
@@ -168,11 +168,14 @@ func (v workflowValidator) Validate(ctx context.Context, formID uuid.UUID, workf
 				if nodeType != string(NodeTypeCondition) {
 					continue
 				}
+
 				rawRule, ok := n["conditionRule"]
 				if !ok {
 					continue
 				}
+
 				nodeID, _ := n["id"].(string)
+
 				err := validateDraftConditionQuestion(ctx, formID, nodeID, rawRule, questionStore)
 				if err != nil {
 					validationErrors = append(validationErrors, err)
@@ -181,19 +184,21 @@ func (v workflowValidator) Validate(ctx context.Context, formID uuid.UUID, workf
 		}
 	}
 
-	err = formatWorkflowValidationErrors(validationErrors)
+	err = formatValidationErrors(validationErrors)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
-// formatWorkflowValidationErrors joins and wraps workflow validation errors in a consistent way.
-func formatWorkflowValidationErrors(validationErrors []error) error {
+// formatValidationErrors joins and wraps validation errors in a consistent way.
+func formatValidationErrors(validationErrors []error) error {
 	if len(validationErrors) == 0 {
 		return nil
 	}
-	return fmt.Errorf("workflow validation failed: %w", errors.Join(validationErrors...))
+
+	return fmt.Errorf("validation failed: %w", errors.Join(validationErrors...))
 }
 
 // parseWorkflow parses workflow JSON into nodes. Call once at entry point and pass nodes to helpers.
@@ -352,27 +357,26 @@ func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]int
 // Returns all validation errors found
 func validateRequiredNodeTypes(startNodeCount, endNodeCount int) []error {
 	var validationErrors []error
-	if startNodeCount == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("workflow must contain exactly one start node, found %d", startNodeCount))
-	} else if startNodeCount > 1 {
+
+	if startNodeCount != 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("workflow must contain exactly one start node, found %d", startNodeCount))
 	}
-	if endNodeCount == 0 {
-		validationErrors = append(validationErrors, fmt.Errorf("workflow must contain exactly one end node, found %d", endNodeCount))
-	} else if endNodeCount > 1 {
+
+	if endNodeCount != 1 {
 		validationErrors = append(validationErrors, fmt.Errorf("workflow must contain exactly one end node, found %d", endNodeCount))
 	}
+
 	return validationErrors
 }
 
-// validateGraphConnectivity checks if all nodes in the workflow are reachable
+// validateReachability checks if all nodes in the workflow are reachable
 // It ensures:
 // - All node references (next, nextTrue, nextFalse) point to valid nodes
 // - All nodes can be reached from entry points (start nodes or first node)
 // - No orphaned nodes exist
-func validateGraphConnectivity(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
+func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
 	// First validate references
-	err := validateGraphReferences(nodes, nodeMap)
+	err := validateReference(nodes, nodeMap)
 	if err != nil {
 		return err
 	}
@@ -459,8 +463,8 @@ func validateGraphConnectivity(nodes []map[string]interface{}, nodeMap map[strin
 	return nil
 }
 
-// validateGraphReferences validates that any explicit reference fields point to nodes that exist.
-func validateGraphReferences(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
+// validateReferences validates that any explicit reference fields point to nodes that exist.
+func validateReference(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
 	var referenceErrors []error
 
 	for _, node := range nodes {
@@ -691,12 +695,12 @@ func validateDraftConditionQuestion(
 	// Validate question type matches condition source (same rules as strict mode).
 	switch rule.Source {
 	case node.ConditionSourceChoice:
-		if q.Type != question.QuestionTypeSingleChoice && q.Type != question.QuestionTypeMultipleChoice {
-			return fmt.Errorf("condition node '%s' with source 'choice' requires question type 'single_choice' or 'multiple_choice', but question '%s' has type '%s'", nodeID, rule.Key, q.Type)
+		if !question.ContainsType(question.ChoiceTypes, q.Type) {
+			return fmt.Errorf("condition node '%s' with source 'choice' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.ChoiceTypes), rule.Key, q.Type)
 		}
 	case node.ConditionSourceNonChoice:
-		if q.Type != question.QuestionTypeShortText && q.Type != question.QuestionTypeLongText && q.Type != question.QuestionTypeDate {
-			return fmt.Errorf("condition node '%s' with source 'nonChoice' requires question type 'short_text', 'long_text', or 'date', but question '%s' has type '%s'", nodeID, rule.Key, q.Type)
+		if !question.ContainsType(question.NonChoiceTypes, q.Type) {
+			return fmt.Errorf("condition node '%s' with source 'nonChoice' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.NonChoiceTypes), rule.Key, q.Type)
 		}
 	}
 	return nil
@@ -839,6 +843,7 @@ func stripNestedPrefixes(line string) string {
 
 	// Strip static prefixes
 	staticPrefixes := []string{
+		"reachability validation failed: ",
 		"graph validation failed: ",
 		"invalid node references found: ",
 	}
@@ -871,7 +876,7 @@ func extractNodeID(line string) *string {
 
 // extractValidationType determines the validation error category from a message.
 func extractValidationType(msg string) ValidationInfoType {
-	if strings.Contains(msg, "graph validation failed") {
+	if strings.Contains(msg, "reachability validation failed") || strings.Contains(msg, "graph validation failed") {
 		return ValidationTypeGraph
 	}
 	if strings.Contains(msg, "node at index") || strings.HasPrefix(msg, "node ") ||

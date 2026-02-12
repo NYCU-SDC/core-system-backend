@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 
+	"NYCU-SDC/core-system-backend/internal/form/question"
+
 	"github.com/google/uuid"
 )
 
@@ -148,14 +150,12 @@ func (n *ConditionNode) validateConditionRule(ctx context.Context, formID uuid.U
 		// Validate question type matches condition source
 		switch rule.Source {
 		case ConditionSourceChoice:
-			// Choice source requires single_choice or multiple_choice question type
-			if string(q.Type) != "single_choice" && string(q.Type) != "multiple_choice" {
-				return fmt.Errorf("condition node '%s' with source 'choice' requires question type 'single_choice' or 'multiple_choice', but question '%s' has type '%s'", nodeID, rule.Key, q.Type)
+			if !question.ContainsType(question.ChoiceTypes, q.Type) {
+				return fmt.Errorf("condition node '%s' with source 'choice' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.ChoiceTypes), rule.Key, q.Type)
 			}
 		case ConditionSourceNonChoice:
-			// NonChoice source requires short_text, long_text, or date question type
-			if string(q.Type) != "short_text" && string(q.Type) != "long_text" && string(q.Type) != "date" {
-				return fmt.Errorf("condition node '%s' with source 'nonChoice' requires question type 'short_text', 'long_text', or 'date', but question '%s' has type '%s'", nodeID, rule.Key, q.Type)
+			if !question.ContainsType(question.NonChoiceTypes, q.Type) {
+				return fmt.Errorf("condition node '%s' with source 'nonChoice' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.NonChoiceTypes), rule.Key, q.Type)
 			}
 		}
 	}

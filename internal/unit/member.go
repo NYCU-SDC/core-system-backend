@@ -1,7 +1,9 @@
 package unit
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
+	"errors"
 	"fmt"
 
 	"NYCU-SDC/core-system-backend/internal/user"
@@ -9,6 +11,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
 
@@ -18,19 +21,53 @@ func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, me
 	defer span.End()
 
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	memberCount, err := s.queries.CountMembers(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "count members")
+		span.RecordError(err)
+		return AddMemberRow{}, err
+	}
+
 	memberRow, err := s.queries.AddMember(traceCtx, AddMemberParams{
 		UnitID:      id,
 		MemberEmail: memberEmail,
 	})
 	if err != nil {
+		// Check if the error is due to email not found (no rows returned)
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = fmt.Errorf("%w: %s", internal.ErrMemberEmailNotFound, memberEmail)
+			span.RecordError(err)
+			return AddMemberRow{}, err
+		}
+
 		err = databaseutil.WrapDBError(err, logger, "add member relationship")
 		span.RecordError(err)
 		return AddMemberRow{}, err
 	}
 
+	if memberCount == 0 {
+		err = s.queries.UpdateMemberRole(traceCtx, UpdateMemberRoleParams{
+			UnitID:   id,
+			MemberID: memberRow.MemberID,
+			Role:     UnitRoleAdmin,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "set first member as admin")
+			span.RecordError(err)
+			return AddMemberRow{}, err
+		}
+
+		memberRow.Role = UnitRoleAdmin
+		logger.Info("First member added, set as admin",
+			zap.String("unit_id", id.String()),
+			zap.String("member_id", memberRow.MemberID.String()))
+	}
+
 	logger.Info(fmt.Sprintf("Added %s member", unitType.String()),
 		zap.String("unit_id", memberRow.UnitID.String()),
-		zap.String("member_id", memberRow.MemberID.String()))
+		zap.String("member_id", memberRow.MemberID.String()),
+		zap.String("role", string(memberRow.Role)))
 
 	return memberRow, nil
 }
@@ -107,7 +144,39 @@ func (s *Service) RemoveMember(ctx context.Context, unitType Type, id uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.RemoveMember(traceCtx, RemoveMemberParams{
+	role, err := s.queries.GetMemberRole(traceCtx, GetMemberRoleParams{
+		UnitID:   id,
+		MemberID: memberID,
+	})
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+
+		err = databaseutil.WrapDBError(err, logger, "get member role before remove")
+		span.RecordError(err)
+		return err
+	}
+
+	if role == UnitRoleAdmin {
+		adminCount, err := s.queries.CountMembersByRole(traceCtx, CountMembersByRoleParams{
+			UnitID: id,
+			Role:   UnitRoleAdmin,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "count admins before remove")
+			span.RecordError(err)
+			return err
+		}
+
+		if adminCount == 1 {
+			span.RecordError(internal.ErrCannotRemoveLastAdmin)
+			return internal.ErrCannotRemoveLastAdmin
+		}
+	}
+
+	err = s.queries.RemoveMember(traceCtx, RemoveMemberParams{
 		UnitID:   id,
 		MemberID: memberID,
 	})

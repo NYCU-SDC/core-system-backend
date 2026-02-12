@@ -21,6 +21,7 @@ type Validatable interface {
 }
 
 // ConditionSource represents the source type for condition rules
+// Reference to question.ChoiceTypes and question.NonChoiceTypes
 type ConditionSource string
 
 const (
