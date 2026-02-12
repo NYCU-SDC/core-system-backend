@@ -18,7 +18,7 @@ import (
 )
 
 type QuestionStore interface {
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.Answerable, error)
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithQuestions, error)
 }
 
 type FormStore interface {
@@ -75,32 +75,34 @@ func (s *Service) Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID
 		return response.FormResponse{}, []error{internal.ErrFormDeadlinePassed}
 	}
 
-	questions, err := s.questionStore.ListByFormID(traceCtx, formID)
+	list, err := s.questionStore.ListByFormID(traceCtx, formID)
 	if err != nil {
 		return response.FormResponse{}, []error{err}
 	}
 
 	// Validate answers against questions
-	questionTypes := make([]response.QuestionType, 0, len(questions))
+	var questionTypes []response.QuestionType
 	validationErrors := make([]error, 0)
 	answeredQuestionIDs := make(map[string]bool)
 
 	for _, ans := range answers {
 		var found bool
-		for _, q := range questions {
-			if q.Question().ID.String() == ans.QuestionID {
-				found = true
-				answeredQuestionIDs[ans.QuestionID] = true
+		for _, section := range list {
+			for _, q := range section.Questions {
+				if q.Question().ID.String() == ans.QuestionID {
+					found = true
+					answeredQuestionIDs[ans.QuestionID] = true
 
-				// Validate answer value
-				err := q.Validate(ans.Value)
-				if err != nil {
-					validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
+					// Validate answer value
+					err := q.Validate(ans.Value)
+					if err != nil {
+						validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
+					}
+
+					questionTypes = append(questionTypes, response.QuestionType(q.Question().Type))
+
+					break
 				}
-
-				questionTypes = append(questionTypes, response.QuestionType(q.Question().Type))
-
-				break
 			}
 		}
 
@@ -110,9 +112,11 @@ func (s *Service) Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID
 	}
 
 	// Check for required questions that were not answered
-	for _, q := range questions {
-		if q.Question().Required && !answeredQuestionIDs[q.Question().ID.String()] {
-			validationErrors = append(validationErrors, fmt.Errorf("question ID %s is required but not answered", q.Question().ID.String()))
+	for _, section := range list {
+		for _, q := range section.Questions {
+			if q.Question().Required && !answeredQuestionIDs[q.Question().ID.String()] {
+				validationErrors = append(validationErrors, fmt.Errorf("question ID %s is required but not answered", q.Question().ID.String()))
+			}
 		}
 	}
 

@@ -16,6 +16,11 @@ SELECT * FROM form_responses
 WHERE form_id = $1
 ORDER BY created_at ASC;
 
+-- name: ListBySubmittedBy :many
+SELECT * FROM form_responses
+WHERE submitted_by = $1
+ORDER BY submitted_at DESC NULLS LAST;
+
 -- name: Update :exec
 UPDATE form_responses
 SET updated_at = now()

@@ -43,6 +43,7 @@ type Store interface {
 type formStore interface {
 	Create(ctx context.Context, req form.Request, unitID uuid.UUID, userID uuid.UUID) (form.CreateRow, error)
 	ListByUnit(context.Context, uuid.UUID) ([]form.ListByUnitRow, error)
+	ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]form.UserForm, error)
 }
 
 type tenantStore interface {
@@ -128,6 +129,13 @@ type OrgMemberResponse struct {
 type UnitMemberResponse struct {
 	UnitID     uuid.UUID            `json:"unitId"`
 	SimpleUser user.ProfileResponse `json:"member"`
+}
+
+type UserFormResponse struct {
+	FormID   string              `json:"id"`
+	Title    string              `json:"title"`
+	Deadline *time.Time          `json:"deadline"`
+	Status   form.UserFormStatus `json:"status"`
 }
 
 // createProfileResponseWithEmails creates a ProfileResponse with emails for a user
@@ -624,17 +632,17 @@ func (h *Handler) AddOrgMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get Username from request body
+	// Get email from request body
 	var params struct {
-		Email string `json:"email"`
+		Email string `json:"email" validate:"required,email"`
 	}
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &params); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
 		return
 	}
 
-	if orgID == uuid.Nil || params.Email == "" {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("org ID or member username cannot be empty"), logger)
+	if orgID == uuid.Nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("org ID cannot be empty"), logger)
 		return
 	}
 
@@ -664,15 +672,10 @@ func (h *Handler) AddUnitMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var params struct {
-		Email string `json:"email"`
+		Email string `json:"email" validate:"required,email"`
 	}
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &params); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
-		return
-	}
-
-	if params.Email == "" {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("member username cannot be empty"), logger)
 		return
 	}
 
@@ -815,4 +818,50 @@ func (h *Handler) RemoveUnitMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
+}
+
+func (h *Handler) ListFormsOfCurrentUser(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListFormsOfCurrentUser")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	organizations, err := h.store.ListOrganizationsOfUser(traceCtx, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get all organizations of user: %w", err), logger)
+		return
+	}
+
+	unitIDs := make([]uuid.UUID, 0)
+	for _, org := range organizations {
+		unitIDs = append(unitIDs, org.Unit.ID)
+	}
+
+	userForms, err := h.formStore.ListFormsOfUser(traceCtx, unitIDs, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get forms of user: %w", err), logger)
+		return
+	}
+
+	userFormsResponse := make([]UserFormResponse, 0, len(userForms))
+	for _, userForm := range userForms {
+		var deadline *time.Time
+		if userForm.Deadline.Valid {
+			deadline = &userForm.Deadline.Time
+		}
+
+		userFormsResponse = append(userFormsResponse, UserFormResponse{
+			FormID:   userForm.FormID.String(),
+			Title:    userForm.Title,
+			Deadline: deadline,
+			Status:   userForm.Status,
+		})
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, userFormsResponse)
 }

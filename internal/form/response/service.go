@@ -30,6 +30,7 @@ type Querier interface {
 	AnswerExists(ctx context.Context, arg AnswerExistsParams) (bool, error)
 	CheckAnswerContent(ctx context.Context, arg CheckAnswerContentParams) (bool, error)
 	GetAnswerID(ctx context.Context, arg GetAnswerIDParams) (uuid.UUID, error)
+	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
 }
 
 type Service struct {
@@ -73,6 +74,45 @@ func (s Service) CreateOrUpdate(ctx context.Context, formID uuid.UUID, userID uu
 	} else {
 		return s.Create(traceCtx, formID, userID, answers, questionType)
 	}
+}
+
+// CreateEmpty creates an empty response (draft) for a given form and user
+// Returns an error if the user already has a response for the form
+func (s Service) CreateEmpty(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateEmpty")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Check if user already has a response for this form
+	exists, err := s.queries.Exists(traceCtx, ExistsParams{
+		FormID:      formID,
+		SubmittedBy: userID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check if response exists")
+		span.RecordError(err)
+		return FormResponse{}, err
+	}
+
+	if exists {
+		err = fmt.Errorf("user already has a response for this form")
+		logger.Error("Failed to create empty response", zap.Error(err), zap.String("formID", formID.String()), zap.String("userID", userID.String()))
+		span.RecordError(err)
+		return FormResponse{}, internal.ErrResponseAlreadyExists
+	}
+
+	// Create empty response
+	newResponse, err := s.queries.Create(traceCtx, CreateParams{
+		FormID:      formID,
+		SubmittedBy: userID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create empty response")
+		span.RecordError(err)
+		return FormResponse{}, err
+	}
+
+	return newResponse, nil
 }
 
 // Create creates a new response and answers for a given form and user
@@ -283,4 +323,19 @@ func (s Service) GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUI
 	}
 
 	return rows, nil
+}
+
+func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	responses, err := s.queries.ListBySubmittedBy(ctx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list responses by submitted by")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return responses, nil
 }

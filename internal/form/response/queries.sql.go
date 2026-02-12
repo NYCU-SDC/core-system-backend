@@ -48,7 +48,7 @@ func (q *Queries) CheckAnswerContent(ctx context.Context, arg CheckAnswerContent
 const create = `-- name: Create :one
 INSERT INTO form_responses (form_id, submitted_by)
 VALUES ($1, $2)
-RETURNING id, form_id, submitted_by, created_at, updated_at
+RETURNING id, form_id, submitted_by, submitted_at, created_at, updated_at
 `
 
 type CreateParams struct {
@@ -63,6 +63,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (FormResponse, e
 		&i.ID,
 		&i.FormID,
 		&i.SubmittedBy,
+		&i.SubmittedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -139,7 +140,7 @@ func (q *Queries) Exists(ctx context.Context, arg ExistsParams) (bool, error) {
 }
 
 const get = `-- name: Get :one
-SELECT id, form_id, submitted_by, created_at, updated_at FROM form_responses
+SELECT id, form_id, submitted_by, submitted_at, created_at, updated_at FROM form_responses
 WHERE id = $1 AND form_id = $2
 `
 
@@ -155,6 +156,7 @@ func (q *Queries) Get(ctx context.Context, arg GetParams) (FormResponse, error) 
 		&i.ID,
 		&i.FormID,
 		&i.SubmittedBy,
+		&i.SubmittedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -266,7 +268,7 @@ func (q *Queries) GetAnswersByResponseID(ctx context.Context, responseID uuid.UU
 }
 
 const getByFormIDAndSubmittedBy = `-- name: GetByFormIDAndSubmittedBy :one
-SELECT id, form_id, submitted_by, created_at, updated_at FROM form_responses
+SELECT id, form_id, submitted_by, submitted_at, created_at, updated_at FROM form_responses
 WHERE form_id = $1 AND submitted_by = $2
 `
 
@@ -282,6 +284,7 @@ func (q *Queries) GetByFormIDAndSubmittedBy(ctx context.Context, arg GetByFormID
 		&i.ID,
 		&i.FormID,
 		&i.SubmittedBy,
+		&i.SubmittedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -289,7 +292,7 @@ func (q *Queries) GetByFormIDAndSubmittedBy(ctx context.Context, arg GetByFormID
 }
 
 const listByFormID = `-- name: ListByFormID :many
-SELECT id, form_id, submitted_by, created_at, updated_at FROM form_responses
+SELECT id, form_id, submitted_by, submitted_at, created_at, updated_at FROM form_responses
 WHERE form_id = $1
 ORDER BY created_at ASC
 `
@@ -307,6 +310,40 @@ func (q *Queries) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormRes
 			&i.ID,
 			&i.FormID,
 			&i.SubmittedBy,
+			&i.SubmittedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listBySubmittedBy = `-- name: ListBySubmittedBy :many
+SELECT id, form_id, submitted_by, submitted_at, created_at, updated_at FROM form_responses
+WHERE submitted_by = $1
+ORDER BY submitted_at DESC NULLS LAST
+`
+
+func (q *Queries) ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error) {
+	rows, err := q.db.Query(ctx, listBySubmittedBy, submittedBy)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FormResponse
+	for rows.Next() {
+		var i FormResponse
+		if err := rows.Scan(
+			&i.ID,
+			&i.FormID,
+			&i.SubmittedBy,
+			&i.SubmittedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

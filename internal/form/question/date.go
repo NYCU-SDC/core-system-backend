@@ -2,18 +2,25 @@ package question
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Date struct {
 	question Question
+	formID   uuid.UUID
 }
 
-func NewDate(q Question) (Answerable, error) {
-	return &Date{question: q}, nil
+func NewDate(q Question, formID uuid.UUID) (Answerable, error) {
+	return &Date{question: q, formID: formID}, nil
 }
 
 func (d Date) Question() Question {
 	return d.question
+}
+
+func (d Date) FormID() uuid.UUID {
+	return d.formID
 }
 
 func (d Date) Validate(value string) error {

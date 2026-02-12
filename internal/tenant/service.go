@@ -4,6 +4,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"context"
 	"errors"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -174,12 +175,12 @@ func (s *Service) GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UU
 	orgID, err := s.query.GetSlugStatus(traceCtx, slug)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return true, uuid.UUID{}, nil
+			return false, uuid.UUID{}, nil
 		}
 		err = databaseutil.WrapDBError(err, logger, "get slug status")
 		span.RecordError(err)
-		return true, uuid.UUID{}, err
+		return false, uuid.UUID{}, err
 	}
 
-	return false, orgID.Bytes, nil
+	return true, orgID.Bytes, nil
 }

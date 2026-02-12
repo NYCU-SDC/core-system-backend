@@ -1,7 +1,13 @@
 package form
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/response"
 	"context"
+	"errors"
+	"slices"
+
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
+	"github.com/jackc/pgx/v5"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -20,41 +26,129 @@ type Querier interface {
 	List(ctx context.Context) ([]ListRow, error)
 	ListByUnit(ctx context.Context, unitID pgtype.UUID) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
+	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
+	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
+}
+
+type ResponseStore interface {
+	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]response.FormResponse, error)
+}
+
+type UserFormStatus string
+
+const (
+	UserFormStatusNotStarted UserFormStatus = "NOT_STARTED"
+	UserFormStatusInProgress UserFormStatus = "IN_PROGRESS"
+	UserFormStatusCompleted  UserFormStatus = "COMPLETED"
+)
+
+type UserForm struct {
+	FormID   uuid.UUID
+	Title    string
+	Deadline pgtype.Timestamptz
+	Status   UserFormStatus
+}
+
+type formFields struct {
+	title                  string
+	description            pgtype.Text
+	previewMessage         pgtype.Text
+	deadline               pgtype.Timestamptz
+	publishTime            pgtype.Timestamptz
+	googleSheetURL         pgtype.Text
+	messageAfterSubmission string
+	visibility             Visibility
+	dressingColor          pgtype.Text
+	dressingHeaderFont     pgtype.Text
+	dressingQuestionFont   pgtype.Text
+	dressingTextFont       pgtype.Text
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger        *zap.Logger
+	queries       Querier
+	tracer        trace.Tracer
+	responseStore ResponseStore
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, responseStore ResponseStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("forms/service"),
+		logger:        logger,
+		queries:       New(db),
+		tracer:        otel.Tracer("forms/service"),
+		responseStore: responseStore,
 	}
 }
 
-func (s *Service) Create(ctx context.Context, req Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
+func buildFormFieldsFromRequest(request Request) formFields {
+	form := formFields{}
+
+	if request.Deadline != nil {
+		form.deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
+	} else {
+		form.deadline = pgtype.Timestamptz{Valid: false}
+	}
+
+	if request.PublishTime != nil {
+		form.publishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
+	} else {
+		form.publishTime = pgtype.Timestamptz{Valid: false}
+	}
+
+	preview := request.PreviewMessage
+	if preview == "" && request.Description != "" {
+		runes := []rune(request.Description)
+		if len(runes) > 25 {
+			preview = string(runes[:25])
+		} else {
+			preview = request.Description
+		}
+	}
+
+	if request.Dressing != nil {
+		form.dressingColor = pgtype.Text{String: request.Dressing.Color, Valid: request.Dressing.Color != ""}
+		form.dressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: request.Dressing.HeaderFont != ""}
+		form.dressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: request.Dressing.QuestionFont != ""}
+		form.dressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: request.Dressing.TextFont != ""}
+	} else {
+		form.dressingColor = pgtype.Text{Valid: false}
+		form.dressingHeaderFont = pgtype.Text{Valid: false}
+		form.dressingQuestionFont = pgtype.Text{Valid: false}
+		form.dressingTextFont = pgtype.Text{Valid: false}
+	}
+
+	form.description = pgtype.Text{String: request.Description, Valid: true}
+	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
+	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""}
+	form.messageAfterSubmission = request.MessageAfterSubmission
+	form.visibility = request.Visibility
+	form.title = request.Title
+
+	return form
+}
+
+func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
 	ctx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	var deadline pgtype.Timestamptz
-	if req.Deadline != nil {
-		deadline = pgtype.Timestamptz{Time: *req.Deadline, Valid: true}
-	} else {
-		deadline = pgtype.Timestamptz{Valid: false}
-	}
+	fields := buildFormFieldsFromRequest(request)
 
 	newForm, err := s.queries.Create(ctx, CreateParams{
-		Title:          req.Title,
-		Description:    pgtype.Text{String: req.Description, Valid: true},
-		PreviewMessage: pgtype.Text{String: req.PreviewMessage, Valid: req.PreviewMessage != ""},
-		UnitID:         pgtype.UUID{Bytes: unitID, Valid: true},
-		LastEditor:     userID,
-		Deadline:       deadline,
+		Title:                  fields.title,
+		Description:            fields.description,
+		PreviewMessage:         fields.previewMessage,
+		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
+		LastEditor:             userID,
+		Deadline:               fields.deadline,
+		PublishTime:            fields.publishTime,
+		MessageAfterSubmission: fields.messageAfterSubmission,
+		GoogleSheetUrl:         fields.googleSheetURL,
+		Visibility:             fields.visibility,
+		DressingColor:          fields.dressingColor,
+		DressingHeaderFont:     fields.dressingHeaderFont,
+		DressingQuestionFont:   fields.dressingQuestionFont,
+		DressingTextFont:       fields.dressingTextFont,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create form")
@@ -70,20 +164,23 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	var deadline pgtype.Timestamptz
-	if request.Deadline != nil {
-		deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
-	} else {
-		deadline = pgtype.Timestamptz{Valid: false}
-	}
+	fields := buildFormFieldsFromRequest(request)
 
 	updatedForm, err := s.queries.Update(ctx, UpdateParams{
-		ID:             id,
-		Title:          request.Title,
-		Description:    pgtype.Text{String: request.Description, Valid: true},
-		PreviewMessage: pgtype.Text{String: request.PreviewMessage, Valid: request.PreviewMessage != ""},
-		LastEditor:     userID,
-		Deadline:       deadline,
+		ID:                     id,
+		Title:                  fields.title,
+		Description:            fields.description,
+		PreviewMessage:         fields.previewMessage,
+		LastEditor:             userID,
+		Deadline:               fields.deadline,
+		PublishTime:            fields.publishTime,
+		MessageAfterSubmission: fields.messageAfterSubmission,
+		GoogleSheetUrl:         fields.googleSheetURL,
+		Visibility:             fields.visibility,
+		DressingColor:          fields.dressingColor,
+		DressingHeaderFont:     fields.dressingHeaderFont,
+		DressingQuestionFont:   fields.dressingQuestionFont,
+		DressingTextFont:       fields.dressingTextFont,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update form")
@@ -171,4 +268,121 @@ func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status Status, us
 	}
 
 	return updated, nil
+}
+
+func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]UserForm, error) {
+	ctx, span := s.tracer.Start(ctx, "ListFormsOfUser")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	responses, err := s.responseStore.ListBySubmittedBy(ctx, userID)
+	if err != nil {
+		span.RecordError(err)
+		return []UserForm{}, err
+	}
+
+	formStatusMap := make(map[uuid.UUID]UserFormStatus)
+	for _, response := range responses {
+		status := UserFormStatusInProgress
+		if response.SubmittedAt.Valid {
+			status = UserFormStatusCompleted
+		}
+		formStatusMap[response.FormID] = status
+	}
+
+	allForms := make(map[uuid.UUID]ListByUnitRow)
+	for _, unitID := range unitIDs {
+		forms, err := s.queries.ListByUnit(ctx, pgtype.UUID{Bytes: unitID, Valid: true})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "list forms by unit")
+			span.RecordError(err)
+			return []UserForm{}, err
+		}
+
+		for _, form := range forms {
+			allForms[form.ID] = form
+		}
+	}
+
+	userForms := make([]UserForm, 0, len(allForms))
+	for formID, form := range allForms {
+		status, exists := formStatusMap[formID]
+		if !exists {
+			status = UserFormStatusNotStarted
+		}
+
+		userForms = append(userForms, UserForm{
+			FormID:   formID,
+			Title:    form.Title,
+			Deadline: form.Deadline,
+			Status:   status,
+		})
+	}
+
+	slices.SortFunc(userForms, func(a, b UserForm) int {
+
+		if a.Deadline.Valid != b.Deadline.Valid {
+			if a.Deadline.Valid {
+				return -1
+			}
+			return 1
+		}
+
+		if a.Deadline.Valid {
+			if n := a.Deadline.Time.Compare(b.Deadline.Time); n != 0 {
+				return n
+			}
+		}
+
+		if a.Title < b.Title {
+			return -1
+		}
+		if a.Title > b.Title {
+			return 1
+		}
+
+		return 0
+	})
+
+	return userForms, nil
+}
+
+func (s *Service) UploadCoverImage(ctx context.Context, formID uuid.UUID, imageData []byte, coverImageURL string) error {
+	ctx, span := s.tracer.Start(ctx, "UploadCoverImage")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	_, err := s.queries.UploadCoverImage(ctx, UploadCoverImageParams{
+		FormID:    formID,
+		ImageData: imageData,
+		CoverImageUrl: pgtype.Text{
+			String: coverImageURL,
+			Valid:  coverImageURL != "",
+		},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return handlerutil.NewNotFoundError("forms", "id", formID.String(), "form not found")
+		}
+		err = databaseutil.WrapDBError(err, logger, "upload cover image")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
+
+func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	ctx, span := s.tracer.Start(ctx, "GetCoverImage")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	imageData, err := s.queries.GetCoverImage(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get form cover image")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return imageData, nil
 }

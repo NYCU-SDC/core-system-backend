@@ -20,7 +20,7 @@ func NewMiddleware(logger *zap.Logger, debug bool) *Middleware {
 }
 
 func (m Middleware) TraceMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return traceutil.TraceMiddleware(next, m.logger)
+	return traceutil.TraceMiddleware(next, m.logger, m.debug)
 }
 
 func (m Middleware) RecoverMiddleware(next http.HandlerFunc) http.HandlerFunc {

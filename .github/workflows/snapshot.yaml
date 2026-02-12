@@ -8,7 +8,7 @@ on:
 
 jobs:
   Lint:
-    runs-on:  ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -16,7 +16,7 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
 
       - name: Lint
         uses: golangci/golangci-lint-action@v7
@@ -32,24 +32,24 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
 
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: '1.28.0'
+          sqlc-version: "1.28.0"
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-          mockery-version: '2.53.3'
+          mockery-version: "3.5.5"
 
       - name: Test
         run: make test
 
   Build:
     needs: Test
-    runs-on:  ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -57,17 +57,17 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
 
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: '1.25.0'
+          sqlc-version: "1.25.0"
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-          mockery-version: '2.53.3'
+          mockery-version: "3.5.5"
 
       - name: Build
         run: |
@@ -104,7 +104,7 @@ jobs:
         id: extract
         with:
           pr_body: ${{ github.event.pull_request.body }}
-      
+
       - name: Process PR body for webhook
         run: |
           PR_TYPE=$(echo '${{ steps.extract.outputs.type_block }}' | jq -R -s @json)
@@ -153,6 +153,16 @@ jobs:
                       "path": "/google-oauth",
                       "secret_name": "CLIENT_SECRET",
                       "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
+                    },
+                    {
+                      "path": "/nycu-oauth",
+                      "secret_name": "CLIENT_ID",
+                      "env_name": "NYCU_OAUTH_CLIENT_ID"
+                    },
+                    {
+                      "path": "/nycu-oauth",
+                      "secret_name": "CLIENT_SECRET",
+                      "env_name": "NYCU_OAUTH_CLIENT_SECRET"
                     }
                   ]
                 }

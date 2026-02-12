@@ -23,12 +23,25 @@ func GetFromContext(ctx context.Context) (*User, bool) {
 }
 
 func ConvertEmailsToSlice(emails interface{}) []string {
+	if emails == nil {
+		return []string{}
+	}
+
 	switch v := emails.(type) {
 	case []string:
 		if v == nil {
 			return []string{}
 		}
 		return v
+	case []interface{}:
+		// Handle PostgreSQL array returned as []interface{}
+		result := make([]string, 0, len(v))
+		for _, email := range v {
+			if str, ok := email.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result
 	default:
 		return []string{}
 	}

@@ -30,6 +30,12 @@ test:
 
 .PHONY: test
 
+mocks:
+	@echo -e ":: $(GREEN)Generating mocks...$(NC)"
+	@mockery && echo -e "==> $(BLUE)Mocks generated successfully$(NC)" || (echo -e "==> $(RED)Mock generation failed$(NC)" && exit 1)
+
+.PHONY: mocks
+
 gen:
 	@echo -e ":: $(GREEN)Generating schema and code...$(NC)"
 	@echo -e "  -> Running schema creation script..."

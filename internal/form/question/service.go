@@ -1,7 +1,9 @@
 package question
 
 import (
+	"cmp"
 	"context"
+	"slices"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -12,16 +14,23 @@ import (
 )
 
 type Querier interface {
-	Create(ctx context.Context, params CreateParams) (Question, error)
-	Update(ctx context.Context, params UpdateParams) (Question, error)
-	Delete(ctx context.Context, params DeleteParams) error
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]Question, error)
-	GetByID(ctx context.Context, id uuid.UUID) (Question, error)
+	Create(ctx context.Context, params CreateParams) (CreateRow, error)
+	Update(ctx context.Context, params UpdateParams) (UpdateRow, error)
+	UpdateOrder(ctx context.Context, params UpdateOrderParams) (UpdateOrderRow, error)
+	DeleteAndReorder(ctx context.Context, arg DeleteAndReorderParams) error
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]ListByFormIDRow, error)
+	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 }
 
 type Answerable interface {
 	Question() Question
+	FormID() uuid.UUID
 	Validate(value string) error
+}
+
+type SectionWithQuestions struct {
+	Section   Section
+	Questions []Answerable
 }
 
 type Service struct {
@@ -43,14 +52,14 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, e
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	q, err := s.queries.Create(ctx, input)
+	row, err := s.queries.Create(ctx, input)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create question")
 		span.RecordError(err)
 		return nil, err
 	}
 
-	return NewAnswerable(q)
+	return NewAnswerable(row.ToQuestion(), row.FormID)
 }
 
 func (s *Service) Update(ctx context.Context, input UpdateParams) (Answerable, error) {
@@ -58,27 +67,42 @@ func (s *Service) Update(ctx context.Context, input UpdateParams) (Answerable, e
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	q, err := s.queries.Update(ctx, input)
+	row, err := s.queries.Update(ctx, input)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update question")
 		span.RecordError(err)
 		return nil, err
 	}
 
-	return NewAnswerable(q)
+	return NewAnswerable(row.ToQuestion(), row.FormID)
 }
 
-func (s *Service) Delete(ctx context.Context, formID uuid.UUID, id uuid.UUID) error {
-	ctx, span := s.tracer.Start(ctx, "Delete")
+func (s *Service) UpdateOrder(ctx context.Context, input UpdateOrderParams) (Answerable, error) {
+	ctx, span := s.tracer.Start(ctx, "UpdateOrder")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	err := s.queries.Delete(ctx, DeleteParams{
-		FormID: formID,
-		ID:     id,
+	row, err := s.queries.UpdateOrder(ctx, input)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "update order for the questions")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return NewAnswerable(row.ToQuestion(), row.FormID)
+}
+
+func (s *Service) DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error {
+	ctx, span := s.tracer.Start(ctx, "DeleteAndReorder")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	err := s.queries.DeleteAndReorder(ctx, DeleteAndReorderParams{
+		SectionID: sectionID,
+		ID:        id,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "delete question")
+		err = databaseutil.WrapDBError(err, logger, "delete and re-index remaining questions")
 		span.RecordError(err)
 		return err
 	}
@@ -86,7 +110,7 @@ func (s *Service) Delete(ctx context.Context, formID uuid.UUID, id uuid.UUID) er
 	return nil
 }
 
-func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Answerable, error) {
+func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithQuestions, error) {
 	ctx, span := s.tracer.Start(ctx, "ListByFormID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -98,18 +122,61 @@ func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]Answera
 		return nil, err
 	}
 
-	answerableList := make([]Answerable, len(list))
-	for i, q := range list {
-		answerable, err := NewAnswerable(q)
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "create answerable from question")
-			span.RecordError(err)
-			return nil, err
+	sectionMap := make(map[uuid.UUID]*SectionWithQuestions)
+	for _, row := range list {
+		sectionID := row.SectionID
+
+		_, exist := sectionMap[sectionID]
+		if !exist {
+			sectionMap[sectionID] = &SectionWithQuestions{
+				Section: Section{
+					ID:          sectionID,
+					FormID:      row.FormID,
+					Title:       row.Title,
+					Description: row.Description,
+					CreatedAt:   row.CreatedAt,
+					UpdatedAt:   row.UpdatedAt,
+				},
+				Questions: []Answerable{},
+			}
 		}
-		answerableList[i] = answerable
+
+		// Check if question exists
+		if row.ID.Valid {
+			q := Question{
+				ID:          row.ID.Bytes,
+				SectionID:   sectionID,
+				Required:    row.Required.Bool,
+				Type:        row.Type.QuestionType,
+				Title:       row.QuestionTitle,
+				Description: row.QuestionDescription,
+				Metadata:    row.Metadata,
+				Order:       row.Order.Int32,
+				SourceID:    row.SourceID,
+				CreatedAt:   row.QuestionCreatedAt,
+				UpdatedAt:   row.QuestionUpdatedAt,
+			}
+			answerable, err := NewAnswerable(q, row.FormID)
+			if err != nil {
+				err = databaseutil.WrapDBError(err, logger, "create answerable from question")
+				span.RecordError(err)
+				return nil, err
+			}
+
+			sectionMap[sectionID].Questions = append(sectionMap[sectionID].Questions, answerable)
+		}
 	}
 
-	return answerableList, nil
+	result := make([]SectionWithQuestions, 0, len(sectionMap))
+	for _, q := range sectionMap {
+		result = append(result, *q)
+	}
+
+	slices.SortFunc(result, func(a, b SectionWithQuestions) int {
+		return cmp.Compare(a.Section.ID.String(), b.Section.ID.String())
+	})
+
+	return result, nil
 }
 
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Answerable, error) {
@@ -117,12 +184,13 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Answerable, error)
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	q, err := s.queries.GetByID(ctx, id)
+	row, err := s.queries.GetByID(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get question by id")
 		span.RecordError(err)
 		return nil, err
 	}
 
-	return NewAnswerable(q)
+	q := row.ToQuestion()
+	return NewAnswerable(q, row.FormID)
 }
