@@ -35,9 +35,7 @@ type Handler struct {
 	tracer        trace.Tracer
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
-
-	baseURL string
-	service *Service
+	service       *Service
 }
 
 func NewHandler(
@@ -45,7 +43,6 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	service *Service,
-	baseURL string,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -53,7 +50,6 @@ func NewHandler(
 		validator:     validator,
 		problemWriter: problemWriter,
 		service:       service,
-		baseURL:       baseURL,
 	}
 }
 
