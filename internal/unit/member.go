@@ -34,6 +34,13 @@ func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, me
 		MemberEmail: memberEmail,
 	})
 	if err != nil {
+		// Check if the error is due to email not found (no rows returned)
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = fmt.Errorf("%w: %s", internal.ErrMemberEmailNotFound, memberEmail)
+			span.RecordError(err)
+			return AddMemberRow{}, err
+		}
+
 		err = databaseutil.WrapDBError(err, logger, "add member relationship")
 		span.RecordError(err)
 		return AddMemberRow{}, err

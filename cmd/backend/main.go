@@ -149,7 +149,7 @@ func main() {
 	workflowService := workflow.NewService(logger, dbPool, questionService)
 
 	// Handler
-	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth)
+	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
