@@ -38,6 +38,7 @@ type Store interface {
 	ListMembers(ctx context.Context, id uuid.UUID) ([]user.Profile, error)
 	RemoveMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) error
 	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error)
+	UpdateUnitMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, newRole UnitRole) error
 }
 
 type formStore interface {
@@ -864,4 +865,78 @@ func (h *Handler) ListFormsOfCurrentUser(w http.ResponseWriter, r *http.Request)
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, userFormsResponse)
+}
+
+func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateUnitMemberRole")
+	defer span.End()
+
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("unit ID not provided"), logger)
+		return
+	}
+
+	unitID, err := uuid.Parse(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid unit ID: %w", err), logger)
+		return
+	}
+
+	mIDStr := r.PathValue("member_id")
+	if mIDStr == "" {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("member ID not provided"), logger)
+		return
+	}
+
+	memberID, err := uuid.Parse(mIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid member ID: %w", err), logger)
+		return
+	}
+
+	var req struct {
+		Role string `json:"role"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
+		return
+	}
+
+	if req.Role == "" {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("role is required"), logger)
+		return
+	}
+
+	newRole := UnitRole(req.Role)
+
+	switch newRole {
+	case UnitRoleAdmin, UnitRoleMember:
+		// valid role
+	default:
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid role value"), logger)
+		return
+	}
+
+	err = h.store.UpdateUnitMemberRole(traceCtx, unitID, memberID, newRole)
+	if err != nil {
+		h.problemWriter.WriteError(
+			traceCtx,
+			w,
+			fmt.Errorf("failed to update unit member role: %w", err),
+			logger,
+		)
+		return
+	}
+
+	logger.Info("Updated unit member role",
+		zap.String("unit_id", unitID.String()),
+		zap.String("member_id", memberID.String()),
+		zap.String("new_role", string(newRole)),
+	)
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }

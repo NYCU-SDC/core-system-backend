@@ -481,3 +481,64 @@ func (s *Service) GetMemberRole(
 
 	return role, nil
 }
+
+func (s *Service) UpdateUnitMemberRole(
+	ctx context.Context,
+	unitID uuid.UUID,
+	memberID uuid.UUID,
+	newRole UnitRole,
+) error {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateUnitMemberRole")
+	defer span.End()
+
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	currentRole, err := s.queries.GetMemberRole(traceCtx, GetMemberRoleParams{
+		UnitID:   unitID,
+		MemberID: memberID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(internal.ErrNotFound)
+			return internal.ErrNotFound
+		}
+		err = databaseutil.WrapDBError(err, logger, "get member role")
+		span.RecordError(err)
+		return err
+	}
+
+	if currentRole == newRole {
+		return nil
+	}
+
+	if currentRole == UnitRoleAdmin && newRole != UnitRoleAdmin {
+		count, err := s.queries.CountMembersByRole(traceCtx, CountMembersByRoleParams{
+			UnitID: unitID,
+			Role:   UnitRoleAdmin,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "count admin")
+			span.RecordError(err)
+			return err
+		}
+
+		if count <= 1 {
+			logger.Error("cannot remove last admin")
+			span.RecordError(internal.ErrCannotRemoveLastAdmin)
+			return internal.ErrCannotRemoveLastAdmin
+		}
+	}
+
+	err = s.queries.UpdateMemberRole(traceCtx, UpdateMemberRoleParams{
+		UnitID:   unitID,
+		MemberID: memberID,
+		Role:     newRole,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "update member role")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}
