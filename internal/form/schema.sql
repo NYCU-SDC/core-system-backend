@@ -1,6 +1,7 @@
 CREATE TYPE status AS ENUM(
     'draft',
-    'published'
+    'published',
+    'archived'
 );
 
 CREATE TYPE visibility AS ENUM(
