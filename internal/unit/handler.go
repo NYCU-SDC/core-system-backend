@@ -938,5 +938,16 @@ func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
 		zap.String("new_role", string(newRole)),
 	)
 
-	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
+	type UpdateUnitMemberRoleResponse struct {
+		UnitID   uuid.UUID `json:"unit_id"`
+		MemberID uuid.UUID `json:"member_id"`
+		Role     UnitRole  `json:"role"`
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, UpdateUnitMemberRoleResponse{
+		UnitID:   unitID,
+		MemberID: memberID,
+		Role:     newRole,
+	})
+
 }
