@@ -16,6 +16,13 @@ import (
 	"go.uber.org/zap"
 )
 
+func mustJSONMarshal(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	require.NoError(t, err)
+	return b
+}
+
 // mockWorkflowStore implements WorkflowStore for testing ListSections.
 type mockWorkflowStore struct {
 	mock.Mock
@@ -127,6 +134,12 @@ func (m *mockQuerier) GetFormIDByResponseID(ctx context.Context, id uuid.UUID) (
 func (m *mockQuerier) GetSectionsByIDs(ctx context.Context, ids []uuid.UUID) ([]GetSectionsByIDsRow, error) {
 	args := m.Called(ctx, ids)
 	rows, _ := args.Get(0).([]GetSectionsByIDsRow)
+	return rows, args.Error(1)
+}
+
+func (m *mockQuerier) GetRequiredQuestionsBySectionIDs(ctx context.Context, sectionIDs []uuid.UUID) ([]GetRequiredQuestionsBySectionIDsRow, error) {
+	args := m.Called(ctx, sectionIDs)
+	rows, _ := args.Get(0).([]GetRequiredQuestionsBySectionIDsRow)
 	return rows, args.Error(1)
 }
 
@@ -287,6 +300,9 @@ func TestService_ListSections(t *testing.T) {
 				sectionID1 := uuid.New()
 				sectionID2 := uuid.New()
 
+				questionID1 := uuid.New()
+				questionID2 := uuid.New()
+
 				formID := uuid.New()
 				startID := uuid.New()
 
@@ -303,18 +319,22 @@ func TestService_ListSections(t *testing.T) {
 					Workflow:   workflowJSON,
 				}, nil).Once()
 
-				q.On("GetAnswersByResponseID", mock.Anything, responseID).Return([]Answer{}, nil).Once()
+				// Only the second section has its required question answered.
+				q.On("GetAnswersByResponseID", mock.Anything, responseID).Return([]Answer{
+					{
+						QuestionID: questionID2,
+						Value:      mustJSONMarshal(t, "some answer"),
+					},
+				}, nil).Once()
 
 				rows := []GetSectionsByIDsRow{
 					{
 						ID:       sectionID2,
 						Title:    pgtype.Text{String: "Section 2", Valid: true},
-						Progress: SectionProgressSubmitted,
 					},
 					{
 						ID:       sectionID1,
 						Title:    pgtype.Text{String: "Section 1", Valid: true},
-						Progress: SectionProgressDraft,
 					},
 				}
 
@@ -323,16 +343,25 @@ func TestService_ListSections(t *testing.T) {
 						ids[0] == sectionID1 &&
 						ids[1] == sectionID2
 				})).Return(rows, nil).Once()
+
+				q.On("GetRequiredQuestionsBySectionIDs", mock.Anything, mock.MatchedBy(func(ids []uuid.UUID) bool {
+					return len(ids) == 2 &&
+						ids[0] == sectionID1 &&
+						ids[1] == sectionID2
+				})).Return([]GetRequiredQuestionsBySectionIDsRow{
+					{ID: questionID1, SectionID: sectionID1},
+					{ID: questionID2, SectionID: sectionID2},
+				}, nil).Once()
 			},
 			expectedErr: false,
 			assertions: func(t *testing.T, got []SectionSummary, err error, q *mockQuerier, ws *mockWorkflowStore) {
 				require.Len(t, got, 2)
 
 				require.Equal(t, "Section 1", got[0].Title)
-				require.Equal(t, string(SectionProgressDraft), got[0].Progress)
+				require.Equal(t, SectionStatusDraft, got[0].Progress)
 
 				require.Equal(t, "Section 2", got[1].Title)
-				require.Equal(t, string(SectionProgressSubmitted), got[1].Progress)
+				require.Equal(t, SectionStatusSubmitted, got[1].Progress)
 
 				q.AssertExpectations(t)
 				ws.AssertExpectations(t)
@@ -343,7 +372,6 @@ func TestService_ListSections(t *testing.T) {
 			setup: func(t *testing.T, s *Service, q *mockQuerier, ws *mockWorkflowStore, responseID uuid.UUID) {
 				formID := uuid.New()
 				questionID := uuid.New()
-
 				sectionTrueID := uuid.New()
 				sectionFalseID := uuid.New()
 
@@ -380,14 +408,21 @@ func TestService_ListSections(t *testing.T) {
 					{
 						ID:       sectionTrueID,
 						Title:    pgtype.Text{String: "True Section", Valid: true},
-						Progress: SectionProgressDraft,
 					},
+				}, nil).Once()
+
+				q.On("GetRequiredQuestionsBySectionIDs", mock.Anything, mock.MatchedBy(func(ids []uuid.UUID) bool {
+					return len(ids) == 1 && ids[0] == sectionTrueID
+				})).Return([]GetRequiredQuestionsBySectionIDsRow{
+					{ID: questionID, SectionID: sectionTrueID},
 				}, nil).Once()
 			},
 			expectedErr: false,
 			assertions: func(t *testing.T, got []SectionSummary, err error, q *mockQuerier, ws *mockWorkflowStore) {
 				require.Len(t, got, 1)
 				require.Equal(t, "True Section", got[0].Title)
+
+				require.Equal(t, SectionStatusSubmitted, got[0].Progress)
 
 				q.AssertExpectations(t)
 				ws.AssertExpectations(t)
