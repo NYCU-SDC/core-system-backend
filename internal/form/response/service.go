@@ -548,3 +548,19 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 
 	return responses, nil
 }
+
+// GetFormIDByResponseID returns the form ID for a given response.
+func (s Service) GetFormIDByResponseID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetFormIDByResponseID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formID, err := s.queries.GetFormIDByResponseID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
+		span.RecordError(err)
+		return uuid.UUID{}, err
+	}
+
+	return formID, nil
+}

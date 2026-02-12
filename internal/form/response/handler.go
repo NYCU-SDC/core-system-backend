@@ -82,9 +82,10 @@ const (
 )
 
 type SectionSummary struct {
-	ID       string        `json:"id" validate:"required,uuid"`
-	Title    string        `json:"title" validate:"required"`
-	Progress SectionStatus `json:"progress" validate:"required,oneof=DRAFT SUBMITTED"`
+	ID        string              `json:"id" validate:"required,uuid"`
+	Title     string              `json:"title" validate:"required"`
+	Progress  SectionStatus       `json:"progress" validate:"required,oneof=DRAFT SUBMITTED"`
+	Questions []question.Response `json:"questions" validate:"required,dive"`
 }
 
 type ListSectionsResponse struct {
@@ -100,10 +101,12 @@ type Store interface {
 	UpdateAnswer(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error)
 	CreateOrUpdate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error)
 	ListSections(ctx context.Context, responseID uuid.UUID) ([]SectionSummary, error)
+	GetFormIDByResponseID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
 type QuestionStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithQuestions, error)
 }
 
 type Handler struct {
@@ -358,9 +361,10 @@ func (h *Handler) CreateHandler(w http.ResponseWriter, r *http.Request) {
 
 // ListSectionsHandler lists all sections of a response.
 // Response model:
-// {
-//   "sections": [{ "id": "<uuid>", "title": "...", "progress": "DRAFT|SUBMITTED" }]
-// }
+//
+//	{
+//	  "sections": [{ "id": "<uuid>", "title": "...", "progress": "DRAFT|SUBMITTED" }]
+//	}
 func (h *Handler) ListSectionsHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "ListSectionsHandler")
 	defer span.End()
@@ -373,10 +377,43 @@ func (h *Handler) ListSectionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	formID, err := h.store.GetFormIDByResponseID(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	sections, err := h.store.ListSections(traceCtx, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
+	}
+
+	sectionsWithQuestions, err := h.questionStore.ListByFormID(traceCtx, formID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	questionsBySectionID := make(map[string][]question.Response, len(sectionsWithQuestions))
+	for _, sq := range sectionsWithQuestions {
+		sectionIDStr := sq.Section.ID.String()
+		for _, ans := range sq.Questions {
+			questionResponse, err := question.ToResponse(ans)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, err, logger)
+				return
+			}
+			questionsBySectionID[sectionIDStr] = append(questionsBySectionID[sectionIDStr], questionResponse)
+		}
+	}
+
+	for i := range sections {
+		questions := questionsBySectionID[sections[i].ID]
+		if questions == nil {
+			questions = []question.Response{}
+		}
+		sections[i].Questions = questions
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, ListSectionsResponse{
