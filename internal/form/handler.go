@@ -75,16 +75,6 @@ type GoogleSheetVerifyRequest struct {
 type GoogleSheetVerifyResponse struct {
 	IsValid bool `json:"isValid"`
 }
-type GoogleSheetEmailResponse struct {
-	Email string `json:"email"`
-}
-type GoogleSheetVerifyRequest struct {
-	GoogleSheetURL string `json:"googleSheetUrl" validate:"required"`
-}
-
-type GoogleSheetVerifyResponse struct {
-	IsValid bool `json:"isValid"`
-}
 
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline, publishTime is null when empty/invalid.
