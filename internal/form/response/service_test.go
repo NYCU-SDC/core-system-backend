@@ -329,12 +329,12 @@ func TestService_ListSections(t *testing.T) {
 
 				rows := []GetSectionsByIDsRow{
 					{
-						ID:       sectionID2,
-						Title:    pgtype.Text{String: "Section 2", Valid: true},
+						ID:    sectionID2,
+						Title: pgtype.Text{String: "Section 2", Valid: true},
 					},
 					{
-						ID:       sectionID1,
-						Title:    pgtype.Text{String: "Section 1", Valid: true},
+						ID:    sectionID1,
+						Title: pgtype.Text{String: "Section 1", Valid: true},
 					},
 				}
 
@@ -406,8 +406,8 @@ func TestService_ListSections(t *testing.T) {
 					return len(ids) == 1 && ids[0] == sectionTrueID
 				})).Return([]GetSectionsByIDsRow{
 					{
-						ID:       sectionTrueID,
-						Title:    pgtype.Text{String: "True Section", Valid: true},
+						ID:    sectionTrueID,
+						Title: pgtype.Text{String: "True Section", Valid: true},
 					},
 				}, nil).Once()
 
