@@ -141,11 +141,11 @@ func main() {
 	distributeService := distribute.NewService(logger, unitService)
 	questionService := question.NewService(logger, dbPool)
 	inboxService := inbox.NewService(logger, dbPool)
-	responseService := response.NewService(logger, dbPool)
+	workflowService := workflow.NewService(logger, dbPool, questionService)
+	responseService := response.NewService(logger, dbPool, workflowService)
 	formService := form.NewService(logger, dbPool, responseService)
 	submitService := submit.NewService(logger, formService, questionService, responseService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService)
-	workflowService := workflow.NewService(logger, dbPool, questionService)
 
 	// OAuth Providers - separated by use case
 	// Auth providers: Only Google (for user login)
@@ -268,6 +268,7 @@ func main() {
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.GetHandler))
 	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.DeleteHandler))
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(responseHandler.GetAnswersByQuestionIDHandler))
+	mux.Handle("GET /api/responses/{id}/sections", authMiddleware.HandlerFunc(responseHandler.ListSectionsHandler))
 
 	// OAuth question routes
 	mux.Handle("GET /api/oauth/questions/{provider}", authMiddleware.HandlerFunc(responseHandler.OauthQuestionHandler))
