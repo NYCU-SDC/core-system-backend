@@ -186,7 +186,6 @@ SELECT
     s.id as section_id,
     s.form_id,
     s.title,
-    s.progress,
     s.description,
     s.created_at,
     s.updated_at,
@@ -212,7 +211,6 @@ type ListByFormIDRow struct {
 	SectionID           uuid.UUID
 	FormID              uuid.UUID
 	Title               pgtype.Text
-	Progress            SectionProgress
 	Description         pgtype.Text
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
@@ -241,7 +239,6 @@ func (q *Queries) ListByFormID(ctx context.Context, formID uuid.UUID) ([]ListByF
 			&i.SectionID,
 			&i.FormID,
 			&i.Title,
-			&i.Progress,
 			&i.Description,
 			&i.CreatedAt,
 			&i.UpdatedAt,

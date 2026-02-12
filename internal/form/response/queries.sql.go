@@ -279,7 +279,7 @@ func (q *Queries) GetFormIDByResponseID(ctx context.Context, id uuid.UUID) (uuid
 }
 
 const getSectionsByIDs = `-- name: GetSectionsByIDs :many
-SELECT id, title, progress
+SELECT id, title, 'draft'::text AS progress
 FROM sections
 WHERE id = ANY($1::uuid[])
 ORDER BY array_position($1::uuid[], id)
@@ -288,7 +288,7 @@ ORDER BY array_position($1::uuid[], id)
 type GetSectionsByIDsRow struct {
 	ID       uuid.UUID
 	Title    pgtype.Text
-	Progress SectionProgress
+	Progress string
 }
 
 func (q *Queries) GetSectionsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetSectionsByIDsRow, error) {
