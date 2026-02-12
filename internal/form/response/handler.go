@@ -74,10 +74,17 @@ type AnswersForQuestionResponse struct {
 	Answers  []AnswerForQuestionResponse `json:"answers" validate:"required,dive"`
 }
 
+type SectionStatus string
+
+const (
+	SectionStatusDraft     SectionStatus = "DRAFT"
+	SectionStatusSubmitted SectionStatus = "SUBMITTED"
+)
+
 type SectionSummary struct {
-	ID       string `json:"id" validate:"required,uuid"`
-	Title    string `json:"title" validate:"required"`
-	Progress string `json:"progress" validate:"required,oneof=DRAFT SUBMITTED"`
+	ID       string        `json:"id" validate:"required,uuid"`
+	Title    string        `json:"title" validate:"required"`
+	Progress SectionStatus `json:"progress" validate:"required,oneof=DRAFT SUBMITTED"`
 }
 
 type ListSectionsResponse struct {
