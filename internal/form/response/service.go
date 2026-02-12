@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
 
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
@@ -188,6 +187,14 @@ func (s Service) ListSections(ctx context.Context, responseID uuid.UUID) ([]Sect
 
 	answerByQuestionID := make(map[string]string, len(answers))
 	for _, a := range answers {
+		// Values are stored as JSON; attempt to unmarshal to a string.
+		var v string
+		err := json.Unmarshal(a.Value, &v)
+		if err == nil {
+			answerByQuestionID[a.QuestionID.String()] = v
+			continue
+		}
+
 		answerByQuestionID[a.QuestionID.String()] = string(a.Value)
 	}
 
@@ -220,9 +227,14 @@ func (s Service) ListSections(ctx context.Context, responseID uuid.UUID) ([]Sect
 			continue
 		}
 
-		progress := strings.ToUpper(string(row.Progress))
-		if progress != string(SectionProgressDraft) && progress != string(SectionProgressSubmitted) {
+		var progress string
+		switch row.Progress {
+		case SectionProgressDraft:
 			progress = string(SectionProgressDraft)
+		case SectionProgressSubmitted:
+			progress = string(SectionProgressSubmitted)
+		default:
+			return nil, fmt.Errorf("invalid section progress: %s", row.Progress)
 		}
 
 		out = append(out, SectionSummary{
