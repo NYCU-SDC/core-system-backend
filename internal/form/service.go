@@ -295,8 +295,7 @@ func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, user
 	allForms := make(map[uuid.UUID]ListByUnitRow)
 	for _, unitID := range unitIDs {
 		forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
-			UnitID:          pgtype.UUID{Bytes: unitID, Valid: true},
-			IncludeArchived: pgtype.Bool{Bool: false, Valid: true},
+			UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
 		})
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "list forms by unit")
