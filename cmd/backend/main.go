@@ -163,7 +163,6 @@ func main() {
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
-	fileHandler := file.NewHandler(logger, validator, problemWriter, fileService)
 
 	// Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
