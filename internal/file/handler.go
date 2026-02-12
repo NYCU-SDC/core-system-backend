@@ -18,11 +18,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	MaxFileSize       = 100 * 1024 * 1024 // 100MB
-	MaxCoverImageSize = 2 * 1024 * 1024   // 2MB for cover images
-)
-
 type Handler struct {
 	logger        *zap.Logger
 	validator     *validator.Validate
@@ -46,7 +41,7 @@ func NewHandler(
 	}
 }
 
-type FileResponse struct {
+type Response struct {
 	ID               string  `json:"id"`
 	OriginalFilename string  `json:"originalFilename"`
 	ContentType      string  `json:"contentType"`
@@ -56,72 +51,10 @@ type FileResponse struct {
 }
 
 type ListFilesResponse struct {
-	Files  []FileResponse `json:"files"`
-	Total  int64          `json:"total"`
-	Limit  int32          `json:"limit"`
-	Offset int32          `json:"offset"`
-}
-
-// Upload handles POST /files - uploads a new file
-func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "Upload")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	// Get current user (optional - can be nil for system uploads)
-	var uploadedBy *uuid.UUID
-	if currentUser, ok := user.GetFromContext(traceCtx); ok {
-		uploadedBy = &currentUser.ID
-	}
-
-	// Parse multipart form
-	if err := r.ParseMultipartForm(MaxFileSize); err != nil {
-		logger.Warn("Failed to parse multipart form", zap.Error(err))
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMultipart, logger)
-		return
-	}
-
-	// Get file from form
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		logger.Warn("Failed to get file from form", zap.Error(err))
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMultipart, logger)
-		return
-	}
-	defer file.Close()
-
-	// Check file size
-	if header.Size > MaxFileSize {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrFileTooLarge, logger)
-		return
-	}
-
-	// Save file to database
-	savedFile, err := h.service.SaveFile(traceCtx, file, header.Filename, header.Header.Get("Content-Type"), header.Size, uploadedBy)
-	if err != nil {
-		logger.Error("Failed to save file", zap.Error(err))
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToSaveFile, logger)
-		span.RecordError(err)
-		return
-	}
-
-	var uploadedByStr *string
-	if savedFile.UploadedBy.Valid {
-		uid := uuid.UUID(savedFile.UploadedBy.Bytes)
-		str := uid.String()
-		uploadedByStr = &str
-	}
-
-	response := FileResponse{
-		ID:               savedFile.ID.String(),
-		OriginalFilename: savedFile.OriginalFilename,
-		ContentType:      savedFile.ContentType,
-		Size:             savedFile.Size,
-		UploadedBy:       uploadedByStr,
-		CreatedAt:        savedFile.CreatedAt.Time.Format(time.RFC3339),
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
+	Files  []Response `json:"files"`
+	Total  int64      `json:"total"`
+	Limit  int32      `json:"limit"`
+	Offset int32      `json:"offset"`
 }
 
 // Download handles GET /files/{id} - downloads a file
@@ -187,7 +120,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		uploadedByStr = &str
 	}
 
-	response := FileResponse{
+	response := Response{
 		ID:               fileInfo.ID.String(),
 		OriginalFilename: fileInfo.OriginalFilename,
 		ContentType:      fileInfo.ContentType,
@@ -274,7 +207,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build response
-	fileResponses := make([]FileResponse, len(files))
+	fileResponses := make([]Response, len(files))
 	for i, f := range files {
 		var uploadedByStr *string
 		if f.UploadedBy.Valid {
@@ -283,7 +216,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			uploadedByStr = &str
 		}
 
-		fileResponses[i] = FileResponse{
+		fileResponses[i] = Response{
 			ID:               f.ID.String(),
 			OriginalFilename: f.OriginalFilename,
 			ContentType:      f.ContentType,
@@ -326,7 +259,7 @@ func (h *Handler) ListMyFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build response
-	fileResponses := make([]FileResponse, len(files))
+	fileResponses := make([]Response, len(files))
 	for i, f := range files {
 		var uploadedByStr *string
 		if f.UploadedBy.Valid {
@@ -335,7 +268,7 @@ func (h *Handler) ListMyFiles(w http.ResponseWriter, r *http.Request) {
 			uploadedByStr = &str
 		}
 
-		fileResponses[i] = FileResponse{
+		fileResponses[i] = Response{
 			ID:               f.ID.String(),
 			OriginalFilename: f.OriginalFilename,
 			ContentType:      f.ContentType,

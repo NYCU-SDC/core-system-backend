@@ -163,6 +163,7 @@ func main() {
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
+	fileHandler := file.NewHandler(logger, validator, problemWriter, fileService)
 
 	// Middleware
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
@@ -293,6 +294,12 @@ func main() {
 	mux.Handle("GET /api/inbox", authMiddleware.HandlerFunc(inboxHandler.ListHandler))
 	mux.Handle("GET /api/inbox/{id}", authMiddleware.HandlerFunc(inboxHandler.GetHandler))
 	mux.Handle("PUT /api/inbox/{id}", authMiddleware.HandlerFunc(inboxHandler.UpdateHandler))
+
+	// File routes
+	mux.Handle("GET /api/files/{id}", basicMiddleware.HandlerFunc(fileHandler.Download))
+	mux.Handle("GET /api/files/{id}/info", authMiddleware.HandlerFunc(fileHandler.GetByID))
+	mux.Handle("GET /api/files", authMiddleware.HandlerFunc(fileHandler.List))
+	mux.Handle("GET /api/files/me", authMiddleware.HandlerFunc(fileHandler.ListMyFiles))
 
 	// handle interrupt signal
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
