@@ -40,11 +40,12 @@ var (
 	ErrFailedToCreateEmail  = errors.New("failed to create email record for OAuth user")
 
 	// Unit Errors
-	ErrOrgSlugNotFound      = errors.New("org slug not found")
-	ErrOrgSlugAlreadyExists = errors.New("org slug already exists")
-	ErrOrgSlugInvalid       = errors.New("org slug is invalid")
-	ErrUnitNotFound         = errors.New("unit not found")
-	ErrSlugNotBelongToUnit  = errors.New("slug not belong to unit")
+	ErrOrgSlugNotFound       = errors.New("org slug not found")
+	ErrOrgSlugAlreadyExists  = errors.New("org slug already exists")
+	ErrOrgSlugInvalid        = errors.New("org slug is invalid")
+	ErrUnitNotFound          = errors.New("unit not found")
+	ErrSlugNotBelongToUnit   = errors.New("slug not belong to unit")
+	ErrCannotRemoveLastAdmin = errors.New("cannot remove the last admin of the unit")
 
 	// Inbox Errors
 	ErrInvalidIsReadParameter     = errors.New("invalid isRead parameter")
@@ -137,6 +138,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("unit not found")
 	case errors.Is(err, ErrSlugNotBelongToUnit):
 		return problem.NewNotFoundProblem("slug not belong to unit")
+	case errors.Is(err, ErrCannotRemoveLastAdmin):
+		return problem.NewValidateProblem("cannot remove the last admin of the unit")
 
 	// Form Errors
 	case errors.Is(err, ErrFormNotFound):

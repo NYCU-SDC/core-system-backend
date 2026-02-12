@@ -55,6 +55,19 @@ func (q *Queries) AddMember(ctx context.Context, arg AddMemberParams) (AddMember
 	return i, err
 }
 
+const countMembers = `-- name: CountMembers :one
+SELECT COUNT(*)
+FROM unit_members
+WHERE unit_id = $1
+`
+
+func (q *Queries) CountMembers(ctx context.Context, unitID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countMembers, unitID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countMembersByRole = `-- name: CountMembersByRole :one
 SELECT COUNT(*)
 FROM unit_members

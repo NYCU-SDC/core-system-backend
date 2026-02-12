@@ -105,3 +105,8 @@ WHERE unit_id = $1 AND role = $2;
 SELECT role
 FROM unit_members
 WHERE unit_id = $1 AND member_id = $2;
+
+-- name: CountMembers :one
+SELECT COUNT(*)
+FROM unit_members
+WHERE unit_id = $1;

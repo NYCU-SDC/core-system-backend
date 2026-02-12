@@ -35,6 +35,7 @@ type Querier interface {
 	ListUnitsMembers(ctx context.Context, unitIDs []uuid.UUID) ([]ListUnitsMembersRow, error)
 	RemoveMember(ctx context.Context, arg RemoveMemberParams) error
 
+	CountMembers(ctx context.Context, unitID uuid.UUID) (int64, error)
 	CountMembersByRole(ctx context.Context, arg CountMembersByRoleParams) (int64, error)
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error

@@ -1,7 +1,9 @@
 package unit
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
+	"errors"
 	"fmt"
 
 	"NYCU-SDC/core-system-backend/internal/user"
@@ -9,6 +11,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.uber.org/zap"
 )
 
@@ -19,16 +22,9 @@ func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, me
 
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	adminCount, err := s.queries.CountMembersByRole(
-		traceCtx,
-		CountMembersByRoleParams{
-			UnitID: id,
-			Role:   UnitRoleAdmin,
-		},
-	)
-
+	memberCount, err := s.queries.CountMembers(traceCtx, id)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "count admins")
+		err = databaseutil.WrapDBError(err, logger, "count members")
 		span.RecordError(err)
 		return AddMemberRow{}, err
 	}
@@ -43,7 +39,7 @@ func (s *Service) AddMember(ctx context.Context, unitType Type, id uuid.UUID, me
 		return AddMemberRow{}, err
 	}
 
-	if adminCount == 0 {
+	if memberCount == 0 {
 		err = s.queries.UpdateMemberRole(traceCtx, UpdateMemberRoleParams{
 			UnitID:   id,
 			MemberID: memberRow.MemberID,
@@ -141,7 +137,39 @@ func (s *Service) RemoveMember(ctx context.Context, unitType Type, id uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.RemoveMember(traceCtx, RemoveMemberParams{
+	role, err := s.queries.GetMemberRole(traceCtx, GetMemberRoleParams{
+		UnitID:   id,
+		MemberID: memberID,
+	})
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+
+		err = databaseutil.WrapDBError(err, logger, "get member role before remove")
+		span.RecordError(err)
+		return err
+	}
+
+	if role == UnitRoleAdmin {
+		adminCount, err := s.queries.CountMembersByRole(traceCtx, CountMembersByRoleParams{
+			UnitID: id,
+			Role:   UnitRoleAdmin,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "count admins before remove")
+			span.RecordError(err)
+			return err
+		}
+
+		if adminCount == 1 {
+			span.RecordError(internal.ErrCannotRemoveLastAdmin)
+			return internal.ErrCannotRemoveLastAdmin
+		}
+	}
+
+	err = s.queries.RemoveMember(traceCtx, RemoveMemberParams{
 		UnitID:   id,
 		MemberID: memberID,
 	})
