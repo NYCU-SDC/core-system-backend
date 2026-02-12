@@ -277,6 +277,48 @@ func (ns NullStatus) Value() (driver.Value, error) {
 	return string(ns.Status), nil
 }
 
+type UnitRole string
+
+const (
+	UnitRoleAdmin  UnitRole = "admin"
+	UnitRoleMember UnitRole = "member"
+)
+
+func (e *UnitRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = UnitRole(s)
+	case string:
+		*e = UnitRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for UnitRole: %T", src)
+	}
+	return nil
+}
+
+type NullUnitRole struct {
+	UnitRole UnitRole
+	Valid    bool // Valid is true if UnitRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullUnitRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.UnitRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.UnitRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullUnitRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.UnitRole), nil
+}
+
 type UnitType string
 
 const (
@@ -429,6 +471,7 @@ type Unit struct {
 type UnitMember struct {
 	UnitID   uuid.UUID
 	MemberID uuid.UUID
+	Role     UnitRole
 }
 
 type User struct {
