@@ -226,9 +226,7 @@ func (s *Service) List(ctx context.Context) ([]ListRow, error) {
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	// By default, exclude archived forms from list results.
-	includeArchived := pgtype.Bool{Bool: false, Valid: true}
-	forms, err := s.queries.List(ctx, includeArchived)
+	forms, err := s.queries.List(ctx, pgtype.Bool{Valid: false})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms")
 		span.RecordError(err)
@@ -244,8 +242,7 @@ func (s *Service) ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUni
 	logger := logutil.WithContext(ctx, s.logger)
 
 	forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
-		UnitID:          pgtype.UUID{Bytes: unitID, Valid: true},
-		IncludeArchived: pgtype.Bool{Bool: false, Valid: true},
+		UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms by unit")
