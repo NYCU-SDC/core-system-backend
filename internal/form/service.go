@@ -23,8 +23,8 @@ type Querier interface {
 	Update(ctx context.Context, params UpdateParams) (UpdateRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
-	List(ctx context.Context) ([]ListRow, error)
-	ListByUnit(ctx context.Context, unitID pgtype.UUID) ([]ListByUnitRow, error)
+	List(ctx context.Context, includeArchived pgtype.Bool) ([]ListRow, error)
+	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
@@ -226,7 +226,7 @@ func (s *Service) List(ctx context.Context) ([]ListRow, error) {
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	forms, err := s.queries.List(ctx)
+	forms, err := s.queries.List(ctx, pgtype.Bool{Valid: false})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms")
 		span.RecordError(err)
@@ -241,7 +241,9 @@ func (s *Service) ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUni
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	forms, err := s.queries.ListByUnit(ctx, pgtype.UUID{Bytes: unitID, Valid: true})
+	forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
+		UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
+	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms by unit")
 		span.RecordError(err)
@@ -292,7 +294,9 @@ func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, user
 
 	allForms := make(map[uuid.UUID]ListByUnitRow)
 	for _, unitID := range unitIDs {
-		forms, err := s.queries.ListByUnit(ctx, pgtype.UUID{Bytes: unitID, Valid: true})
+		forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
+			UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
+		})
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "list forms by unit")
 			span.RecordError(err)

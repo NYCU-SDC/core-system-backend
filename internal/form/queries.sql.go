@@ -276,6 +276,7 @@ FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+WHERE (f.status <> 'archived' OR $1::boolean IS TRUE)
 ORDER BY f.updated_at DESC
 `
 
@@ -307,8 +308,8 @@ type ListRow struct {
 	LastEditorEmail        interface{}
 }
 
-func (q *Queries) List(ctx context.Context) ([]ListRow, error) {
-	rows, err := q.db.Query(ctx, list)
+func (q *Queries) List(ctx context.Context, includeArchived pgtype.Bool) ([]ListRow, error) {
+	rows, err := q.db.Query(ctx, list, includeArchived)
 	if err != nil {
 		return nil, err
 	}
@@ -367,8 +368,14 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.unit_id = $1
+AND (f.status <> 'archived' OR $2::boolean IS TRUE)
 ORDER BY f.updated_at DESC
 `
+
+type ListByUnitParams struct {
+	UnitID          pgtype.UUID
+	IncludeArchived pgtype.Bool
+}
 
 type ListByUnitRow struct {
 	ID                     uuid.UUID
@@ -398,8 +405,8 @@ type ListByUnitRow struct {
 	LastEditorEmail        interface{}
 }
 
-func (q *Queries) ListByUnit(ctx context.Context, unitID pgtype.UUID) ([]ListByUnitRow, error) {
-	rows, err := q.db.Query(ctx, listByUnit, unitID)
+func (q *Queries) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error) {
+	rows, err := q.db.Query(ctx, listByUnit, arg.UnitID, arg.IncludeArchived)
 	if err != nil {
 		return nil, err
 	}

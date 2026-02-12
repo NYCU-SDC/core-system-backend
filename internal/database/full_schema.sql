@@ -167,7 +167,8 @@ CREATE TABLE IF NOT EXISTS questions(
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );CREATE TYPE status AS ENUM(
     'draft',
-    'published'
+    'published',
+    'archived'
 );
 
 CREATE TYPE visibility AS ENUM(

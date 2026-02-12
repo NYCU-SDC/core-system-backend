@@ -549,6 +549,70 @@ func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ArchiveHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("id")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	_, err = h.store.SetStatus(traceCtx, id, StatusArchived, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentForm, err := h.store.GetByID(traceCtx, id)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := ToResponse(Form{
+		ID:                     currentForm.ID,
+		Title:                  currentForm.Title,
+		Description:            currentForm.Description,
+		PreviewMessage:         currentForm.PreviewMessage,
+		Status:                 currentForm.Status,
+		UnitID:                 currentForm.UnitID,
+		LastEditor:             currentForm.LastEditor,
+		Deadline:               currentForm.Deadline,
+		CreatedAt:              currentForm.CreatedAt,
+		UpdatedAt:              currentForm.UpdatedAt,
+		MessageAfterSubmission: currentForm.MessageAfterSubmission,
+		Visibility:             currentForm.Visibility,
+		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
+		PublishTime:            currentForm.PublishTime,
+		CoverImageUrl:          currentForm.CoverImageUrl,
+		DressingColor:          currentForm.DressingColor,
+		DressingHeaderFont:     currentForm.DressingHeaderFont,
+		DressingQuestionFont:   currentForm.DressingQuestionFont,
+		DressingTextFont:       currentForm.DressingTextFont,
+	},
+		currentForm.UnitName.String,
+		currentForm.OrgName.String,
+		user.User{
+			ID:        currentForm.LastEditor,
+			Name:      currentForm.LastEditorName,
+			Username:  currentForm.LastEditorUsername,
+			AvatarUrl: currentForm.LastEditorAvatarUrl,
+		},
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
 func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetFontsHandler")
 	defer span.End()
