@@ -1,7 +1,7 @@
 -- Response progress enum (for form completion tracking)
 CREATE TYPE response_progress AS ENUM(
     'draft',
-    'submitted'
+    'submitted' -- which is implemented as "completed" currently
 );
 
 CREATE TABLE IF NOT EXISTS form_responses (
