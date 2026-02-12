@@ -3,7 +3,6 @@ package question
 import (
 	_ "embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -83,8 +82,8 @@ func (s LinearScale) Validate(value string) error {
 
 func NewLinearScale(q Question, formID uuid.UUID) (LinearScale, error) {
 	metadata := q.Metadata
-	if metadata == nil {
-		return LinearScale{}, errors.New("metadata is nil")
+	if metadata == nil || len(metadata) == 0 {
+		return LinearScale{}, fmt.Errorf("metadata is nil or empty for linear scale question %s", q.ID.String())
 	}
 
 	linearScale, err := ExtractLinearScale(metadata)
@@ -136,8 +135,8 @@ func (s Rating) Validate(value string) error {
 
 func NewRating(q Question, formID uuid.UUID) (Rating, error) {
 	metadata := q.Metadata
-	if metadata == nil {
-		return Rating{}, errors.New("metadata is nil")
+	if metadata == nil || len(metadata) == 0 {
+		return Rating{}, fmt.Errorf("metadata is nil or empty for rating question %s", q.ID.String())
 	}
 
 	rating, err := ExtractRating(metadata)
@@ -186,7 +185,7 @@ func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {
 
 func GenerateRatingMetadata(option ScaleOption) ([]byte, error) {
 	if option.Icon == "" {
-		return nil, errors.New("icon is required for rating questions")
+		return nil, fmt.Errorf("icon is required for rating questions")
 	}
 
 	if option.MinVal >= option.MaxVal {

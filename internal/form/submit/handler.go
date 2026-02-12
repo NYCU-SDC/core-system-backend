@@ -27,12 +27,6 @@ type Request struct {
 }
 
 type AnswerRequest struct {
-	QuestionID   string `json:"questionId" validate:"required,uuid"`
-	QuestionType string `json:"questionType" validate:"required"`
-	Value        string `json:"value" validate:"required"`
-}
-
-type UpdateAnswerRequest struct {
 	Answers []json.RawMessage `json:"answers" validate:"required"`
 }
 
@@ -40,13 +34,6 @@ type UpdateAnswerRequest struct {
 type BaseAnswer struct {
 	QuestionID   string `json:"questionId"`
 	QuestionType string `json:"questionType"`
-}
-
-func (a AnswerRequest) ToAnswerParam() shared.AnswerParam {
-	return shared.AnswerParam{
-		QuestionID: a.QuestionID,
-		Value:      []byte(a.Value),
-	}
 }
 
 type Response struct {
@@ -59,6 +46,7 @@ type Response struct {
 type Operator interface {
 	Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
 	Update(ctx context.Context, userID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
+	GetQuestionTypes(ctx context.Context, questionIDs []uuid.UUID) (map[string]string, error)
 }
 
 type Handler struct {
@@ -92,7 +80,7 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var request Request
+	var request AnswerRequest
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -105,9 +93,18 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	answerParams := make([]shared.AnswerParam, len(request.Answers))
-	for i, answer := range request.Answers {
-		answerParams[i] = answer.ToAnswerParam()
+	// validate if the incoming question type is the same as in db
+	err = h.validateQuestionType(traceCtx, request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Parse and convert answers based on their types
+	answerParams, err := parseAnswers(request.Answers, h.validator)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
 	newResponse, errs := h.operator.Submit(traceCtx, formID, currentUser.ID, answerParams)
@@ -138,7 +135,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	var request UpdateAnswerRequest
+	var request AnswerRequest
 	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -148,6 +145,13 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	// validate if the incoming question type is the same as in db
+	err = h.validateQuestionType(traceCtx, request)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -201,6 +205,15 @@ func parseAnswers(rawAnswers []json.RawMessage, validator *validator.Validate) (
 			}
 			valueJSON, _ = json.Marshal(oauthValue)
 
+		case "DATE":
+			var dateAnswer shared.DateAnswerJSON
+			if err := json.Unmarshal(rawAnswer, &dateAnswer); err != nil {
+				return nil, internal.ErrValidationFailed
+			}
+			if err := validator.Struct(dateAnswer); err != nil {
+				return nil, internal.ErrValidationFailed
+			}
+			valueJSON, _ = json.Marshal(dateAnswer.Date)
 		default:
 			var answer shared.AnswerJSON
 			if err := json.Unmarshal(rawAnswer, &answer); err != nil {
@@ -219,4 +232,46 @@ func parseAnswers(rawAnswers []json.RawMessage, validator *validator.Validate) (
 	}
 
 	return answerParams, nil
+}
+
+func (h *Handler) validateQuestionType(ctx context.Context, request AnswerRequest) error {
+	traceCtx, span := h.tracer.Start(ctx, "GetQuestionTypes")
+	defer span.End()
+
+	questionIDsMap := make(map[string]string) // questionID -> claimed questionType
+	for _, rawAnswer := range request.Answers {
+		var base BaseAnswer
+		if err := json.Unmarshal(rawAnswer, &base); err != nil {
+			return internal.ErrValidationFailed
+		}
+		questionIDsMap[base.QuestionID] = strings.ToLower(base.QuestionType)
+	}
+
+	// Get actual question types from database
+	questionIDs := make([]uuid.UUID, 0, len(questionIDsMap))
+	for qidStr := range questionIDsMap {
+		qid, err := internal.ParseUUID(qidStr)
+		if err != nil {
+			return internal.ErrQuestionNotFound
+		}
+		questionIDs = append(questionIDs, qid)
+	}
+
+	actualTypes, err := h.operator.GetQuestionTypes(traceCtx, questionIDs)
+	if err != nil {
+		return err
+	}
+
+	// Validate that claimed types match actual types
+	for qidStr, claimedType := range questionIDsMap {
+		actualType, exists := actualTypes[qidStr]
+		if !exists {
+			return internal.ErrQuestionNotFound
+		}
+		if claimedType != actualType {
+			return internal.ErrQuestionTypeMismatch
+		}
+	}
+
+	return nil
 }

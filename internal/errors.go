@@ -66,7 +66,8 @@ var (
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
 
 	// Response Errors
-	ErrResponseNotFound = errors.New("response not found")
+	ErrResponseNotFound     = errors.New("response not found")
+	ErrQuestionTypeMismatch = errors.New("response question type mismatch with the actual type in database")
 
 	// Workflow Errors
 	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
@@ -170,6 +171,8 @@ func ErrorHandler(err error) problem.Problem {
 	// Response Errors
 	case errors.Is(err, ErrResponseNotFound):
 		return problem.NewNotFoundProblem("response not found")
+	case errors.Is(err, ErrQuestionTypeMismatch):
+		return problem.NewBadRequestProblem("response question type mismatch with the actual type in database")
 
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):

@@ -2,7 +2,6 @@ package question
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -54,12 +53,13 @@ func (s SingleChoice) Validate(value string) error {
 func NewSingleChoice(q Question, formID uuid.UUID) (SingleChoice, error) {
 	metadata := q.Metadata
 
-	if q.SourceID.Valid && metadata == nil {
+	// If sourceID is provided, metadata should be empty (no choices)
+	if q.SourceID.Valid {
 		return SingleChoice{question: q, formID: formID, Choices: []Choice{}}, nil
 	}
 
-	if metadata == nil {
-		return SingleChoice{}, errors.New("metadata is nil")
+	if metadata == nil || len(metadata) == 0 {
+		return SingleChoice{}, fmt.Errorf("metadata is nil or empty for single choice question %s", q.ID.String())
 	}
 
 	choices, err := ExtractChoices(metadata)
@@ -152,12 +152,13 @@ func (m MultiChoice) Validate(value string) error {
 func NewMultiChoice(q Question, formID uuid.UUID) (MultiChoice, error) {
 	metadata := q.Metadata
 
-	if q.SourceID.Valid && metadata == nil {
+	// If sourceID is provided, metadata should be empty (no choices)
+	if q.SourceID.Valid {
 		return MultiChoice{question: q, formID: formID, Choices: []Choice{}}, nil
 	}
 
-	if metadata == nil {
-		return MultiChoice{}, errors.New("metadata is nil")
+	if metadata == nil || len(metadata) == 0 {
+		return MultiChoice{}, fmt.Errorf("metadata is nil or empty for multiple choice question %s", q.ID.String())
 	}
 
 	choices, err := ExtractChoices(metadata)
@@ -249,8 +250,8 @@ func (m DetailedMultiChoice) Validate(value string) error {
 
 func NewDetailedMultiChoice(q Question, formID uuid.UUID) (DetailedMultiChoice, error) {
 	metadata := q.Metadata
-	if metadata == nil {
-		return DetailedMultiChoice{}, errors.New("metadata is nil")
+	if metadata == nil || len(metadata) == 0 {
+		return DetailedMultiChoice{}, fmt.Errorf("metadata is nil or empty for detailed multiple choice question %s", q.ID.String())
 	}
 
 	choices, err := ExtractChoices(metadata)
@@ -339,12 +340,13 @@ func (r Ranking) Validate(value string) error {
 func NewRanking(q Question, formID uuid.UUID) (Ranking, error) {
 	metadata := q.Metadata
 
-	if q.SourceID.Valid && metadata == nil {
+	// If sourceID is provided, metadata should be empty (no choices)
+	if q.SourceID.Valid {
 		return Ranking{question: q, formID: formID, Rank: []Choice{}}, nil
 	}
 
-	if metadata == nil {
-		return Ranking{}, errors.New("metadata is nil")
+	if metadata == nil || len(metadata) == 0 {
+		return Ranking{}, fmt.Errorf("metadata is nil or empty for ranking question %s", q.ID.String())
 	}
 
 	choices, err := ExtractChoices(metadata)

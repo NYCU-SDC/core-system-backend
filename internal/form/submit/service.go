@@ -243,7 +243,33 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, answers []shared
 	return result, validationErrors
 }
 
-// convertAnswerValueForValidation converts a JSONB value (json.RawMessage) to the format expected by validation methods
+// GetQuestionTypes returns a map of questionID -> questionType (lowercase) for the given question IDs
+func (s *Service) GetQuestionTypes(ctx context.Context, questionIDs []uuid.UUID) (map[string]string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetQuestionTypes")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	if len(questionIDs) == 0 {
+		return map[string]string{}, nil
+	}
+
+	questionAnswerables, err := s.questionStore.GetByIDs(traceCtx, questionIDs)
+	if err != nil {
+		logger.Error("failed to get questions", zap.Error(err))
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to get questions: %w", err)
+	}
+
+	result := make(map[string]string, len(questionAnswerables))
+	for _, answerable := range questionAnswerables {
+		qid := answerable.Question().ID.String()
+		qtype := strings.ToLower(string(answerable.Question().Type))
+		result[qid] = qtype
+	}
+
+	return result, nil
+}
+
 func convertAnswerValueForValidation(rawValue json.RawMessage, questionType question.QuestionType) (string, error) {
 	if len(rawValue) == 0 || string(rawValue) == "null" {
 		return "", nil
@@ -259,7 +285,12 @@ func convertAnswerValueForValidation(rawValue json.RawMessage, questionType ques
 
 	case "OAUTH_CONNECT":
 		return string(rawValue), nil
-
+	case "DATE":
+		var dateTime time.Time
+		if err := json.Unmarshal(rawValue, &dateTime); err != nil {
+			return "", fmt.Errorf("failed to parse date value: %w", err)
+		}
+		return dateTime.Format("2006-01-02"), nil
 	default:
 		var stringArray []string
 		if err := json.Unmarshal(rawValue, &stringArray); err != nil {

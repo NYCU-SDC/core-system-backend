@@ -27,6 +27,7 @@ type Request struct {
 	Order        int32            `json:"order" validate:"required,min=1"`
 	Choices      []ChoiceOption   `json:"choices,omitempty" validate:"omitempty,required_if=Type SINGLE_CHOICE,required_if=Type MULTIPLE_CHOICE,required_if=Type DETAILED_MULTIPLE_CHOICE,required_if=Type DROPDOWN,required_if=Type RANKING,dive"`
 	Scale        ScaleOption      `json:"scale,omitempty" validate:"omitempty,required_if=Type LINEAR_SCALE,required_if=Type RATING"`
+	Date         DateOption       `json:"date,omitempty" validate:"omitempty,required_if=Type DATE"`
 	UploadFile   UploadFileOption `json:"uploadFile,omitempty" validate:"omitempty,required_if=Type UPLOAD_FILE"`
 	OauthConnect string           `json:"oauthConnect,omitempty" validate:"required_if=Type OAUTH_CONNECT"`
 	SourceID     uuid.UUID        `json:"sourceId,omitempty"`
@@ -41,6 +42,7 @@ type Response struct {
 	Description  string            `json:"description"`
 	Choices      []Choice          `json:"choices,omitempty"`
 	Scale        *ScaleOption      `json:"scale,omitempty"`
+	Date         *DateOption       `json:"date,omitempty"`
 	UploadFile   *UploadFileOption `json:"uploadFile,omitempty"`
 	OauthConnect string            `json:"oauthConnect,omitempty"`
 	SourceID     string            `json:"sourceId,omitempty"`
@@ -88,6 +90,16 @@ func ToResponse(answerable Answerable) (Response, error) {
 			}
 		}
 		response.Choices = choices
+	case QuestionTypeDate:
+		date, err := ExtractDate(q.Metadata)
+		if err != nil {
+			return response, ErrInvalidMetadata{
+				QuestionID: q.ID.String(),
+				RawData:    q.Metadata,
+				Message:    err.Error(),
+			}
+		}
+		response.Date = &date
 	case QuestionTypeLinearScale:
 		scale, err := ExtractLinearScale(q.Metadata)
 		if err != nil {
@@ -386,15 +398,17 @@ func getGenerateMetadata(req Request) ([]byte, error) {
 			if len(req.Choices) > 0 {
 				return nil, internal.ErrInvalidSourceIDWithChoices
 			}
-			return nil, nil
+			return []byte("{}"), nil
 		default:
 			return nil, internal.ErrInvalidSourceIDForType
 		}
 	}
 
 	switch req.Type {
-	case "short_text", "long_text", "date", "hyperlink":
-		return nil, nil
+	case "short_text", "long_text", "hyperlink":
+		return []byte("{}"), nil
+	case "date":
+		return GenerateDateMetadata(req.Date)
 	case "single_choice", "multiple_choice", "detailed_multiple_choice", "dropdown", "ranking":
 		return GenerateChoiceMetadata(req.Type, req.Choices)
 	case "linear_scale":

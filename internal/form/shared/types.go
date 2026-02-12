@@ -21,7 +21,14 @@ type ScaleAnswerJSON struct {
 
 // OauthAnswerJSON is stored in DB and returned after OAuth completion
 type OauthAnswerJSON struct {
-	QuestionID string `json:"questionId" validate:"required,uuid"`
-	AvatarURL  string `json:"avatarUrl" validate:"required"`
-	Username   string `json:"username" validate:"required"`
+	QuestionID   string `json:"questionId" validate:"required,uuid"`
+	QuestionType string `json:"questionType" validate:"required,oneof=OAUTH_CONNECT"`
+	AvatarURL    string `json:"avatarUrl" validate:"required"`
+	Username     string `json:"username" validate:"required"`
+}
+
+type DateAnswerJSON struct {
+	QuestionID   string `json:"questionId" validate:"required,uuid"`
+	QuestionType string `json:"questionType" validate:"required,oneof=DATE"`
+	Date         string `json:"date" validate:"required"`
 }

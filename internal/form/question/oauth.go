@@ -2,7 +2,6 @@ package question
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -62,8 +61,8 @@ func (o OAuthConnect) Validate(value string) error {
 }
 
 func NewOAuthConnect(q Question, formID uuid.UUID) (OAuthConnect, error) {
-	if q.Metadata == nil {
-		return OAuthConnect{}, errors.New("metadata is nil")
+	if q.Metadata == nil || len(q.Metadata) == 0 {
+		return OAuthConnect{}, fmt.Errorf("metadata is nil or empty for oauth connect question %s", q.ID.String())
 	}
 
 	var partial map[string]json.RawMessage

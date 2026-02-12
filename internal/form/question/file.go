@@ -2,7 +2,6 @@ package question
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -132,8 +131,8 @@ func (u UploadFile) Validate(value string) error {
 }
 
 func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
-	if q.Metadata == nil {
-		return UploadFile{}, errors.New("metadata is nil")
+	if q.Metadata == nil || len(q.Metadata) == 0 {
+		return UploadFile{}, fmt.Errorf("metadata is nil or empty for upload file question %s", q.ID.String())
 	}
 
 	uploadFile, err := ExtractUploadFile(q.Metadata)
@@ -182,7 +181,7 @@ func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
 // GenerateUploadFileMetadata generates metadata for upload file question
 func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
 	if len(option.AllowedFileTypes) == 0 {
-		return nil, errors.New("allowedFileTypes cannot be empty")
+		return nil, fmt.Errorf("allowedFileTypes cannot be empty")
 	}
 
 	if option.MaxFileAmount < 1 || option.MaxFileAmount > 10 {
