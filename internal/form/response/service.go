@@ -3,9 +3,13 @@ package response
 import (
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"context"
+	"encoding/json"
 	"fmt"
+	"regexp"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/workflow"
+	"NYCU-SDC/core-system-backend/internal/form/workflow/node"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -14,6 +18,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+type WorkflowStore interface {
+	Get(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error)
+}
 
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
@@ -31,20 +39,237 @@ type Querier interface {
 	CheckAnswerContent(ctx context.Context, arg CheckAnswerContentParams) (bool, error)
 	GetAnswerID(ctx context.Context, arg GetAnswerIDParams) (uuid.UUID, error)
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
+	GetFormIDByResponseID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetSectionsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetSectionsByIDsRow, error)
+	GetRequiredQuestionsBySectionIDs(ctx context.Context, sectionIDs []uuid.UUID) ([]GetRequiredQuestionsBySectionIDsRow, error)
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger        *zap.Logger
+	queries       Querier
+	tracer        trace.Tracer
+	workflowStore WorkflowStore
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, workflowStore WorkflowStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("response/service"),
+		logger:        logger,
+		queries:       New(db),
+		tracer:        otel.Tracer("response/service"),
+		workflowStore: workflowStore,
 	}
+}
+
+type conditionRule struct {
+	Source  string `json:"source"`
+	Key     string `json:"key"` // question ID
+	Pattern string `json:"pattern"`
+}
+
+// traverseWorkflowSections walks the workflow from the start node using answers
+// to evaluate condition nodes, and returns section IDs in traversal order.
+func traverseWorkflowSections(workflowJSON []byte, answerByQuestionID map[string]string) ([]uuid.UUID, error) {
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(workflowJSON, &nodes); err != nil {
+		return nil, fmt.Errorf("parse workflow json: %w", err)
+	}
+
+	workflowMap := make(map[string]map[string]interface{})
+	var startNodeID string
+	for _, n := range nodes {
+		id, _ := n["id"].(string)
+		if id == "" {
+			continue
+		}
+
+		workflowMap[id] = n
+		typ, _ := n["type"].(string)
+		if typ == node.TypeStart {
+			startNodeID = id
+		}
+	}
+
+	if startNodeID == "" {
+		return nil, fmt.Errorf("workflow has no start node")
+	}
+
+	var sectionIDs []uuid.UUID
+	visited := make(map[string]struct{})
+	currentID := startNodeID
+
+	for currentID != "" {
+		_, visitedNode := visited[currentID]
+		if visitedNode {
+			break // cycle guard
+		}
+		visited[currentID] = struct{}{}
+
+		currentNode, ok := workflowMap[currentID]
+		if !ok {
+			break
+		}
+
+		nodeType, _ := currentNode["type"].(string)
+		switch nodeType {
+		case node.TypeSection:
+			id, err := uuid.Parse(currentID)
+			if err == nil {
+				sectionIDs = append(sectionIDs, id)
+			}
+			next, _ := currentNode["next"].(string)
+			currentID = next
+
+		case node.TypeCondition:
+			ruleRaw, ok := currentNode["conditionRule"]
+			if !ok {
+				currentID, _ = currentNode["nextFalse"].(string)
+				continue
+			}
+
+			ruleBytes, _ := json.Marshal(ruleRaw)
+
+			var rule conditionRule
+			if json.Unmarshal(ruleBytes, &rule) != nil {
+				currentID, _ = currentNode["nextFalse"].(string)
+				continue
+			}
+
+			val := answerByQuestionID[rule.Key]
+			matched, _ := regexp.MatchString(rule.Pattern, val)
+			if matched {
+				currentID, _ = currentNode["nextTrue"].(string)
+			} else {
+				currentID, _ = currentNode["nextFalse"].(string)
+			}
+
+		case node.TypeStart:
+			next, _ := currentNode["next"].(string)
+			currentID = next
+
+		case node.TypeEnd:
+			currentID = ""
+		default:
+			next, _ := currentNode["next"].(string)
+			currentID = next
+		}
+	}
+
+	return sectionIDs, nil
+}
+
+// ListSections lists all sections of a response by traversing the workflow
+// using stored answers to evaluate condition nodes. Sections are returned
+// in the order they appear on the user's path. Progress comes from the sections table.
+func (s Service) ListSections(ctx context.Context, responseID uuid.UUID) ([]SectionSummary, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListSections")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formID, err := s.queries.GetFormIDByResponseID(traceCtx, responseID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", responseID.String(), logger, "get form id by response id")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	workflow, err := s.workflowStore.Get(traceCtx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get workflow by form id")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	answers, err := s.queries.GetAnswersByResponseID(traceCtx, responseID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "answers", "response_id", responseID.String(), logger, "get answers by response id")
+		span.RecordError(err)
+		return nil, err
+	}
+	// use answerByQuestionID to traverse the workflow
+	answersByQuestionID := make(map[string]string, len(answers))
+	// use answeredQuestionIDs to check if a question is answered
+	answeredQuestionIDs := make(map[uuid.UUID]struct{}, len(answers))
+
+	for _, a := range answers {
+		// Values are stored as JSON; attempt to unmarshal to a string.
+		var value string
+		err := json.Unmarshal(a.Value, &value)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "unmarshal answer value")
+			span.RecordError(err)
+			return nil, err
+		}
+		answersByQuestionID[a.QuestionID.String()] = value
+		answeredQuestionIDs[a.QuestionID] = struct{}{}
+	}
+
+	sectionIDs, err := traverseWorkflowSections(workflow.Workflow, answersByQuestionID)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	if len(sectionIDs) == 0 {
+		return []SectionSummary{}, nil
+	}
+
+	sectionRows, err := s.queries.GetSectionsByIDs(traceCtx, sectionIDs)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get sections by ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	rowByID := make(map[uuid.UUID]GetSectionsByIDsRow, len(sectionRows))
+	for _, row := range sectionRows {
+		rowByID[row.ID] = row
+	}
+
+	requiredRows, err := s.queries.GetRequiredQuestionsBySectionIDs(traceCtx, sectionIDs)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get required questions by section ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	requiredBySection := make(map[uuid.UUID][]uuid.UUID, len(requiredRows))
+	for _, row := range requiredRows {
+		requiredBySection[row.SectionID] = append(requiredBySection[row.SectionID], row.ID)
+	}
+
+	out := make([]SectionSummary, 0, len(sectionIDs))
+	for _, sectionID := range sectionIDs {
+		row, ok := rowByID[sectionID]
+		if !ok {
+			continue
+		}
+
+		// A section is SUBMITTED if all its required questions
+		// have answers for this response; otherwise it is DRAFT.
+		requiredQuestions := requiredBySection[sectionID]
+
+		progress := SectionStatusDraft
+		if len(requiredQuestions) > 0 {
+			isComplete := true
+			for _, qID := range requiredQuestions {
+				if _, ok := answeredQuestionIDs[qID]; !ok {
+					isComplete = false
+					break
+				}
+			}
+			if isComplete {
+				progress = SectionStatusSubmitted
+			}
+		}
+
+		out = append(out, SectionSummary{
+			ID:       sectionID.String(),
+			Title:    row.Title.String,
+			Progress: progress,
+		})
+	}
+
+	return out, nil
 }
 
 func (s Service) CreateOrUpdate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []QuestionType) (FormResponse, error) {
@@ -322,4 +547,20 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 	}
 
 	return responses, nil
+}
+
+// GetFormIDByResponseID returns the form ID for a given response.
+func (s Service) GetFormIDByResponseID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetFormIDByResponseID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formID, err := s.queries.GetFormIDByResponseID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
+		span.RecordError(err)
+		return uuid.UUID{}, err
+	}
+
+	return formID, nil
 }

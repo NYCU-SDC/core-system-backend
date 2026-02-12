@@ -175,8 +175,8 @@ func (b Builder) CreateActiveWorkflow(formID uuid.UUID, userID uuid.UUID, workfl
 // CreateSectionRecord creates a section record in the database
 func (b Builder) CreateSectionRecord(sectionID uuid.UUID, formID uuid.UUID, title string) {
 	_, err := b.db.Exec(context.Background(),
-		"INSERT INTO sections (id, form_id, title, progress) VALUES ($1, $2, $3, $4)",
-		sectionID, formID, title, "draft")
+		"INSERT INTO sections (id, form_id, title) VALUES ($1, $2, $3)",
+		sectionID, formID, title)
 	require.NoError(b.t, err)
 }
 

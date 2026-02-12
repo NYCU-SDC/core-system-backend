@@ -66,3 +66,19 @@ SELECT EXISTS(SELECT 1 FROM answers WHERE response_id = $1 AND question_id = $2)
 
 -- name: GetAnswerID :one
 SELECT id FROM answers WHERE response_id = $1 AND question_id = $2;
+
+-- name: GetFormIDByResponseID :one
+SELECT form_id FROM form_responses
+WHERE id = $1;
+
+-- name: GetSectionsByIDs :many
+SELECT id, title, 'draft'::text AS progress
+FROM sections
+WHERE id = ANY($1::uuid[])
+ORDER BY array_position($1::uuid[], id);
+
+-- name: GetRequiredQuestionsBySectionIDs :many
+SELECT id, section_id
+FROM questions
+WHERE section_id = ANY($1::uuid[])
+  AND required = TRUE;
