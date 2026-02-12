@@ -76,3 +76,9 @@ SELECT id, title, 'draft'::text AS progress
 FROM sections
 WHERE id = ANY($1::uuid[])
 ORDER BY array_position($1::uuid[], id);
+
+-- name: GetRequiredQuestionsBySectionIDs :many
+SELECT id, section_id
+FROM questions
+WHERE section_id = ANY($1::uuid[])
+  AND required = TRUE;

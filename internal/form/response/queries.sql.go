@@ -278,6 +278,38 @@ func (q *Queries) GetFormIDByResponseID(ctx context.Context, id uuid.UUID) (uuid
 	return form_id, err
 }
 
+const getRequiredQuestionsBySectionIDs = `-- name: GetRequiredQuestionsBySectionIDs :many
+SELECT id, section_id
+FROM questions
+WHERE section_id = ANY($1::uuid[])
+  AND required = TRUE
+`
+
+type GetRequiredQuestionsBySectionIDsRow struct {
+	ID        uuid.UUID
+	SectionID uuid.UUID
+}
+
+func (q *Queries) GetRequiredQuestionsBySectionIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetRequiredQuestionsBySectionIDsRow, error) {
+	rows, err := q.db.Query(ctx, getRequiredQuestionsBySectionIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRequiredQuestionsBySectionIDsRow
+	for rows.Next() {
+		var i GetRequiredQuestionsBySectionIDsRow
+		if err := rows.Scan(&i.ID, &i.SectionID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSectionsByIDs = `-- name: GetSectionsByIDs :many
 SELECT id, title, 'draft'::text AS progress
 FROM sections
