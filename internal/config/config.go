@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	googleOauth "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
 	oauthprovider "NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
 
 	configutil "github.com/NYCU-SDC/summer/pkg/config"
@@ -39,7 +38,7 @@ type Config struct {
 	RefreshTokenExpirationStr string                    `yaml:"refresh_token_expiration" envconfig:"REFRESH_TOKEN_EXPIRATION"`
 	OtelCollectorUrl          string                    `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
 	AllowOrigins              []string                  `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
-	GoogleOauth               googleOauth.GoogleOauth   `yaml:"google_oauth"`
+	GoogleOauth               oauthprovider.GoogleOauth `yaml:"google_oauth"`
 	GitHubOauth               oauthprovider.GitHubOauth `yaml:"github_oauth"`
 
 	AccessTokenExpiration  time.Duration `yaml:"-"`
@@ -136,7 +135,7 @@ func Load() (Config, *LogBuffer) {
 		AccessTokenExpirationStr:  "15m",
 		RefreshTokenExpirationStr: "720h",
 		OtelCollectorUrl:          "",
-		GoogleOauth:               googleOauth.GoogleOauth{},
+		GoogleOauth:               oauthprovider.GoogleOauth{},
 		GitHubOauth:               oauthprovider.GitHubOauth{},
 	}
 
@@ -207,7 +206,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		MigrationSource:   os.Getenv("MIGRATION_SOURCE"),
 		OtelCollectorUrl:  os.Getenv("OTEL_COLLECTOR_URL"),
-		GoogleOauth: googleOauth.GoogleOauth{
+		GoogleOauth: oauthprovider.GoogleOauth{
 			ClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 			ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
 		},
