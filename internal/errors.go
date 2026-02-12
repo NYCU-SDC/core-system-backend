@@ -40,13 +40,14 @@ var (
 	ErrFailedToCreateEmail  = errors.New("failed to create email record for OAuth user")
 
 	// Unit Errors
-	ErrOrgSlugNotFound      = errors.New("org slug not found")
-	ErrOrgSlugAlreadyExists = errors.New("org slug already exists")
-	ErrOrgSlugInvalid       = errors.New("org slug is invalid")
-	ErrUnitNotFound         = errors.New("unit not found")
-	ErrSlugNotBelongToUnit  = errors.New("slug not belong to unit")
-	ErrInvalidEmailFormat   = errors.New("invalid email format")
-	ErrMemberEmailNotFound  = errors.New("member email not found")
+	ErrOrgSlugNotFound       = errors.New("org slug not found")
+	ErrOrgSlugAlreadyExists  = errors.New("org slug already exists")
+	ErrOrgSlugInvalid        = errors.New("org slug is invalid")
+	ErrUnitNotFound          = errors.New("unit not found")
+	ErrSlugNotBelongToUnit   = errors.New("slug not belong to unit")
+	ErrInvalidEmailFormat    = errors.New("invalid email format")
+	ErrMemberEmailNotFound   = errors.New("member email not found")
+	ErrCannotRemoveLastAdmin = errors.New("cannot remove the last admin of the unit")
 
 	// Inbox Errors
 	ErrInvalidIsReadParameter     = errors.New("invalid isRead parameter")
@@ -56,9 +57,11 @@ var (
 	ErrSearchTooLong              = errors.New("search string exceeds maximum length")
 
 	// Form Errors
-	ErrFormNotFound            = errors.New("form not found")
-	ErrFormNotDraft            = fmt.Errorf("form is not in draft status")
-	ErrFormDeadlinePassed      = errors.New("form deadline has passed")
+	ErrFormNotFound                 = errors.New("form not found")
+	ErrFormNotDraft                 = fmt.Errorf("form is not in draft status")
+	ErrFormDeadlinePassed           = errors.New("form deadline has passed")
+	ErrCoverImageTooLarge      = errors.New("cover image exceeds maximum size")
+	ErrCoverImageInvalidFormat = errors.New("cover image format is invalid")
 	ErrGoogleSheetURLInvalid   = errors.New("invalid google sheet url format")
 	ErrGoogleSheetAccessDenied = errors.New("cannot access google sheet")
 
@@ -75,6 +78,7 @@ var (
 
 	// Workflow Errors
 	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
+	ErrWorkflowNotActive        = errors.New("workflow is not active")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -145,12 +149,18 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid email format")
 	case errors.Is(err, ErrMemberEmailNotFound):
 		return problem.NewBadRequestProblem("member email not found")
+	case errors.Is(err, ErrCannotRemoveLastAdmin):
+		return problem.NewValidateProblem("cannot remove the last admin of the unit")
 
 	// Form Errors
 	case errors.Is(err, ErrFormNotFound):
 		return problem.NewNotFoundProblem("form not found")
 	case errors.Is(err, ErrFormNotDraft):
 		return problem.NewValidateProblem("form is not in draft status")
+	case errors.Is(err, ErrCoverImageTooLarge):
+		return problem.NewValidateProblem("cover image exceeds maximum size (max 2MB)")
+	case errors.Is(err, ErrCoverImageInvalidFormat):
+		return problem.NewValidateProblem("cover image must be a WebP file")
 	case errors.Is(err, ErrGoogleSheetURLInvalid):
 		return problem.NewValidateProblem("invalid google sheet url format")
 	case errors.Is(err, ErrGoogleSheetAccessDenied):
@@ -193,6 +203,8 @@ func ErrorHandler(err error) problem.Problem {
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
+	case errors.Is(err, ErrWorkflowNotActive):
+		return problem.NewValidateProblem("workflow is not active")
 	}
 	return problem.Problem{}
 }

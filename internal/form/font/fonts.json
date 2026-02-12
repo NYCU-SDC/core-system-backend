@@ -1,0 +1,614 @@
+[
+  {
+    "id":  "975HazyGo",
+    "name":  "975 朦朧黑體"
+  },
+  {
+    "id":  "BoutiqueBitmap7x7",
+    "name":  "精品點陣體7×7"
+  },
+  {
+    "id":  "BoutiqueBitmap7x7CircleDot",
+    "name":  "精品點陣體7×7 圓形版"
+  },
+  {
+    "id":  "BoutiqueBitmap7x7ScanLine",
+    "name":  "精品點陣體7×7 掃描線"
+  },
+  {
+    "id":  "BoutiqueBitmap7x7SquareDot",
+    "name":  "精品點陣體7×7 方格版"
+  },
+  {
+    "id":  "BoutiqueBitmap9x9",
+    "name":  "精品點陣體9x9"
+  },
+  {
+    "id":  "BoutiqueBitmap9x93D",
+    "name":  "精品點陣體9x9 立體版"
+  },
+  {
+    "id":  "BoutiqueBitmap9x9Blur",
+    "name":  "精品點陣體9x9 光暈版"
+  },
+  {
+    "id":  "BoutiqueBitmap9x9CircleDot",
+    "name":  "精品點陣體9x9 圓形版"
+  },
+  {
+    "id":  "BoutiqueBitmap9x9Gradient",
+    "name":  "精品點陣體9x9 漸層版"
+  },
+  {
+    "id":  "BoutiqueBitmap9x9SquareDot",
+    "name":  "精品點陣體9x9 方格版"
+  },
+  {
+    "id":  "CEFFontsCJK",
+    "name":  "快去寫作業CJK"
+  },
+  {
+    "id":  "CEFFontsCJKMono",
+    "name":  "快去寫作業CJK Mono"
+  },
+  {
+    "id":  "ChenYuLuoYan",
+    "name":  "辰宇落雁體"
+  },
+  {
+    "id":  "ChenYuLuoYanMono",
+    "name":  "辰宇落雁體 Mono"
+  },
+  {
+    "id":  "ChickenMcNuggets",
+    "name":  "麥克鷄塊體"
+  },
+  {
+    "id":  "ChillBitmap16px",
+    "name":  "寒蟬點陣體 16px"
+  },
+  {
+    "id":  "ChillBitmap7px",
+    "name":  "寒蟬點陣體 7px"
+  },
+  {
+    "id":  "ChillRoundGothic",
+    "name":  "寒蟬圓黑體"
+  },
+  {
+    "id":  "ChironGoRoundTC",
+    "name":  "昭源環方"
+  },
+  {
+    "id":  "ChironHeiHK",
+    "name":  "昭源黑體"
+  },
+  {
+    "id":  "ChironHeiHKIt",
+    "name":  "昭源黑體 It"
+  },
+  {
+    "id":  "ChironHeiHKText",
+    "name":  "昭源黑體 Text"
+  },
+  {
+    "id":  "ChironHeiHKTextIt",
+    "name":  "昭源黑體 Text It"
+  },
+  {
+    "id":  "ChironSungHK",
+    "name":  "昭源宋體"
+  },
+  {
+    "id":  "ChironSungHKIt",
+    "name":  "昭源宋體 It"
+  },
+  {
+    "id":  "ChironSungHKText",
+    "name":  "昭源宋體 Text"
+  },
+  {
+    "id":  "ChironSungHKTextIt",
+    "name":  "昭源宋體 Text It"
+  },
+  {
+    "id":  "CNSKai",
+    "name":  "全字庫楷體"
+  },
+  {
+    "id":  "CNSSung",
+    "name":  "全字庫明體"
+  },
+  {
+    "id":  "Cubic11",
+    "name":  "俐方體11號"
+  },
+  {
+    "id":  "ElffontFern",
+    "name":  "精靈文．蕨"
+  },
+  {
+    "id":  "ElffontRock",
+    "name":  "精靈文．岩"
+  },
+  {
+    "id":  "FancyFreeFont1",
+    "name":  "字言字型免費中文字體1—手繪體"
+  },
+  {
+    "id":  "FiraCode",
+    "name":  "Fira Code"
+  },
+  {
+    "id":  "FiraMono",
+    "name":  "Fira Mono"
+  },
+  {
+    "id":  "FusionPixelFont10px",
+    "name":  "縫合像素字體 10px"
+  },
+  {
+    "id":  "FusionPixelFont10pxMono",
+    "name":  "縫合像素字體 10px Mono"
+  },
+  {
+    "id":  "FusionPixelFont12px",
+    "name":  "縫合像素字體 12px"
+  },
+  {
+    "id":  "FusionPixelFont12pxMono",
+    "name":  "縫合像素字體 12px Mono"
+  },
+  {
+    "id":  "FusionPixelFont8px",
+    "name":  "縫合像素字體 8px"
+  },
+  {
+    "id":  "FusionPixelFont8pxMono",
+    "name":  "縫合像素字體 8px Mono"
+  },
+  {
+    "id":  "GenJyuuGothic",
+    "name":  "思源柔黑體"
+  },
+  {
+    "id":  "GenJyuuGothicL",
+    "name":  "思源柔黑體 L"
+  },
+  {
+    "id":  "GenJyuuGothicMono",
+    "name":  "思源柔黑體 Mono"
+  },
+  {
+    "id":  "GenJyuuGothicMonoL",
+    "name":  "思源柔黑體 Mono L"
+  },
+  {
+    "id":  "GenJyuuGothicMonoX",
+    "name":  "思源柔黑體 Mono X"
+  },
+  {
+    "id":  "GenJyuuGothicP",
+    "name":  "思源柔黑體 P"
+  },
+  {
+    "id":  "GenJyuuGothicPL",
+    "name":  "思源柔黑體 PL"
+  },
+  {
+    "id":  "GenJyuuGothicPX",
+    "name":  "思源柔黑體 PX"
+  },
+  {
+    "id":  "GenJyuuGothicX",
+    "name":  "思源柔黑體 X"
+  },
+  {
+    "id":  "GenKiGothicJP",
+    "name":  "源起黑體 JP"
+  },
+  {
+    "id":  "GenKiGothicPJP",
+    "name":  "源起黑體 PJP"
+  },
+  {
+    "id":  "GenKiGothicTC",
+    "name":  "源起黑體 TC"
+  },
+  {
+    "id":  "GenKiGothicTW",
+    "name":  "源起黑體 TW"
+  },
+  {
+    "id":  "GenKiMinJP",
+    "name":  "源起明體 JP"
+  },
+  {
+    "id":  "GenKiMinPJP",
+    "name":  "源起明體 PJP"
+  },
+  {
+    "id":  "GenKiMinTC",
+    "name":  "源起明體 TC"
+  },
+  {
+    "id":  "GenKiMinTW",
+    "name":  "源起明體 TW"
+  },
+  {
+    "id":  "GenRyuMinJP",
+    "name":  "源流明體 JP"
+  },
+  {
+    "id":  "GenRyuMinPJP",
+    "name":  "源流明體 PJP"
+  },
+  {
+    "id":  "GenRyuMinTC",
+    "name":  "源流明體 TC"
+  },
+  {
+    "id":  "GenRyuMinTW",
+    "name":  "源流明體 TW"
+  },
+  {
+    "id":  "GenSekiGothicJP",
+    "name":  "源石黑體 JP"
+  },
+  {
+    "id":  "GenSekiGothicPJP",
+    "name":  "源石黑體 PJP"
+  },
+  {
+    "id":  "GenSekiGothicTC",
+    "name":  "源石黑體 TC"
+  },
+  {
+    "id":  "GenSekiGothicTW",
+    "name":  "源石黑體 TW"
+  },
+  {
+    "id":  "GenSenRoundedJP",
+    "name":  "源泉圓體 JP"
+  },
+  {
+    "id":  "GenSenRoundedPJP",
+    "name":  "源泉圓體 PJP"
+  },
+  {
+    "id":  "GenSenRoundedTC",
+    "name":  "源泉圓體 TC"
+  },
+  {
+    "id":  "GenSenRoundedTW",
+    "name":  "源泉圓體 TW"
+  },
+  {
+    "id":  "GenWanMinJP",
+    "name":  "源雲明體 JP"
+  },
+  {
+    "id":  "GenWanMinPJP",
+    "name":  "源雲明體 PJP"
+  },
+  {
+    "id":  "GenWanMinTC",
+    "name":  "源雲明體 TC"
+  },
+  {
+    "id":  "GenWanMinTW",
+    "name":  "源雲明體 TW"
+  },
+  {
+    "id":  "GenYoGothicJP",
+    "name":  "源樣黑體 JP"
+  },
+  {
+    "id":  "GenYoGothicPJP",
+    "name":  "源樣黑體 PJP"
+  },
+  {
+    "id":  "GenYoGothicTC",
+    "name":  "源樣黑體 TC"
+  },
+  {
+    "id":  "GenYoGothicTW",
+    "name":  "源樣黑體 TW"
+  },
+  {
+    "id":  "GenYoMinJP",
+    "name":  "源樣明體 JP"
+  },
+  {
+    "id":  "GenYoMinPJP",
+    "name":  "源樣明體 PJP"
+  },
+  {
+    "id":  "GenYoMinTC",
+    "name":  "源樣明體 TC"
+  },
+  {
+    "id":  "GenYoMinTW",
+    "name":  "源樣明體 TW"
+  },
+  {
+    "id":  "GlowSansJP",
+    "name":  "未來熒黑 JP"
+  },
+  {
+    "id":  "GlowSansJPCom",
+    "name":  "未來熒黑 JP 窄"
+  },
+  {
+    "id":  "GlowSansJPCon",
+    "name":  "未來熒黑 JP 較窄"
+  },
+  {
+    "id":  "GlowSansJPEx",
+    "name":  "未來熒黑 JP 較寬"
+  },
+  {
+    "id":  "GlowSansJPWide",
+    "name":  "未來熒黑 JP 寬"
+  },
+  {
+    "id":  "GlowSansSC",
+    "name":  "未來熒黑 SC"
+  },
+  {
+    "id":  "GlowSansSCCom",
+    "name":  "未來熒黑 SC 窄"
+  },
+  {
+    "id":  "GlowSansSCCon",
+    "name":  "未來熒黑 SC 較窄"
+  },
+  {
+    "id":  "GlowSansSCEx",
+    "name":  "未來熒黑 SC 較寬"
+  },
+  {
+    "id":  "GlowSansSCWide",
+    "name":  "未來熒黑 TC 寬"
+  },
+  {
+    "id":  "GlowSansTC",
+    "name":  "未來熒黑 TC"
+  },
+  {
+    "id":  "GlowSansTCCom",
+    "name":  "未來熒黑 TC 窄"
+  },
+  {
+    "id":  "GlowSansTCCon",
+    "name":  "未來熒黑 TC 較窄"
+  },
+  {
+    "id":  "GlowSansTCEx",
+    "name":  "未來熒黑 TC 較寬"
+  },
+  {
+    "id":  "GlowSansTCWide",
+    "name":  "未來熒黑 SC 寬"
+  },
+  {
+    "id":  "Iansui",
+    "name":  "芫荽"
+  },
+  {
+    "id":  "IBMPlexSansJP",
+    "name":  "IBM Plex Sans Japanese"
+  },
+  {
+    "id":  "IBMPlexSansKR",
+    "name":  "IBM Plex Sans Korean"
+  },
+  {
+    "id":  "IBMPlexSansSC",
+    "name":  "IBM Plex Sans Chinese SC"
+  },
+  {
+    "id":  "IBMPlexSansTC",
+    "name":  "IBM Plex Sans Chinese TC"
+  },
+  {
+    "id":  "JetBrainsMono",
+    "name":  "JetBrains Mono"
+  },
+  {
+    "id":  "JetBrainsMonoIt",
+    "name":  "JetBrains Mono Italic"
+  },
+  {
+    "id":  "jfOpenHuninn",
+    "name":  "jf open 粉圓"
+  },
+  {
+    "id":  "LINESeed",
+    "name":  "LINE Seed"
+  },
+  {
+    "id":  "LINESeedJP",
+    "name":  "LINE Seed JP"
+  },
+  {
+    "id":  "LINESeedKR",
+    "name":  "LINE Seed KR"
+  },
+  {
+    "id":  "LINESeedTH",
+    "name":  "LINE Seed TH"
+  },
+  {
+    "id":  "LINESeedTW",
+    "name":  "LINE Seed TW"
+  },
+  {
+    "id":  "LXGWFasmartGothic",
+    "name":  "霞鷸尚智黑"
+  },
+  {
+    "id":  "LXGWFasmartGothicCL",
+    "name":  "霞鷸尚智黑 CL"
+  },
+  {
+    "id":  "LXGWFasmartGothicMN",
+    "name":  "霞鷸尚智黑 MN"
+  },
+  {
+    "id":  "LXGWHeartSerif",
+    "name":  "霞鶩銘心宋"
+  },
+  {
+    "id":  "LXGWHeartSerifCL",
+    "name":  "霞鶩銘心宋 CL"
+  },
+  {
+    "id":  "LXGWHeartSerifMN",
+    "name":  "霞鶩銘心宋 MN"
+  },
+  {
+    "id":  "LXGWMarkerGothic",
+    "name":  "霞鷸漫黑"
+  },
+  {
+    "id":  "LXGWNeoXiHei",
+    "name":  "霞鷸新晰黑＋"
+  },
+  {
+    "id":  "LXGWNeoZhiSong",
+    "name":  "霞鶩新緻宋"
+  },
+  {
+    "id":  "LXGWWenKaiGB",
+    "name":  "霞鷸文楷 GB"
+  },
+  {
+    "id":  "LXGWWenKaiGBMono",
+    "name":  "霞鷸文楷 GB Mono"
+  },
+  {
+    "id":  "LXGWWenKaiTC",
+    "name":  "霞鷸文楷 TC"
+  },
+  {
+    "id":  "LXGWWenKaiTCMono",
+    "name":  "霞鷸文楷 TC Mono"
+  },
+  {
+    "id":  "LXGWZhenKai",
+    "name":  "霞鵯臻楷"
+  },
+  {
+    "id":  "MantouSans",
+    "name":  "饅頭黑體"
+  },
+  {
+    "id":  "MaokenAssortedSansTC",
+    "name":  "貓啃什錦黑"
+  },
+  {
+    "id":  "McDonaldsFries",
+    "name":  "麥當勞薯條體"
+  },
+  {
+    "id":  "MiSans",
+    "name":  "MiSans"
+  },
+  {
+    "id":  "MiSansTC",
+    "name":  "MiSans TC"
+  },
+  {
+    "id":  "MisekiBitmap",
+    "name":  "美積點陣體"
+  },
+  {
+    "id":  "MisekiBitmapMin",
+    "name":  "美積點陣體 明"
+  },
+  {
+    "id":  "MuzaiPixel",
+    "name":  "目哉像素"
+  },
+  {
+    "id":  "MuzaiPixelFlat",
+    "name":  "目哉像素 Flat"
+  },
+  {
+    "id":  "Nerd",
+    "name":  "Symbols Nerd Font"
+  },
+  {
+    "id":  "NerdMono",
+    "name":  "Symbols Nerd Font Mono"
+  },
+  {
+    "id":  "NotoSansTC",
+    "name":  "思源黑體"
+  },
+  {
+    "id":  "NotoSerifTC",
+    "name":  "思源宋體"
+  },
+  {
+    "id":  "PopGothicJP",
+    "name":  "大波浪圓體 JP"
+  },
+  {
+    "id":  "PopGothicTC",
+    "name":  "大波浪圓體 TC"
+  },
+  {
+    "id":  "ProperScript",
+    "name":  "中規中矩體"
+  },
+  {
+    "id":  "SmileySans",
+    "name":  "得意黑"
+  },
+  {
+    "id":  "TaipeiSansTC",
+    "name":  "台北黑體"
+  },
+  {
+    "id":  "TASAExplorer",
+    "name":  "TASA Explorer"
+  },
+  {
+    "id":  "TASAOrbiter",
+    "name":  "TASA Orbiter"
+  },
+  {
+    "id":  "Tiejili",
+    "name":  "鐵蒺藜體"
+  },
+  {
+    "id":  "TomatoEmoji",
+    "name":  "托碼頭點陣字體表情包"
+  },
+  {
+    "id":  "UnboundedSans",
+    "name":  "無界黑"
+  },
+  {
+    "id":  "XiaoLai",
+    "name":  "小賴字體"
+  },
+  {
+    "id":  "XiaoLaiMono",
+    "name":  "小賴字體 Mono"
+  },
+  {
+    "id":  "Yozai",
+    "name":  "悠哉字體"
+  },
+  {
+    "id":  "ZhudouSans",
+    "name":  "煮豆黑體"
+  },
+  {
+    "id":  "ZhuqueFangsong",
+    "name":  "朱雀仿宋"
+  }
+]

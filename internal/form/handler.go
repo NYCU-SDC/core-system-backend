@@ -2,9 +2,11 @@ package form
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/font"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,25 +22,58 @@ import (
 	"go.uber.org/zap"
 )
 
+type DressingRequest struct {
+	Color        string `json:"color" validate:"omitempty,hexcolor"`
+	HeaderFont   string `json:"headerFont" validate:"omitempty,font"`
+	QuestionFont string `json:"questionFont" validate:"omitempty,font"`
+	TextFont     string `json:"textFont" validate:"omitempty,font"`
+}
+
 type Request struct {
-	Title          string     `json:"title" validate:"required"`
-	Description    string     `json:"description"`
-	PreviewMessage string     `json:"previewMessage"`
-	Deadline       *time.Time `json:"deadline"`
+	Title                  string           `json:"title" validate:"required"`
+	Description            string           `json:"description" validate:"required"`
+	PreviewMessage         string           `json:"previewMessage"`
+	Deadline               *time.Time       `json:"deadline"`
+	PublishTime            *time.Time       `json:"publishTime"`
+	MessageAfterSubmission string           `json:"messageAfterSubmission" validate:"required"`
+	GoogleSheetUrl         string           `json:"googleSheetUrl"`
+	Visibility             Visibility       `json:"visibility" validate:"required,oneof=public private"`
+	CoverImageUrl          string           `json:"coverImageUrl"`
+	Dressing               *DressingRequest `json:"dressing"`
 }
 
 type Response struct {
-	ID             string               `json:"id"`
-	Title          string               `json:"title"`
-	Description    string               `json:"description"`
-	PreviewMessage string               `json:"previewMessage"`
-	Status         string               `json:"status"`
-	UnitID         string               `json:"unitId"`
-	OrgID          string               `json:"orgId"`
-	LastEditor     user.ProfileResponse `json:"lastEditor"`
-	Deadline       *time.Time           `json:"deadline"`
-	CreatedAt      time.Time            `json:"createdAt"`
-	UpdatedAt      time.Time            `json:"updatedAt"`
+	ID                     string               `json:"id"`
+	Title                  string               `json:"title"`
+	Description            string               `json:"description"`
+	PreviewMessage         string               `json:"previewMessage"`
+	Status                 string               `json:"status"`
+	UnitID                 string               `json:"unitId"`
+	OrgID                  string               `json:"orgId"`
+	LastEditor             user.ProfileResponse `json:"lastEditor"`
+	Deadline               *time.Time           `json:"deadline"`
+	CreatedAt              time.Time            `json:"createdAt"`
+	UpdatedAt              time.Time            `json:"updatedAt"`
+	PublishTime            *time.Time           `json:"publishTime"`
+	MessageAfterSubmission string               `json:"messageAfterSubmission"`
+	GoogleSheetUrl         string               `json:"googleSheetUrl"`
+	Visibility             Visibility           `json:"visibility"`
+	CoverImageUrl          string               `json:"coverImageUrl"`
+	Dressing               DressingRequest      `json:"dressing"`
+}
+
+type CoverUploadResponse struct {
+	ImageURL string `json:"imageUrl"`
+}
+type GoogleSheetEmailResponse struct {
+	Email string `json:"email"`
+}
+type GoogleSheetVerifyRequest struct {
+	GoogleSheetURL string `json:"googleSheetUrl" validate:"required"`
+}
+
+type GoogleSheetVerifyResponse struct {
+	IsValid bool `json:"isValid"`
 }
 type GoogleSheetEmailResponse struct {
 	Email string `json:"email"`
@@ -52,7 +87,7 @@ type GoogleSheetVerifyResponse struct {
 }
 
 // ToResponse converts a Form storage model into an API Response.
-// Ensures deadline is null when empty/invalid.
+// Ensures deadline, publishTime is null when empty/invalid.
 func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
 	var deadline *time.Time
 
@@ -60,6 +95,13 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		deadline = &form.Deadline.Time
 	} else {
 		deadline = nil
+	}
+
+	var publishTime *time.Time
+	if form.PublishTime.Valid {
+		publishTime = &form.PublishTime.Time
+	} else {
+		publishTime = nil
 	}
 
 	return Response{
@@ -77,9 +119,20 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 			Emails:    emails,
 			AvatarURL: editor.AvatarUrl.String,
 		},
-		Deadline:  deadline,
-		CreatedAt: form.CreatedAt.Time,
-		UpdatedAt: form.UpdatedAt.Time,
+		Deadline:               deadline,
+		CreatedAt:              form.CreatedAt.Time,
+		UpdatedAt:              form.UpdatedAt.Time,
+		MessageAfterSubmission: form.MessageAfterSubmission,
+		Visibility:             form.Visibility,
+		GoogleSheetUrl:         form.GoogleSheetUrl.String,
+		PublishTime:            publishTime,
+		CoverImageUrl:          form.CoverImageUrl.String,
+		Dressing: DressingRequest{
+			Color:        form.DressingColor.String,
+			HeaderFont:   form.DressingHeaderFont.String,
+			QuestionFont: form.DressingQuestionFont.String,
+			TextFont:     form.DressingTextFont.String,
+		},
 	}
 }
 
@@ -91,6 +144,8 @@ type Store interface {
 	List(ctx context.Context) ([]ListRow, error)
 	ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
+	UploadCoverImage(ctx context.Context, id uuid.UUID, data []byte, coverImageURL string) error
+	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
 }
 
 type tenantStore interface {
@@ -156,16 +211,25 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := ToResponse(Form{
-		ID:             currentForm.ID,
-		Title:          currentForm.Title,
-		Description:    currentForm.Description,
-		PreviewMessage: currentForm.PreviewMessage,
-		Status:         currentForm.Status,
-		UnitID:         currentForm.UnitID,
-		LastEditor:     currentForm.LastEditor,
-		Deadline:       currentForm.Deadline,
-		CreatedAt:      currentForm.CreatedAt,
-		UpdatedAt:      currentForm.UpdatedAt,
+		ID:                     currentForm.ID,
+		Title:                  currentForm.Title,
+		Description:            currentForm.Description,
+		PreviewMessage:         currentForm.PreviewMessage,
+		Status:                 currentForm.Status,
+		UnitID:                 currentForm.UnitID,
+		LastEditor:             currentForm.LastEditor,
+		Deadline:               currentForm.Deadline,
+		CreatedAt:              currentForm.CreatedAt,
+		UpdatedAt:              currentForm.UpdatedAt,
+		MessageAfterSubmission: currentForm.MessageAfterSubmission,
+		Visibility:             currentForm.Visibility,
+		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
+		PublishTime:            currentForm.PublishTime,
+		CoverImageUrl:          currentForm.CoverImageUrl,
+		DressingColor:          currentForm.DressingColor,
+		DressingHeaderFont:     currentForm.DressingHeaderFont,
+		DressingQuestionFont:   currentForm.DressingQuestionFont,
+		DressingTextFont:       currentForm.DressingTextFont,
 	},
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
@@ -219,16 +283,25 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := ToResponse(Form{
-		ID:             currentForm.ID,
-		Title:          currentForm.Title,
-		Description:    currentForm.Description,
-		PreviewMessage: currentForm.PreviewMessage,
-		Status:         currentForm.Status,
-		UnitID:         currentForm.UnitID,
-		LastEditor:     currentForm.LastEditor,
-		Deadline:       currentForm.Deadline,
-		CreatedAt:      currentForm.CreatedAt,
-		UpdatedAt:      currentForm.UpdatedAt,
+		ID:                     currentForm.ID,
+		Title:                  currentForm.Title,
+		Description:            currentForm.Description,
+		PreviewMessage:         currentForm.PreviewMessage,
+		Status:                 currentForm.Status,
+		UnitID:                 currentForm.UnitID,
+		LastEditor:             currentForm.LastEditor,
+		Deadline:               currentForm.Deadline,
+		CreatedAt:              currentForm.CreatedAt,
+		UpdatedAt:              currentForm.UpdatedAt,
+		MessageAfterSubmission: currentForm.MessageAfterSubmission,
+		Visibility:             currentForm.Visibility,
+		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
+		PublishTime:            currentForm.PublishTime,
+		CoverImageUrl:          currentForm.CoverImageUrl,
+		DressingColor:          currentForm.DressingColor,
+		DressingHeaderFont:     currentForm.DressingHeaderFont,
+		DressingQuestionFont:   currentForm.DressingQuestionFont,
+		DressingTextFont:       currentForm.DressingTextFont,
 	},
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
@@ -256,11 +329,20 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	responses := make([]Response, 0, len(forms))
 	for _, form := range forms {
 		responses = append(responses, ToResponse(Form{
-			ID:             form.ID,
-			Title:          form.Title,
-			Description:    form.Description,
-			PreviewMessage: form.PreviewMessage,
-			Status:         form.Status,
+			ID:                     form.ID,
+			Title:                  form.Title,
+			Description:            form.Description,
+			PreviewMessage:         form.PreviewMessage,
+			Status:                 form.Status,
+			MessageAfterSubmission: form.MessageAfterSubmission,
+			Visibility:             form.Visibility,
+			GoogleSheetUrl:         form.GoogleSheetUrl,
+			PublishTime:            form.PublishTime,
+			CoverImageUrl:          form.CoverImageUrl,
+			DressingColor:          form.DressingColor,
+			DressingHeaderFont:     form.DressingHeaderFont,
+			DressingQuestionFont:   form.DressingQuestionFont,
+			DressingTextFont:       form.DressingTextFont,
 		},
 			form.UnitName.String,
 			form.OrgName.String,
@@ -311,16 +393,25 @@ func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	response := ToResponse(Form{
-		ID:             newForm.ID,
-		Title:          newForm.Title,
-		Description:    newForm.Description,
-		PreviewMessage: newForm.PreviewMessage,
-		Status:         newForm.Status,
-		UnitID:         newForm.UnitID,
-		LastEditor:     newForm.LastEditor,
-		Deadline:       newForm.Deadline,
-		CreatedAt:      newForm.CreatedAt,
-		UpdatedAt:      newForm.UpdatedAt,
+		ID:                     newForm.ID,
+		Title:                  newForm.Title,
+		Description:            newForm.Description,
+		PreviewMessage:         newForm.PreviewMessage,
+		Status:                 newForm.Status,
+		UnitID:                 newForm.UnitID,
+		LastEditor:             newForm.LastEditor,
+		Deadline:               newForm.Deadline,
+		CreatedAt:              newForm.CreatedAt,
+		UpdatedAt:              newForm.UpdatedAt,
+		MessageAfterSubmission: newForm.MessageAfterSubmission,
+		Visibility:             newForm.Visibility,
+		GoogleSheetUrl:         newForm.GoogleSheetUrl,
+		PublishTime:            newForm.PublishTime,
+		CoverImageUrl:          newForm.CoverImageUrl,
+		DressingColor:          newForm.DressingColor,
+		DressingHeaderFont:     newForm.DressingHeaderFont,
+		DressingQuestionFont:   newForm.DressingQuestionFont,
+		DressingTextFont:       newForm.DressingTextFont,
 	},
 		newForm.UnitName.String,
 		newForm.OrgName.String,
@@ -360,16 +451,25 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 	responses := make([]Response, len(forms))
 	for i, currentForm := range forms {
 		responses[i] = ToResponse(Form{
-			ID:             currentForm.ID,
-			Title:          currentForm.Title,
-			Description:    currentForm.Description,
-			PreviewMessage: currentForm.PreviewMessage,
-			Status:         currentForm.Status,
-			UnitID:         currentForm.UnitID,
-			LastEditor:     currentForm.LastEditor,
-			Deadline:       currentForm.Deadline,
-			CreatedAt:      currentForm.CreatedAt,
-			UpdatedAt:      currentForm.UpdatedAt,
+			ID:                     currentForm.ID,
+			Title:                  currentForm.Title,
+			Description:            currentForm.Description,
+			PreviewMessage:         currentForm.PreviewMessage,
+			Status:                 currentForm.Status,
+			UnitID:                 currentForm.UnitID,
+			LastEditor:             currentForm.LastEditor,
+			Deadline:               currentForm.Deadline,
+			CreatedAt:              currentForm.CreatedAt,
+			UpdatedAt:              currentForm.UpdatedAt,
+			MessageAfterSubmission: currentForm.MessageAfterSubmission,
+			Visibility:             currentForm.Visibility,
+			GoogleSheetUrl:         currentForm.GoogleSheetUrl,
+			PublishTime:            currentForm.PublishTime,
+			CoverImageUrl:          currentForm.CoverImageUrl,
+			DressingColor:          currentForm.DressingColor,
+			DressingHeaderFont:     currentForm.DressingHeaderFont,
+			DressingQuestionFont:   currentForm.DressingQuestionFont,
+			DressingTextFont:       currentForm.DressingTextFont,
 		}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
 			ID:        currentForm.LastEditor,
 			Name:      currentForm.LastEditorName,
@@ -379,6 +479,110 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
+}
+
+func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UploadCoverImageHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("id")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	const maxBytes int64 = 2 << 20 // 2MB
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+
+	if err := r.ParseMultipartForm(maxBytes); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	file, _, err := r.FormFile("coverImage")
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			logutil.WithContext(traceCtx, logger).Warn(
+				"failed to close cover image file",
+				zap.String("form_id", id.String()),
+				zap.Error(err),
+			)
+		}
+	}()
+
+	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to read cover image: %w", err), logger)
+		return
+	}
+	if int64(len(imageBytes)) > maxBytes {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageTooLarge, logger)
+		return
+	}
+
+	// WebP validation
+	if len(imageBytes) < 12 ||
+		string(imageBytes[0:4]) != "RIFF" ||
+		string(imageBytes[8:12]) != "WEBP" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageInvalidFormat, logger)
+		return
+	}
+
+	coverImageURL := fmt.Sprintf("/api/forms/%s/cover", id.String())
+
+	if err := h.store.UploadCoverImage(traceCtx, id, imageBytes, coverImageURL); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, CoverUploadResponse{ImageURL: coverImageURL})
+}
+
+func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetCoverImageHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("id")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	imageData, err := h.store.GetCoverImage(traceCtx, id)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/webp")
+	_, err = w.Write(imageData)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+}
+
+func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetFontsHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	fonts, err := font.List()
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, fonts)
 }
 
 func (h *Handler) GetGoogleSheetEmailHandler(w http.ResponseWriter, r *http.Request) {

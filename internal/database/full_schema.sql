@@ -2,6 +2,13 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT TRUE,
+    expiration_date TIMESTAMPTZ NOT NULL
+);CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255),
@@ -44,7 +51,29 @@ SELECT
     COALESCE(array_agg(e.value) FILTER (WHERE e.value IS NOT NULL), ARRAY[]::text[]) as emails
 FROM users u
 LEFT JOIN user_emails e ON u.id = e.user_id
-GROUP BY u.id, u.name, u.username, u.avatar_url, u.role, u.is_onboarded, u.created_at, u.updated_at;CREATE EXTENSION IF NOT EXISTS pgcrypto;
+GROUP BY u.id, u.name, u.username, u.avatar_url, u.role, u.is_onboarded, u.created_at, u.updated_at;CREATE TYPE content_type AS ENUM(
+    'text',
+    'form'
+);
+
+CREATE TABLE IF NOT EXISTS inbox_message(
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    posted_by UUID NOT NULL references units(id),
+    type content_type NOT NULL,
+    content_id UUID NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS user_inbox_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL references users(id) ON DELETE CASCADE,
+    message_id UUID NOT NULL references inbox_message(id) ON DELETE CASCADE,
+    is_read boolean NOT NULL DEFAULT false,
+    is_starred boolean NOT NULL DEFAULT false,
+    is_archived boolean NOT NULL DEFAULT false
+);
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TYPE unit_type AS ENUM ('organization', 'unit');
 
@@ -62,35 +91,15 @@ CREATE TABLE IF NOT EXISTS units (
 
 CREATE INDEX idx_units_parent_id ON units(parent_id);
 
+CREATE TYPE unit_role AS ENUM ('admin', 'member');
+
 CREATE TABLE IF NOT EXISTS unit_members (
     unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
     member_id UUID,
+    role unit_role NOT NULL DEFAULT 'member',
     PRIMARY KEY (unit_id, member_id)
 );
-CREATE TYPE db_strategy AS ENUM ('shared', 'isolated');
-
-CREATE TABLE IF NOT EXISTS tenants
-(
-    id UUID PRIMARY KEY REFERENCES units(id) ON DELETE CASCADE,
-    db_strategy db_strategy NOT NULL,
-    owner_id UUID REFERENCES users(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS slug_history
-(
-    id SERIAL PRIMARY KEY,
-    slug TEXT NOT NULL,
-    org_id UUID REFERENCES units(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    ended_at TIMESTAMPTZ DEFAULT null
-);CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    is_active BOOLEAN DEFAULT TRUE,
-    expiration_date TIMESTAMPTZ NOT NULL
-);-- Node type enum for workflow nodes
+-- Node type enum for workflow nodes
 CREATE TYPE node_type AS ENUM(
     'section',
     'end',
@@ -128,43 +137,7 @@ CREATE TABLE IF NOT EXISTS answers (
     value TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);CREATE TYPE status AS ENUM(
-    'draft',
-    'published'
-);
-
-CREATE TABLE IF NOT EXISTS forms (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title TEXT NOT NULL,
-    description TEXT,
-    preview_message TEXT DEFAULT NULL,
-    status status NOT NULL DEFAULT 'draft',
-    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
-    last_editor UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    deadline TIMESTAMPTZ DEFAULT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Section progress enum (for form completion tracking)
-CREATE TYPE section_progress AS ENUM(
-    'draft',
-    'submitted'
-);
-
-CREATE TABLE IF NOT EXISTS sections (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
-    title VARCHAR(255) DEFAULT NULL,
-    progress section_progress NOT NULL DEFAULT 'draft',
-    description TEXT DEFAULT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_sections_form_id ON sections(form_id);
-
-CREATE TYPE question_type AS ENUM(
+);CREATE TYPE question_type AS ENUM(
     'short_text',
     'long_text',
     'single_choice',
@@ -192,25 +165,77 @@ CREATE TABLE IF NOT EXISTS questions(
     source_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);CREATE TYPE content_type AS ENUM(
-    'text',
-    'form'
+);CREATE TYPE status AS ENUM(
+    'draft',
+    'published'
 );
 
-CREATE TABLE IF NOT EXISTS inbox_message(
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    posted_by UUID NOT NULL references units(id),
-    type content_type NOT NULL,
-    content_id UUID NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now()
+CREATE TYPE visibility AS ENUM(
+    'public',
+    'private'
 );
 
-CREATE TABLE IF NOT EXISTS user_inbox_messages (
+CREATE TABLE IF NOT EXISTS forms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL references users(id) ON DELETE CASCADE,
-    message_id UUID NOT NULL references inbox_message(id) ON DELETE CASCADE,
-    is_read boolean NOT NULL DEFAULT false,
-    is_starred boolean NOT NULL DEFAULT false,
-    is_archived boolean NOT NULL DEFAULT false
+    title TEXT NOT NULL,
+    description TEXT,
+    preview_message TEXT DEFAULT NULL,
+    message_after_submission TEXT NOT NULL,
+    status status NOT NULL DEFAULT 'draft',
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    last_editor UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    deadline TIMESTAMPTZ DEFAULT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    visibility visibility NOT NULL DEFAULT 'private',
+    google_sheet_url TEXT,
+    publish_time TIMESTAMPTZ,
+    cover_image_url TEXT,
+    dressing_color TEXT,
+    dressing_header_font TEXT,
+    dressing_question_font TEXT,
+    dressing_text_font TEXT
+);
+
+CREATE TABLE IF NOT EXISTS form_covers (
+    form_id UUID PRIMARY KEY REFERENCES forms(id) ON DELETE CASCADE,
+    image_data BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Section progress enum (for form completion tracking)
+CREATE TYPE section_progress AS ENUM(
+    'draft',
+    'submitted'
+);
+
+CREATE TABLE IF NOT EXISTS sections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    title VARCHAR(255) DEFAULT NULL,
+    progress section_progress NOT NULL DEFAULT 'draft',
+    description TEXT DEFAULT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_sections_form_id ON sections(form_id);
+
+CREATE TYPE db_strategy AS ENUM ('shared', 'isolated');
+
+CREATE TABLE IF NOT EXISTS tenants
+(
+    id UUID PRIMARY KEY REFERENCES units(id) ON DELETE CASCADE,
+    db_strategy db_strategy NOT NULL,
+    owner_id UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS slug_history
+(
+    id SERIAL PRIMARY KEY,
+    slug TEXT NOT NULL,
+    org_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at TIMESTAMPTZ DEFAULT null
 );

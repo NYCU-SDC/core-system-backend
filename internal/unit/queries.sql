@@ -68,6 +68,7 @@ LEFT JOIN users u ON u.id = um.member_id;
 
 -- name: ListMembers :many
 SELECT m.member_id,
+       m.role,
        u.name,
        u.username,
        u.avatar_url,
@@ -79,6 +80,7 @@ WHERE m.unit_id = $1;
 -- name: ListUnitsMembers :many
 SELECT m.unit_id,
        m.member_id,
+       m.role,
        u.name,
        u.username,
        u.avatar_url
@@ -88,3 +90,23 @@ WHERE m.unit_id = ANY($1::uuid[]);
 
 -- name: RemoveMember :exec
 DELETE FROM unit_members WHERE unit_id = $1 AND member_id = $2;
+
+-- name: UpdateMemberRole :exec
+UPDATE unit_members
+SET role = $3
+WHERE unit_id = $1 AND member_id = $2;
+
+-- name: CountMembersByRole :one
+SELECT COUNT(*)
+FROM unit_members
+WHERE unit_id = $1 AND role = $2;
+
+-- name: GetMemberRole :one
+SELECT role
+FROM unit_members
+WHERE unit_id = $1 AND member_id = $2;
+
+-- name: CountMembers :one
+SELECT COUNT(*)
+FROM unit_members
+WHERE unit_id = $1;
