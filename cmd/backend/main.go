@@ -145,8 +145,8 @@ func main() {
 	responseService := response.NewService(logger, dbPool)
 	formService := form.NewService(logger, dbPool, responseService)
 	submitService := submit.NewService(logger, formService, questionService, responseService)
-	publishService := publish.NewService(logger, distributeService, formService, inboxService)
 	workflowService := workflow.NewService(logger, dbPool, questionService)
+	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
 	// Handler
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
@@ -282,7 +282,6 @@ func main() {
 	// Workflow routes
 	mux.Handle("GET /api/forms/{id}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetWorkflow))
 	mux.Handle("PUT /api/forms/{id}/workflow", authMiddleware.HandlerFunc(workflowHandler.UpdateWorkflow))
-	mux.Handle("POST /api/forms/{id}/workflow/activate", authMiddleware.HandlerFunc(workflowHandler.ActivateWorkflow))
 	mux.Handle("POST /api/forms/{formId}/workflow/nodes", authMiddleware.HandlerFunc(workflowHandler.CreateNode))
 	mux.Handle("DELETE /api/forms/{formId}/workflow/nodes/{nodeId}", authMiddleware.HandlerFunc(workflowHandler.DeleteNode))
 
