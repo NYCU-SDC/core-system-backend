@@ -227,20 +227,9 @@ func (s Service) ListSections(ctx context.Context, responseID uuid.UUID) ([]Sect
 			continue
 		}
 
-		var progress string
-		switch row.Progress {
-		case SectionProgressDraft:
-			progress = string(SectionProgressDraft)
-		case SectionProgressSubmitted:
-			progress = string(SectionProgressSubmitted)
-		default:
-			return nil, fmt.Errorf("invalid section progress: %s", row.Progress)
-		}
-
 		out = append(out, SectionSummary{
-			ID:       sectionID.String(),
-			Title:    row.Title.String,
-			Progress: progress,
+			ID:    sectionID.String(),
+			Title: row.Title.String,
 		})
 	}
 
