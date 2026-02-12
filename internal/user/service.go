@@ -220,6 +220,25 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 		return User{}, internal.ErrDatabaseError
 	}
 
+	userEmails, err := s.GetEmailsByID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get user emails by id")
+		span.RecordError(err)
+		return User{}, internal.ErrDatabaseError
+	}
+	isAllowed := false
+	for _, userEmail := range userEmails{
+		if IsAllowed(userEmail) {
+			isAllowed = true
+			break
+		}
+	}
+	if !isAllowed {
+		err := internal.ErrUserNotInAllowedList
+		logger.Warn(fmt.Sprintf("%s: user_id=%s", err.Error(), id.String()))
+		return User{}, err
+	}
+
 	if userInfo.IsOnboarded {
 		err := internal.ErrUserOnboarded
 		logger.Warn(fmt.Sprintf("%s: user_id=%s", err.Error(), id.String()))

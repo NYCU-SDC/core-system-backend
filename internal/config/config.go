@@ -23,22 +23,24 @@ var ErrDatabaseURLRequired = errors.New("database_url is required")
 type Config struct {
 	// Dev mode disables strict cookie policies by using SameSite=None
 	// instead of SameSite=Strict, allowing cross-site requests during development.
-	Dev                       bool              `yaml:"dev"                envconfig:"DEV"`
-	Debug                     bool              `yaml:"debug"              envconfig:"DEBUG"`
-	Host                      string            `yaml:"host"               envconfig:"HOST"`
-	Port                      string            `yaml:"port"               envconfig:"PORT"`
-	BaseURL                   string            `yaml:"base_url"          envconfig:"BASE_URL"`
-	OauthProxyBaseURL         string            `yaml:"oauth_proxy_base_url" envconfig:"OAUTH_PROXY_BASE_URL"`
-	OauthProxySecret          string            `yaml:"oauth_proxy_secret" envconfig:"OAUTH_PROXY_SECRET"`
-	Secret                    string            `yaml:"secret"             envconfig:"SECRET"`
-	DatabaseURL               string            `yaml:"database_url"       envconfig:"DATABASE_URL"`
-	MigrationSource           string            `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
-	AccessTokenExpirationStr  string            `yaml:"access_token_expiration" envconfig:"ACCESS_TOKEN_EXPIRATION"`
-	RefreshTokenExpirationStr string            `yaml:"refresh_token_expiration" envconfig:"REFRESH_TOKEN_EXPIRATION"`
-	OtelCollectorUrl          string            `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
-	AllowOrigins              []string          `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
+	Dev                       bool                    `yaml:"dev"                envconfig:"DEV"`
+	Debug                     bool                    `yaml:"debug"              envconfig:"DEBUG"`
+	Host                      string                  `yaml:"host"               envconfig:"HOST"`
+	Port                      string                  `yaml:"port"               envconfig:"PORT"`
+	BaseURL                   string                  `yaml:"base_url"          envconfig:"BASE_URL"`
+	OauthProxyBaseURL         string                  `yaml:"oauth_proxy_base_url" envconfig:"OAUTH_PROXY_BASE_URL"`
+	OauthProxySecret          string                  `yaml:"oauth_proxy_secret" envconfig:"OAUTH_PROXY_SECRET"`
+	Secret                    string                  `yaml:"secret"             envconfig:"SECRET"`
+	DatabaseURL               string                  `yaml:"database_url"       envconfig:"DATABASE_URL"`
+	MigrationSource           string                  `yaml:"migration_source"   envconfig:"MIGRATION_SOURCE"`
+	AccessTokenExpirationStr  string                  `yaml:"access_token_expiration" envconfig:"ACCESS_TOKEN_EXPIRATION"`
+	RefreshTokenExpirationStr string                  `yaml:"refresh_token_expiration" envconfig:"REFRESH_TOKEN_EXPIRATION"`
+	OtelCollectorUrl          string                  `yaml:"otel_collector_url" envconfig:"OTEL_COLLECTOR_URL"`
+	AllowOrigins              []string                `yaml:"allow_origins"      envconfig:"ALLOW_ORIGINS"`
 	GoogleOauth               Oauth.GoogleOauth `yaml:"google_oauth"`
-	NYCUOauth                 Oauth.NYCUOauth   `yaml:"nycu_oauth"`
+	NYCUOauth                 Oauth.NYCUOauth         `yaml:"nycu_oauth"`
+	
+  AllowOnboardingList       string `yaml:"allow_onboarding_list" envconfig:"ALLOW_ONBOARDING_LIST"`
 
 	CasbinModelPath  string `yaml:"casbin_model_path"  envconfig:"CASBIN_MODEL_PATH"`
 	CasbinPolicyPath string `yaml:"casbin_policy_path" envconfig:"CASBIN_POLICY_PATH"`
@@ -139,6 +141,7 @@ func Load() (Config, *LogBuffer) {
 		OtelCollectorUrl:          "",
 		GoogleOauth:               Oauth.GoogleOauth{},
 		NYCUOauth:                 Oauth.NYCUOauth{},
+		AllowOnboardingList:       "",
 		CasbinModelPath:           "internal/auth/casbin/model.conf",
 		CasbinPolicyPath:          "internal/auth/casbin/policy.csv",
 	}
@@ -218,6 +221,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 			ClientID:     os.Getenv("NYCU_OAUTH_CLIENT_ID"),
 			ClientSecret: os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
 		},
+		AllowOnboardingList: os.Getenv("ALLOW_ONBOARDING_LIST"),
 		CasbinModelPath:  os.Getenv("CASBIN_MODEL_PATH"),
 		CasbinPolicyPath: os.Getenv("CASBIN_POLICY_PATH"),
 	}
@@ -241,6 +245,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.GoogleOauth.ClientSecret, "google_oauth_client_secret", "", "Google OAuth client secret")
 	flag.StringVar(&flagConfig.NYCUOauth.ClientID, "nycu_oauth_client_id", "", "NYCU OAuth client ID")
 	flag.StringVar(&flagConfig.NYCUOauth.ClientSecret, "nycu_oauth_client_secret", "", "NYCU OAuth client secret")
+	flag.StringVar(&flagConfig.AllowOnboardingList, "allow_onboarding_list", "", "Allowed list of emails for onboarding")
 	flag.StringVar(&flagConfig.CasbinModelPath, "casbin_model_path", "", "casbin model path")
 	flag.StringVar(&flagConfig.CasbinPolicyPath, "casbin_policy_path", "", "casbin policy path")
 

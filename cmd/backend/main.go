@@ -133,6 +133,7 @@ func main() {
 
 	validator := internal.NewValidator()
 	problemWriter := internal.NewProblemWriter()
+	user.InitAllowedList(cfg.AllowOnboardingList)
 
 	// Service
 	userService := user.NewService(logger, dbPool)

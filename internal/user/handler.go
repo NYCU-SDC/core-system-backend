@@ -68,7 +68,7 @@ type MeResponse struct {
 // OnboardingRequest represents the request format for /user/onboarding endpoint
 type OnboardingRequest struct {
 	Username string `json:"username" validate:"required,min=4,max=15,username_rules"`
-	Name     string `json:"name" validate:"required"`
+	Name     string `json:"name" validate:"required,max=15"`
 }
 
 type Handler struct {
