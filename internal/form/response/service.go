@@ -41,6 +41,7 @@ type Querier interface {
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
 	GetFormIDByResponseID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetSectionsByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetSectionsByIDsRow, error)
+	GetRequiredQuestionsBySectionIDs(ctx context.Context, sectionIDs []uuid.UUID) ([]GetRequiredQuestionsBySectionIDsRow, error)
 }
 
 type Service struct {
@@ -184,21 +185,25 @@ func (s Service) ListSections(ctx context.Context, responseID uuid.UUID) ([]Sect
 		span.RecordError(err)
 		return nil, err
 	}
+	// use answerByQuestionID to traverse the workflow
+	answersByQuestionID := make(map[string]string, len(answers))
+	// use answeredQuestionIDs to check if a question is answered
+	answeredQuestionIDs := make(map[uuid.UUID]struct{}, len(answers))
 
-	answerByQuestionID := make(map[string]string, len(answers))
 	for _, a := range answers {
 		// Values are stored as JSON; attempt to unmarshal to a string.
-		var v string
-		err := json.Unmarshal(a.Value, &v)
-		if err == nil {
-			answerByQuestionID[a.QuestionID.String()] = v
-			continue
+		var value string
+		err := json.Unmarshal(a.Value, &value)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "unmarshal answer value")
+			span.RecordError(err)
+			return nil, err
 		}
-
-		answerByQuestionID[a.QuestionID.String()] = string(a.Value)
+		answersByQuestionID[a.QuestionID.String()] = value
+		answeredQuestionIDs[a.QuestionID] = struct{}{}
 	}
 
-	sectionIDs, err := traverseWorkflowSections(workflow.Workflow, answerByQuestionID)
+	sectionIDs, err := traverseWorkflowSections(workflow.Workflow, answersByQuestionID)
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
@@ -220,6 +225,18 @@ func (s Service) ListSections(ctx context.Context, responseID uuid.UUID) ([]Sect
 		rowByID[row.ID] = row
 	}
 
+	requiredRows, err := s.queries.GetRequiredQuestionsBySectionIDs(traceCtx, sectionIDs)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get required questions by section ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	requiredBySection := make(map[uuid.UUID][]uuid.UUID, len(requiredRows))
+	for _, row := range requiredRows {
+		requiredBySection[row.SectionID] = append(requiredBySection[row.SectionID], row.ID)
+	}
+
 	out := make([]SectionSummary, 0, len(sectionIDs))
 	for _, sectionID := range sectionIDs {
 		row, ok := rowByID[sectionID]
@@ -227,9 +244,28 @@ func (s Service) ListSections(ctx context.Context, responseID uuid.UUID) ([]Sect
 			continue
 		}
 
+		// A section is SUBMITTED if all its required questions
+		// have answers for this response; otherwise it is DRAFT.
+		requiredQuestions := requiredBySection[sectionID]
+
+		progress := SectionStatusDraft
+		if len(requiredQuestions) > 0 {
+			isComplete := true
+			for _, qID := range requiredQuestions {
+				if _, ok := answeredQuestionIDs[qID]; !ok {
+					isComplete = false
+					break
+				}
+			}
+			if isComplete {
+				progress = SectionStatusSubmitted
+			}
+		}
+
 		out = append(out, SectionSummary{
-			ID:    sectionID.String(),
-			Title: row.Title.String,
+			ID:       sectionID.String(),
+			Title:    row.Title.String,
+			Progress: progress,
 		})
 	}
 
