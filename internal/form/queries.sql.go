@@ -276,6 +276,7 @@ FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+WHERE f.status <> 'archived'
 ORDER BY f.updated_at DESC
 `
 
@@ -367,6 +368,7 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.unit_id = $1
+  AND f.status <> 'archived'
 ORDER BY f.updated_at DESC
 `
 
