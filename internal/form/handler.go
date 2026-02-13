@@ -35,7 +35,7 @@ type Request struct {
 	PublishTime            *time.Time       `json:"publishTime"`
 	MessageAfterSubmission string           `json:"messageAfterSubmission" validate:"required"`
 	GoogleSheetUrl         string           `json:"googleSheetUrl"`
-	Visibility             Visibility       `json:"visibility" validate:"required,oneof=public private"`
+	Visibility             string           `json:"visibility" validate:"required,oneof=PUBLIC PRIVATE"`
 	CoverImageUrl          string           `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
 }
@@ -55,13 +55,37 @@ type Response struct {
 	PublishTime            *time.Time           `json:"publishTime"`
 	MessageAfterSubmission string               `json:"messageAfterSubmission"`
 	GoogleSheetUrl         string               `json:"googleSheetUrl"`
-	Visibility             Visibility           `json:"visibility"`
+	Visibility             string               `json:"visibility"`
 	CoverImageUrl          string               `json:"coverImageUrl"`
 	Dressing               DressingRequest      `json:"dressing"`
 }
 
 type CoverUploadResponse struct {
 	ImageURL string `json:"imageUrl"`
+}
+
+// visibilityToUppercase converts database visibility format (lowercase) to API format (uppercase).
+func visibilityToUppercase(v Visibility) string {
+	switch v {
+	case VisibilityPublic:
+		return "PUBLIC"
+	case VisibilityPrivate:
+		return "PRIVATE"
+	default:
+		return string(v)
+	}
+}
+
+// visibilityToLowercase converts API visibility format (uppercase) to database format (lowercase).
+func visibilityToLowercase(v string) Visibility {
+	switch v {
+	case "PUBLIC":
+		return VisibilityPublic
+	case "PRIVATE":
+		return VisibilityPrivate
+	default:
+		return Visibility(v)
+	}
 }
 
 // ToResponse converts a Form storage model into an API Response.
@@ -101,7 +125,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		CreatedAt:              form.CreatedAt.Time,
 		UpdatedAt:              form.UpdatedAt.Time,
 		MessageAfterSubmission: form.MessageAfterSubmission,
-		Visibility:             form.Visibility,
+		Visibility:             visibilityToUppercase(form.Visibility),
 		GoogleSheetUrl:         form.GoogleSheetUrl.String,
 		PublishTime:            publishTime,
 		CoverImageUrl:          form.CoverImageUrl.String,
