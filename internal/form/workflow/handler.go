@@ -91,6 +91,59 @@ func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 	return result, nil
 }
 
+// mergeTypeFromDB merges type information from database workflow into API request.
+// API request may not contain 'type' field, so we need to retrieve it from the database.
+// If a node ID exists in API request but not in database, returns an error.
+func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
+	// Parse API workflow (request from client)
+	var apiNodes []map[string]interface{}
+	if err := json.Unmarshal(apiWorkflow, &apiNodes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal API workflow: %w", err)
+	}
+
+	// Parse database workflow
+	var dbNodes []map[string]interface{}
+	if err := json.Unmarshal(dbWorkflow, &dbNodes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal database workflow: %w", err)
+	}
+
+	// Build a map of node ID -> type from database
+	dbNodeTypeMap := make(map[string]string)
+	for _, dbNode := range dbNodes {
+		nodeID, idOk := dbNode["id"].(string)
+		nodeType, typeOk := dbNode["type"].(string)
+		if idOk && typeOk {
+			dbNodeTypeMap[nodeID] = nodeType
+		}
+	}
+
+	// Merge type information into API nodes
+	for i := range apiNodes {
+		nodeID, ok := apiNodes[i]["id"].(string)
+		if !ok || nodeID == "" {
+			// Node ID is required, but let validator handle this error
+			continue
+		}
+
+		// Check if node exists in database
+		dbType, exists := dbNodeTypeMap[nodeID]
+		if !exists {
+			return nil, fmt.Errorf("node with id '%s' not found in current workflow, please create it first using CreateNode API", nodeID)
+		}
+
+		// Add type from database to API node
+		apiNodes[i]["type"] = dbType
+	}
+
+	// Marshal merged nodes back to JSON
+	result, err := json.Marshal(apiNodes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged workflow: %w", err)
+	}
+
+	return result, nil
+}
+
 // workflowFromAPIFormat converts workflow JSON from API format to database format (type: uppercase -> lowercase).
 func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
@@ -229,10 +282,24 @@ func (h *Handler) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid JSON in request body: %w", err), logger)
 		return
 	}
-	req = json.RawMessage(bodyBytes)
+	req = bodyBytes
+
+	// Get current workflow from database to merge type information
+	currentRow, err := h.store.Get(traceCtx, formID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Merge type information from database into API request
+	mergedWorkflow, err := mergeTypeFromDB(req, currentRow.Workflow)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to merge type information: %w", err), logger)
+		return
+	}
 
 	// Convert workflow types from API format to database format
-	dbWorkflow, err := workflowFromAPIFormat([]byte(req))
+	dbWorkflow, err := workflowFromAPIFormat(mergedWorkflow)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow from API format: %w", err), logger)
 		return
@@ -245,7 +312,7 @@ func (h *Handler) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Convert response back to API format
-	apiWorkflow, err := workflowToAPIFormat([]byte(row.Workflow))
+	apiWorkflow, err := workflowToAPIFormat(row.Workflow)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow to API format: %w", err), logger)
 		return
