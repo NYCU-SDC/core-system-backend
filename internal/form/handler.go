@@ -76,18 +76,6 @@ func visibilityToUppercase(v Visibility) string {
 	}
 }
 
-// visibilityToLowercase converts API visibility format (uppercase) to database format (lowercase).
-func visibilityToLowercase(v string) Visibility {
-	switch v {
-	case "PUBLIC":
-		return VisibilityPublic
-	case "PRIVATE":
-		return VisibilityPrivate
-	default:
-		return Visibility(v)
-	}
-}
-
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline, publishTime is null when empty/invalid.
 func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
