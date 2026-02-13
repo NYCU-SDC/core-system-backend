@@ -39,6 +39,22 @@ type Handler struct {
 	store Store
 }
 
+// nodeTypeToUppercase converts database node type format (lowercase) to API format (uppercase).
+func nodeTypeToUppercase(nt NodeType) string {
+	switch nt {
+	case NodeTypeSection:
+		return "SECTION"
+	case NodeTypeCondition:
+		return "CONDITION"
+	case NodeTypeStart:
+		return "START"
+	case NodeTypeEnd:
+		return "END"
+	default:
+		return string(nt)
+	}
+}
+
 func NewHandler(
 	logger *zap.Logger,
 	validator *validator.Validate,
@@ -196,7 +212,7 @@ func (h *Handler) CreateNode(w http.ResponseWriter, r *http.Request) {
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, createNodeResponse{
 		ID:    created.NodeID.String(),
-		Type:  string(created.NodeType),
+		Type:  nodeTypeToUppercase(created.NodeType),
 		Label: created.NodeLabel,
 	})
 }
