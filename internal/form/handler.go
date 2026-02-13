@@ -64,6 +64,20 @@ type CoverUploadResponse struct {
 	ImageURL string `json:"imageUrl"`
 }
 
+// statusToUppercase converts database status format (lowercase) to API format (uppercase).
+func statusToUppercase(s Status) string {
+	switch s {
+	case StatusDraft:
+		return "DRAFT"
+	case StatusPublished:
+		return "PUBLISHED"
+	case StatusArchived:
+		return "ARCHIVED"
+	default:
+		return string(s)
+	}
+}
+
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline, publishTime is null when empty/invalid.
 func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
@@ -87,7 +101,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		Title:          form.Title,
 		Description:    form.Description.String,
 		PreviewMessage: form.PreviewMessage.String,
-		Status:         string(form.Status),
+		Status:         statusToUppercase(form.Status),
 		UnitID:         unitName,
 		OrgID:          orgName,
 		LastEditor: user.ProfileResponse{
