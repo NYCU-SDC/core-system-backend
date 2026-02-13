@@ -55,6 +55,62 @@ func nodeTypeToUppercase(nt NodeType) string {
 	}
 }
 
+// nodeTypeToLowercase converts API node type format (uppercase) to database format (lowercase).
+func nodeTypeToLowercase(apiType string) string {
+	switch apiType {
+	case "SECTION":
+		return "section"
+	case "CONDITION":
+		return "condition"
+	case "START":
+		return "start"
+	case "END":
+		return "end"
+	default:
+		return strings.ToLower(apiType)
+	}
+}
+
+// workflowToAPIFormat converts workflow JSON from database format to API format (type: lowercase -> uppercase).
+func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(dbWorkflow, &nodes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
+	}
+
+	for i := range nodes {
+		if typeVal, ok := nodes[i]["type"].(string); ok {
+			nodes[i]["type"] = nodeTypeToUppercase(NodeType(typeVal))
+		}
+	}
+
+	result, err := json.Marshal(nodes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal workflow: %w", err)
+	}
+	return result, nil
+}
+
+// workflowFromAPIFormat converts workflow JSON from API format to database format (type: uppercase -> lowercase).
+func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
+	var nodes []map[string]interface{}
+	if err := json.Unmarshal(apiWorkflow, &nodes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
+	}
+
+	for i := range nodes {
+		if typeVal, ok := nodes[i]["type"].(string); ok {
+			nodes[i]["type"] = nodeTypeToLowercase(typeVal)
+		}
+	}
+
+	result, err := json.Marshal(nodes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal workflow: %w", err)
+	}
+	return result, nil
+}
+
 func NewHandler(
 	logger *zap.Logger,
 	validator *validator.Validate,
@@ -109,6 +165,13 @@ func (h *Handler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert workflow types from database format to API format
+	apiWorkflow, err := workflowToAPIFormat([]byte(row.Workflow))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow to API format: %w", err), logger)
+		return
+	}
+
 	// Check validation status
 	validationInfos, err := h.store.GetValidationInfo(traceCtx, formID, []byte(row.Workflow))
 	if err != nil {
@@ -118,7 +181,7 @@ func (h *Handler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := GetWorkflowResponse{
-		Workflow: json.RawMessage(row.Workflow),
+		Workflow: json.RawMessage(apiWorkflow),
 		Info:     validationInfos,
 	}
 
@@ -168,13 +231,27 @@ func (h *Handler) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 	req = json.RawMessage(bodyBytes)
 
-	row, err := h.store.Update(traceCtx, formID, []byte(req), currentUser.ID)
+	// Convert workflow types from API format to database format
+	dbWorkflow, err := workflowFromAPIFormat([]byte(req))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow from API format: %w", err), logger)
+		return
+	}
+
+	row, err := h.store.Update(traceCtx, formID, dbWorkflow, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, json.RawMessage(row.Workflow))
+	// Convert response back to API format
+	apiWorkflow, err := workflowToAPIFormat([]byte(row.Workflow))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow to API format: %w", err), logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, json.RawMessage(apiWorkflow))
 }
 
 func (h *Handler) CreateNode(w http.ResponseWriter, r *http.Request) {
