@@ -8,8 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strings"
+	"regexp"
 	"time"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -83,6 +82,9 @@ type emailGetter interface {
 type verifier interface {
 	VerifySpreadsheetReadable(ctx context.Context, spreadsheetID string) error
 }
+
+// Google IDs allow alphanumeric characters, hyphens, and underscores.
+var spreadsheetIDPattern = regexp.MustCompile(`spreadsheets/d/([a-zA-Z0-9_-]+)`)
 
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline, publishTime is null when empty/invalid.
@@ -637,20 +639,9 @@ func (h *Handler) VerifyGoogleSheetHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func extractSpreadsheetID(sheetURL string) (string, error) {
-	u, err := url.Parse(sheetURL)
-	if err != nil {
+	matches := spreadsheetIDPattern.FindStringSubmatch(sheetURL)
+	if len(matches) < 2 {
 		return "", internal.ErrGoogleSheetURLInvalid
 	}
-
-	parts := strings.Split(u.Path, "/")
-	// /spreadsheets/d/<id>/edit
-	for i := 0; i < len(parts); i++ {
-		if parts[i] == "spreadsheets" && i+2 < len(parts) && parts[i+1] == "d" {
-			id := parts[i+2]
-			if id != "" {
-				return id, nil
-			}
-		}
-	}
-	return "", internal.ErrGoogleSheetURLInvalid
+	return matches[1], nil
 }
