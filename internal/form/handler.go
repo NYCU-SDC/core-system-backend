@@ -76,6 +76,14 @@ type GoogleSheetVerifyResponse struct {
 	IsValid bool `json:"isValid"`
 }
 
+type emailGetter interface {
+	GetServiceAccountEmail() string
+}
+
+type verifier interface {
+	VerifySpreadsheetReadable(ctx context.Context, spreadsheetID string) error
+}
+
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline, publishTime is null when empty/invalid.
 func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
@@ -580,9 +588,6 @@ func (h *Handler) GetGoogleSheetEmailHandler(w http.ResponseWriter, r *http.Requ
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	type emailGetter interface {
-		GetServiceAccountEmail() string
-	}
 	getter, ok := h.store.(emailGetter)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
@@ -604,7 +609,8 @@ func (h *Handler) VerifyGoogleSheetHandler(w http.ResponseWriter, r *http.Reques
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req GoogleSheetVerifyRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -615,16 +621,14 @@ func (h *Handler) VerifyGoogleSheetHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	type verifier interface {
-		VerifySpreadsheetReadable(ctx context.Context, spreadsheetID string) error
-	}
 	v, ok := h.store.(verifier)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
 		return
 	}
 
-	if err := v.VerifySpreadsheetReadable(traceCtx, spreadsheetID); err != nil {
+	err = v.VerifySpreadsheetReadable(traceCtx, spreadsheetID)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -635,7 +639,7 @@ func (h *Handler) VerifyGoogleSheetHandler(w http.ResponseWriter, r *http.Reques
 func extractSpreadsheetID(sheetURL string) (string, error) {
 	u, err := url.Parse(sheetURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid url: %w", err)
+		return "", internal.ErrGoogleSheetURLInvalid
 	}
 
 	parts := strings.Split(u.Path, "/")
@@ -648,5 +652,5 @@ func extractSpreadsheetID(sheetURL string) (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("invalid Google Sheets URL")
+	return "", internal.ErrGoogleSheetURLInvalid
 }

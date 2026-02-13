@@ -404,7 +404,7 @@ func (s *Service) VerifySpreadsheetReadable(ctx context.Context, spreadsheetID s
 
 	serviceAccountKey := os.Getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
 	if serviceAccountKey == "" {
-		err := fmt.Errorf("GOOGLE_SERVICE_ACCOUNT_KEY is not set")
+		err := fmt.Errorf("%w: GOOGLE_SERVICE_ACCOUNT_KEY is not set", internal.ErrInternalServerError)
 		span.RecordError(err)
 		logger.Error("missing google service account key", zap.Error(err))
 		return err
