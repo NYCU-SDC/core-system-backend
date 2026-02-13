@@ -13,6 +13,7 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -55,6 +56,25 @@ type ListFilesResponse struct {
 	Total  int64      `json:"total"`
 	Limit  int32      `json:"limit"`
 	Offset int32      `json:"offset"`
+}
+
+// toResponse converts file metadata to Response struct
+func toResponse(id uuid.UUID, filename, contentType string, size int64, uploadedBy pgtype.UUID, createdAt pgtype.Timestamptz) Response {
+	var uploadedByStr *string
+	if uploadedBy.Valid {
+		uid := uuid.UUID(uploadedBy.Bytes)
+		str := uid.String()
+		uploadedByStr = &str
+	}
+
+	return Response{
+		ID:               id.String(),
+		OriginalFilename: filename,
+		ContentType:      contentType,
+		Size:             size,
+		UploadedBy:       uploadedByStr,
+		CreatedAt:        createdAt.Time.Format(time.RFC3339),
+	}
 }
 
 // Download handles GET /files/{id} - downloads a file
@@ -113,21 +133,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var uploadedByStr *string
-	if fileInfo.UploadedBy.Valid {
-		uid := uuid.UUID(fileInfo.UploadedBy.Bytes)
-		str := uid.String()
-		uploadedByStr = &str
-	}
-
-	response := Response{
-		ID:               fileInfo.ID.String(),
-		OriginalFilename: fileInfo.OriginalFilename,
-		ContentType:      fileInfo.ContentType,
-		Size:             fileInfo.Size,
-		UploadedBy:       uploadedByStr,
-		CreatedAt:        fileInfo.CreatedAt.Time.Format(time.RFC3339),
-	}
+	response := toResponse(fileInfo.ID, fileInfo.OriginalFilename, fileInfo.ContentType, fileInfo.Size, fileInfo.UploadedBy, fileInfo.CreatedAt)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -209,21 +215,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	// Build response
 	fileResponses := make([]Response, len(files))
 	for i, f := range files {
-		var uploadedByStr *string
-		if f.UploadedBy.Valid {
-			uid := uuid.UUID(f.UploadedBy.Bytes)
-			str := uid.String()
-			uploadedByStr = &str
-		}
-
-		fileResponses[i] = Response{
-			ID:               f.ID.String(),
-			OriginalFilename: f.OriginalFilename,
-			ContentType:      f.ContentType,
-			Size:             f.Size,
-			UploadedBy:       uploadedByStr,
-			CreatedAt:        f.CreatedAt.Time.Format(time.RFC3339),
-		}
+		fileResponses[i] = toResponse(f.ID, f.OriginalFilename, f.ContentType, f.Size, f.UploadedBy, f.CreatedAt)
 	}
 
 	response := ListFilesResponse{
@@ -261,21 +253,7 @@ func (h *Handler) ListMyFiles(w http.ResponseWriter, r *http.Request) {
 	// Build response
 	fileResponses := make([]Response, len(files))
 	for i, f := range files {
-		var uploadedByStr *string
-		if f.UploadedBy.Valid {
-			uid := uuid.UUID(f.UploadedBy.Bytes)
-			str := uid.String()
-			uploadedByStr = &str
-		}
-
-		fileResponses[i] = Response{
-			ID:               f.ID.String(),
-			OriginalFilename: f.OriginalFilename,
-			ContentType:      f.ContentType,
-			Size:             f.Size,
-			UploadedBy:       uploadedByStr,
-			CreatedAt:        f.CreatedAt.Time.Format(time.RFC3339),
-		}
+		fileResponses[i] = toResponse(f.ID, f.OriginalFilename, f.ContentType, f.Size, f.UploadedBy, f.CreatedAt)
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, fileResponses)
