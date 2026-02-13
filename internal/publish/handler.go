@@ -85,19 +85,13 @@ func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req Request
-	if err := handlerutil.ParseAndValidateRequestBody(ctx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(ctx, w, err, logger)
-		return
-	}
-
 	currentUser, ok := user.GetFromContext(ctx)
 	if !ok {
 		h.problemWriter.WriteError(ctx, w, internal.ErrNoUserInContext, logger)
 		return
 	}
 
-	visibility, err := h.service.PublishForm(ctx, formID, req.UnitIDs, currentUser.ID)
+	visibility, err := h.service.PublishForm(ctx, formID, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(ctx, w, err, logger)
 		return
