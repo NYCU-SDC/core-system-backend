@@ -47,7 +47,6 @@ type Response struct {
 	PreviewMessage         string               `json:"previewMessage"`
 	Status                 string               `json:"status"`
 	UnitID                 string               `json:"unitId"`
-	OrgID                  string               `json:"orgId"`
 	LastEditor             user.ProfileResponse `json:"lastEditor"`
 	Deadline               *time.Time           `json:"deadline"`
 	CreatedAt              time.Time            `json:"createdAt"`
@@ -75,7 +74,7 @@ func statusToUppercase(s Status) string {
 		return "ARCHIVED"
 	default:
 		return string(s)
-  }
+	}
 }
 
 // visibilityToUppercase converts database visibility format (lowercase) to API format (uppercase).
@@ -114,8 +113,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		Description:    form.Description.String,
 		PreviewMessage: form.PreviewMessage.String,
 		Status:         statusToUppercase(form.Status),
-		UnitID:         unitName,
-		OrgID:          orgName,
+		UnitID:         form.UnitID.String(),
 		LastEditor: user.ProfileResponse{
 			ID:        editor.ID,
 			Name:      editor.Name.String,
