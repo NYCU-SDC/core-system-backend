@@ -76,7 +76,7 @@ func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
 	err := json.Unmarshal(dbWorkflow, &nodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
 	}
 
 	for i := range nodes {
@@ -87,7 +87,7 @@ func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 
 	result, err := json.Marshal(nodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalWorkflow, err)
 	}
 	return result, nil
 }
@@ -100,14 +100,14 @@ func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 	var apiNodes []map[string]interface{}
 	err := json.Unmarshal(apiWorkflow, &apiNodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal API workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalAPIWorkflow, err)
 	}
 
 	// Parse database workflow
 	var dbNodes []map[string]interface{}
 	err = json.Unmarshal(dbWorkflow, &dbNodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal database workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalDBWorkflow, err)
 	}
 
 	// Build a map of node ID -> type from database
@@ -131,7 +131,7 @@ func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 		// Check if node exists in database
 		dbType, exists := dbNodeTypeMap[nodeID]
 		if !exists {
-			return nil, fmt.Errorf("node with id '%s' not found in current workflow, please create it first using CreateNode API", nodeID)
+			return nil, fmt.Errorf("%w: node with id '%s' not found in current workflow, please create it first using CreateNode API", internal.ErrWorkflowNodeNotFound, nodeID)
 		}
 
 		// Add type from database to API node
@@ -141,7 +141,7 @@ func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 	// Marshal merged nodes back to JSON
 	result, err := json.Marshal(apiNodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal merged workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalMergedWorkflow, err)
 	}
 
 	return result, nil
@@ -152,7 +152,7 @@ func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
 	err := json.Unmarshal(apiWorkflow, &nodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
 	}
 
 	for i := range nodes {
@@ -163,7 +163,7 @@ func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
 
 	result, err := json.Marshal(nodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalWorkflow, err)
 	}
 	return result, nil
 }

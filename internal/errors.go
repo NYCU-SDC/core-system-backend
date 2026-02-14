@@ -28,12 +28,12 @@ var (
 	ErrInvalidAuthUser         = errors.New("invalid authenticated user")
 
 	// User Errors
-	ErrUserNotFound       = errors.New("user not found")
-	ErrNoUserInContext    = errors.New("no user found in request context")
-	ErrEmailAlreadyExists = errors.New("email already exists")
-	ErrUserOnboarded      = errors.New("user already onboarded")
-	ErrUsernameConflict   = errors.New("user name already taken")
-	ErrDatabaseError      = errors.New("database error")
+	ErrUserNotFound         = errors.New("user not found")
+	ErrNoUserInContext      = errors.New("no user found in request context")
+	ErrEmailAlreadyExists   = errors.New("email already exists")
+	ErrUserOnboarded        = errors.New("user already onboarded")
+	ErrUsernameConflict     = errors.New("user name already taken")
+	ErrDatabaseError        = errors.New("database error")
 	ErrUserNotInAllowedList = errors.New("user not in allowed onboarding list")
 
 	// OAuth Email Errors
@@ -78,6 +78,12 @@ var (
 	// Workflow Errors
 	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
 	ErrWorkflowNotActive        = errors.New("workflow is not active")
+	ErrUnmarshalWorkflow        = errors.New("failed to unmarshal workflow")
+	ErrMarshalWorkflow          = errors.New("failed to marshal workflow")
+	ErrUnmarshalAPIWorkflow     = errors.New("failed to unmarshal API workflow")
+	ErrUnmarshalDBWorkflow      = errors.New("failed to unmarshal database workflow")
+	ErrWorkflowNodeNotFound     = errors.New("node not found in current workflow")
+	ErrMarshalMergedWorkflow    = errors.New("failed to marshal merged workflow")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -202,6 +208,18 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("workflow validation failed")
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
+	case errors.Is(err, ErrUnmarshalWorkflow):
+		return problem.NewBadRequestProblem("failed to unmarshal workflow")
+	case errors.Is(err, ErrMarshalWorkflow):
+		return problem.NewInternalServerProblem("failed to marshal workflow")
+	case errors.Is(err, ErrUnmarshalAPIWorkflow):
+		return problem.NewBadRequestProblem("failed to unmarshal API workflow")
+	case errors.Is(err, ErrUnmarshalDBWorkflow):
+		return problem.NewInternalServerProblem("failed to unmarshal database workflow")
+	case errors.Is(err, ErrWorkflowNodeNotFound):
+		return problem.NewValidateProblem("node not found in current workflow, please create it first using CreateNode API")
+	case errors.Is(err, ErrMarshalMergedWorkflow):
+		return problem.NewInternalServerProblem("failed to marshal merged workflow")
 	}
 	return problem.Problem{}
 }
