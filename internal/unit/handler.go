@@ -103,6 +103,10 @@ type Request struct {
 	Metadata    map[string]string `json:"metadata"`
 }
 
+type UpdateUnitMemberRoleRequest struct {
+	Role string `json:"role" validate:"required"`
+}
+
 type UnitResponse struct {
 	ID          uuid.UUID         `json:"id"`
 	Name        string            `json:"name"`
@@ -137,6 +141,12 @@ type UserFormResponse struct {
 	Title    string              `json:"title"`
 	Deadline *time.Time          `json:"deadline"`
 	Status   form.UserFormStatus `json:"status"`
+}
+
+type UpdateUnitMemberRoleResponse struct {
+	UnitID   uuid.UUID `json:"unit_id"`
+	MemberID uuid.UUID `json:"member_id"`
+	Role     UnitRole  `json:"role"`
 }
 
 // createProfileResponseWithEmails creates a ProfileResponse with emails for a user
@@ -897,11 +907,10 @@ func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req struct {
-		Role string `json:"role"`
-	}
+	var req UpdateUnitMemberRoleRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
 		return
 	}
@@ -913,11 +922,11 @@ func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
 
 	newRole := UnitRole(req.Role)
 
-	switch newRole {
-	case UnitRoleAdmin, UnitRoleMember:
-		// valid role
-	default:
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid role value"), logger)
+	if !newRole.IsValidMemberRole() {
+		h.problemWriter.WriteError(traceCtx, w,
+			fmt.Errorf("invalid role value"),
+			logger,
+		)
 		return
 	}
 
@@ -937,12 +946,6 @@ func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
 		zap.String("member_id", memberID.String()),
 		zap.String("new_role", string(newRole)),
 	)
-
-	type UpdateUnitMemberRoleResponse struct {
-		UnitID   uuid.UUID `json:"unit_id"`
-		MemberID uuid.UUID `json:"member_id"`
-		Role     UnitRole  `json:"role"`
-	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, UpdateUnitMemberRoleResponse{
 		UnitID:   unitID,
