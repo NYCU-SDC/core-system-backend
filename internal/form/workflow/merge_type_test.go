@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestMergeTypeFromDB(t *testing.T) {
-	tests := []struct {
+func TestWorkflow_MergeTypeFromDB(t *testing.T) {
+	testCases := []struct {
 		name        string
 		apiWorkflow string
 		dbWorkflow  string
@@ -58,16 +58,16 @@ func TestMergeTypeFromDB(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := mergeTypeFromDB([]byte(tt.apiWorkflow), []byte(tt.dbWorkflow))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := mergeTypeFromDB([]byte(tc.apiWorkflow), []byte(tc.dbWorkflow))
 
-			if tt.expectError {
+			if tc.expectError {
 				if err == nil {
 					t.Fatalf("expected error but got none")
 				}
-				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("error message mismatch: got %v, want substring %v", err.Error(), tt.errorMsg)
+				if tc.errorMsg != "" && !strings.Contains(err.Error(), tc.errorMsg) {
+					t.Errorf("error message mismatch: got %v, want substring %v", err.Error(), tc.errorMsg)
 				}
 				return
 			}
@@ -78,14 +78,16 @@ func TestMergeTypeFromDB(t *testing.T) {
 
 			// Parse result to verify type field was added
 			var resultNodes []map[string]interface{}
-			if err := json.Unmarshal(result, &resultNodes); err != nil {
+			err = json.Unmarshal(result, &resultNodes)
+			if err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
 
 			// Parse database workflow to get expected types
 			var dbNodes []map[string]interface{}
-			if err := json.Unmarshal([]byte(tt.dbWorkflow), &dbNodes); err != nil {
-				t.Fatalf("failed to unmarshal dbWorkflow: %v", err)
+			err = json.Unmarshal([]byte(tc.dbWorkflow), &dbNodes)
+			if err != nil {
+				t.Fatalf("failed to unmarshal database workflow: %v", err)
 			}
 
 			// Build expected type map
