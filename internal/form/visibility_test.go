@@ -24,9 +24,9 @@ func TestVisibilityToUppercase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := visibilityToUppercase(tt.input)
+			result := VisibilityToUppercase(tt.input)
 			if result != tt.expected {
-				t.Errorf("visibilityToUppercase(%v) = %v, want %v", tt.input, result, tt.expected)
+				t.Errorf("VisibilityToUppercase(%v) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
 	}

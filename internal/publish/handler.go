@@ -26,8 +26,8 @@ type Request struct {
 	UnitIDs []uuid.UUID `json:"unitIds"`
 }
 
-type PublishFormResponse struct {
-	Visibility form.Visibility `json:"visibility"`
+type Response struct {
+	Visibility string `json:"visibility"`
 }
 
 type Handler struct {
@@ -97,7 +97,7 @@ func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, PublishFormResponse{
-		Visibility: visibility,
+	handlerutil.WriteJSONResponse(w, http.StatusOK, Response{
+		Visibility: form.VisibilityToUppercase(visibility),
 	})
 }
