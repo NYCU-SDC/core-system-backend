@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-func TestStatusToUppercase(t *testing.T) {
-	tests := []struct {
+func TestStatus_ToUppercase(t *testing.T) {
+	testCases := []struct {
 		name     string
 		input    Status
 		expected string
@@ -27,11 +27,11 @@ func TestStatusToUppercase(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := statusToUppercase(tt.input)
-			if result != tt.expected {
-				t.Errorf("statusToUppercase(%v) = %v, want %v", tt.input, result, tt.expected)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := statusToUppercase(tc.input)
+			if result != tc.expected {
+				t.Errorf("statusToUppercase(%v) = %v, want %v", tc.input, result, tc.expected)
 			}
 		})
 	}
