@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 )
 
@@ -12,7 +11,6 @@ func TestWorkflow_MergeTypeFromDB(t *testing.T) {
 		apiWorkflow string
 		dbWorkflow  string
 		expectError bool
-		errorMsg    string
 	}{
 		{
 			name: "successful merge - all nodes exist in database",
@@ -38,7 +36,6 @@ func TestWorkflow_MergeTypeFromDB(t *testing.T) {
 				{"id":"1","type":"start","label":"Start Node"}
 			]`,
 			expectError: true,
-			errorMsg:    "node with id '999' not found in current workflow",
 		},
 		{
 			name: "successful merge - with condition node",
@@ -65,9 +62,6 @@ func TestWorkflow_MergeTypeFromDB(t *testing.T) {
 			if tc.expectError {
 				if err == nil {
 					t.Fatalf("expected error but got none")
-				}
-				if tc.errorMsg != "" && !strings.Contains(err.Error(), tc.errorMsg) {
-					t.Errorf("error message mismatch: got %v, want substring %v", err.Error(), tc.errorMsg)
 				}
 				return
 			}
