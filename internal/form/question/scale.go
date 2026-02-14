@@ -173,12 +173,12 @@ func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {
 		return nil, fmt.Errorf("minVal (%d) must be less than maxVal (%d)", option.MinVal, option.MaxVal)
 	}
 
-	if option.MinVal < 1 || option.MinVal > 7 {
-		return nil, fmt.Errorf("minVal must be between 1 and 7, got %d", option.MinVal)
+	if option.MinVal < 1 || option.MinVal > 10 {
+		return nil, fmt.Errorf("minVal must be between 1 and 10, got %d", option.MinVal)
 	}
 
-	if option.MaxVal < 1 || option.MaxVal > 7 {
-		return nil, fmt.Errorf("maxVal must be between 1 and 7, got %d", option.MaxVal)
+	if option.MaxVal < 1 || option.MaxVal > 10 {
+		return nil, fmt.Errorf("maxVal must be between 1 and 10, got %d", option.MaxVal)
 	}
 
 	metadata := map[string]any{

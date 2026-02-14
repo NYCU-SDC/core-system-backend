@@ -80,6 +80,19 @@ func NewService(logger *zap.Logger, db DBTX, responseStore ResponseStore) *Servi
 	}
 }
 
+// visibilityFromAPIFormat converts API visibility format (uppercase) to database format (lowercase).
+func visibilityFromAPIFormat(v string) Visibility {
+	switch v {
+	case "PUBLIC":
+		return VisibilityPublic
+	case "PRIVATE":
+		return VisibilityPrivate
+	default:
+		// Fallback for backward compatibility
+		return Visibility(v)
+	}
+}
+
 func buildFormFieldsFromRequest(request Request) formFields {
 	form := formFields{}
 
@@ -121,7 +134,7 @@ func buildFormFieldsFromRequest(request Request) formFields {
 	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
 	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""}
 	form.messageAfterSubmission = request.MessageAfterSubmission
-	form.visibility = request.Visibility
+	form.visibility = visibilityFromAPIFormat(request.Visibility)
 	form.title = request.Title
 
 	return form

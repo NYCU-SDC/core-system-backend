@@ -102,7 +102,7 @@ func (s *Service) GetRecipients(ctx context.Context, selection Selection) ([]uui
 //  2. Ensuring there is a latest workflow stored for the form
 //  3. Activating that latest workflow from DB
 //  4. Publishing the form
-func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, unitIDs []uuid.UUID, editor uuid.UUID) (form.Visibility, error) {
+func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, editor uuid.UUID) (form.Visibility, error) {
 	ctx, span := s.tracer.Start(ctx, "PublishForm")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
