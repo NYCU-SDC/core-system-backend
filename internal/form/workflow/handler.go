@@ -80,7 +80,8 @@ func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 	}
 
 	for i := range nodes {
-		if typeVal, ok := nodes[i]["type"].(string); ok {
+		typeVal, ok := nodes[i]["type"].(string)
+		if ok {
 			nodes[i]["type"] = nodeTypeToUppercase(NodeType(typeVal))
 		}
 	}
@@ -156,7 +157,8 @@ func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
 	}
 
 	for i := range nodes {
-		if typeVal, ok := nodes[i]["type"].(string); ok {
+		typeVal, ok := nodes[i]["type"].(string)
+		if ok {
 			nodes[i]["type"] = nodeTypeToLowercase(typeVal)
 		}
 	}
