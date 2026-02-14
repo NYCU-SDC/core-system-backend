@@ -77,8 +77,8 @@ func statusToUppercase(s Status) string {
 	}
 }
 
-// visibilityToUppercase converts database visibility format (lowercase) to API format (uppercase).
-func visibilityToUppercase(v Visibility) string {
+// VisibilityToUppercase converts database visibility format (lowercase) to API format (uppercase).
+func VisibilityToUppercase(v Visibility) string {
 	switch v {
 	case VisibilityPublic:
 		return "PUBLIC"
@@ -125,7 +125,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		CreatedAt:              form.CreatedAt.Time,
 		UpdatedAt:              form.UpdatedAt.Time,
 		MessageAfterSubmission: form.MessageAfterSubmission,
-		Visibility:             visibilityToUppercase(form.Visibility),
+		Visibility:             VisibilityToUppercase(form.Visibility),
 		GoogleSheetUrl:         form.GoogleSheetUrl.String,
 		PublishTime:            publishTime,
 		CoverImageUrl:          form.CoverImageUrl.String,
