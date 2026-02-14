@@ -125,7 +125,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 		}
 		fileTypes := make([]string, len(uploadFile.AllowedFileTypes))
 		for i, ft := range uploadFile.AllowedFileTypes {
-			fileTypes[i] = string(ft)
+			fileTypes[i] = strings.ToUpper(string(ft))
 		}
 		response.UploadFile = &UploadFileOption{
 			AllowedFileTypes: fileTypes,
