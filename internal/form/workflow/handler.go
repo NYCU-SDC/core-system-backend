@@ -74,7 +74,8 @@ func nodeTypeToLowercase(apiType string) string {
 // workflowToAPIFormat converts workflow JSON from database format to API format (type: lowercase -> uppercase).
 func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
-	if err := json.Unmarshal(dbWorkflow, &nodes); err != nil {
+	err := json.Unmarshal(dbWorkflow, &nodes)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
 	}
 
@@ -97,13 +98,15 @@ func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 	// Parse API workflow (request from client)
 	var apiNodes []map[string]interface{}
-	if err := json.Unmarshal(apiWorkflow, &apiNodes); err != nil {
+	err := json.Unmarshal(apiWorkflow, &apiNodes)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal API workflow: %w", err)
 	}
 
 	// Parse database workflow
 	var dbNodes []map[string]interface{}
-	if err := json.Unmarshal(dbWorkflow, &dbNodes); err != nil {
+	err = json.Unmarshal(dbWorkflow, &dbNodes)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal database workflow: %w", err)
 	}
 
@@ -147,7 +150,8 @@ func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 // workflowFromAPIFormat converts workflow JSON from API format to database format (type: uppercase -> lowercase).
 func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
-	if err := json.Unmarshal(apiWorkflow, &nodes); err != nil {
+	err := json.Unmarshal(apiWorkflow, &nodes)
+	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
 	}
 
