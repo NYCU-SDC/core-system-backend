@@ -130,7 +130,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 		response.UploadFile = &UploadFileOption{
 			AllowedFileTypes: fileTypes,
 			MaxFileAmount:    uploadFile.MaxFileAmount,
-			MaxFileSizeLimit: string(uploadFile.MaxFileSizeLimit),
+			MaxFileSizeLimit: uploadFile.MaxFileSizeLimit,
 		}
 	case QuestionTypeOauthConnect:
 		provider, err := ExtractOauthConnect(q.Metadata)
