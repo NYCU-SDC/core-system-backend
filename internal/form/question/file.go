@@ -70,29 +70,18 @@ const (
 	FileTypeZip FileType = "zip"
 )
 
-// FileSizeLimit represents maximum file size
-type FileSizeLimit string
-
-const (
-	FileSizeLimit1MB   FileSizeLimit = "1MB"
-	FileSizeLimit5MB   FileSizeLimit = "5MB"
-	FileSizeLimit10MB  FileSizeLimit = "10MB"
-	FileSizeLimit100MB FileSizeLimit = "100MB"
-	FileSizeLimit1GB   FileSizeLimit = "1GB"
-)
-
 // UploadFileOption represents the request from frontend
 type UploadFileOption struct {
 	AllowedFileTypes []string `json:"allowedFileTypes" validate:"required"`
-	MaxFileAmount    int32    `json:"maxFileAmount" validate:"required"`
-	MaxFileSizeLimit string   `json:"maxFileSizeLimit" validate:"required"`
+	MaxFileAmount    int32    `json:"maxFileAmount" validate:"required,min=1,max=10"`
+	MaxFileSizeLimit int64    `json:"maxFileSizeLimit" validate:"required,min=1,max=10485760"`
 }
 
 // UploadFileMetadata represents the metadata stored in DB
 type UploadFileMetadata struct {
-	AllowedFileTypes []FileType    `json:"allowedFileTypes"`
-	MaxFileAmount    int32         `json:"maxFileAmount"`
-	MaxFileSizeLimit FileSizeLimit `json:"maxFileSizeLimit"`
+	AllowedFileTypes []FileType `json:"allowedFileTypes"`
+	MaxFileAmount    int32      `json:"maxFileAmount"`
+	MaxFileSizeLimit int64      `json:"maxFileSizeLimit"`
 }
 
 type UploadFile struct {
@@ -100,7 +89,7 @@ type UploadFile struct {
 	formID           uuid.UUID
 	AllowedFileTypes []FileType
 	MaxFileAmount    int32
-	MaxFileSizeLimit FileSizeLimit
+	MaxFileSizeLimit int64
 }
 
 func (u UploadFile) Question() Question {
@@ -162,11 +151,13 @@ func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
 		}
 	}
 
-	if !isValidFileSizeLimit(uploadFile.MaxFileSizeLimit) {
+	// Validate file size limit (1 byte to 10 MB)
+	const maxFileSizeBytes int64 = 10485760 // 10 MB in bytes
+	if uploadFile.MaxFileSizeLimit < 1 || uploadFile.MaxFileSizeLimit > maxFileSizeBytes {
 		return UploadFile{}, ErrMetadataBroken{
 			QuestionID: q.ID.String(),
 			RawData:    q.Metadata,
-			Message:    fmt.Sprintf("invalid maxFileSizeLimit: %s", uploadFile.MaxFileSizeLimit),
+			Message:    fmt.Sprintf("maxFileSizeLimit must be between 1 and %d bytes (10 MB), got: %d", maxFileSizeBytes, uploadFile.MaxFileSizeLimit),
 		}
 	}
 
@@ -199,17 +190,17 @@ func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
 		fileTypes[i] = fileType
 	}
 
-	// Validate file size limit
-	sizeLimit := FileSizeLimit(option.MaxFileSizeLimit)
-	if !isValidFileSizeLimit(sizeLimit) {
-		return nil, fmt.Errorf("invalid file size limit: %s", option.MaxFileSizeLimit)
+	// Validate file size limit (1 byte to 10 MB)
+	const maxFileSizeBytes int64 = 10485760 // 10 MB in bytes
+	if option.MaxFileSizeLimit < 1 || option.MaxFileSizeLimit > maxFileSizeBytes {
+		return nil, fmt.Errorf("file size limit must be between 1 and %d bytes (10 MB), got: %d", maxFileSizeBytes, option.MaxFileSizeLimit)
 	}
 
 	metadata := map[string]any{
 		"uploadFile": UploadFileMetadata{
 			AllowedFileTypes: fileTypes,
 			MaxFileAmount:    option.MaxFileAmount,
-			MaxFileSizeLimit: sizeLimit,
+			MaxFileSizeLimit: option.MaxFileSizeLimit,
 		},
 	}
 
@@ -242,24 +233,6 @@ func isValidFileType(ft FileType) bool {
 
 	for _, valid := range validTypes {
 		if ft == valid {
-			return true
-		}
-	}
-	return false
-}
-
-// isValidFileSizeLimit checks if the file size limit is valid
-func isValidFileSizeLimit(limit FileSizeLimit) bool {
-	validLimits := []FileSizeLimit{
-		FileSizeLimit1MB,
-		FileSizeLimit5MB,
-		FileSizeLimit10MB,
-		FileSizeLimit100MB,
-		FileSizeLimit1GB,
-	}
-
-	for _, valid := range validLimits {
-		if limit == valid {
 			return true
 		}
 	}

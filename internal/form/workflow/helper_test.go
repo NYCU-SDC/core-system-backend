@@ -451,7 +451,7 @@ func createMockAnswerable(t *testing.T, formID uuid.UUID, questionType question.
 		metadata, err := question.GenerateUploadFileMetadata(question.UploadFileOption{
 			AllowedFileTypes: []string{"pdf"},
 			MaxFileAmount:    1,
-			MaxFileSizeLimit: "10MB",
+			MaxFileSizeLimit: 10485760, // 10 MB in bytes
 		})
 		require.NoError(t, err)
 		q.Metadata = metadata

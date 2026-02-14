@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package inbox
+package file
 
 import (
 	"database/sql/driver"
