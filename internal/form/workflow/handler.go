@@ -74,19 +74,21 @@ func nodeTypeToLowercase(apiType string) string {
 // workflowToAPIFormat converts workflow JSON from database format to API format (type: lowercase -> uppercase).
 func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
-	if err := json.Unmarshal(dbWorkflow, &nodes); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
+	err := json.Unmarshal(dbWorkflow, &nodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
 	}
 
 	for i := range nodes {
-		if typeVal, ok := nodes[i]["type"].(string); ok {
+		typeVal, ok := nodes[i]["type"].(string)
+		if ok {
 			nodes[i]["type"] = nodeTypeToUppercase(NodeType(typeVal))
 		}
 	}
 
 	result, err := json.Marshal(nodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalWorkflow, err)
 	}
 	return result, nil
 }
@@ -97,14 +99,16 @@ func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 	// Parse API workflow (request from client)
 	var apiNodes []map[string]interface{}
-	if err := json.Unmarshal(apiWorkflow, &apiNodes); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal API workflow: %w", err)
+	err := json.Unmarshal(apiWorkflow, &apiNodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalAPIWorkflow, err)
 	}
 
 	// Parse database workflow
 	var dbNodes []map[string]interface{}
-	if err := json.Unmarshal(dbWorkflow, &dbNodes); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal database workflow: %w", err)
+	err = json.Unmarshal(dbWorkflow, &dbNodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalDBWorkflow, err)
 	}
 
 	// Build a map of node ID -> type from database
@@ -128,7 +132,7 @@ func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 		// Check if node exists in database
 		dbType, exists := dbNodeTypeMap[nodeID]
 		if !exists {
-			return nil, fmt.Errorf("node with id '%s' not found in current workflow, please create it first using CreateNode API", nodeID)
+			return nil, fmt.Errorf("%w: node with id '%s' not found in current workflow, please create it first using CreateNode API", internal.ErrWorkflowNodeNotFound, nodeID)
 		}
 
 		// Add type from database to API node
@@ -138,7 +142,7 @@ func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 	// Marshal merged nodes back to JSON
 	result, err := json.Marshal(apiNodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal merged workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalMergedWorkflow, err)
 	}
 
 	return result, nil
@@ -147,19 +151,21 @@ func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 // workflowFromAPIFormat converts workflow JSON from API format to database format (type: uppercase -> lowercase).
 func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
-	if err := json.Unmarshal(apiWorkflow, &nodes); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
+	err := json.Unmarshal(apiWorkflow, &nodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
 	}
 
 	for i := range nodes {
-		if typeVal, ok := nodes[i]["type"].(string); ok {
+		typeVal, ok := nodes[i]["type"].(string)
+		if ok {
 			nodes[i]["type"] = nodeTypeToLowercase(typeVal)
 		}
 	}
 
 	result, err := json.Marshal(nodes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal workflow: %w", err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalWorkflow, err)
 	}
 	return result, nil
 }

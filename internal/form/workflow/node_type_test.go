@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestNodeTypeToUppercase(t *testing.T) {
-	tests := []struct {
+func TestNodeType_ToUppercase(t *testing.T) {
+	testCases := []struct {
 		name     string
 		input    NodeType
 		expected string
@@ -33,18 +33,18 @@ func TestNodeTypeToUppercase(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := nodeTypeToUppercase(tt.input)
-			if result != tt.expected {
-				t.Errorf("nodeTypeToUppercase(%v) = %v, want %v", tt.input, result, tt.expected)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := nodeTypeToUppercase(tc.input)
+			if result != tc.expected {
+				t.Errorf("nodeTypeToUppercase(%v) = %v, want %v", tc.input, result, tc.expected)
 			}
 		})
 	}
 }
 
-func TestNodeTypeToLowercase(t *testing.T) {
-	tests := []struct {
+func TestNodeType_ToLowercase(t *testing.T) {
+	testCases := []struct {
 		name     string
 		input    string
 		expected string
@@ -71,18 +71,18 @@ func TestNodeTypeToLowercase(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := nodeTypeToLowercase(tt.input)
-			if result != tt.expected {
-				t.Errorf("nodeTypeToLowercase(%v) = %v, want %v", tt.input, result, tt.expected)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := nodeTypeToLowercase(tc.input)
+			if result != tc.expected {
+				t.Errorf("nodeTypeToLowercase(%v) = %v, want %v", tc.input, result, tc.expected)
 			}
 		})
 	}
 }
 
-func TestWorkflowToAPIFormat(t *testing.T) {
-	tests := []struct {
+func TestWorkflow_ToAPIFormat(t *testing.T) {
+	testCases := []struct {
 		name     string
 		input    string
 		expected string
@@ -104,19 +104,21 @@ func TestWorkflowToAPIFormat(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := workflowToAPIFormat([]byte(tt.input))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := workflowToAPIFormat([]byte(tc.input))
 			if err != nil {
 				t.Fatalf("workflowToAPIFormat() error = %v", err)
 			}
 
 			// Unmarshal both to compare structure
 			var resultNodes, expectedNodes []map[string]interface{}
-			if err := json.Unmarshal(result, &resultNodes); err != nil {
+			err = json.Unmarshal(result, &resultNodes)
+			if err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
-			if err := json.Unmarshal([]byte(tt.expected), &expectedNodes); err != nil {
+			err = json.Unmarshal([]byte(tc.expected), &expectedNodes)
+			if err != nil {
 				t.Fatalf("failed to unmarshal expected: %v", err)
 			}
 
@@ -133,8 +135,8 @@ func TestWorkflowToAPIFormat(t *testing.T) {
 	}
 }
 
-func TestWorkflowFromAPIFormat(t *testing.T) {
-	tests := []struct {
+func TestWorkflow_FromAPIFormat(t *testing.T) {
+	testCases := []struct {
 		name     string
 		input    string
 		expected string
@@ -156,19 +158,21 @@ func TestWorkflowFromAPIFormat(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := workflowFromAPIFormat([]byte(tt.input))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := workflowFromAPIFormat([]byte(tc.input))
 			if err != nil {
 				t.Fatalf("workflowFromAPIFormat() error = %v", err)
 			}
 
 			// Unmarshal both to compare structure
 			var resultNodes, expectedNodes []map[string]interface{}
-			if err := json.Unmarshal(result, &resultNodes); err != nil {
+			err = json.Unmarshal(result, &resultNodes)
+			if err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
-			if err := json.Unmarshal([]byte(tt.expected), &expectedNodes); err != nil {
+			err = json.Unmarshal([]byte(tc.expected), &expectedNodes)
+			if err != nil {
 				t.Fatalf("failed to unmarshal expected: %v", err)
 			}
 
