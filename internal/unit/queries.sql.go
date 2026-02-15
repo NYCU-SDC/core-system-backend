@@ -470,6 +470,19 @@ func (q *Queries) ListUnitsMembers(ctx context.Context, dollar_1 []uuid.UUID) ([
 	return items, nil
 }
 
+const lockAdminsForUnit = `-- name: LockAdminsForUnit :exec
+SELECT member_id
+FROM unit_members
+WHERE unit_id = $1
+  AND role = 'admin'
+    FOR UPDATE
+`
+
+func (q *Queries) LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockAdminsForUnit, unitID)
+	return err
+}
+
 const removeMember = `-- name: RemoveMember :exec
 DELETE FROM unit_members WHERE unit_id = $1 AND member_id = $2
 `
