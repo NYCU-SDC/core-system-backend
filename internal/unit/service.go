@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	//"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -39,9 +40,18 @@ type Querier interface {
 	CountMembersByRole(ctx context.Context, arg CountMembersByRoleParams) (int64, error)
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
+	LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) error
+
+	WithTx(tx pgx.Tx) *Queries
+}
+
+type TxBeginner interface {
+	BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error)
 }
 
 type Service struct {
+	db          DBTX
+	txBeginner  TxBeginner
 	logger      *zap.Logger
 	queries     Querier
 	tracer      trace.Tracer
@@ -78,6 +88,8 @@ func (t Type) String() string {
 
 func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 	return &Service{
+		db:          db,
+		txBeginner:  db.(TxBeginner),
 		logger:      logger,
 		queries:     New(db),
 		tracer:      otel.Tracer("unit/service"),
@@ -493,7 +505,31 @@ func (s *Service) UpdateUnitMemberRole(
 
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	currentRole, err := s.queries.GetMemberRole(traceCtx, GetMemberRoleParams{
+	tx, err := s.txBeginner.BeginTx(traceCtx, pgx.TxOptions{})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "begin tx")
+		span.RecordError(err)
+		return err
+	}
+
+	defer func() {
+		err := tx.Rollback(traceCtx)
+		if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			logger.Error("rollback failed", zap.Error(err))
+		}
+	}()
+
+	qtx := s.queries.WithTx(tx)
+
+	// lock admins
+	err = qtx.LockAdminsForUnit(traceCtx, unitID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "lock admin rows")
+		span.RecordError(err)
+		return err
+	}
+
+	currentRole, err := qtx.GetMemberRole(traceCtx, GetMemberRoleParams{
 		UnitID:   unitID,
 		MemberID: memberID,
 	})
@@ -508,11 +544,11 @@ func (s *Service) UpdateUnitMemberRole(
 	}
 
 	if currentRole == newRole {
-		return nil
+		return tx.Commit(traceCtx)
 	}
 
 	if currentRole == UnitRoleAdmin && newRole != UnitRoleAdmin {
-		count, err := s.queries.CountMembersByRole(traceCtx, CountMembersByRoleParams{
+		count, err := qtx.CountMembersByRole(traceCtx, CountMembersByRoleParams{
 			UnitID: unitID,
 			Role:   UnitRoleAdmin,
 		})
@@ -529,7 +565,7 @@ func (s *Service) UpdateUnitMemberRole(
 		}
 	}
 
-	err = s.queries.UpdateMemberRole(traceCtx, UpdateMemberRoleParams{
+	err = qtx.UpdateMemberRole(traceCtx, UpdateMemberRoleParams{
 		UnitID:   unitID,
 		MemberID: memberID,
 		Role:     newRole,
@@ -540,5 +576,5 @@ func (s *Service) UpdateUnitMemberRole(
 		return err
 	}
 
-	return nil
+	return tx.Commit(traceCtx)
 }
