@@ -885,48 +885,38 @@ func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
 
 	idStr := r.PathValue("id")
 	if idStr == "" {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("unit ID not provided"), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrMissingUnitID, logger)
 		return
 	}
 
 	unitID, err := uuid.Parse(idStr)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid unit ID: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidUnitID, logger)
 		return
 	}
 
 	mIDStr := r.PathValue("member_id")
 	if mIDStr == "" {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("member ID not provided"), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrMissingMemberID, logger)
 		return
 	}
 
 	memberID, err := uuid.Parse(mIDStr)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid member ID: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMemberID, logger)
 		return
 	}
 
 	var req UpdateUnitMemberRoleRequest
-
-	err = json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
-		return
-	}
-
-	if req.Role == "" {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("role is required"), logger)
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
 		return
 	}
 
 	newRole := UnitRole(req.Role)
 
 	if !newRole.IsValidMemberRole() {
-		h.problemWriter.WriteError(traceCtx, w,
-			fmt.Errorf("invalid role value"),
-			logger,
-		)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRole, logger)
 		return
 	}
 

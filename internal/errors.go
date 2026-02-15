@@ -49,6 +49,13 @@ var (
 	ErrMemberEmailNotFound   = errors.New("member email not found")
 	ErrCannotRemoveLastAdmin = errors.New("cannot remove the last admin of the unit")
 
+	ErrMissingUnitID      = errors.New("missing unit id")
+	ErrInvalidUnitID      = errors.New("invalid unit id")
+	ErrMissingMemberID    = errors.New("missing member id")
+	ErrInvalidMemberID    = errors.New("invalid member id")
+	ErrInvalidRequestBody = errors.New("invalid request body")
+	ErrInvalidRole        = errors.New("invalid role")
+
 	// Inbox Errors
 	ErrInvalidIsReadParameter     = errors.New("invalid isRead parameter")
 	ErrInvalidIsStarredParameter  = errors.New("invalid isStarred parameter")
@@ -146,6 +153,18 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("member email not found")
 	case errors.Is(err, ErrCannotRemoveLastAdmin):
 		return problem.NewValidateProblem("cannot remove the last admin of the unit")
+	case errors.Is(err, ErrMissingUnitID):
+		return problem.NewBadRequestProblem("unit id is required")
+	case errors.Is(err, ErrInvalidUnitID):
+		return problem.NewBadRequestProblem("invalid unit id")
+	case errors.Is(err, ErrMissingMemberID):
+		return problem.NewBadRequestProblem("member id is required")
+	case errors.Is(err, ErrInvalidMemberID):
+		return problem.NewBadRequestProblem("invalid member id")
+	case errors.Is(err, ErrInvalidRequestBody):
+		return problem.NewBadRequestProblem("invalid request body")
+	case errors.Is(err, ErrInvalidRole):
+		return problem.NewValidateProblem("invalid role value")
 
 	// Form Errors
 	case errors.Is(err, ErrFormNotFound):
