@@ -51,7 +51,6 @@ type TxBeginner interface {
 
 type Service struct {
 	db          DBTX
-	txBeginner  TxBeginner
 	logger      *zap.Logger
 	queries     Querier
 	tracer      trace.Tracer
@@ -89,7 +88,6 @@ func (t Type) String() string {
 func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 	return &Service{
 		db:          db,
-		txBeginner:  db.(TxBeginner),
 		logger:      logger,
 		queries:     New(db),
 		tracer:      otel.Tracer("unit/service"),
@@ -505,19 +503,39 @@ func (s *Service) UpdateUnitMemberRole(
 
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	tx, err := s.txBeginner.BeginTx(traceCtx, pgx.TxOptions{})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "begin tx")
-		span.RecordError(err)
-		return err
-	}
+	var (
+		tx         pgx.Tx
+		err        error
+		needCommit bool
+	)
 
-	defer func() {
-		err := tx.Rollback(traceCtx)
-		if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
-			logger.Error("rollback failed", zap.Error(err))
+	existingTx, ok := s.db.(pgx.Tx)
+	if ok {
+		// reuse
+		tx = existingTx
+	} else {
+		// build tx
+		beginner, ok := s.db.(TxBeginner)
+		if !ok {
+			return fmt.Errorf("db does not support transactions")
 		}
-	}()
+
+		tx, err = beginner.BeginTx(traceCtx, pgx.TxOptions{})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "begin tx")
+			span.RecordError(err)
+			return err
+		}
+
+		needCommit = true
+
+		defer func() {
+			if err := tx.Rollback(traceCtx); err != nil &&
+				!errors.Is(err, pgx.ErrTxClosed) {
+				logger.Error("rollback failed", zap.Error(err))
+			}
+		}()
+	}
 
 	qtx := s.queries.WithTx(tx)
 
@@ -544,7 +562,10 @@ func (s *Service) UpdateUnitMemberRole(
 	}
 
 	if currentRole == newRole {
-		return tx.Commit(traceCtx)
+		if needCommit {
+			return tx.Commit(traceCtx)
+		}
+		return nil
 	}
 
 	if currentRole == UnitRoleAdmin && newRole != UnitRoleAdmin {
@@ -576,5 +597,9 @@ func (s *Service) UpdateUnitMemberRole(
 		return err
 	}
 
-	return tx.Commit(traceCtx)
+	if needCommit {
+		return tx.Commit(traceCtx)
+	}
+
+	return nil
 }
