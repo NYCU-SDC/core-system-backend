@@ -110,3 +110,10 @@ WHERE unit_id = $1 AND member_id = $2;
 SELECT COUNT(*)
 FROM unit_members
 WHERE unit_id = $1;
+
+-- name: LockAdminsForUnit :many
+SELECT member_id
+FROM unit_members
+WHERE unit_id = $1
+  AND role = 'admin'
+    FOR UPDATE;
