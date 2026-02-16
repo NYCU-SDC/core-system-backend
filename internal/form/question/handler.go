@@ -49,8 +49,8 @@ type Response struct {
 }
 
 type SectionResponse struct {
-	Section   Section
-	Questions []Response
+	Section   Section    `json:"section"`
+	Questions []Response `json:"questions"`
 }
 
 func ToResponse(answerable Answerable) (Response, error) {

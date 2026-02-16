@@ -39,7 +39,6 @@ type Response struct {
 	UpdatedAt    time.Time `json:"updatedAt"`
 	ResponseID   uuid.UUID `json:"responseId"`
 	QuestionID   uuid.UUID `json:"questionId"`
-	SubmittedBy  uuid.UUID `json:"submittedBy"`
 	Payload      Payload   `json:"answer"`
 	DisplayValue string    `json:"displayValue"`
 }
