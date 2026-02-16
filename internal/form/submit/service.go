@@ -22,7 +22,7 @@ type FormStore interface {
 }
 
 type FormResponseStore interface {
-	CreateOrUpdate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []response.QuestionType) (response.FormResponse, error)
+	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (response.FormResponse, error)
 }
 
 type Service struct {

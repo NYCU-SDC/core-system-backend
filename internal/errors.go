@@ -79,8 +79,9 @@ var (
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
 
 	// Response Errors
-	ErrResponseNotFound      = errors.New("response not found")
-	ErrResponseAlreadyExists = errors.New("user already has a response for this form")
+	ErrResponseNotFound       = errors.New("response not found")
+	ErrResponseAlreadyExists  = errors.New("user already has a response for this form")
+	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 
 	// Workflow Errors
 	ErrWorkflowValidationFailed = errors.New("workflow validation failed")

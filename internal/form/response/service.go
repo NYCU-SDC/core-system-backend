@@ -16,6 +16,7 @@ import (
 
 type Querier interface {
 	Get(ctx context.Context, id uuid.UUID) (FormResponse, error)
+	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
 	Exists(ctx context.Context, arg ExistsParams) (bool, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
@@ -121,6 +122,21 @@ func (s Service) Get(ctx context.Context, id uuid.UUID) (FormResponse, error) {
 	}
 
 	return response, nil
+}
+
+func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetFormIDByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formID, err := s.queries.GetFormIDByID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
+		span.RecordError(err)
+		return uuid.Nil, nil
+	}
+
+	return formID, nil
 }
 
 // Delete deletes a response by id

@@ -83,29 +83,16 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (FormResponse, error) {
 	return i, err
 }
 
-const getByFormIDAndSubmittedBy = `-- name: GetByFormIDAndSubmittedBy :one
-SELECT id, form_id, submitted_by, submitted_at, progress, created_at, updated_at FROM form_responses
-WHERE form_id = $1 AND submitted_by = $2
+const getFormIDByID = `-- name: GetFormIDByID :one
+SELECT form_id FROM form_responses
+WHERE id = $1
 `
 
-type GetByFormIDAndSubmittedByParams struct {
-	FormID      uuid.UUID
-	SubmittedBy uuid.UUID
-}
-
-func (q *Queries) GetByFormIDAndSubmittedBy(ctx context.Context, arg GetByFormIDAndSubmittedByParams) (FormResponse, error) {
-	row := q.db.QueryRow(ctx, getByFormIDAndSubmittedBy, arg.FormID, arg.SubmittedBy)
-	var i FormResponse
-	err := row.Scan(
-		&i.ID,
-		&i.FormID,
-		&i.SubmittedBy,
-		&i.SubmittedAt,
-		&i.Progress,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+func (q *Queries) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getFormIDByID, id)
+	var form_id uuid.UUID
+	err := row.Scan(&form_id)
+	return form_id, err
 }
 
 const listByFormID = `-- name: ListByFormID :many

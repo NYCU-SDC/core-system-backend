@@ -7,9 +7,9 @@ RETURNING *;
 SELECT * FROM form_responses
 WHERE id = $1;
 
--- name: GetByFormIDAndSubmittedBy :one
-SELECT * FROM form_responses
-WHERE form_id = $1 AND submitted_by = $2;
+-- name: GetFormIDByID :one
+SELECT form_id FROM form_responses
+WHERE id = $1;
 
 -- name: ListByFormID :many
 SELECT * FROM form_responses

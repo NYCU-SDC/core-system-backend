@@ -64,10 +64,9 @@ type CreateResponse struct {
 }
 
 type Store interface {
-	Get(ctx context.Context, formID uuid.UUID, responseID uuid.UUID) (FormResponse, []Answer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
+	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
-	CreateEmpty(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 }
 
 type QuestionStore interface {
@@ -131,51 +130,56 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get retrieves a response by id
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "Get")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	idStr := r.PathValue("responseId")
-	id, err := internal.ParseUUID(idStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	currentResponse, answers, err := h.store.Get(traceCtx, formID, id)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	questionAnswerResponses := make([]QuestionAnswerForGetResponse, len(answers))
-	for i, answer := range answers {
-		q, err := h.questionStore.GetByID(traceCtx, answer.QuestionID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-
-		questionAnswerResponses[i] = QuestionAnswerForGetResponse{
-			QuestionID: q.Question().ID.String(),
-		}
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, GetResponse{
-		ID:                   currentResponse.ID.String(),
-		FormID:               currentResponse.FormID.String(),
-		SubmittedBy:          currentResponse.SubmittedBy.String(),
-		QuestionsAnswerPairs: questionAnswerResponses,
-		CreatedAt:            currentResponse.CreatedAt.Time,
-		UpdatedAt:            currentResponse.UpdatedAt.Time,
-	})
+	//traceCtx, span := h.tracer.Start(r.Context(), "Get")
+	//defer span.End()
+	//logger := logutil.WithContext(traceCtx, h.logger)
+	//
+	//formIDStr := r.PathValue("formId")
+	//formID, err := internal.ParseUUID(formIDStr)
+	//if err != nil {
+	//	h.problemWriter.WriteError(traceCtx, w, err, logger)
+	//	return
+	//}
+	//
+	//idStr := r.PathValue("responseId")
+	//id, err := internal.ParseUUID(idStr)
+	//if err != nil {
+	//	h.problemWriter.WriteError(traceCtx, w, err, logger)
+	//	return
+	//}
+	//
+	//currentResponse, answers, err := h.store.Get(traceCtx, id)
+	//if err != nil {
+	//	h.problemWriter.WriteError(traceCtx, w, err, logger)
+	//	return
+	//}
+	//
+	//if currentResponse.FormID != formID {
+	//	h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseFormIDMismatch, logger)
+	//	return
+	//}
+	//
+	//questionAnswerResponses := make([]QuestionAnswerForGetResponse, len(answers))
+	//for i, answer := range answers {
+	//	q, err := h.questionStore.GetByID(traceCtx, answer.QuestionID)
+	//	if err != nil {
+	//		h.problemWriter.WriteError(traceCtx, w, err, logger)
+	//		return
+	//	}
+	//
+	//	questionAnswerResponses[i] = QuestionAnswerForGetResponse{
+	//		QuestionID: q.Question().ID.String(),
+	//	}
+	//}
+	//
+	//handlerutil.WriteJSONResponse(w, http.StatusOK, GetResponse{
+	//	ID:                   currentResponse.ID.String(),
+	//	FormID:               currentResponse.FormID.String(),
+	//	SubmittedBy:          currentResponse.SubmittedBy.String(),
+	//	QuestionsAnswerPairs: questionAnswerResponses,
+	//	CreatedAt:            currentResponse.CreatedAt.Time,
+	//	UpdatedAt:            currentResponse.UpdatedAt.Time,
+	//})
 }
 
 // Create creates an empty response for a form
@@ -200,7 +204,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create empty response
-	newResponse, err := h.store.CreateEmpty(traceCtx, formID, currentUser.ID)
+	newResponse, err := h.store.Create(traceCtx, formID, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
