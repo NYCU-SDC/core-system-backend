@@ -470,7 +470,7 @@ func (q *Queries) ListUnitsMembers(ctx context.Context, dollar_1 []uuid.UUID) ([
 	return items, nil
 }
 
-const lockAdminsForUnit = `-- name: LockAdminsForUnit :exec
+const lockAdminsForUnit = `-- name: LockAdminsForUnit :many
 SELECT member_id
 FROM unit_members
 WHERE unit_id = $1
@@ -478,9 +478,24 @@ WHERE unit_id = $1
     FOR UPDATE
 `
 
-func (q *Queries) LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, lockAdminsForUnit, unitID)
-	return err
+func (q *Queries) LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, lockAdminsForUnit, unitID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var member_id uuid.UUID
+		if err := rows.Scan(&member_id); err != nil {
+			return nil, err
+		}
+		items = append(items, member_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const removeMember = `-- name: RemoveMember :exec

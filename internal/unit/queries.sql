@@ -111,7 +111,7 @@ SELECT COUNT(*)
 FROM unit_members
 WHERE unit_id = $1;
 
--- name: LockAdminsForUnit :exec
+-- name: LockAdminsForUnit :many
 SELECT member_id
 FROM unit_members
 WHERE unit_id = $1

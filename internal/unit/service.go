@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	//"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -40,7 +39,7 @@ type Querier interface {
 	CountMembersByRole(ctx context.Context, arg CountMembersByRoleParams) (int64, error)
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
-	LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) error
+	LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error)
 
 	WithTx(tx pgx.Tx) *Queries
 }
@@ -530,7 +529,8 @@ func (s *Service) UpdateUnitMemberRole(
 		needCommit = true
 
 		defer func() {
-			if err := tx.Rollback(traceCtx); err != nil &&
+			err := tx.Rollback(traceCtx)
+			if err != nil &&
 				!errors.Is(err, pgx.ErrTxClosed) {
 				logger.Error("rollback failed", zap.Error(err))
 			}
@@ -540,7 +540,7 @@ func (s *Service) UpdateUnitMemberRole(
 	qtx := s.queries.WithTx(tx)
 
 	// lock admins
-	err = qtx.LockAdminsForUnit(traceCtx, unitID)
+	_, err = qtx.LockAdminsForUnit(traceCtx, unitID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "lock admin rows")
 		span.RecordError(err)

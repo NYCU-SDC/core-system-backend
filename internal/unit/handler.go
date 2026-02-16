@@ -908,7 +908,8 @@ func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateUnitMemberRoleRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
 		return
 	}
