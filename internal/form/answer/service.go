@@ -161,7 +161,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	answerQuestionPairs := make([]struct {
 		AnswerParam shared.AnswerParam
 		Answerable  Answerable
-	}, len(answers))
+	}, 0, len(answers))
 
 	traceCtx, span := s.tracer.Start(ctx, "Upsert")
 	defer span.End()
