@@ -5,7 +5,7 @@ RETURNING *;
 
 -- name: Get :one
 SELECT * FROM form_responses
-WHERE id = $1 AND form_id = $2;
+WHERE id = $1;
 
 -- name: GetByFormIDAndSubmittedBy :one
 SELECT * FROM form_responses

@@ -28,6 +28,23 @@ type QuestionStore interface {
 	GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID) (map[string]question.Answerable, error)
 }
 
+type ResponseStore interface {
+	Get(ctx context.Context, id uuid.UUID) (response.FormResponse, error)
+}
+
+type Answerable interface {
+	Validate(rawValue json.RawMessage) error
+
+	// DecodeRequest decodes the raw JSON value from the request into the appropriate Go type based on the question type.
+	DecodeRequest(rawValue json.RawMessage) (any, error)
+
+	// DecodeStorage decodes the raw JSON value from the database into the appropriate Go type based on the question type.
+	DecodeStorage(rawValue json.RawMessage) (any, error)
+
+	// EncodeRequest encodes the Go value into raw JSON for storage in the database or for sending in a response, based on the question type.
+	EncodeRequest(answer any) (json.RawMessage, error)
+}
+
 type Service struct {
 	logger  *zap.Logger
 	queries Querier
@@ -45,7 +62,7 @@ func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore) *Servi
 	}
 }
 
-func (s Service) List(ctx context.Context, responseID uuid.UUID) ([]Answer, error) {
+func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, error) {
 	traceCtx, span := s.tracer.Start(ctx, "List")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -57,11 +74,27 @@ func (s Service) List(ctx context.Context, responseID uuid.UUID) ([]Answer, erro
 		return nil, fmt.Errorf("failed to list answers: %w", err)
 	}
 
-	logger.Info("successfully listed answers", zap.Int("count", len(answers)), zap.String("responseID", responseID.String()))
-	return answers, nil
+	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
+	}
+
+	transformedAnswers := make([]Answer, 0, len(answers))
+	for _, answer := range answers {
+		transformedAnswer, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
+		if err != nil {
+			logger.Error("failed to transform answer", zap.String("questionID", answer.QuestionID.String()), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+		transformedAnswers = append(transformedAnswers, transformedAnswer)
+	}
+
+	logger.Info("successfully listed answers", zap.Int("count", len(transformedAnswers)), zap.String("responseID", responseID.String()))
+	return transformedAnswers, nil
 }
 
-func (s Service) Get(ctx context.Context, responseID, questionID uuid.UUID) (Answer, error) {
+func (s Service) Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -76,11 +109,61 @@ func (s Service) Get(ctx context.Context, responseID, questionID uuid.UUID) (Ans
 		return Answer{}, fmt.Errorf("failed to list answers for Get: %w", err)
 	}
 
+	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
+	if err != nil {
+		return Answer{}, fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
+	}
+
+	transformedAnswer, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
+	if err != nil {
+		span.RecordError(err)
+		return Answer{}, err
+	}
+
+	logger.Info("successfully retrieved answer", zap.String("responseID", responseID.String()), zap.String("questionID", questionID.String()))
+
+	return transformedAnswer, nil
+}
+
+// transformAnswerForResponse transforms an answer from storage format to response format
+func (s Service) transformAnswerForResponse(ctx context.Context, answer Answer, answerableMap map[string]question.Answerable, formID uuid.UUID) (Answer, error) {
+	_, span := s.tracer.Start(ctx, "transformAnswerForResponse")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	questionID := answer.QuestionID
+
+	answerable, found := answerableMap[questionID.String()]
+	if !found {
+		return Answer{}, fmt.Errorf("question with ID %s not found in form %s", questionID, formID)
+	}
+
+	valueStruct, err := answerable.DecodeStorage(answer.Value)
+	if err != nil {
+		logger.Error("failed to decode answer value from storage", zap.String("questionID", questionID.String()), zap.Error(err))
+		span.RecordError(fmt.Errorf("failed to decode answer value for question ID %s: %w", questionID, err))
+		return Answer{}, fmt.Errorf("failed to decode answer value for question ID %s: %w", questionID, err)
+	}
+
+	payload, err := answerable.EncodeRequest(valueStruct)
+	if err != nil {
+		logger.Error("failed to encode answer value for response", zap.String("questionID", questionID.String()), zap.Error(err))
+		span.RecordError(fmt.Errorf("failed to encode answer value for response for question ID %s: %w", questionID, err))
+		return Answer{}, fmt.Errorf("failed to encode answer value for response for question ID %s: %w", questionID, err)
+	}
+
+	answer.Value = payload
+
 	return answer, nil
 }
 
 // Upsert validates and upserts answers for a given form response. It returns the upserted answers and any validation errors that occurred during the process.
 func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []error) {
+	answerQuestionPairs := make([]struct {
+		AnswerParam shared.AnswerParam
+		Answerable  Answerable
+	}, len(answers))
+
 	traceCtx, span := s.tracer.Start(ctx, "Upsert")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -90,7 +173,6 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 		return []Answer{}, []error{err}
 	}
 
-	var questionTypes []response.QuestionType
 	validationErrors := make([]error, 0)
 	answeredQuestionIDs := make(map[string]bool)
 
@@ -104,12 +186,18 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 		answeredQuestionIDs[ans.QuestionID] = true
 
 		// Validate answer value (convert string to json.RawMessage)
-		err := answerable.Validate(json.RawMessage(ans.Value))
+		err := answerable.Validate(ans.Value)
 		if err != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
 		}
 
-		questionTypes = append(questionTypes, response.QuestionType(answerable.Question().Type))
+		answerQuestionPairs = append(answerQuestionPairs, struct {
+			AnswerParam shared.AnswerParam
+			Answerable  Answerable
+		}{
+			AnswerParam: ans,
+			Answerable:  answerable,
+		})
 	}
 
 	if len(validationErrors) > 0 {
@@ -124,17 +212,26 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	questionIDs := make([]uuid.UUID, len(answers))
 	values := make([][]byte, len(answers))
 
-	for i, ans := range answers {
-		questionID, err := uuid.Parse(ans.QuestionID)
+	for i, pair := range answerQuestionPairs {
+		responseIDs[i] = responseID
+
+		questionID, err := uuid.Parse(pair.AnswerParam.QuestionID)
 		if err != nil {
-			logger.Error("failed to parse question ID", zap.Error(err), zap.String("questionID", ans.QuestionID))
-			span.RecordError(err)
-			return []Answer{}, []error{fmt.Errorf("invalid question ID %s: %w", ans.QuestionID, err)}
+			logger.Error("invalid question ID format", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
+			span.RecordError(fmt.Errorf("invalid question ID format for question ID %s: %w", pair.AnswerParam.QuestionID, err))
+			return []Answer{}, []error{fmt.Errorf("invalid question ID format for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
 		}
 
-		responseIDs[i] = responseID
 		questionIDs[i] = questionID
-		values[i] = []byte(ans.Value)
+
+		encodedValue, err := pair.Answerable.EncodeRequest(pair.AnswerParam.Value)
+		if err != nil {
+			logger.Error("failed to encode answer value for storage", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
+			span.RecordError(fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err))
+			return []Answer{}, []error{fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
+		}
+
+		values[i] = encodedValue
 	}
 
 	// Batch upsert answers into database

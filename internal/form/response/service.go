@@ -15,6 +15,7 @@ import (
 )
 
 type Querier interface {
+	Get(ctx context.Context, id uuid.UUID) (FormResponse, error)
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
 	Exists(ctx context.Context, arg ExistsParams) (bool, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
@@ -105,6 +106,21 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 	}
 
 	return responses, nil
+}
+
+func (s Service) Get(ctx context.Context, id uuid.UUID) (FormResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Get")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	response, err := s.queries.Get(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get response by id")
+		span.RecordError(err)
+		return FormResponse{}, err
+	}
+
+	return response, nil
 }
 
 // Delete deletes a response by id
