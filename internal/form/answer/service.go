@@ -6,6 +6,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"context"
+	"encoding/json"
 	"fmt"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -102,8 +103,8 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 		answeredQuestionIDs[ans.QuestionID] = true
 
-		// Validate answer value
-		err := answerable.Validate(ans.Value)
+		// Validate answer value (convert string to json.RawMessage)
+		err := answerable.Validate(json.RawMessage(ans.Value))
 		if err != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
 		}

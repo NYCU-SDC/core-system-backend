@@ -111,15 +111,10 @@ func (u UploadFile) FormID() uuid.UUID {
 	return u.formID
 }
 
-func (u UploadFile) Validate(value string) error {
-	if strings.TrimSpace(value) == "" {
-		return nil // Empty is allowed if not required
-	}
-
-	// value should be JSON array of file URLs or IDs
-	// Example: ["file-id-1", "file-id-2"]
+func (u UploadFile) Validate(rawValue json.RawMessage) error {
+	// Parse the JSON array of file URLs/IDs
 	var fileIDs []string
-	if err := json.Unmarshal([]byte(value), &fileIDs); err != nil {
+	if err := json.Unmarshal(rawValue, &fileIDs); err != nil {
 		return fmt.Errorf("invalid file upload value format: %w", err)
 	}
 

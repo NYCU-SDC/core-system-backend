@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
@@ -93,17 +92,16 @@ func (s LinearScale) Question() Question { return s.question }
 
 func (s LinearScale) FormID() uuid.UUID { return s.formID }
 
-func (s LinearScale) Validate(value string) error {
-	num, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return err
+func (s LinearScale) Validate(rawValue json.RawMessage) error {
+	var value int
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return fmt.Errorf("invalid linear scale value format: %w", err)
 	}
 
-	intValue := int(num)
-	if intValue < s.MinVal || intValue > s.MaxVal {
+	if value < s.MinVal || value > s.MaxVal {
 		return ErrInvalidScaleValue{
 			QuestionID: s.question.ID.String(),
-			RawValue:   intValue,
+			RawValue:   value,
 			Message:    "out of range",
 		}
 	}
@@ -195,17 +193,16 @@ func (s Rating) Question() Question { return s.question }
 
 func (s Rating) FormID() uuid.UUID { return s.formID }
 
-func (s Rating) Validate(value string) error {
-	num, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return err
+func (s Rating) Validate(rawValue json.RawMessage) error {
+	var value int
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return fmt.Errorf("invalid rating value format: %w", err)
 	}
 
-	intValue := int(num)
-	if intValue < s.MinVal || intValue > s.MaxVal {
+	if value < s.MinVal || value > s.MaxVal {
 		return ErrInvalidScaleValue{
 			QuestionID: s.question.ID.String(),
-			RawValue:   intValue,
+			RawValue:   value,
 			Message:    "out of range",
 		}
 	}

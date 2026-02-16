@@ -36,11 +36,21 @@ func (s SingleChoice) FormID() uuid.UUID {
 	return s.formID
 }
 
-func (s SingleChoice) Validate(value string) error {
-	if value == "" {
+func (s SingleChoice) Validate(rawValue json.RawMessage) error {
+	var choiceIDs []string
+	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+		return fmt.Errorf("invalid single choice value format: %w", err)
+	}
+
+	if len(choiceIDs) == 0 {
 		return nil // No value means no selection
 	}
 
+	if len(choiceIDs) > 1 {
+		return fmt.Errorf("single choice cannot have multiple selections")
+	}
+
+	value := choiceIDs[0]
 	for _, choice := range s.Choices {
 		if choice.ID.String() == value {
 			return nil
@@ -121,21 +131,25 @@ func (m MultiChoice) FormID() uuid.UUID {
 	return m.formID
 }
 
-func (m MultiChoice) Validate(value string) error {
-	if strings.TrimSpace(value) == "" {
+func (m MultiChoice) Validate(rawValue json.RawMessage) error {
+	var choiceIDs []string
+	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+		return fmt.Errorf("invalid multiple choice value format: %w", err)
+	}
+
+	if len(choiceIDs) == 0 {
 		return nil // No value means no selection
 	}
 
-	ids := strings.Split(value, ";")
-	for _, v := range ids {
-		v = strings.TrimSpace(v)
-		if v == "" {
+	for _, idStr := range choiceIDs {
+		idStr = strings.TrimSpace(idStr)
+		if idStr == "" {
 			continue
 		}
 
 		valid := false
 		for _, choice := range m.Choices {
-			if choice.ID.String() == v {
+			if choice.ID.String() == idStr {
 				valid = true
 				break
 			}
@@ -144,7 +158,7 @@ func (m MultiChoice) Validate(value string) error {
 		if !valid {
 			return ErrInvalidChoiceID{
 				QuestionID: m.question.ID.String(),
-				ChoiceID:   v,
+				ChoiceID:   idStr,
 			}
 		}
 	}
@@ -233,21 +247,25 @@ func (m DetailedMultiChoice) FormID() uuid.UUID {
 	return m.formID
 }
 
-func (m DetailedMultiChoice) Validate(value string) error {
-	if strings.TrimSpace(value) == "" {
+func (m DetailedMultiChoice) Validate(rawValue json.RawMessage) error {
+	var choiceIDs []string
+	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+		return fmt.Errorf("invalid detailed multiple choice value format: %w", err)
+	}
+
+	if len(choiceIDs) == 0 {
 		return nil // No value means no selection
 	}
 
-	ids := strings.Split(value, ";")
-	for _, v := range ids {
-		v = strings.TrimSpace(v)
-		if v == "" {
+	for _, idStr := range choiceIDs {
+		idStr = strings.TrimSpace(idStr)
+		if idStr == "" {
 			continue
 		}
 
 		valid := false
 		for _, choice := range m.Choices {
-			if choice.ID.String() == v {
+			if choice.ID.String() == idStr {
 				valid = true
 				break
 			}
@@ -256,7 +274,7 @@ func (m DetailedMultiChoice) Validate(value string) error {
 		if !valid {
 			return ErrInvalidChoiceID{
 				QuestionID: m.question.ID.String(),
-				ChoiceID:   v,
+				ChoiceID:   idStr,
 			}
 		}
 	}
@@ -345,17 +363,21 @@ func (r Ranking) FormID() uuid.UUID {
 	return r.formID
 }
 
-func (r Ranking) Validate(value string) error {
-	ids := strings.Split(value, ";")
-	for _, v := range ids {
-		v = strings.TrimSpace(v)
-		if v == "" {
+func (r Ranking) Validate(rawValue json.RawMessage) error {
+	var choiceIDs []string
+	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+		return fmt.Errorf("invalid ranking value format: %w", err)
+	}
+
+	for _, idStr := range choiceIDs {
+		idStr = strings.TrimSpace(idStr)
+		if idStr == "" {
 			continue
 		}
 
 		valid := false
 		for _, choice := range r.Rank {
-			if choice.ID.String() == v {
+			if choice.ID.String() == idStr {
 				valid = true
 				break
 			}
@@ -364,7 +386,7 @@ func (r Ranking) Validate(value string) error {
 		if !valid {
 			return ErrInvalidChoiceID{
 				QuestionID: r.question.ID.String(),
-				ChoiceID:   v,
+				ChoiceID:   idStr,
 			}
 		}
 	}

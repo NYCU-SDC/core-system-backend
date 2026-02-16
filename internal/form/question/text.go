@@ -31,7 +31,12 @@ func (s ShortText) FormID() uuid.UUID {
 	return s.formID
 }
 
-func (s ShortText) Validate(value string) error {
+func (s ShortText) Validate(rawValue json.RawMessage) error {
+	var value string
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return fmt.Errorf("invalid short text value format: %w", err)
+	}
+
 	if len(value) > 100 {
 		return ErrInvalidAnswerLength{
 			Expected: 100,
@@ -90,7 +95,12 @@ func (l LongText) FormID() uuid.UUID {
 	return l.formID
 }
 
-func (l LongText) Validate(value string) error {
+func (l LongText) Validate(rawValue json.RawMessage) error {
+	var value string
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return fmt.Errorf("invalid long text value format: %w", err)
+	}
+
 	if len(value) > 1000 {
 		return ErrInvalidAnswerLength{
 			Expected: 1000,
@@ -149,7 +159,12 @@ func (h Hyperlink) FormID() uuid.UUID {
 	return h.formID
 }
 
-func (h Hyperlink) Validate(value string) error {
+func (h Hyperlink) Validate(rawValue json.RawMessage) error {
+	var value string
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return fmt.Errorf("invalid hyperlink value format: %w", err)
+	}
+
 	if len(value) > 100 {
 		return ErrInvalidAnswerLength{
 			Expected: 100,

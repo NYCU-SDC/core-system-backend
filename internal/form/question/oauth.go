@@ -34,8 +34,8 @@ func (o OAuthConnect) FormID() uuid.UUID {
 	return o.formID
 }
 
-func (o OAuthConnect) Validate(value string) error {
-	// TODO
+func (o OAuthConnect) Validate(rawValue json.RawMessage) error {
+	// TODO: Implement OAuth validation
 	return errors.New("not implemented")
 }
 

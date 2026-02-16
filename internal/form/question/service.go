@@ -26,9 +26,15 @@ type Querier interface {
 type Answerable interface {
 	Question() Question
 	FormID() uuid.UUID
-	Validate(value string) error
+	Validate(rawValue json.RawMessage) error
+
+	// DecodeRequest decodes the raw JSON value from the request into the appropriate Go type based on the question type.
 	DecodeRequest(rawValue json.RawMessage) (any, error)
+
+	// DecodeStorage decodes the raw JSON value from the database into the appropriate Go type based on the question type.
 	DecodeStorage(rawValue json.RawMessage) (any, error)
+
+	// EncodeRequest encodes the Go value into raw JSON for storage in the database or for sending in a response, based on the question type.
 	EncodeRequest(answer any) (json.RawMessage, error)
 }
 

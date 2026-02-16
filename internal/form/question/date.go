@@ -3,6 +3,7 @@ package question
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,7 +26,12 @@ func (d Date) FormID() uuid.UUID {
 	return d.formID
 }
 
-func (d Date) Validate(value string) error {
+func (d Date) Validate(rawValue json.RawMessage) error {
+	var value string
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return fmt.Errorf("invalid date value format: %w", err)
+	}
+
 	_, err := time.Parse("2006-01-02", value)
 	if err != nil {
 		return ErrInvalidDateFormat{
