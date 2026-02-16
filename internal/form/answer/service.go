@@ -32,6 +32,8 @@ type Answerable interface {
 
 	Validate(rawValue json.RawMessage) error
 
+	DisplayValue(rawValue json.RawMessage) (string, error)
+
 	// DecodeRequest decodes the raw JSON value from the request into the appropriate Go type based on the question type.
 	DecodeRequest(rawValue json.RawMessage) (any, error)
 
@@ -59,7 +61,7 @@ func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore) *Servi
 	}
 }
 
-func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []QuestionType, error) {
+func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []Answerable, error) {
 	traceCtx, span := s.tracer.Start(ctx, "List")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -77,23 +79,23 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	}
 
 	transformedAnswers := make([]Answer, 0, len(answers))
-	questionType := make([]QuestionType, 0, len(answers))
+	answerableList := make([]Answerable, 0, len(answers))
 	for _, answer := range answers {
-		transformedAnswer, answable, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
+		transformedAnswer, answerable, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
 		if err != nil {
 			logger.Error("failed to transform answer", zap.String("questionID", answer.QuestionID.String()), zap.Error(err))
 			span.RecordError(err)
 			return nil, nil, err
 		}
 		transformedAnswers = append(transformedAnswers, transformedAnswer)
-		questionType = append(questionType, QuestionType(answable.Question().Type))
+		answerableList = append(answerableList, answerable)
 	}
 
 	logger.Info("successfully listed answers", zap.Int("count", len(transformedAnswers)), zap.String("responseID", responseID.String()))
-	return transformedAnswers, questionType, nil
+	return transformedAnswers, answerableList, nil
 }
 
-func (s Service) Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, QuestionType, error) {
+func (s Service) Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -105,23 +107,23 @@ func (s Service) Get(ctx context.Context, formID, responseID, questionID uuid.UU
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get answer by response ID and question ID")
 		span.RecordError(err)
-		return Answer{}, "", fmt.Errorf("failed to get answer for response ID %s and question ID %s: %w", responseID, questionID, err)
+		return Answer{}, nil, fmt.Errorf("failed to get answer for response ID %s and question ID %s: %w", responseID, questionID, err)
 	}
 
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
-		return Answer{}, "", fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
+		return Answer{}, nil, fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
 	}
 
 	transformedAnswer, answerable, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
 	if err != nil {
 		span.RecordError(err)
-		return Answer{}, "", err
+		return Answer{}, nil, err
 	}
 
 	logger.Info("successfully retrieved answer", zap.String("responseID", responseID.String()), zap.String("questionID", questionID.String()))
 
-	return transformedAnswer, QuestionType(answerable.Question().Type), nil
+	return transformedAnswer, answerable, nil
 }
 
 // transformAnswerForResponse transforms an answer from storage format to response format
@@ -157,7 +159,7 @@ func (s Service) transformAnswerForResponse(ctx context.Context, answer Answer, 
 }
 
 // Upsert validates and upserts answers for a given form response. It returns the upserted answers and any validation errors that occurred during the process.
-func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []error) {
+func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error) {
 	answerQuestionPairs := make([]struct {
 		AnswerParam shared.AnswerParam
 		Answerable  Answerable
@@ -169,7 +171,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
-		return []Answer{}, []error{err}
+		return nil, nil, []error{err}
 	}
 
 	validationErrors := make([]error, 0)
@@ -203,7 +205,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 		logger.Error("validation errors occurred", zap.Error(fmt.Errorf("validation errors occurred")), zap.Any("errors", validationErrors))
 		span.RecordError(fmt.Errorf("validation errors occurred"))
 		validationErrors = append([]error{internal.ErrValidationFailed}, validationErrors...)
-		return []Answer{}, validationErrors
+		return nil, nil, validationErrors
 	}
 
 	// Prepare batch upsert parameters
@@ -218,7 +220,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 		if err != nil {
 			logger.Error("invalid question ID format", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
 			span.RecordError(fmt.Errorf("invalid question ID format for question ID %s: %w", pair.AnswerParam.QuestionID, err))
-			return []Answer{}, []error{fmt.Errorf("invalid question ID format for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
+			return nil, nil, []error{fmt.Errorf("invalid question ID format for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
 		}
 
 		questionIDs[i] = questionID
@@ -227,14 +229,14 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 		if err != nil {
 			logger.Error("failed to encode answer value for storage", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
 			span.RecordError(fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err))
-			return []Answer{}, []error{fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
+			return nil, nil, []error{fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
 		}
 
 		jsonValue, err := json.Marshal(encodedValue)
 		if err != nil {
 			logger.Error("failed to marshal encoded answer value to JSON", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
 			span.RecordError(fmt.Errorf("failed to marshal encoded answer value to JSON for question ID %s: %w", pair.AnswerParam.QuestionID, err))
-			return []Answer{}, []error{fmt.Errorf("failed to marshal encoded answer value to JSON for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
+			return nil, nil, []error{fmt.Errorf("failed to marshal encoded answer value to JSON for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
 		}
 
 		values[i] = jsonValue
@@ -249,9 +251,22 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "batch upsert answers")
 		span.RecordError(err)
-		return []Answer{}, []error{fmt.Errorf("failed to save answers: %w", err)}
+		return nil, nil, []error{fmt.Errorf("failed to save answers: %w", err)}
+	}
+
+	transformedAnswers := make([]Answer, 0, len(answers))
+	answerableList := make([]Answerable, 0, len(answers))
+	for _, answer := range upsertedAnswers {
+		transformedAnswer, answerable, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
+		if err != nil {
+			logger.Error("failed to transform answer", zap.String("questionID", answer.QuestionID.String()), zap.Error(err))
+			span.RecordError(err)
+			return nil, nil, []error{err}
+		}
+		transformedAnswers = append(transformedAnswers, transformedAnswer)
+		answerableList = append(answerableList, answerable)
 	}
 
 	logger.Info("successfully upserted answers", zap.Int("count", len(upsertedAnswers)))
-	return upsertedAnswers, nil
+	return upsertedAnswers, answerableList, nil
 }

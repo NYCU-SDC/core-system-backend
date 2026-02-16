@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
@@ -32,20 +33,25 @@ type AnswersRequest struct {
 	Answers []Payload `json:"answers" validate:"required,dive"`
 }
 
-// GetQuestionResponse is the response for getting a specific question's answer
-type GetQuestionResponse struct {
-	ID                 string  `json:"id" validate:"required,uuid"`
-	QuestionAnswerPair Payload `json:"questionAnswerPair" validate:"required"`
+// Response is the response for getting a specific question's answer
+type Response struct {
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	ResponseID   uuid.UUID `json:"responseId"`
+	QuestionID   uuid.UUID `json:"questionId"`
+	SubmittedBy  uuid.UUID `json:"submittedBy"`
+	Payload      Payload   `json:"answer"`
+	DisplayValue string    `json:"displayValue"`
 }
 
 // UpdateResponse is the response for updating answers
 type UpdateResponse struct {
-	ID string `json:"id" validate:"required,uuid"`
+	Answers []Response `json:"answers"`
 }
 
 type Store interface {
-	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, QuestionType, error)
-	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []error)
+	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error)
+	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
 }
 
 type QuestionGetter interface {
@@ -109,20 +115,13 @@ func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get answer from store
-	answer, questionType, err := h.store.Get(traceCtx, formID, responseID, questionID)
+	answer, answerable, err := h.store.Get(traceCtx, formID, responseID, questionID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	response := GetQuestionResponse{
-		ID: answer.ID.String(),
-		QuestionAnswerPair: Payload{
-			QuestionID:   questionID.String(),
-			QuestionType: strings.ToUpper(string(questionType)),
-			Value:        answer.Value,
-		},
-	}
+	response := ToResponse(answer, answerable, responseID)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -165,7 +164,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Upsert answers
-	_, errs := h.store.Upsert(traceCtx, formID, responseID, answerParams)
+	answers, answerableList, errs := h.store.Upsert(traceCtx, formID, responseID, answerParams)
 	if len(errs) > 0 {
 		errStrings := make([]string, 0, len(errs))
 		for _, err := range errs {
@@ -178,9 +177,30 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	responses := make([]Response, 0, len(answers))
+	for i, answer := range answers {
+		responses = append(responses, ToResponse(answer, answerableList[i], responseID))
+	}
+
 	response := UpdateResponse{
-		ID: responseID.String(),
+		Answers: responses,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func ToResponse(answer Answer, answerable Answerable, responseID uuid.UUID) Response {
+	questionID := answerable.Question().ID
+
+	return Response{
+		CreatedAt:  answer.CreatedAt.Time,
+		UpdatedAt:  answer.UpdatedAt.Time,
+		ResponseID: responseID,
+		QuestionID: questionID,
+		Payload: Payload{
+			QuestionID:   questionID.String(),
+			QuestionType: strings.ToUpper(string(answerable.Question().Type)),
+			Value:        answer.Value,
+		},
+	}
 }
