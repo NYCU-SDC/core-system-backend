@@ -7,11 +7,29 @@ import (
 	"fmt"
 	"strconv"
 
+	"NYCU-SDC/core-system-backend/internal/form/shared"
+
 	"github.com/google/uuid"
 )
 
 //go:embed icons.json
 var iconsJSON []byte
+
+var validIcons map[string]bool
+
+// Import valid icon list at init
+func init() {
+	var icons []string
+	if err := json.Unmarshal(iconsJSON, &icons); err != nil {
+		validIcons = map[string]bool{"star": true}
+		return
+	}
+
+	validIcons = make(map[string]bool, len(icons))
+	for _, icon := range icons {
+		validIcons[icon] = true
+	}
+}
 
 type ScaleOption struct {
 	Icon          string `json:"icon"`
@@ -46,44 +64,6 @@ type LinearScale struct {
 	MaxValueLabel string
 }
 
-var validIcons map[string]bool
-
-// Import valid icon list at init
-func init() {
-	var icons []string
-	if err := json.Unmarshal(iconsJSON, &icons); err != nil {
-		validIcons = map[string]bool{"star": true}
-		return
-	}
-
-	validIcons = make(map[string]bool, len(icons))
-	for _, icon := range icons {
-		validIcons[icon] = true
-	}
-}
-
-func (s LinearScale) Question() Question { return s.question }
-
-func (s LinearScale) FormID() uuid.UUID { return s.formID }
-
-func (s LinearScale) Validate(value string) error {
-	num, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return err
-	}
-
-	intValue := int(num)
-	if intValue < s.MinVal || intValue > s.MaxVal {
-		return ErrInvalidScaleValue{
-			QuestionID: s.question.ID.String(),
-			RawValue:   intValue,
-			Message:    "out of range",
-		}
-	}
-
-	return nil
-}
-
 func NewLinearScale(q Question, formID uuid.UUID) (LinearScale, error) {
 	metadata := q.Metadata
 	if metadata == nil {
@@ -109,19 +89,66 @@ func NewLinearScale(q Question, formID uuid.UUID) (LinearScale, error) {
 	}, nil
 }
 
+func (s LinearScale) Question() Question { return s.question }
+
+func (s LinearScale) FormID() uuid.UUID { return s.formID }
+
+func (s LinearScale) Validate(value string) error {
+	num, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	intValue := int(num)
+	if intValue < s.MinVal || intValue > s.MaxVal {
+		return ErrInvalidScaleValue{
+			QuestionID: s.question.ID.String(),
+			RawValue:   intValue,
+			Message:    "out of range",
+		}
+	}
+
+	return nil
+}
+
 func (s LinearScale) DecodeRequest(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement linear scale decoding from API request
-	return nil, errors.New("not implemented yet")
+	// API sends int32 for linear scale
+	var value int
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return nil, fmt.Errorf("invalid linear scale value format: %w", err)
+	}
+
+	// Validate range
+	if value < s.MinVal || value > s.MaxVal {
+		return nil, ErrInvalidScaleValue{
+			QuestionID: s.question.ID.String(),
+			RawValue:   value,
+			Message:    fmt.Sprintf("value %d is out of range [%d, %d]", value, s.MinVal, s.MaxVal),
+		}
+	}
+
+	return shared.LinearScaleAnswer{
+		Value: value,
+	}, nil
 }
 
 func (s LinearScale) DecodeStorage(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement linear scale decoding from storage
-	return nil, errors.New("not implemented yet")
+	var answer shared.LinearScaleAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid linear scale answer in storage: %w", err)
+	}
+
+	return answer, nil
 }
 
 func (s LinearScale) EncodeRequest(answer any) (json.RawMessage, error) {
-	// TODO: Implement linear scale encoding to API request format
-	return nil, errors.New("not implemented yet")
+	linearScaleAnswer, ok := answer.(shared.LinearScaleAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.LinearScaleAnswer, got %T", answer)
+	}
+
+	// API expects int32 value
+	return json.Marshal(linearScaleAnswer.Value)
 }
 
 type Rating struct {
@@ -187,18 +214,43 @@ func (s Rating) Validate(value string) error {
 }
 
 func (s Rating) DecodeRequest(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement rating decoding from API request
-	return nil, errors.New("not implemented yet")
+	// API sends int32 for rating
+	var value int
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return nil, fmt.Errorf("invalid rating value format: %w", err)
+	}
+
+	// Validate range
+	if value < s.MinVal || value > s.MaxVal {
+		return nil, ErrInvalidScaleValue{
+			QuestionID: s.question.ID.String(),
+			RawValue:   value,
+			Message:    fmt.Sprintf("value %d is out of range [%d, %d]", value, s.MinVal, s.MaxVal),
+		}
+	}
+
+	return shared.RatingAnswer{
+		Value: value,
+	}, nil
 }
 
 func (s Rating) DecodeStorage(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement rating decoding from storage
-	return nil, errors.New("not implemented yet")
+	var answer shared.RatingAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid rating answer in storage: %w", err)
+	}
+
+	return answer, nil
 }
 
 func (s Rating) EncodeRequest(answer any) (json.RawMessage, error) {
-	// TODO: Implement rating encoding to API request format
-	return nil, errors.New("not implemented yet")
+	ratingAnswer, ok := answer.(shared.RatingAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.RatingAnswer, got %T", answer)
+	}
+
+	// API expects int32 value
+	return json.Marshal(ratingAnswer.Value)
 }
 
 func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {
