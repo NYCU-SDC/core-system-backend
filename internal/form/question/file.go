@@ -179,6 +179,21 @@ func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
 	}, nil
 }
 
+func (u UploadFile) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement upload file decoding from API request
+	return nil, errors.New("not implemented yet")
+}
+
+func (u UploadFile) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement upload file decoding from storage
+	return nil, errors.New("not implemented yet")
+}
+
+func (u UploadFile) EncodeRequest(answer any) (json.RawMessage, error) {
+	// TODO: Implement upload file encoding to API request format
+	return nil, errors.New("not implemented yet")
+}
+
 // GenerateUploadFileMetadata generates metadata for upload file question
 func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
 	if len(option.AllowedFileTypes) == 0 {

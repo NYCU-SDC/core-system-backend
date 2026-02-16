@@ -1,8 +1,12 @@
 package question
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
+
+	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
 )
@@ -10,6 +14,13 @@ import (
 type ShortText struct {
 	question Question
 	formID   uuid.UUID
+}
+
+func NewShortText(q Question, formID uuid.UUID) ShortText {
+	return ShortText{
+		question: q,
+		formID:   formID,
+	}
 }
 
 func (s ShortText) Question() Question {
@@ -31,16 +42,44 @@ func (s ShortText) Validate(value string) error {
 	return nil
 }
 
-func NewShortText(q Question, formID uuid.UUID) ShortText {
-	return ShortText{
-		question: q,
-		formID:   formID,
+func (s ShortText) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	var value string
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return nil, fmt.Errorf("invalid short text value format: %w", err)
 	}
+
+	return shared.ShortTextAnswer{Value: value}, nil
+}
+
+func (s ShortText) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.ShortTextAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid short text answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (s ShortText) EncodeRequest(answer any) (json.RawMessage, error) {
+	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+	}
+
+	// API expects a plain string value
+	return json.Marshal(shortTextAnswer.Value)
 }
 
 type LongText struct {
 	question Question
 	formID   uuid.UUID
+}
+
+func NewLongText(q Question, formID uuid.UUID) LongText {
+	return LongText{
+		question: q,
+		formID:   formID,
+	}
 }
 
 func (l LongText) Question() Question {
@@ -62,16 +101,44 @@ func (l LongText) Validate(value string) error {
 	return nil
 }
 
-func NewLongText(q Question, formID uuid.UUID) LongText {
-	return LongText{
-		question: q,
-		formID:   formID,
+func (l LongText) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	var value string
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return nil, fmt.Errorf("invalid long text value format: %w", err)
 	}
+
+	return shared.LongTextAnswer{Value: value}, nil
+}
+
+func (l LongText) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.LongTextAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid long text answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (l LongText) EncodeRequest(answer any) (json.RawMessage, error) {
+	longTextAnswer, ok := answer.(shared.LongTextAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+	}
+
+	// API expects a plain string value
+	return json.Marshal(longTextAnswer.Value)
 }
 
 type Hyperlink struct {
 	question Question
 	formID   uuid.UUID
+}
+
+func NewHyperlink(q Question, formID uuid.UUID) Hyperlink {
+	return Hyperlink{
+		question: q,
+		formID:   formID,
+	}
 }
 
 func (h Hyperlink) Question() Question {
@@ -97,11 +164,32 @@ func (h Hyperlink) Validate(value string) error {
 	return nil
 }
 
-func NewHyperlink(q Question, formID uuid.UUID) Hyperlink {
-	return Hyperlink{
-		question: q,
-		formID:   formID,
+func (h Hyperlink) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	var value string
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return nil, fmt.Errorf("invalid hyperlink value format: %w", err)
 	}
+
+	return shared.HyperlinkAnswer{Value: value}, nil
+}
+
+func (h Hyperlink) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.HyperlinkAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid hyperlink answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (h Hyperlink) EncodeRequest(answer any) (json.RawMessage, error) {
+	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+	}
+
+	// API expects a plain string value
+	return json.Marshal(hyperlinkAnswer.Value)
 }
 
 // validateURL checks if the value is a valid URL

@@ -1,6 +1,8 @@
 package question
 
 import (
+	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,4 +35,19 @@ func (d Date) Validate(value string) error {
 		}
 	}
 	return nil
+}
+
+func (d Date) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement date decoding from API request
+	return nil, errors.New("not implemented yet")
+}
+
+func (d Date) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement date decoding from storage
+	return nil, errors.New("not implemented yet")
+}
+
+func (d Date) EncodeRequest(answer any) (json.RawMessage, error) {
+	// TODO: Implement date encoding to API request format
+	return nil, errors.New("not implemented yet")
 }

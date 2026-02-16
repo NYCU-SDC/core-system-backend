@@ -69,6 +69,21 @@ func NewOAuthConnect(q Question, formID uuid.UUID) (OAuthConnect, error) {
 	}, nil
 }
 
+func (o OAuthConnect) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement OAuth connect decoding from API request
+	return nil, errors.New("not implemented yet")
+}
+
+func (o OAuthConnect) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement OAuth connect decoding from storage
+	return nil, errors.New("not implemented yet")
+}
+
+func (o OAuthConnect) EncodeRequest(answer any) (json.RawMessage, error) {
+	// TODO: Implement OAuth connect encoding to API request format
+	return nil, errors.New("not implemented yet")
+}
+
 func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 	if provider == "" {
 		return nil, ErrMetadataValidate{

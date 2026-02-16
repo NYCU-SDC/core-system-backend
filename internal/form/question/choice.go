@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal/form/shared"
+
 	"github.com/google/uuid"
 )
 
@@ -52,49 +54,9 @@ func (s SingleChoice) Validate(value string) error {
 }
 
 func NewSingleChoice(q Question, formID uuid.UUID) (SingleChoice, error) {
-	metadata := q.Metadata
-
-	if q.SourceID.Valid && metadata == nil {
-		return SingleChoice{question: q, formID: formID, Choices: []Choice{}}, nil
-	}
-
-	if metadata == nil {
-		return SingleChoice{}, errors.New("metadata is nil")
-	}
-
-	choices, err := ExtractChoices(metadata)
+	choices, err := validateAndExtractChoices(q, true)
 	if err != nil {
-		return SingleChoice{}, ErrMetadataBroken{
-			QuestionID: q.ID.String(),
-			RawData:    metadata,
-			Message:    "could not extract choices from metadata",
-		}
-	}
-
-	if len(choices) == 0 {
-		return SingleChoice{}, ErrMetadataBroken{
-			QuestionID: q.ID.String(),
-			RawData:    metadata,
-			Message:    "no choices found in metadata",
-		}
-	}
-
-	for _, choice := range choices {
-		if choice.ID == uuid.Nil {
-			return SingleChoice{}, ErrMetadataBroken{
-				QuestionID: q.ID.String(),
-				RawData:    metadata,
-				Message:    "choice ID cannot be nil",
-			}
-		}
-
-		if strings.TrimSpace(choice.Name) == "" {
-			return SingleChoice{}, ErrMetadataBroken{
-				QuestionID: q.ID.String(),
-				RawData:    metadata,
-				Message:    "choice name cannot be empty",
-			}
-		}
+		return SingleChoice{}, err
 	}
 
 	return SingleChoice{
@@ -102,6 +64,47 @@ func NewSingleChoice(q Question, formID uuid.UUID) (SingleChoice, error) {
 		formID:   formID,
 		Choices:  choices,
 	}, nil
+}
+
+func (s SingleChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// API sends string[] with single element for single choice
+	_, selectedChoices, err := decodeMultipleChoiceIDs(rawValue, s.Choices, s.question.ID.String(), 1)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(selectedChoices) > 1 {
+		return nil, errors.New("single choice cannot have multiple selections")
+	}
+
+	selectedChoice := selectedChoices[0]
+	return shared.SingleChoiceAnswer{
+		ChoiceID: selectedChoice.ID,
+		Snapshot: shared.ChoiceSnapshot{
+			Name:        selectedChoice.Name,
+			Description: selectedChoice.Description,
+		},
+	}, nil
+}
+
+func (s SingleChoice) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.SingleChoiceAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid single choice answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (s SingleChoice) EncodeRequest(answer any) (json.RawMessage, error) {
+	singleChoiceAnswer, ok := answer.(shared.SingleChoiceAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.SingleChoiceAnswer, got %T", answer)
+	}
+
+	// API expects string[] with single element
+	choiceIDs := []uuid.UUID{singleChoiceAnswer.ChoiceID}
+	return encodeChoiceIDsToRequest(choiceIDs)
 }
 
 type MultiChoice struct {
@@ -150,49 +153,9 @@ func (m MultiChoice) Validate(value string) error {
 }
 
 func NewMultiChoice(q Question, formID uuid.UUID) (MultiChoice, error) {
-	metadata := q.Metadata
-
-	if q.SourceID.Valid && metadata == nil {
-		return MultiChoice{question: q, formID: formID, Choices: []Choice{}}, nil
-	}
-
-	if metadata == nil {
-		return MultiChoice{}, errors.New("metadata is nil")
-	}
-
-	choices, err := ExtractChoices(metadata)
+	choices, err := validateAndExtractChoices(q, true)
 	if err != nil {
-		return MultiChoice{}, ErrMetadataBroken{
-			QuestionID: q.ID.String(),
-			RawData:    metadata,
-			Message:    "could not extract choices from metadata",
-		}
-	}
-
-	if len(choices) == 0 {
-		return MultiChoice{}, ErrMetadataBroken{
-			QuestionID: q.ID.String(),
-			RawData:    metadata,
-			Message:    "no choices found in metadata",
-		}
-	}
-
-	for _, choice := range choices {
-		if choice.ID == uuid.Nil {
-			return MultiChoice{}, ErrMetadataBroken{
-				QuestionID: q.ID.String(),
-				RawData:    metadata,
-				Message:    "choice ID cannot be nil",
-			}
-		}
-
-		if strings.TrimSpace(choice.Name) == "" {
-			return MultiChoice{}, ErrMetadataBroken{
-				QuestionID: q.ID.String(),
-				RawData:    metadata,
-				Message:    "choice name cannot be empty",
-			}
-		}
+		return MultiChoice{}, err
 	}
 
 	return MultiChoice{
@@ -200,6 +163,60 @@ func NewMultiChoice(q Question, formID uuid.UUID) (MultiChoice, error) {
 		formID:   formID,
 		Choices:  choices,
 	}, nil
+}
+
+func (m MultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// API sends string[] for multiple choice
+	_, selectedChoices, err := decodeMultipleChoiceIDs(rawValue, m.Choices, m.question.ID.String(), 1)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build answer with snapshots
+	answer := shared.MultipleChoiceAnswer{
+		Choices: make([]struct {
+			ChoiceID uuid.UUID             `json:"choiceId"`
+			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
+		}, 0, len(selectedChoices)),
+	}
+
+	for _, selectedChoice := range selectedChoices {
+		answer.Choices = append(answer.Choices, struct {
+			ChoiceID uuid.UUID             `json:"choiceId"`
+			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
+		}{
+			ChoiceID: selectedChoice.ID,
+			Snapshot: shared.ChoiceSnapshot{
+				Name:        selectedChoice.Name,
+				Description: selectedChoice.Description,
+			},
+		})
+	}
+
+	return answer, nil
+}
+
+func (m MultiChoice) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.MultipleChoiceAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid multiple choice answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (m MultiChoice) EncodeRequest(answer any) (json.RawMessage, error) {
+	multiChoiceAnswer, ok := answer.(shared.MultipleChoiceAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.MultipleChoiceAnswer, got %T", answer)
+	}
+
+	// API expects string[] of choice IDs
+	choiceIDs := make([]uuid.UUID, len(multiChoiceAnswer.Choices))
+	for i, choice := range multiChoiceAnswer.Choices {
+		choiceIDs[i] = choice.ChoiceID
+	}
+	return encodeChoiceIDsToRequest(choiceIDs)
 }
 
 type DetailedMultiChoice struct {
@@ -248,44 +265,9 @@ func (m DetailedMultiChoice) Validate(value string) error {
 }
 
 func NewDetailedMultiChoice(q Question, formID uuid.UUID) (DetailedMultiChoice, error) {
-	metadata := q.Metadata
-	if metadata == nil {
-		return DetailedMultiChoice{}, errors.New("metadata is nil")
-	}
-
-	choices, err := ExtractChoices(metadata)
+	choices, err := validateAndExtractChoices(q, false)
 	if err != nil {
-		return DetailedMultiChoice{}, ErrMetadataBroken{
-			QuestionID: q.ID.String(),
-			RawData:    metadata,
-			Message:    "could not extract choices from metadata",
-		}
-	}
-
-	if len(choices) == 0 {
-		return DetailedMultiChoice{}, ErrMetadataBroken{
-			QuestionID: q.ID.String(),
-			RawData:    metadata,
-			Message:    "no choices found in metadata",
-		}
-	}
-
-	for _, choice := range choices {
-		if choice.ID == uuid.Nil {
-			return DetailedMultiChoice{}, ErrMetadataBroken{
-				QuestionID: q.ID.String(),
-				RawData:    metadata,
-				Message:    "choice ID cannot be nil",
-			}
-		}
-
-		if strings.TrimSpace(choice.Name) == "" {
-			return DetailedMultiChoice{}, ErrMetadataBroken{
-				QuestionID: q.ID.String(),
-				RawData:    metadata,
-				Message:    "choice name cannot be empty",
-			}
-		}
+		return DetailedMultiChoice{}, err
 	}
 
 	return DetailedMultiChoice{
@@ -293,6 +275,60 @@ func NewDetailedMultiChoice(q Question, formID uuid.UUID) (DetailedMultiChoice, 
 		formID:   formID,
 		Choices:  choices,
 	}, nil
+}
+
+func (m DetailedMultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// API sends string[] for detailed multiple choice
+	_, selectedChoices, err := decodeMultipleChoiceIDs(rawValue, m.Choices, m.question.ID.String(), 1)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build answer with snapshots
+	answer := shared.DetailedMultipleChoiceAnswer{
+		Choices: make([]struct {
+			ChoiceID uuid.UUID             `json:"choiceId"`
+			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
+		}, 0, len(selectedChoices)),
+	}
+
+	for _, selectedChoice := range selectedChoices {
+		answer.Choices = append(answer.Choices, struct {
+			ChoiceID uuid.UUID             `json:"choiceId"`
+			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
+		}{
+			ChoiceID: selectedChoice.ID,
+			Snapshot: shared.ChoiceSnapshot{
+				Name:        selectedChoice.Name,
+				Description: selectedChoice.Description,
+			},
+		})
+	}
+
+	return answer, nil
+}
+
+func (m DetailedMultiChoice) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.DetailedMultipleChoiceAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid detailed multiple choice answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (m DetailedMultiChoice) EncodeRequest(answer any) (json.RawMessage, error) {
+	detailedMultiChoiceAnswer, ok := answer.(shared.DetailedMultipleChoiceAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.DetailedMultipleChoiceAnswer, got %T", answer)
+	}
+
+	// API expects string[] of choice IDs
+	choiceIDs := make([]string, len(detailedMultiChoiceAnswer.Choices))
+	for i, choice := range detailedMultiChoiceAnswer.Choices {
+		choiceIDs[i] = choice.ChoiceID.String()
+	}
+	return json.Marshal(choiceIDs)
 }
 
 type Ranking struct {
@@ -337,53 +373,126 @@ func (r Ranking) Validate(value string) error {
 }
 
 func NewRanking(q Question, formID uuid.UUID) (Ranking, error) {
-	metadata := q.Metadata
-
-	if q.SourceID.Valid && metadata == nil {
-		return Ranking{question: q, formID: formID, Rank: []Choice{}}, nil
-	}
-
-	if metadata == nil {
-		return Ranking{}, errors.New("metadata is nil")
-	}
-
-	choices, err := ExtractChoices(metadata)
+	choices, err := validateAndExtractChoices(q, true)
 	if err != nil {
-		return Ranking{}, ErrMetadataBroken{
-			QuestionID: q.ID.String(),
-			RawData:    metadata,
-			Message:    "could not extract rank from metadata",
-		}
-	}
-
-	if len(choices) == 0 {
-		return Ranking{}, ErrMetadataBroken{
-			QuestionID: q.ID.String(),
-			RawData:    metadata,
-			Message:    "no choices found in metadata",
-		}
-	}
-
-	rank := make([]Choice, len(choices))
-	for _, choice := range choices {
-		if choice.ID == uuid.Nil {
-			return Ranking{}, ErrMetadataBroken{
-				QuestionID: q.ID.String(),
-				RawData:    metadata,
-				Message:    "choice ID cannot be nil",
-			}
-		}
-		rank = append(rank, choice)
+		return Ranking{}, err
 	}
 
 	return Ranking{
 		question: q,
 		formID:   formID,
-		Rank:     rank,
+		Rank:     choices,
 	}, nil
 }
 
-// Creates and validates metadata JSON for choice-based questions
+func (r Ranking) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// API sends string[] for ranking (ordered by rank)
+	var choiceIDs []string
+	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+		return nil, fmt.Errorf("invalid ranking value format: %w", err)
+	}
+
+	if len(choiceIDs) == 0 {
+		return nil, errors.New("ranking requires at least one choice ID")
+	}
+
+	// Build answer with snapshots and rank
+	answer := shared.RankingAnswer{
+		RankedChoices: make([]struct {
+			ChoiceID uuid.UUID             `json:"choiceId"`
+			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
+			Rank     int                   `json:"rank"`
+		}, 0, len(choiceIDs)),
+	}
+
+	for rank, idStr := range choiceIDs {
+		choiceID, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid choice ID format: %w", err)
+		}
+
+		// Find the choice in metadata to create snapshot
+		var selectedChoice *Choice
+		for _, choice := range r.Rank {
+			if choice.ID == choiceID {
+				selectedChoice = &choice
+				break
+			}
+		}
+
+		if selectedChoice == nil {
+			return nil, ErrInvalidChoiceID{
+				QuestionID: r.question.ID.String(),
+				ChoiceID:   choiceID.String(),
+			}
+		}
+
+		answer.RankedChoices = append(answer.RankedChoices, struct {
+			ChoiceID uuid.UUID             `json:"choiceId"`
+			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
+			Rank     int                   `json:"rank"`
+		}{
+			ChoiceID: choiceID,
+			Snapshot: shared.ChoiceSnapshot{
+				Name:        selectedChoice.Name,
+				Description: selectedChoice.Description,
+			},
+			Rank: rank + 1, // 1-based ranking
+		})
+	}
+
+	return answer, nil
+}
+
+func (r Ranking) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.RankingAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid ranking answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (r Ranking) EncodeRequest(answer any) (json.RawMessage, error) {
+	rankingAnswer, ok := answer.(shared.RankingAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.RankingAnswer, got %T", answer)
+	}
+
+	// API expects string[] of choice IDs in rank order
+	// Sort by rank first to ensure correct order
+	type rankedChoice struct {
+		choiceID string
+		rank     int
+	}
+
+	rankedChoices := make([]rankedChoice, len(rankingAnswer.RankedChoices))
+	for i, choice := range rankingAnswer.RankedChoices {
+		rankedChoices[i] = rankedChoice{
+			choiceID: choice.ChoiceID.String(),
+			rank:     choice.Rank,
+		}
+	}
+
+	// Sort by rank
+	for i := 0; i < len(rankedChoices)-1; i++ {
+		for j := i + 1; j < len(rankedChoices); j++ {
+			if rankedChoices[i].rank > rankedChoices[j].rank {
+				rankedChoices[i], rankedChoices[j] = rankedChoices[j], rankedChoices[i]
+			}
+		}
+	}
+
+	// Extract choice IDs in order
+	choiceIDs := make([]string, len(rankedChoices))
+	for i, choice := range rankedChoices {
+		choiceIDs[i] = choice.choiceID
+	}
+
+	return json.Marshal(choiceIDs)
+}
+
+// GenerateChoiceMetadata creates and validates metadata JSON for choice-based questions
 func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) ([]byte, error) {
 	// For choice questions, require at least one choice
 	if len(choiceOptions) == 0 {
@@ -450,4 +559,110 @@ func ExtractChoices(data []byte) ([]Choice, error) {
 	}
 
 	return choices, nil
+}
+
+// validateAndExtractChoices is a helper function that validates and extracts choices from metadata
+// It returns an error if metadata is invalid or choices are malformed
+func validateAndExtractChoices(q Question, allowSourceWithNil bool) ([]Choice, error) {
+	metadata := q.Metadata
+
+	// Allow empty metadata for questions with SourceID
+	if allowSourceWithNil && q.SourceID.Valid && metadata == nil {
+		return []Choice{}, nil
+	}
+
+	if metadata == nil {
+		return nil, errors.New("metadata is nil")
+	}
+
+	choices, err := ExtractChoices(metadata)
+	if err != nil {
+		return nil, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    metadata,
+			Message:    "could not extract choices from metadata",
+		}
+	}
+
+	if len(choices) == 0 {
+		return nil, ErrMetadataBroken{
+			QuestionID: q.ID.String(),
+			RawData:    metadata,
+			Message:    "no choices found in metadata",
+		}
+	}
+
+	for _, choice := range choices {
+		if choice.ID == uuid.Nil {
+			return nil, ErrMetadataBroken{
+				QuestionID: q.ID.String(),
+				RawData:    metadata,
+				Message:    "choice ID cannot be nil",
+			}
+		}
+
+		if strings.TrimSpace(choice.Name) == "" {
+			return nil, ErrMetadataBroken{
+				QuestionID: q.ID.String(),
+				RawData:    metadata,
+				Message:    "choice name cannot be empty",
+			}
+		}
+	}
+
+	return choices, nil
+}
+
+// findChoiceByID searches for a choice by ID and returns a pointer to it
+func findChoiceByID(choices []Choice, choiceID uuid.UUID) *Choice {
+	for _, choice := range choices {
+		if choice.ID == choiceID {
+			return &choice
+		}
+	}
+	return nil
+}
+
+// decodeMultipleChoiceIDs is a helper function to decode and validate multiple choice IDs from API request
+func decodeMultipleChoiceIDs(rawValue json.RawMessage, choices []Choice, questionID string, minChoices int) ([]uuid.UUID, []*Choice, error) {
+	var choiceIDs []string
+	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+		return nil, nil, fmt.Errorf("invalid choice value format: %w", err)
+	}
+
+	if len(choiceIDs) < minChoices {
+		return nil, nil, fmt.Errorf("requires at least %d choice ID(s)", minChoices)
+	}
+
+	parsedIDs := make([]uuid.UUID, 0, len(choiceIDs))
+	selectedChoices := make([]*Choice, 0, len(choiceIDs))
+
+	for _, idStr := range choiceIDs {
+		choiceID, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid choice ID format: %w", err)
+		}
+
+		selectedChoice := findChoiceByID(choices, choiceID)
+		if selectedChoice == nil {
+			return nil, nil, ErrInvalidChoiceID{
+				QuestionID: questionID,
+				ChoiceID:   choiceID.String(),
+			}
+		}
+
+		parsedIDs = append(parsedIDs, choiceID)
+		selectedChoices = append(selectedChoices, selectedChoice)
+	}
+
+	return parsedIDs, selectedChoices, nil
+}
+
+// encodeChoiceIDsToRequest converts choice IDs to the API request format (string[])
+func encodeChoiceIDsToRequest(choiceIDs []uuid.UUID) (json.RawMessage, error) {
+	strIDs := make([]string, len(choiceIDs))
+	for i, id := range choiceIDs {
+		strIDs[i] = id.String()
+	}
+	return json.Marshal(strIDs)
 }

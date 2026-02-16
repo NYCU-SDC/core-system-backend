@@ -20,6 +20,7 @@ type ScaleOption struct {
 	MinValueLabel string `json:"minValueLabel,omitempty"`
 	MaxValueLabel string `json:"maxValueLabel,omitempty"`
 }
+
 type LinearScaleMetadata struct {
 	Icon          string `json:"icon"`
 	MinVal        int    `json:"minVal" validate:"required"`
@@ -27,6 +28,7 @@ type LinearScaleMetadata struct {
 	MinValueLabel string `json:"minValueLabel"`
 	MaxValueLabel string `json:"maxValueLabel"`
 }
+
 type RatingMetadata struct {
 	Icon          string `json:"icon" validate:"required"`
 	MinVal        int    `json:"minVal" validate:"required"`
@@ -34,6 +36,7 @@ type RatingMetadata struct {
 	MinValueLabel string `json:"minValueLabel"`
 	MaxValueLabel string `json:"maxValueLabel"`
 }
+
 type LinearScale struct {
 	question      Question
 	formID        uuid.UUID
@@ -106,6 +109,21 @@ func NewLinearScale(q Question, formID uuid.UUID) (LinearScale, error) {
 	}, nil
 }
 
+func (s LinearScale) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement linear scale decoding from API request
+	return nil, errors.New("not implemented yet")
+}
+
+func (s LinearScale) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement linear scale decoding from storage
+	return nil, errors.New("not implemented yet")
+}
+
+func (s LinearScale) EncodeRequest(answer any) (json.RawMessage, error) {
+	// TODO: Implement linear scale encoding to API request format
+	return nil, errors.New("not implemented yet")
+}
+
 type Rating struct {
 	question      Question
 	formID        uuid.UUID
@@ -114,28 +132,6 @@ type Rating struct {
 	MaxVal        int
 	MinValueLabel string
 	MaxValueLabel string
-}
-
-func (s Rating) Question() Question { return s.question }
-
-func (s Rating) FormID() uuid.UUID { return s.formID }
-
-func (s Rating) Validate(value string) error {
-	num, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return err
-	}
-
-	intValue := int(num)
-	if intValue < s.MinVal || intValue > s.MaxVal {
-		return ErrInvalidScaleValue{
-			QuestionID: s.question.ID.String(),
-			RawValue:   intValue,
-			Message:    "out of range",
-		}
-	}
-
-	return nil
 }
 
 func NewRating(q Question, formID uuid.UUID) (Rating, error) {
@@ -166,6 +162,43 @@ func NewRating(q Question, formID uuid.UUID) (Rating, error) {
 		MinValueLabel: rating.MinValueLabel,
 		MaxValueLabel: rating.MaxValueLabel,
 	}, nil
+}
+
+func (s Rating) Question() Question { return s.question }
+
+func (s Rating) FormID() uuid.UUID { return s.formID }
+
+func (s Rating) Validate(value string) error {
+	num, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	intValue := int(num)
+	if intValue < s.MinVal || intValue > s.MaxVal {
+		return ErrInvalidScaleValue{
+			QuestionID: s.question.ID.String(),
+			RawValue:   intValue,
+			Message:    "out of range",
+		}
+	}
+
+	return nil
+}
+
+func (s Rating) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement rating decoding from API request
+	return nil, errors.New("not implemented yet")
+}
+
+func (s Rating) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement rating decoding from storage
+	return nil, errors.New("not implemented yet")
+}
+
+func (s Rating) EncodeRequest(answer any) (json.RawMessage, error) {
+	// TODO: Implement rating encoding to API request format
+	return nil, errors.New("not implemented yet")
 }
 
 func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {

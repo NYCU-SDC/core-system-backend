@@ -3,6 +3,7 @@ package question
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"slices"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -26,6 +27,9 @@ type Answerable interface {
 	Question() Question
 	FormID() uuid.UUID
 	Validate(value string) error
+	DecodeRequest(rawValue json.RawMessage) (any, error)
+	DecodeStorage(rawValue json.RawMessage) (any, error)
+	EncodeRequest(answer any) (json.RawMessage, error)
 }
 
 type SectionWithQuestions struct {
