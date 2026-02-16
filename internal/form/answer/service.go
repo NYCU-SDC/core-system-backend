@@ -268,5 +268,5 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	}
 
 	logger.Info("successfully upserted answers", zap.Int("count", len(upsertedAnswers)))
-	return upsertedAnswers, answerableList, nil
+	return transformedAnswers, answerableList, nil
 }
