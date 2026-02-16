@@ -223,14 +223,21 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 		questionIDs[i] = questionID
 
-		encodedValue, err := pair.Answerable.EncodeRequest(pair.AnswerParam.Value)
+		encodedValue, err := pair.Answerable.DecodeRequest(pair.AnswerParam.Value)
 		if err != nil {
 			logger.Error("failed to encode answer value for storage", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
 			span.RecordError(fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err))
 			return []Answer{}, []error{fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
 		}
 
-		values[i] = encodedValue
+		jsonValue, err := json.Marshal(encodedValue)
+		if err != nil {
+			logger.Error("failed to marshal encoded answer value to JSON", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
+			span.RecordError(fmt.Errorf("failed to marshal encoded answer value to JSON for question ID %s: %w", pair.AnswerParam.QuestionID, err))
+			return []Answer{}, []error{fmt.Errorf("failed to marshal encoded answer value to JSON for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
+		}
+
+		values[i] = jsonValue
 	}
 
 	// Batch upsert answers into database
