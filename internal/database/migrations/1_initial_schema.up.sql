@@ -156,7 +156,8 @@ CREATE TABLE IF NOT EXISTS answers (
     type question_type NOT NULL,
     value TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(response_id, question_id)
 );
 
 CREATE TYPE content_type AS ENUM(
