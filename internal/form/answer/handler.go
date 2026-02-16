@@ -121,7 +121,13 @@ func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := ToResponse(answer, answerable, responseID)
+	response, err := h.ToResponse(traceCtx, answer, answerable, responseID)
+	if err != nil {
+		logger.Error("Failed to convert answer to response", zap.Error(err))
+		span.RecordError(err)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -179,7 +185,15 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]Response, 0, len(answers))
 	for i, answer := range answers {
-		responses = append(responses, ToResponse(answer, answerableList[i], responseID))
+		response, err := h.ToResponse(traceCtx, answer, answerableList[i], responseID)
+		if err != nil {
+			logger.Error("Failed to convert answer to response", zap.Error(err))
+			span.RecordError(err)
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+
+		responses = append(responses, response)
 	}
 
 	response := UpdateResponse{
@@ -189,18 +203,42 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func ToResponse(answer Answer, answerable Answerable, responseID uuid.UUID) Response {
+func (h *Handler) ToResponse(context context.Context, answer Answer, answerable Answerable, responseID uuid.UUID) (Response, error) {
+	traceCtx, span := h.tracer.Start(context, "ToResponse")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
 	questionID := answerable.Question().ID
 
+	displayValue, err := answerable.DisplayValue(answer.Value)
+	if err != nil {
+		return Response{}, err
+	}
+
+	valueStruct, err := answerable.DecodeStorage(answer.Value)
+	if err != nil {
+		logger.Error("failed to decode answer value from storage", zap.String("questionID", questionID.String()), zap.Error(err))
+		span.RecordError(err)
+		return Response{}, err
+	}
+
+	payload, err := answerable.EncodeRequest(valueStruct)
+	if err != nil {
+		logger.Error("failed to encode answer value for response", zap.String("questionID", questionID.String()), zap.Error(err))
+		span.RecordError(err)
+		return Response{}, err
+	}
+
 	return Response{
-		CreatedAt:  answer.CreatedAt.Time,
-		UpdatedAt:  answer.UpdatedAt.Time,
-		ResponseID: responseID,
-		QuestionID: questionID,
+		CreatedAt:    answer.CreatedAt.Time,
+		UpdatedAt:    answer.UpdatedAt.Time,
+		ResponseID:   responseID,
+		QuestionID:   questionID,
+		DisplayValue: displayValue,
 		Payload: Payload{
 			QuestionID:   questionID.String(),
 			QuestionType: strings.ToUpper(string(answerable.Question().Type)),
-			Value:        answer.Value,
+			Value:        payload,
 		},
-	}
+	}, nil
 }

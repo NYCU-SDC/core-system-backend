@@ -130,7 +130,6 @@ func (s Service) Get(ctx context.Context, formID, responseID, questionID uuid.UU
 func (s Service) transformAnswerForResponse(ctx context.Context, answer Answer, answerableMap map[string]question.Answerable, formID uuid.UUID) (Answer, question.Answerable, error) {
 	_, span := s.tracer.Start(ctx, "transformAnswerForResponse")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
 
 	questionID := answer.QuestionID
 
@@ -138,22 +137,6 @@ func (s Service) transformAnswerForResponse(ctx context.Context, answer Answer, 
 	if !found {
 		return Answer{}, nil, fmt.Errorf("question with ID %s not found in form %s", questionID, formID)
 	}
-
-	valueStruct, err := answerable.DecodeStorage(answer.Value)
-	if err != nil {
-		logger.Error("failed to decode answer value from storage", zap.String("questionID", questionID.String()), zap.Error(err))
-		span.RecordError(fmt.Errorf("failed to decode answer value for question ID %s: %w", questionID, err))
-		return Answer{}, nil, fmt.Errorf("failed to decode answer value for question ID %s: %w", questionID, err)
-	}
-
-	payload, err := answerable.EncodeRequest(valueStruct)
-	if err != nil {
-		logger.Error("failed to encode answer value for response", zap.String("questionID", questionID.String()), zap.Error(err))
-		span.RecordError(fmt.Errorf("failed to encode answer value for response for question ID %s: %w", questionID, err))
-		return Answer{}, nil, fmt.Errorf("failed to encode answer value for response for question ID %s: %w", questionID, err)
-	}
-
-	answer.Value = payload
 
 	return answer, answerable, nil
 }
