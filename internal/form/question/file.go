@@ -189,6 +189,11 @@ func (u UploadFile) EncodeRequest(answer any) (json.RawMessage, error) {
 	return nil, errors.New("not implemented yet")
 }
 
+func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
+	// TODO: Implement DisplayValue for UploadFile
+	return "", fmt.Errorf("DisplayValue not implemented for UploadFile question type")
+}
+
 // GenerateUploadFileMetadata generates metadata for upload file question
 func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
 	if len(option.AllowedFileTypes) == 0 {

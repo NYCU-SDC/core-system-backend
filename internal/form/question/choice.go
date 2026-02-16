@@ -117,6 +117,20 @@ func (s SingleChoice) EncodeRequest(answer any) (json.RawMessage, error) {
 	return encodeChoiceIDsToRequest(choiceIDs)
 }
 
+func (s SingleChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	singleChoiceAnswer, ok := answer.(shared.SingleChoiceAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.SingleChoiceAnswer, got %T", answer)
+	}
+
+	return singleChoiceAnswer.Snapshot.Name, nil
+}
+
 type MultiChoice struct {
 	question Question
 	formID   uuid.UUID
@@ -233,6 +247,28 @@ func (m MultiChoice) EncodeRequest(answer any) (json.RawMessage, error) {
 	return encodeChoiceIDsToRequest(choiceIDs)
 }
 
+func (m MultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := m.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	multiChoiceAnswer, ok := answer.(shared.MultipleChoiceAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.MultipleChoiceAnswer, got %T", answer)
+	}
+
+	if len(multiChoiceAnswer.Choices) == 0 {
+		return "", nil
+	}
+
+	names := make([]string, len(multiChoiceAnswer.Choices))
+	for i, choice := range multiChoiceAnswer.Choices {
+		names[i] = choice.Snapshot.Name
+	}
+	return strings.Join(names, ", "), nil
+}
+
 type DetailedMultiChoice struct {
 	question Question
 	formID   uuid.UUID
@@ -347,6 +383,28 @@ func (m DetailedMultiChoice) EncodeRequest(answer any) (json.RawMessage, error) 
 		choiceIDs[i] = choice.ChoiceID.String()
 	}
 	return json.Marshal(choiceIDs)
+}
+
+func (m DetailedMultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := m.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	detailedMultiChoiceAnswer, ok := answer.(shared.DetailedMultipleChoiceAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.DetailedMultipleChoiceAnswer, got %T", answer)
+	}
+
+	if len(detailedMultiChoiceAnswer.Choices) == 0 {
+		return "", nil
+	}
+
+	names := make([]string, len(detailedMultiChoiceAnswer.Choices))
+	for i, choice := range detailedMultiChoiceAnswer.Choices {
+		names[i] = choice.Snapshot.Name
+	}
+	return strings.Join(names, ", "), nil
 }
 
 type Ranking struct {
@@ -512,6 +570,51 @@ func (r Ranking) EncodeRequest(answer any) (json.RawMessage, error) {
 	}
 
 	return json.Marshal(choiceIDs)
+}
+
+func (r Ranking) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := r.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	rankingAnswer, ok := answer.(shared.RankingAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.RankingAnswer, got %T", answer)
+	}
+
+	if len(rankingAnswer.RankedChoices) == 0 {
+		return "", nil
+	}
+
+	// Sort by rank
+	type sortedChoice struct {
+		name string
+		rank int
+	}
+
+	sorted := make([]sortedChoice, len(rankingAnswer.RankedChoices))
+	for i, choice := range rankingAnswer.RankedChoices {
+		sorted[i] = sortedChoice{
+			name: choice.Snapshot.Name,
+			rank: choice.Rank,
+		}
+	}
+
+	// Sort by rank
+	for i := 0; i < len(sorted)-1; i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[i].rank > sorted[j].rank {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+
+	names := make([]string, len(sorted))
+	for i, choice := range sorted {
+		names[i] = choice.name
+	}
+	return strings.Join(names, " > "), nil
 }
 
 // GenerateChoiceMetadata creates and validates metadata JSON for choice-based questions

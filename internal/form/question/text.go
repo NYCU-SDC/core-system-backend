@@ -75,6 +75,20 @@ func (s ShortText) EncodeRequest(answer any) (json.RawMessage, error) {
 	return json.Marshal(shortTextAnswer.Value)
 }
 
+func (s ShortText) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+	}
+
+	return shortTextAnswer.Value, nil
+}
+
 type LongText struct {
 	question Question
 	formID   uuid.UUID
@@ -137,6 +151,25 @@ func (l LongText) EncodeRequest(answer any) (json.RawMessage, error) {
 
 	// API expects a plain string value
 	return json.Marshal(longTextAnswer.Value)
+}
+
+func (l LongText) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := l.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	longTextAnswer, ok := answer.(shared.LongTextAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+	}
+
+	value := longTextAnswer.Value
+	// Limit to 100 characters
+	if len(value) > 100 {
+		return value[:100] + "...", nil
+	}
+	return value, nil
 }
 
 type Hyperlink struct {
@@ -205,6 +238,20 @@ func (h Hyperlink) EncodeRequest(answer any) (json.RawMessage, error) {
 
 	// API expects a plain string value
 	return json.Marshal(hyperlinkAnswer.Value)
+}
+
+func (h Hyperlink) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := h.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+	}
+
+	return hyperlinkAnswer.Value, nil
 }
 
 // validateURL checks if the value is a valid URL

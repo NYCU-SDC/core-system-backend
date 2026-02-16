@@ -84,6 +84,11 @@ func (o OAuthConnect) EncodeRequest(answer any) (json.RawMessage, error) {
 	return nil, errors.New("not implemented yet")
 }
 
+func (o OAuthConnect) DisplayValue(rawValue json.RawMessage) (string, error) {
+	// TODO: Implement DisplayValue for OAuthConnect
+	return "", fmt.Errorf("DisplayValue not implemented for OAuthConnect question type")
+}
+
 func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 	if provider == "" {
 		return nil, ErrMetadataValidate{

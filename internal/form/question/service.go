@@ -28,6 +28,8 @@ type Answerable interface {
 	FormID() uuid.UUID
 	Validate(rawValue json.RawMessage) error
 
+	DisplayValue(rawValue json.RawMessage) (string, error)
+
 	// DecodeRequest decodes the raw JSON value from the request into the appropriate Go type based on the question type.
 	DecodeRequest(rawValue json.RawMessage) (any, error)
 

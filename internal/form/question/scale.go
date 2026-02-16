@@ -149,6 +149,20 @@ func (s LinearScale) EncodeRequest(answer any) (json.RawMessage, error) {
 	return json.Marshal(linearScaleAnswer.Value)
 }
 
+func (s LinearScale) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	linearScaleAnswer, ok := answer.(shared.LinearScaleAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.LinearScaleAnswer, got %T", answer)
+	}
+
+	return fmt.Sprintf("%d (%d-%d)", linearScaleAnswer.Value, s.MinVal, s.MaxVal), nil
+}
+
 type Rating struct {
 	question      Question
 	formID        uuid.UUID
@@ -248,6 +262,20 @@ func (s Rating) EncodeRequest(answer any) (json.RawMessage, error) {
 
 	// API expects int32 value
 	return json.Marshal(ratingAnswer.Value)
+}
+
+func (s Rating) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	ratingAnswer, ok := answer.(shared.RatingAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.RatingAnswer, got %T", answer)
+	}
+
+	return fmt.Sprintf("%d (%d-%d)", ratingAnswer.Value, s.MinVal, s.MaxVal), nil
 }
 
 func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {
