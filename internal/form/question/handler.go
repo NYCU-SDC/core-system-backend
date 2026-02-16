@@ -48,9 +48,31 @@ type Response struct {
 	UpdatedAt    time.Time         `json:"updatedAt"`
 }
 
+type SectionPayload struct {
+	ID          uuid.UUID `json:"id"`
+	FormID      uuid.UUID `json:"formId"`
+	Title       string    `json:"title"`
+	Progress    string    `json:"progress"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 type SectionResponse struct {
-	Section   Section    `json:"section"`
-	Questions []Response `json:"questions"`
+	Section   SectionPayload `json:"section"`
+	Questions []Response     `json:"questions"`
+}
+
+func ToSection(section Section) SectionPayload {
+	return SectionPayload{
+		ID:          section.ID,
+		FormID:      section.FormID,
+		Title:       section.Title.String,
+		Progress:    strings.ToUpper(string(section.Progress)),
+		Description: section.Description.String,
+		CreatedAt:   section.CreatedAt.Time,
+		UpdatedAt:   section.UpdatedAt.Time,
+	}
 }
 
 func ToResponse(answerable Answerable) (Response, error) {
@@ -353,7 +375,7 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]SectionResponse, len(sectionWithQuestions))
 	for i, s := range sectionWithQuestions {
-		responses[i].Section = sectionWithQuestions[i].Section
+		responses[i].Section = ToSection(sectionWithQuestions[i].Section)
 		for _, q := range s.AnswerableList {
 			response, err := ToResponse(q)
 			if err != nil {
