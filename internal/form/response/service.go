@@ -16,11 +16,8 @@ import (
 
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
-	Get(ctx context.Context, arg GetParams) (FormResponse, error)
-	GetByFormIDAndSubmittedBy(ctx context.Context, arg GetByFormIDAndSubmittedByParams) (FormResponse, error)
 	Exists(ctx context.Context, arg ExistsParams) (bool, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
-	Update(ctx context.Context, arg UpdateParams) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
 }
@@ -94,6 +91,7 @@ func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResp
 	return responses, nil
 }
 
+// ListBySubmittedBy retrieves all responses submitted by a given user
 func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
 	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
 	defer span.End()

@@ -23,7 +23,8 @@ type Querier interface {
 }
 
 type QuestionStore interface {
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithQuestions, error)
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
+	GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID) (map[string]question.Answerable, error)
 }
 
 type Service struct {
@@ -83,7 +84,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	list, err := s.questionStore.ListByFormID(traceCtx, formID)
+	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
 		return []Answer{}, []error{err}
 	}
@@ -93,29 +94,21 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	answeredQuestionIDs := make(map[string]bool)
 
 	for _, ans := range answers {
-		var found bool
-		for _, section := range list {
-			for _, q := range section.Questions {
-				if q.Question().ID.String() == ans.QuestionID {
-					found = true
-					answeredQuestionIDs[ans.QuestionID] = true
-
-					// Validate answer value
-					err := q.Validate(ans.Value)
-					if err != nil {
-						validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
-					}
-
-					questionTypes = append(questionTypes, response.QuestionType(q.Question().Type))
-
-					break
-				}
-			}
-		}
-
+		answerable, found := answerableMap[ans.QuestionID]
 		if !found {
 			validationErrors = append(validationErrors, fmt.Errorf("question with ID %s not found in form %s", ans.QuestionID, formID))
+			continue
 		}
+
+		answeredQuestionIDs[ans.QuestionID] = true
+
+		// Validate answer value
+		err := answerable.Validate(ans.Value)
+		if err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
+		}
+
+		questionTypes = append(questionTypes, response.QuestionType(answerable.Question().Type))
 	}
 
 	if len(validationErrors) > 0 {
