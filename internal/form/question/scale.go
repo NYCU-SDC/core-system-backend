@@ -5,43 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
+
+	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
 )
 
 //go:embed icons.json
 var iconsJSON []byte
-
-type ScaleOption struct {
-	Icon          string `json:"icon"`
-	MinVal        int    `json:"minVal" validate:"required"`
-	MaxVal        int    `json:"maxVal" validate:"required"`
-	MinValueLabel string `json:"minValueLabel,omitempty"`
-	MaxValueLabel string `json:"maxValueLabel,omitempty"`
-}
-type LinearScaleMetadata struct {
-	Icon          string `json:"icon"`
-	MinVal        int    `json:"minVal" validate:"required"`
-	MaxVal        int    `json:"maxVal" validate:"required"`
-	MinValueLabel string `json:"minValueLabel"`
-	MaxValueLabel string `json:"maxValueLabel"`
-}
-type RatingMetadata struct {
-	Icon          string `json:"icon" validate:"required"`
-	MinVal        int    `json:"minVal" validate:"required"`
-	MaxVal        int    `json:"maxVal" validate:"required"`
-	MinValueLabel string `json:"minValueLabel"`
-	MaxValueLabel string `json:"maxValueLabel"`
-}
-type LinearScale struct {
-	question      Question
-	formID        uuid.UUID
-	MinVal        int
-	MaxVal        int
-	MinValueLabel string
-	MaxValueLabel string
-}
 
 var validIcons map[string]bool
 
@@ -59,26 +30,37 @@ func init() {
 	}
 }
 
-func (s LinearScale) Question() Question { return s.question }
+type ScaleOption struct {
+	Icon          string `json:"icon"`
+	MinVal        int    `json:"minVal" validate:"required"`
+	MaxVal        int    `json:"maxVal" validate:"required"`
+	MinValueLabel string `json:"minValueLabel,omitempty"`
+	MaxValueLabel string `json:"maxValueLabel,omitempty"`
+}
 
-func (s LinearScale) FormID() uuid.UUID { return s.formID }
+type LinearScaleMetadata struct {
+	Icon          string `json:"icon"`
+	MinVal        int    `json:"minVal" validate:"required"`
+	MaxVal        int    `json:"maxVal" validate:"required"`
+	MinValueLabel string `json:"minValueLabel"`
+	MaxValueLabel string `json:"maxValueLabel"`
+}
 
-func (s LinearScale) Validate(value string) error {
-	num, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return err
-	}
+type RatingMetadata struct {
+	Icon          string `json:"icon" validate:"required"`
+	MinVal        int    `json:"minVal" validate:"required"`
+	MaxVal        int    `json:"maxVal" validate:"required"`
+	MinValueLabel string `json:"minValueLabel"`
+	MaxValueLabel string `json:"maxValueLabel"`
+}
 
-	intValue := int(num)
-	if intValue < s.MinVal || intValue > s.MaxVal {
-		return ErrInvalidScaleValue{
-			QuestionID: s.question.ID.String(),
-			RawValue:   intValue,
-			Message:    "out of range",
-		}
-	}
-
-	return nil
+type LinearScale struct {
+	question      Question
+	formID        uuid.UUID
+	MinVal        int
+	MaxVal        int
+	MinValueLabel string
+	MaxValueLabel string
 }
 
 func NewLinearScale(q Question, formID uuid.UUID) (LinearScale, error) {
@@ -106,6 +88,81 @@ func NewLinearScale(q Question, formID uuid.UUID) (LinearScale, error) {
 	}, nil
 }
 
+func (s LinearScale) Question() Question { return s.question }
+
+func (s LinearScale) FormID() uuid.UUID { return s.formID }
+
+func (s LinearScale) Validate(rawValue json.RawMessage) error {
+	var value int
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return fmt.Errorf("invalid linear scale value format: %w", err)
+	}
+
+	if value < s.MinVal || value > s.MaxVal {
+		return ErrInvalidScaleValue{
+			QuestionID: s.question.ID.String(),
+			RawValue:   value,
+			Message:    "out of range",
+		}
+	}
+
+	return nil
+}
+
+func (s LinearScale) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// API sends int32 for linear scale
+	var value int
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return nil, fmt.Errorf("invalid linear scale value format: %w", err)
+	}
+
+	// Validate range
+	if value < s.MinVal || value > s.MaxVal {
+		return nil, ErrInvalidScaleValue{
+			QuestionID: s.question.ID.String(),
+			RawValue:   value,
+			Message:    fmt.Sprintf("value %d is out of range [%d, %d]", value, s.MinVal, s.MaxVal),
+		}
+	}
+
+	return shared.LinearScaleAnswer{
+		Value: value,
+	}, nil
+}
+
+func (s LinearScale) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.LinearScaleAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid linear scale answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (s LinearScale) EncodeRequest(answer any) (json.RawMessage, error) {
+	linearScaleAnswer, ok := answer.(shared.LinearScaleAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.LinearScaleAnswer, got %T", answer)
+	}
+
+	// API expects int32 value
+	return json.Marshal(linearScaleAnswer.Value)
+}
+
+func (s LinearScale) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	linearScaleAnswer, ok := answer.(shared.LinearScaleAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.LinearScaleAnswer, got %T", answer)
+	}
+
+	return fmt.Sprintf("%d (%d-%d)", linearScaleAnswer.Value, s.MinVal, s.MaxVal), nil
+}
+
 type Rating struct {
 	question      Question
 	formID        uuid.UUID
@@ -114,28 +171,6 @@ type Rating struct {
 	MaxVal        int
 	MinValueLabel string
 	MaxValueLabel string
-}
-
-func (s Rating) Question() Question { return s.question }
-
-func (s Rating) FormID() uuid.UUID { return s.formID }
-
-func (s Rating) Validate(value string) error {
-	num, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return err
-	}
-
-	intValue := int(num)
-	if intValue < s.MinVal || intValue > s.MaxVal {
-		return ErrInvalidScaleValue{
-			QuestionID: s.question.ID.String(),
-			RawValue:   intValue,
-			Message:    "out of range",
-		}
-	}
-
-	return nil
 }
 
 func NewRating(q Question, formID uuid.UUID) (Rating, error) {
@@ -166,6 +201,81 @@ func NewRating(q Question, formID uuid.UUID) (Rating, error) {
 		MinValueLabel: rating.MinValueLabel,
 		MaxValueLabel: rating.MaxValueLabel,
 	}, nil
+}
+
+func (s Rating) Question() Question { return s.question }
+
+func (s Rating) FormID() uuid.UUID { return s.formID }
+
+func (s Rating) Validate(rawValue json.RawMessage) error {
+	var value int
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return fmt.Errorf("invalid rating value format: %w", err)
+	}
+
+	if value < s.MinVal || value > s.MaxVal {
+		return ErrInvalidScaleValue{
+			QuestionID: s.question.ID.String(),
+			RawValue:   value,
+			Message:    "out of range",
+		}
+	}
+
+	return nil
+}
+
+func (s Rating) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// API sends int32 for rating
+	var value int
+	if err := json.Unmarshal(rawValue, &value); err != nil {
+		return nil, fmt.Errorf("invalid rating value format: %w", err)
+	}
+
+	// Validate range
+	if value < s.MinVal || value > s.MaxVal {
+		return nil, ErrInvalidScaleValue{
+			QuestionID: s.question.ID.String(),
+			RawValue:   value,
+			Message:    fmt.Sprintf("value %d is out of range [%d, %d]", value, s.MinVal, s.MaxVal),
+		}
+	}
+
+	return shared.RatingAnswer{
+		Value: value,
+	}, nil
+}
+
+func (s Rating) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.RatingAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid rating answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (s Rating) EncodeRequest(answer any) (json.RawMessage, error) {
+	ratingAnswer, ok := answer.(shared.RatingAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.RatingAnswer, got %T", answer)
+	}
+
+	// API expects int32 value
+	return json.Marshal(ratingAnswer.Value)
+}
+
+func (s Rating) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	ratingAnswer, ok := answer.(shared.RatingAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.RatingAnswer, got %T", answer)
+	}
+
+	return fmt.Sprintf("%d (%d-%d)", ratingAnswer.Value, s.MinVal, s.MaxVal), nil
 }
 
 func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {

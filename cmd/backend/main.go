@@ -8,6 +8,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/cors"
 	"NYCU-SDC/core-system-backend/internal/distribute"
 	"NYCU-SDC/core-system-backend/internal/form"
+	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/submit"
@@ -142,6 +143,7 @@ func main() {
 	unitService := unit.NewService(logger, dbPool, tenantService)
 	distributeService := distribute.NewService(logger, unitService)
 	questionService := question.NewService(logger, dbPool)
+	answerService := answer.NewService(logger, dbPool, questionService)
 	inboxService := inbox.NewService(logger, dbPool)
 	responseService := response.NewService(logger, dbPool)
 	formService := form.NewService(logger, dbPool, responseService)
@@ -154,6 +156,7 @@ func main() {
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
+	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService, tenantService, userService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
 	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService)
@@ -275,12 +278,16 @@ func main() {
 	mux.Handle("DELETE /api/sections/{sectionId}/questions/{questionId}", authMiddleware.HandlerFunc(questionHandler.DeleteHandler))
 
 	// Response routes
-	mux.Handle("GET /api/forms/{id}/responses", authMiddleware.HandlerFunc(responseHandler.ListHandler))
-	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.CreateFormResponseHandler))
+	mux.Handle("GET /api/forms/{id}/responses", authMiddleware.HandlerFunc(responseHandler.List))
+	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.Create))
 	mux.Handle("POST /api/responses/{id}/submit", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))
-	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.GetHandler))
-	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.DeleteHandler))
-	mux.Handle("GET /api/forms/{formId}/questions/{questionId}", authMiddleware.HandlerFunc(responseHandler.GetAnswersByQuestionIDHandler))
+	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
+	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Delete))
+	//mux.Handle("GET /api/forms/{formId}/questions/{questionId}", authMiddleware.HandlerFunc(responseHandler.GetAnswersByQuestionIDHandler))
+
+	// Answer routes
+	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(answerHandler.GetQuestionResponse))
+	mux.Handle("PATCH /api/responses/{responseId}/answers", authMiddleware.HandlerFunc(answerHandler.UpdateFormResponse))
 
 	// Workflow routes
 	mux.Handle("GET /api/forms/{id}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetWorkflow))

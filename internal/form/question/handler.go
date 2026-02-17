@@ -28,6 +28,7 @@ type Request struct {
 	Choices      []ChoiceOption   `json:"choices,omitempty" validate:"omitempty,required_if=Type SINGLE_CHOICE,required_if=Type MULTIPLE_CHOICE,required_if=Type DETAILED_MULTIPLE_CHOICE,required_if=Type DROPDOWN,required_if=Type RANKING,dive"`
 	Scale        ScaleOption      `json:"scale,omitempty" validate:"omitempty,required_if=Type LINEAR_SCALE,required_if=Type RATING"`
 	UploadFile   UploadFileOption `json:"uploadFile,omitempty" validate:"omitempty,required_if=Type UPLOAD_FILE"`
+	Date         DateOption       `json:"date,omitempty"`
 	OauthConnect string           `json:"oauthConnect,omitempty" validate:"required_if=Type OAUTH_CONNECT"`
 	SourceID     uuid.UUID        `json:"sourceId,omitempty"`
 }
@@ -42,15 +43,38 @@ type Response struct {
 	Choices      []Choice          `json:"choices,omitempty"`
 	Scale        *ScaleOption      `json:"scale,omitempty"`
 	UploadFile   *UploadFileOption `json:"uploadFile,omitempty"`
+	Date         *DateOption       `json:"date,omitempty"`
 	OauthConnect string            `json:"oauthConnect,omitempty"`
 	SourceID     string            `json:"sourceId,omitempty"`
 	CreatedAt    time.Time         `json:"createdAt"`
 	UpdatedAt    time.Time         `json:"updatedAt"`
 }
 
+type SectionPayload struct {
+	ID          uuid.UUID `json:"id"`
+	FormID      uuid.UUID `json:"formId"`
+	Title       string    `json:"title"`
+	Progress    string    `json:"progress"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 type SectionResponse struct {
-	Section   Section
-	Questions []Response
+	Section   SectionPayload `json:"section"`
+	Questions []Response     `json:"questions"`
+}
+
+func ToSection(section Section) SectionPayload {
+	return SectionPayload{
+		ID:          section.ID,
+		FormID:      section.FormID,
+		Title:       section.Title.String,
+		Progress:    strings.ToUpper(string(section.Progress)),
+		Description: section.Description.String,
+		CreatedAt:   section.CreatedAt.Time,
+		UpdatedAt:   section.UpdatedAt.Time,
+	}
 }
 
 func ToResponse(answerable Answerable) (Response, error) {
@@ -142,6 +166,31 @@ func ToResponse(answerable Answerable) (Response, error) {
 			}
 		}
 		response.OauthConnect = string(provider)
+	case QuestionTypeDate:
+		// If metadata is nil, use default values
+		if q.Metadata == nil {
+			response.Date = &DateOption{
+				HasYear:  true,
+				HasMonth: true,
+				HasDay:   true,
+			}
+		} else {
+			dateMetadata, err := ExtractDateMetadata(q.Metadata)
+			if err != nil {
+				return response, ErrInvalidMetadata{
+					QuestionID: q.ID.String(),
+					RawData:    q.Metadata,
+					Message:    err.Error(),
+				}
+			}
+			response.Date = &DateOption{
+				HasYear:  dateMetadata.HasYear,
+				HasMonth: dateMetadata.HasMonth,
+				HasDay:   dateMetadata.HasDay,
+				MinDate:  dateMetadata.MinDate,
+				MaxDate:  dateMetadata.MaxDate,
+			}
+		}
 	}
 
 	return response, nil
@@ -152,7 +201,7 @@ type Store interface {
 	Update(ctx context.Context, input UpdateParams) (Answerable, error)
 	UpdateOrder(ctx context.Context, input UpdateOrderParams) (Answerable, error)
 	DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithQuestions, error)
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error)
 }
 
 type Handler struct {
@@ -353,8 +402,8 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]SectionResponse, len(sectionWithQuestions))
 	for i, s := range sectionWithQuestions {
-		responses[i].Section = sectionWithQuestions[i].Section
-		for _, q := range s.Questions {
+		responses[i].Section = ToSection(sectionWithQuestions[i].Section)
+		for _, q := range s.AnswerableList {
 			response, err := ToResponse(q)
 			if err != nil {
 				h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -382,8 +431,10 @@ func getGenerateMetadata(req Request) ([]byte, error) {
 	}
 
 	switch req.Type {
-	case "short_text", "long_text", "date", "hyperlink":
+	case "short_text", "long_text", "hyperlink":
 		return nil, nil
+	case "date":
+		return GenerateDateMetadata(req.Date)
 	case "single_choice", "multiple_choice", "detailed_multiple_choice", "dropdown", "ranking":
 		return GenerateChoiceMetadata(req.Type, req.Choices)
 	case "linear_scale":
