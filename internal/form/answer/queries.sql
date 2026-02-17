@@ -25,12 +25,13 @@ RETURNING *;
 INSERT INTO answers (response_id, question_id, value)
 VALUES ($1, $2, $3)
     ON CONFLICT (response_id, question_id)
-DO UPDATE SET
-           value = excluded.value,
-           updated_at = CASE
-           WHEN answers.value IS DISTINCT FROM excluded.value
-           THEN now()
-           ELSE answers.updated_at
+DO UPDATE
+    SET
+        value = excluded.value,
+        updated_at = CASE
+    WHEN answers.value IS DISTINCT FROM excluded.value
+        THEN now()
+        ELSE answers.updated_at
 END
 RETURNING *;
 
@@ -44,8 +45,11 @@ ON CONFLICT (response_id, question_id)
 DO UPDATE
     SET
         value = excluded.value,
-        updated_at = now()
-    WHERE answers.value IS DISTINCT FROM excluded.value
+        updated_at = CASE
+    WHEN answers.value IS DISTINCT FROM excluded.value
+        THEN now()
+        ELSE answers.updated_at
+END
 RETURNING *;
 
 -- name: Update :one
