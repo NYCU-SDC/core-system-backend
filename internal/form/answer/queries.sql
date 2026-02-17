@@ -22,21 +22,17 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: Upsert :one
-WITH upsert AS (
 INSERT INTO answers (response_id, question_id, value)
 VALUES ($1, $2, $3)
-ON CONFLICT (response_id, question_id)
-    DO UPDATE SET
+    ON CONFLICT (response_id, question_id)
+DO UPDATE SET
            value = excluded.value,
-           updated_at = now()
-       WHERE answers.value IS DISTINCT FROM excluded.value
-           RETURNING *
-           )
-SELECT * FROM upsert
-UNION ALL
-SELECT * FROM answers
-WHERE response_id = $1 AND question_id = $2
-  AND NOT EXISTS (SELECT 1 FROM upsert);
+           updated_at = CASE
+           WHEN answers.value IS DISTINCT FROM excluded.value
+           THEN now()
+           ELSE answers.updated_at
+END
+RETURNING *;
 
 -- name: BatchUpsert :many
 INSERT INTO answers (response_id, question_id, value)
