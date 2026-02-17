@@ -49,6 +49,15 @@ func (e ErrInvalidDateFormat) Error() string {
 	return fmt.Sprintf("invalid date format for question %s: %s, raw value: %s", e.QuestionID, e.Message, e.RawValue)
 }
 
+type ErrInvalidDateValue struct {
+	QuestionID string
+	Message    string
+}
+
+func (e ErrInvalidDateValue) Error() string {
+	return fmt.Sprintf("invalid date value for question %s: %s", e.QuestionID, e.Message)
+}
+
 // ErrMetadataBroken is returned when stored metadata is corrupted and cannot be recovered.
 type ErrMetadataBroken struct {
 	QuestionID string

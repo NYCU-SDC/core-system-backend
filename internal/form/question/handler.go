@@ -28,6 +28,7 @@ type Request struct {
 	Choices      []ChoiceOption   `json:"choices,omitempty" validate:"omitempty,required_if=Type SINGLE_CHOICE,required_if=Type MULTIPLE_CHOICE,required_if=Type DETAILED_MULTIPLE_CHOICE,required_if=Type DROPDOWN,required_if=Type RANKING,dive"`
 	Scale        ScaleOption      `json:"scale,omitempty" validate:"omitempty,required_if=Type LINEAR_SCALE,required_if=Type RATING"`
 	UploadFile   UploadFileOption `json:"uploadFile,omitempty" validate:"omitempty,required_if=Type UPLOAD_FILE"`
+	Date         DateOption       `json:"date,omitempty"`
 	OauthConnect string           `json:"oauthConnect,omitempty" validate:"required_if=Type OAUTH_CONNECT"`
 	SourceID     uuid.UUID        `json:"sourceId,omitempty"`
 }
@@ -42,6 +43,7 @@ type Response struct {
 	Choices      []Choice          `json:"choices,omitempty"`
 	Scale        *ScaleOption      `json:"scale,omitempty"`
 	UploadFile   *UploadFileOption `json:"uploadFile,omitempty"`
+	Date         *DateOption       `json:"date,omitempty"`
 	OauthConnect string            `json:"oauthConnect,omitempty"`
 	SourceID     string            `json:"sourceId,omitempty"`
 	CreatedAt    time.Time         `json:"createdAt"`
@@ -164,6 +166,31 @@ func ToResponse(answerable Answerable) (Response, error) {
 			}
 		}
 		response.OauthConnect = string(provider)
+	case QuestionTypeDate:
+		// If metadata is nil, use default values
+		if q.Metadata == nil {
+			response.Date = &DateOption{
+				HasYear:  true,
+				HasMonth: true,
+				HasDay:   true,
+			}
+		} else {
+			dateMetadata, err := ExtractDateMetadata(q.Metadata)
+			if err != nil {
+				return response, ErrInvalidMetadata{
+					QuestionID: q.ID.String(),
+					RawData:    q.Metadata,
+					Message:    err.Error(),
+				}
+			}
+			response.Date = &DateOption{
+				HasYear:  dateMetadata.HasYear,
+				HasMonth: dateMetadata.HasMonth,
+				HasDay:   dateMetadata.HasDay,
+				MinDate:  dateMetadata.MinDate,
+				MaxDate:  dateMetadata.MaxDate,
+			}
+		}
 	}
 
 	return response, nil
@@ -404,8 +431,10 @@ func getGenerateMetadata(req Request) ([]byte, error) {
 	}
 
 	switch req.Type {
-	case "short_text", "long_text", "date", "hyperlink":
+	case "short_text", "long_text", "hyperlink":
 		return nil, nil
+	case "date":
+		return GenerateDateMetadata(req.Date)
 	case "single_choice", "multiple_choice", "detailed_multiple_choice", "dropdown", "ranking":
 		return GenerateChoiceMetadata(req.Type, req.Choices)
 	case "linear_scale":

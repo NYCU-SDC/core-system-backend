@@ -26,8 +26,11 @@ type Querier interface {
 type Answerable interface {
 	Question() Question
 	FormID() uuid.UUID
+
+	// Validate checks if the provided answer is valid according to the question's type and constraints.
 	Validate(rawValue json.RawMessage) error
 
+	// DisplayValue converts the answer to simple string for human to read
 	DisplayValue(rawValue json.RawMessage) (string, error)
 
 	// DecodeRequest decodes the raw JSON value from the request into the appropriate Go type based on the question type.
