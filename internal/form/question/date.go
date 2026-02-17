@@ -316,13 +316,7 @@ func GenerateDateMetadata(option DateOption) ([]byte, error) {
 	}
 
 	metadata := map[string]any{
-		"date": DateMetadata{
-			HasYear:  option.HasYear,
-			HasMonth: option.HasMonth,
-			HasDay:   option.HasDay,
-			MinDate:  option.MinDate,
-			MaxDate:  option.MaxDate,
-		},
+		"date": DateMetadata(option),
 	}
 
 	return json.Marshal(metadata)
