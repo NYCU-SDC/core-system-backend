@@ -38,7 +38,6 @@ type Response struct {
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 	ResponseID   uuid.UUID `json:"responseId"`
-	QuestionID   uuid.UUID `json:"questionId"`
 	Payload      Payload   `json:"answer"`
 	DisplayValue string    `json:"displayValue"`
 }
@@ -232,7 +231,6 @@ func (h *Handler) ToResponse(context context.Context, answer Answer, answerable 
 		CreatedAt:    answer.CreatedAt.Time,
 		UpdatedAt:    answer.UpdatedAt.Time,
 		ResponseID:   responseID,
-		QuestionID:   questionID,
 		DisplayValue: displayValue,
 		Payload: Payload{
 			QuestionID:   questionID.String(),
