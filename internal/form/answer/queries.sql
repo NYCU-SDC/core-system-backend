@@ -29,7 +29,6 @@ DO UPDATE
     SET
         value = excluded.value,
         updated_at = now()
-    WHERE answers.value IS DISTINCT FROM excluded.value
 RETURNING *;
 
 -- name: BatchUpsert :many
