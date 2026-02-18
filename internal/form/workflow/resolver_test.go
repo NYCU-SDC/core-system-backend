@@ -1,6 +1,7 @@
 package workflow_test
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"context"
 	"encoding/json"
 	"testing"
@@ -67,7 +68,7 @@ func TestService_ResolveSections_Simple(t *testing.T) {
 	}, nil).Once()
 
 	// No answers provided
-	answers := []workflow.Answer{}
+	var answers []answer.Answer
 	answerableMap := map[string]question.Answerable{} // Empty since no questions
 
 	result, err := service.ResolveSections(ctx, formID, answers, answerableMap)
@@ -159,7 +160,7 @@ func TestService_ResolveSections_WithCondition_ChoiceTrue(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	answers := []workflow.Answer{
+	answers := []answer.Answer{
 		{
 			ID:         uuid.New(),
 			ResponseID: uuid.New(),
@@ -278,7 +279,7 @@ func TestService_ResolveSections_MultipleChoice_AnyMatch(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	answers := []workflow.Answer{
+	answers := []answer.Answer{
 		{
 			ID:         uuid.New(),
 			ResponseID: uuid.New(),
@@ -326,7 +327,7 @@ func TestService_ResolveSections_EmptyWorkflow(t *testing.T) {
 		Workflow: workflowJSON,
 	}, nil).Once()
 
-	answers := []workflow.Answer{}
+	var answers []answer.Answer
 
 	// Empty answerableMap for empty workflow test
 	answerableMap := map[string]question.Answerable{}
