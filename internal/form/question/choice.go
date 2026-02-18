@@ -38,7 +38,8 @@ func (s SingleChoice) FormID() uuid.UUID {
 
 func (s SingleChoice) Validate(rawValue json.RawMessage) error {
 	var choiceIDs []string
-	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+	err := json.Unmarshal(rawValue, &choiceIDs)
+	if err != nil {
 		return fmt.Errorf("invalid single choice value format: %w", err)
 	}
 
@@ -99,7 +100,8 @@ func (s SingleChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
 
 func (s SingleChoice) DecodeStorage(rawValue json.RawMessage) (any, error) {
 	var answer shared.SingleChoiceAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
 		return nil, fmt.Errorf("invalid single choice answer in storage: %w", err)
 	}
 
@@ -147,7 +149,8 @@ func (m MultiChoice) FormID() uuid.UUID {
 
 func (m MultiChoice) Validate(rawValue json.RawMessage) error {
 	var choiceIDs []string
-	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+	err := json.Unmarshal(rawValue, &choiceIDs)
+	if err != nil {
 		return fmt.Errorf("invalid multiple choice value format: %w", err)
 	}
 
@@ -226,7 +229,8 @@ func (m MultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
 
 func (m MultiChoice) DecodeStorage(rawValue json.RawMessage) (any, error) {
 	var answer shared.MultipleChoiceAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
 		return nil, fmt.Errorf("invalid multiple choice answer in storage: %w", err)
 	}
 
@@ -285,7 +289,8 @@ func (m DetailedMultiChoice) FormID() uuid.UUID {
 
 func (m DetailedMultiChoice) Validate(rawValue json.RawMessage) error {
 	var choiceIDs []string
-	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+	err := json.Unmarshal(rawValue, &choiceIDs)
+	if err != nil {
 		return fmt.Errorf("invalid detailed multiple choice value format: %w", err)
 	}
 
@@ -364,7 +369,8 @@ func (m DetailedMultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error
 
 func (m DetailedMultiChoice) DecodeStorage(rawValue json.RawMessage) (any, error) {
 	var answer shared.DetailedMultipleChoiceAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
 		return nil, fmt.Errorf("invalid detailed multiple choice answer in storage: %w", err)
 	}
 
@@ -423,7 +429,8 @@ func (r Ranking) FormID() uuid.UUID {
 
 func (r Ranking) Validate(rawValue json.RawMessage) error {
 	var choiceIDs []string
-	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+	err := json.Unmarshal(rawValue, &choiceIDs)
+	if err != nil {
 		return fmt.Errorf("invalid ranking value format: %w", err)
 	}
 
@@ -468,7 +475,8 @@ func NewRanking(q Question, formID uuid.UUID) (Ranking, error) {
 func (r Ranking) DecodeRequest(rawValue json.RawMessage) (any, error) {
 	// API sends string[] for ranking (ordered by rank)
 	var choiceIDs []string
-	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+	err := json.Unmarshal(rawValue, &choiceIDs)
+	if err != nil {
 		return nil, fmt.Errorf("invalid ranking value format: %w", err)
 	}
 
@@ -526,7 +534,8 @@ func (r Ranking) DecodeRequest(rawValue json.RawMessage) (any, error) {
 
 func (r Ranking) DecodeStorage(rawValue json.RawMessage) (any, error) {
 	var answer shared.RankingAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
 		return nil, fmt.Errorf("invalid ranking answer in storage: %w", err)
 	}
 
@@ -672,13 +681,15 @@ func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) (
 
 func ExtractChoices(data []byte) ([]Choice, error) {
 	var partial map[string]json.RawMessage
-	if err := json.Unmarshal(data, &partial); err != nil {
+	err := json.Unmarshal(data, &partial)
+	if err != nil {
 		return nil, fmt.Errorf("could not parse partial json: %w", err)
 	}
 
 	var choices []Choice
 	if raw, ok := partial["choice"]; ok {
-		if err := json.Unmarshal(raw, &choices); err != nil {
+		err := json.Unmarshal(raw, &choices)
+		if err != nil {
 			return nil, fmt.Errorf("could not parse choices: %w", err)
 		}
 	}
@@ -751,7 +762,8 @@ func findChoiceByID(choices []Choice, choiceID uuid.UUID) *Choice {
 // decodeMultipleChoiceIDs is a helper function to decode and validate multiple choice IDs from API request
 func decodeMultipleChoiceIDs(rawValue json.RawMessage, choices []Choice, questionID string, minChoices int) ([]uuid.UUID, []*Choice, error) {
 	var choiceIDs []string
-	if err := json.Unmarshal(rawValue, &choiceIDs); err != nil {
+	err := json.Unmarshal(rawValue, &choiceIDs)
+	if err != nil {
 		return nil, nil, fmt.Errorf("invalid choice value format: %w", err)
 	}
 
