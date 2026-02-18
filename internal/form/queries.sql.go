@@ -451,6 +451,134 @@ func (q *Queries) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListB
 	return items, nil
 }
 
+const patch = `-- name: Patch :one
+WITH updated AS (
+    UPDATE forms
+    SET
+        title = COALESCE($1::text, forms.title),
+        description = COALESCE($2::text, forms.description),
+        preview_message = COALESCE($3::text, forms.preview_message),
+        last_editor = $4,
+        deadline = COALESCE($5::timestamptz, forms.deadline),
+        publish_time = COALESCE($6::timestamptz, forms.publish_time),
+        message_after_submission = COALESCE($7::text, forms.message_after_submission),
+        google_sheet_url = COALESCE($8::text, forms.google_sheet_url),
+        visibility = COALESCE($9::visibility, forms.visibility),
+        dressing_color = COALESCE($10::text, forms.dressing_color),
+        dressing_header_font = COALESCE($11::text, forms.dressing_header_font),
+        dressing_question_font = COALESCE($12::text, forms.dressing_question_font),
+        dressing_text_font = COALESCE($13::text, forms.dressing_text_font),
+        updated_at = now()
+    WHERE forms.id = $14
+    RETURNING id, title, description, preview_message, message_after_submission, status, unit_id, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font
+)
+SELECT 
+    f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
+    u.name as unit_name,
+    o.name as org_name,
+    usr.name as last_editor_name,
+    usr.username as last_editor_username,
+    usr.avatar_url as last_editor_avatar_url,
+    usr.emails as last_editor_email
+FROM updated f
+LEFT JOIN units u ON f.unit_id = u.id
+LEFT JOIN units o ON u.org_id = o.id
+LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+`
+
+type PatchParams struct {
+	Title                  pgtype.Text
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	PublishTime            pgtype.Timestamptz
+	MessageAfterSubmission pgtype.Text
+	GoogleSheetUrl         pgtype.Text
+	Visibility             NullVisibility
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+	ID                     uuid.UUID
+}
+
+type PatchRow struct {
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	MessageAfterSubmission string
+	Status                 Status
+	UnitID                 pgtype.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Visibility             Visibility
+	GoogleSheetUrl         pgtype.Text
+	PublishTime            pgtype.Timestamptz
+	CoverImageUrl          pgtype.Text
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+	UnitName               pgtype.Text
+	OrgName                pgtype.Text
+	LastEditorName         pgtype.Text
+	LastEditorUsername     pgtype.Text
+	LastEditorAvatarUrl    pgtype.Text
+	LastEditorEmail        interface{}
+}
+
+func (q *Queries) Patch(ctx context.Context, arg PatchParams) (PatchRow, error) {
+	row := q.db.QueryRow(ctx, patch,
+		arg.Title,
+		arg.Description,
+		arg.PreviewMessage,
+		arg.LastEditor,
+		arg.Deadline,
+		arg.PublishTime,
+		arg.MessageAfterSubmission,
+		arg.GoogleSheetUrl,
+		arg.Visibility,
+		arg.DressingColor,
+		arg.DressingHeaderFont,
+		arg.DressingQuestionFont,
+		arg.DressingTextFont,
+		arg.ID,
+	)
+	var i PatchRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.PreviewMessage,
+		&i.MessageAfterSubmission,
+		&i.Status,
+		&i.UnitID,
+		&i.LastEditor,
+		&i.Deadline,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Visibility,
+		&i.GoogleSheetUrl,
+		&i.PublishTime,
+		&i.CoverImageUrl,
+		&i.DressingColor,
+		&i.DressingHeaderFont,
+		&i.DressingQuestionFont,
+		&i.DressingTextFont,
+		&i.UnitName,
+		&i.OrgName,
+		&i.LastEditorName,
+		&i.LastEditorUsername,
+		&i.LastEditorAvatarUrl,
+		&i.LastEditorEmail,
+	)
+	return i, err
+}
+
 const setStatus = `-- name: SetStatus :one
 UPDATE forms
 SET status = $2, last_editor = $3, updated_at = now()

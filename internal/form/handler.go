@@ -29,14 +29,27 @@ type DressingRequest struct {
 
 type Request struct {
 	Title                  string           `json:"title" validate:"required"`
-	Description            string           `json:"description" validate:"required"`
+	Description            string           `json:"description"`
 	PreviewMessage         string           `json:"previewMessage"`
 	Deadline               *time.Time       `json:"deadline"`
 	PublishTime            *time.Time       `json:"publishTime"`
-	MessageAfterSubmission string           `json:"messageAfterSubmission" validate:"required"`
+	MessageAfterSubmission string           `json:"messageAfterSubmission"`
 	GoogleSheetUrl         string           `json:"googleSheetUrl"`
 	Visibility             string           `json:"visibility" validate:"required,oneof=PUBLIC PRIVATE"`
 	CoverImageUrl          string           `json:"coverImageUrl"`
+	Dressing               *DressingRequest `json:"dressing"`
+}
+
+type PatchRequest struct {
+	Title                  *string          `json:"title" validate:"omitempty"`
+	Description            *string          `json:"description" validate:"omitempty"`
+	PreviewMessage         *string          `json:"previewMessage"`
+	Deadline               *time.Time       `json:"deadline"`
+	PublishTime            *time.Time       `json:"publishTime"`
+	MessageAfterSubmission *string          `json:"messageAfterSubmission" validate:"omitempty"`
+	GoogleSheetUrl         *string          `json:"googleSheetUrl"`
+	Visibility             *string          `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
+	CoverImageUrl          *string          `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
 }
 
@@ -141,6 +154,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 type Store interface {
 	Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error)
 	Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (UpdateRow, error)
+	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (UpdateRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	List(ctx context.Context) ([]ListRow, error)
@@ -182,8 +196,8 @@ func NewHandler(
 	}
 }
 
-func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UpdateHandler")
+func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "PatchHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -194,7 +208,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req Request
+	var req PatchRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -206,7 +220,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.Update(traceCtx, id, req, currentUser.ID)
+	currentForm, err := h.store.Patch(traceCtx, id, req, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
