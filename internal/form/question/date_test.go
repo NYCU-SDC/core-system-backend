@@ -13,48 +13,48 @@ import (
 func TestDate_Validate(t *testing.T) {
 	d, _ := NewDate(Question{ID: uuid.New()}, uuid.New())
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
 	}{
 		{
-			name:        "Should accept ISO 8601 date format (YYYY-MM-DD)",
-			rawValue:    `"2024-12-31"`,
-			shouldError: false,
+			name:          "Should accept ISO 8601 date format (YYYY-MM-DD)",
+			rawValue:      `"2024-12-31"`,
+			expectedError: false,
 		},
 		{
-			name:        "Should accept RFC3339 datetime format",
-			rawValue:    `"2024-12-31T00:00:00Z"`,
-			shouldError: false,
+			name:          "Should accept RFC3339 datetime format",
+			rawValue:      `"2024-12-31T00:00:00Z"`,
+			expectedError: false,
 		},
 		{
-			name:        "Should accept RFC3339 with timezone",
-			rawValue:    `"2024-12-31T15:30:00+08:00"`,
-			shouldError: false,
+			name:          "Should accept RFC3339 with timezone",
+			rawValue:      `"2024-12-31T15:30:00+08:00"`,
+			expectedError: false,
 		},
 		{
-			name:        "Should reject invalid date format",
-			rawValue:    `"12/31/2024"`,
-			shouldError: true,
+			name:          "Should reject invalid date format",
+			rawValue:      `"12/31/2024"`,
+			expectedError: true,
 		},
 		{
-			name:        "Should reject invalid JSON",
-			rawValue:    `not a string`,
-			shouldError: true,
+			name:          "Should reject invalid JSON",
+			rawValue:      `not a string`,
+			expectedError: true,
 		},
 		{
-			name:        "Should reject non-string value",
-			rawValue:    `123`,
-			shouldError: true,
+			name:          "Should reject non-string value",
+			rawValue:      `123`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := d.Validate(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := d.Validate(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -70,11 +70,11 @@ func TestDate_Validate(t *testing.T) {
 func TestDate_DecodeRequest(t *testing.T) {
 	d, _ := NewDate(Question{ID: uuid.New()}, uuid.New())
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		expected    shared.DateAnswer
-		shouldError bool
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expected      shared.DateAnswer
+		expectedError bool
 	}{
 		{
 			name:     "Should decode ISO 8601 date format",
@@ -84,7 +84,7 @@ func TestDate_DecodeRequest(t *testing.T) {
 				Month: intPtr(12),
 				Day:   intPtr(31),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name:     "Should decode RFC3339 datetime format",
@@ -94,7 +94,7 @@ func TestDate_DecodeRequest(t *testing.T) {
 				Month: intPtr(12),
 				Day:   intPtr(31),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name:     "Should decode RFC3339 with timezone",
@@ -104,25 +104,25 @@ func TestDate_DecodeRequest(t *testing.T) {
 				Month: intPtr(5),
 				Day:   intPtr(6),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
-			name:        "Should return error for invalid date format",
-			rawValue:    `"12/31/2024"`,
-			shouldError: true,
+			name:          "Should return error for invalid date format",
+			rawValue:      `"12/31/2024"`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for invalid JSON",
-			rawValue:    `not a string`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON",
+			rawValue:      `not a string`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := d.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := d.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -140,20 +140,20 @@ func TestDate_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if !compareDateAnswers(answer, tt.expected) {
-				t.Errorf("Expected %+v, got %+v", tt.expected, answer)
+			if !compareDateAnswers(answer, tc.expected) {
+				t.Errorf("Expected %+v, got %+v", tc.expected, answer)
 			}
 		})
 	}
 }
 
 func TestDate_DecodeStorage(t *testing.T) {
-	tests := []struct {
-		name        string
-		metadata    DateMetadata
-		rawValue    string
-		expected    shared.DateAnswer
-		shouldError bool
+	testCases := []struct {
+		name          string
+		metadata      DateMetadata
+		rawValue      string
+		expected      shared.DateAnswer
+		expectedError bool
 	}{
 		{
 			name: "Should decode stored date answer with all components",
@@ -168,7 +168,7 @@ func TestDate_DecodeStorage(t *testing.T) {
 				Month: intPtr(12),
 				Day:   intPtr(31),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should decode stored date answer with only year",
@@ -181,7 +181,7 @@ func TestDate_DecodeStorage(t *testing.T) {
 			expected: shared.DateAnswer{
 				Year: intPtr(2024),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should decode stored date answer with year and month",
@@ -195,7 +195,7 @@ func TestDate_DecodeStorage(t *testing.T) {
 				Year:  intPtr(2024),
 				Month: intPtr(5),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should return error when required year is missing",
@@ -204,8 +204,8 @@ func TestDate_DecodeStorage(t *testing.T) {
 				HasMonth: true,
 				HasDay:   true,
 			},
-			rawValue:    `{"month":5,"day":10}`,
-			shouldError: true,
+			rawValue:      `{"month":5,"day":10}`,
+			expectedError: true,
 		},
 		{
 			name: "Should return error when required month is missing",
@@ -214,8 +214,8 @@ func TestDate_DecodeStorage(t *testing.T) {
 				HasMonth: true,
 				HasDay:   true,
 			},
-			rawValue:    `{"year":2024,"day":10}`,
-			shouldError: true,
+			rawValue:      `{"year":2024,"day":10}`,
+			expectedError: true,
 		},
 		{
 			name: "Should return error when required day is missing",
@@ -224,8 +224,8 @@ func TestDate_DecodeStorage(t *testing.T) {
 				HasMonth: true,
 				HasDay:   true,
 			},
-			rawValue:    `{"year":2024,"month":5}`,
-			shouldError: true,
+			rawValue:      `{"year":2024,"month":5}`,
+			expectedError: true,
 		},
 		{
 			name: "Should return error for invalid JSON structure",
@@ -234,15 +234,15 @@ func TestDate_DecodeStorage(t *testing.T) {
 				HasMonth: true,
 				HasDay:   true,
 			},
-			rawValue:    `{invalid}`,
-			shouldError: true,
+			rawValue:      `{invalid}`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			// Create metadata
-			metadataBytes, _ := json.Marshal(map[string]any{"date": tt.metadata})
+			metadataBytes, _ := json.Marshal(map[string]any{"date": tc.metadata})
 
 			d, err := NewDate(Question{
 				ID:       uuid.New(),
@@ -252,9 +252,9 @@ func TestDate_DecodeStorage(t *testing.T) {
 				t.Fatalf("Failed to create Date: %v", err)
 			}
 
-			result, err := d.DecodeStorage(json.RawMessage(tt.rawValue))
+			result, err := d.DecodeStorage(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -272,20 +272,20 @@ func TestDate_DecodeStorage(t *testing.T) {
 				return
 			}
 
-			if !compareDateAnswers(answer, tt.expected) {
-				t.Errorf("Expected %+v, got %+v", tt.expected, answer)
+			if !compareDateAnswers(answer, tc.expected) {
+				t.Errorf("Expected %+v, got %+v", tc.expected, answer)
 			}
 		})
 	}
 }
 
 func TestDate_EncodeRequest(t *testing.T) {
-	tests := []struct {
-		name        string
-		metadata    DateMetadata
-		answer      any
-		expected    string // Expected RFC3339 date string
-		shouldError bool
+	testCases := []struct {
+		name          string
+		metadata      DateMetadata
+		answer        any
+		expected      string // Expected RFC3339 date string
+		expectedError bool
 	}{
 		{
 			name: "Should encode complete date answer",
@@ -299,8 +299,8 @@ func TestDate_EncodeRequest(t *testing.T) {
 				Month: intPtr(12),
 				Day:   intPtr(31),
 			},
-			expected:    `"2024-12-31T00:00:00Z"`,
-			shouldError: false,
+			expected:      `"2024-12-31T00:00:00Z"`,
+			expectedError: false,
 		},
 		{
 			name: "Should encode date answer with only year",
@@ -312,8 +312,8 @@ func TestDate_EncodeRequest(t *testing.T) {
 			answer: shared.DateAnswer{
 				Year: intPtr(2024),
 			},
-			expected:    `"2024-01-01T00:00:00Z"`, // Defaults to Jan 1
-			shouldError: false,
+			expected:      `"2024-01-01T00:00:00Z"`, // Defaults to Jan 1
+			expectedError: false,
 		},
 		{
 			name: "Should encode date answer with year and month",
@@ -326,8 +326,8 @@ func TestDate_EncodeRequest(t *testing.T) {
 				Year:  intPtr(2024),
 				Month: intPtr(5),
 			},
-			expected:    `"2024-05-01T00:00:00Z"`, // Defaults to day 1
-			shouldError: false,
+			expected:      `"2024-05-01T00:00:00Z"`, // Defaults to day 1
+			expectedError: false,
 		},
 		{
 			name: "Should return error when required year is missing",
@@ -340,7 +340,7 @@ func TestDate_EncodeRequest(t *testing.T) {
 				Month: intPtr(12),
 				Day:   intPtr(31),
 			},
-			shouldError: true,
+			expectedError: true,
 		},
 		{
 			name: "Should return error when required month is missing",
@@ -353,7 +353,7 @@ func TestDate_EncodeRequest(t *testing.T) {
 				Year: intPtr(2024),
 				Day:  intPtr(31),
 			},
-			shouldError: true,
+			expectedError: true,
 		},
 		{
 			name: "Should return error when required day is missing",
@@ -366,7 +366,7 @@ func TestDate_EncodeRequest(t *testing.T) {
 				Year:  intPtr(2024),
 				Month: intPtr(12),
 			},
-			shouldError: true,
+			expectedError: true,
 		},
 		{
 			name: "Should return error for wrong type",
@@ -375,15 +375,15 @@ func TestDate_EncodeRequest(t *testing.T) {
 				HasMonth: true,
 				HasDay:   true,
 			},
-			answer:      "not a date answer",
-			shouldError: true,
+			answer:        "not a date answer",
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			// Create metadata
-			metadataBytes, _ := json.Marshal(map[string]any{"date": tt.metadata})
+			metadataBytes, _ := json.Marshal(map[string]any{"date": tc.metadata})
 
 			d, err := NewDate(Question{
 				ID:       uuid.New(),
@@ -393,9 +393,9 @@ func TestDate_EncodeRequest(t *testing.T) {
 				t.Fatalf("Failed to create Date: %v", err)
 			}
 
-			result, err := d.EncodeRequest(tt.answer)
+			result, err := d.EncodeRequest(tc.answer)
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -408,8 +408,8 @@ func TestDate_EncodeRequest(t *testing.T) {
 			}
 
 			resultStr := string(result)
-			if resultStr != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, resultStr)
+			if resultStr != tc.expected {
+				t.Errorf("Expected %s, got %s", tc.expected, resultStr)
 			}
 		})
 	}
@@ -447,10 +447,10 @@ func compareDateAnswers(a, b shared.DateAnswer) bool {
 }
 
 func TestGenerateDateMetadata(t *testing.T) {
-	tests := []struct {
-		name        string
-		option      DateOption
-		shouldError bool
+	testCases := []struct {
+		name          string
+		option        DateOption
+		expectedError bool
 	}{
 		{
 			name: "Should generate metadata with all components enabled",
@@ -459,7 +459,7 @@ func TestGenerateDateMetadata(t *testing.T) {
 				HasMonth: true,
 				HasDay:   true,
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should generate metadata with only year",
@@ -468,7 +468,7 @@ func TestGenerateDateMetadata(t *testing.T) {
 				HasMonth: false,
 				HasDay:   false,
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should generate metadata with year and month",
@@ -477,7 +477,7 @@ func TestGenerateDateMetadata(t *testing.T) {
 				HasMonth: true,
 				HasDay:   false,
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should generate metadata with min and max dates",
@@ -488,7 +488,7 @@ func TestGenerateDateMetadata(t *testing.T) {
 				MinDate:  timePtr(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
 				MaxDate:  timePtr(time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC)),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should return error when no components are enabled",
@@ -497,7 +497,7 @@ func TestGenerateDateMetadata(t *testing.T) {
 				HasMonth: false,
 				HasDay:   false,
 			},
-			shouldError: true,
+			expectedError: true,
 		},
 		{
 			name: "Should return error when minDate is after maxDate",
@@ -508,15 +508,15 @@ func TestGenerateDateMetadata(t *testing.T) {
 				MinDate:  timePtr(time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC)),
 				MaxDate:  timePtr(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
 			},
-			shouldError: true,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := GenerateDateMetadata(tt.option)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := GenerateDateMetadata(tc.option)
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -540,25 +540,25 @@ func TestGenerateDateMetadata(t *testing.T) {
 				return
 			}
 
-			if extracted.HasYear != tt.option.HasYear {
-				t.Errorf("HasYear: expected %v, got %v", tt.option.HasYear, extracted.HasYear)
+			if extracted.HasYear != tc.option.HasYear {
+				t.Errorf("HasYear: expected %v, got %v", tc.option.HasYear, extracted.HasYear)
 			}
-			if extracted.HasMonth != tt.option.HasMonth {
-				t.Errorf("HasMonth: expected %v, got %v", tt.option.HasMonth, extracted.HasMonth)
+			if extracted.HasMonth != tc.option.HasMonth {
+				t.Errorf("HasMonth: expected %v, got %v", tc.option.HasMonth, extracted.HasMonth)
 			}
-			if extracted.HasDay != tt.option.HasDay {
-				t.Errorf("HasDay: expected %v, got %v", tt.option.HasDay, extracted.HasDay)
+			if extracted.HasDay != tc.option.HasDay {
+				t.Errorf("HasDay: expected %v, got %v", tc.option.HasDay, extracted.HasDay)
 			}
 		})
 	}
 }
 
 func TestExtractDateMetadata(t *testing.T) {
-	tests := []struct {
-		name        string
-		data        string
-		expected    DateMetadata
-		shouldError bool
+	testCases := []struct {
+		name          string
+		data          string
+		expected      DateMetadata
+		expectedError bool
 	}{
 		{
 			name: "Should extract date metadata with all components",
@@ -568,7 +568,7 @@ func TestExtractDateMetadata(t *testing.T) {
 				HasMonth: true,
 				HasDay:   true,
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should extract date metadata with only year",
@@ -578,25 +578,25 @@ func TestExtractDateMetadata(t *testing.T) {
 				HasMonth: false,
 				HasDay:   false,
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
-			name:        "Should return error for invalid JSON",
-			data:        `{invalid}`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON",
+			data:          `{invalid}`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for invalid date structure",
-			data:        `{"date":"not an object"}`,
-			shouldError: true,
+			name:          "Should return error for invalid date structure",
+			data:          `{"date":"not an object"}`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := ExtractDateMetadata([]byte(tt.data))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ExtractDateMetadata([]byte(tc.data))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -608,14 +608,14 @@ func TestExtractDateMetadata(t *testing.T) {
 				return
 			}
 
-			if result.HasYear != tt.expected.HasYear {
-				t.Errorf("HasYear: expected %v, got %v", tt.expected.HasYear, result.HasYear)
+			if result.HasYear != tc.expected.HasYear {
+				t.Errorf("HasYear: expected %v, got %v", tc.expected.HasYear, result.HasYear)
 			}
-			if result.HasMonth != tt.expected.HasMonth {
-				t.Errorf("HasMonth: expected %v, got %v", tt.expected.HasMonth, result.HasMonth)
+			if result.HasMonth != tc.expected.HasMonth {
+				t.Errorf("HasMonth: expected %v, got %v", tc.expected.HasMonth, result.HasMonth)
 			}
-			if result.HasDay != tt.expected.HasDay {
-				t.Errorf("HasDay: expected %v, got %v", tt.expected.HasDay, result.HasDay)
+			if result.HasDay != tc.expected.HasDay {
+				t.Errorf("HasDay: expected %v, got %v", tc.expected.HasDay, result.HasDay)
 			}
 		})
 	}
@@ -646,43 +646,43 @@ func TestDate_ValidateWithDateRange(t *testing.T) {
 		t.Fatalf("Failed to create Date: %v", err)
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
 	}{
 		{
-			name:        "Should accept date within range",
-			rawValue:    `"2024-06-15"`,
-			shouldError: false,
+			name:          "Should accept date within range",
+			rawValue:      `"2024-06-15"`,
+			expectedError: false,
 		},
 		{
-			name:        "Should accept minimum date",
-			rawValue:    `"2024-01-01"`,
-			shouldError: false,
+			name:          "Should accept minimum date",
+			rawValue:      `"2024-01-01"`,
+			expectedError: false,
 		},
 		{
-			name:        "Should accept maximum date",
-			rawValue:    `"2024-12-31"`,
-			shouldError: false,
+			name:          "Should accept maximum date",
+			rawValue:      `"2024-12-31"`,
+			expectedError: false,
 		},
 		{
-			name:        "Should reject date before minimum",
-			rawValue:    `"2023-12-31"`,
-			shouldError: true,
+			name:          "Should reject date before minimum",
+			rawValue:      `"2023-12-31"`,
+			expectedError: true,
 		},
 		{
-			name:        "Should reject date after maximum",
-			rawValue:    `"2025-01-01"`,
-			shouldError: true,
+			name:          "Should reject date after maximum",
+			rawValue:      `"2025-01-01"`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := d.Validate(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := d.Validate(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -716,33 +716,33 @@ func TestDate_DecodeRequestWithDateRange(t *testing.T) {
 		t.Fatalf("Failed to create Date: %v", err)
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
 	}{
 		{
-			name:        "Should decode date within range",
-			rawValue:    `"2024-06-15"`,
-			shouldError: false,
+			name:          "Should decode date within range",
+			rawValue:      `"2024-06-15"`,
+			expectedError: false,
 		},
 		{
-			name:        "Should reject date before minimum",
-			rawValue:    `"2023-12-31"`,
-			shouldError: true,
+			name:          "Should reject date before minimum",
+			rawValue:      `"2023-12-31"`,
+			expectedError: true,
 		},
 		{
-			name:        "Should reject date after maximum",
-			rawValue:    `"2025-01-01"`,
-			shouldError: true,
+			name:          "Should reject date after maximum",
+			rawValue:      `"2025-01-01"`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := d.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := d.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -756,12 +756,12 @@ func TestDate_DecodeRequestWithDateRange(t *testing.T) {
 }
 
 func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
-	tests := []struct {
-		name        string
-		metadata    DateMetadata
-		rawValue    string
-		expected    shared.DateAnswer
-		shouldError bool
+	testCases := []struct {
+		name          string
+		metadata      DateMetadata
+		rawValue      string
+		expected      shared.DateAnswer
+		expectedError bool
 	}{
 		{
 			name: "Should decode with only year component enabled",
@@ -774,7 +774,7 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 			expected: shared.DateAnswer{
 				Year: intPtr(2024),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should decode with year and month components enabled",
@@ -788,7 +788,7 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 				Year:  intPtr(2024),
 				Month: intPtr(6),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 		{
 			name: "Should decode with all components enabled",
@@ -803,13 +803,13 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 				Month: intPtr(6),
 				Day:   intPtr(15),
 			},
-			shouldError: false,
+			expectedError: false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			metadataBytes, _ := json.Marshal(map[string]any{"date": tt.metadata})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			metadataBytes, _ := json.Marshal(map[string]any{"date": tc.metadata})
 
 			d, err := NewDate(Question{
 				ID:       uuid.New(),
@@ -819,9 +819,9 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 				t.Fatalf("Failed to create Date: %v", err)
 			}
 
-			result, err := d.DecodeRequest(json.RawMessage(tt.rawValue))
+			result, err := d.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -839,20 +839,20 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 				return
 			}
 
-			if !compareDateAnswers(answer, tt.expected) {
-				t.Errorf("Expected %+v, got %+v", tt.expected, answer)
+			if !compareDateAnswers(answer, tc.expected) {
+				t.Errorf("Expected %+v, got %+v", tc.expected, answer)
 			}
 		})
 	}
 }
 
 func TestDate_DisplayValue(t *testing.T) {
-	tests := []struct {
-		name        string
-		metadata    DateMetadata
-		rawValue    string
-		expected    string
-		shouldError bool
+	testCases := []struct {
+		name          string
+		metadata      DateMetadata
+		rawValue      string
+		expected      string
+		expectedError bool
 	}{
 		{
 			name: "Should display full date",
@@ -861,9 +861,9 @@ func TestDate_DisplayValue(t *testing.T) {
 				HasMonth: true,
 				HasDay:   true,
 			},
-			rawValue:    `{"year":2024,"month":12,"day":31}`,
-			expected:    "2024-12-31",
-			shouldError: false,
+			rawValue:      `{"year":2024,"month":12,"day":31}`,
+			expected:      "2024-12-31",
+			expectedError: false,
 		},
 		{
 			name: "Should display year and month",
@@ -872,9 +872,9 @@ func TestDate_DisplayValue(t *testing.T) {
 				HasMonth: true,
 				HasDay:   false,
 			},
-			rawValue:    `{"year":2024,"month":5}`,
-			expected:    "2024-05",
-			shouldError: false,
+			rawValue:      `{"year":2024,"month":5}`,
+			expected:      "2024-05",
+			expectedError: false,
 		},
 		{
 			name: "Should display only year",
@@ -883,15 +883,15 @@ func TestDate_DisplayValue(t *testing.T) {
 				HasMonth: false,
 				HasDay:   false,
 			},
-			rawValue:    `{"year":2024}`,
-			expected:    "2024",
-			shouldError: false,
+			rawValue:      `{"year":2024}`,
+			expected:      "2024",
+			expectedError: false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			metadataBytes, _ := json.Marshal(map[string]any{"date": tt.metadata})
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			metadataBytes, _ := json.Marshal(map[string]any{"date": tc.metadata})
 
 			d, err := NewDate(Question{
 				ID:       uuid.New(),
@@ -901,9 +901,9 @@ func TestDate_DisplayValue(t *testing.T) {
 				t.Fatalf("Failed to create Date: %v", err)
 			}
 
-			result, err := d.DisplayValue(json.RawMessage(tt.rawValue))
+			result, err := d.DisplayValue(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -915,8 +915,8 @@ func TestDate_DisplayValue(t *testing.T) {
 				return
 			}
 
-			if result != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, result)
+			if result != tc.expected {
+				t.Errorf("Expected %s, got %s", tc.expected, result)
 			}
 		})
 	}
