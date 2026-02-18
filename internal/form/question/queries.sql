@@ -102,7 +102,6 @@ SELECT
     s.id as section_id,
     s.form_id,
     s.title,
-    s.progress,
     s.description,
     s.created_at,
     s.updated_at,

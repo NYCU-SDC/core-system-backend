@@ -70,7 +70,6 @@ func ToSection(section Section) SectionPayload {
 		ID:          section.ID,
 		FormID:      section.FormID,
 		Title:       section.Title.String,
-		Progress:    strings.ToUpper(string(section.Progress)),
 		Description: section.Description.String,
 		CreatedAt:   section.CreatedAt.Time,
 		UpdatedAt:   section.UpdatedAt.Time,

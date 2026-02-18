@@ -131,6 +131,20 @@ func (s SingleChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return singleChoiceAnswer.Snapshot.Name, nil
 }
 
+func (s SingleChoice) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode single choice answer: %w", err)
+	}
+
+	singleChoiceAnswer, ok := answer.(shared.SingleChoiceAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.SingleChoiceAnswer, got %T", answer)
+	}
+
+	return matchChoiceID(singleChoiceAnswer.ChoiceID, pattern)
+}
+
 type MultiChoice struct {
 	question Question
 	formID   uuid.UUID
@@ -269,6 +283,26 @@ func (m MultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return strings.Join(names, ", "), nil
 }
 
+func (m MultiChoice) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := m.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode multiple choice answer: %w", err)
+	}
+
+	multiChoiceAnswer, ok := answer.(shared.MultipleChoiceAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.MultipleChoiceAnswer, got %T", answer)
+	}
+
+	// Check if any choice ID matches the pattern
+	choiceIDs := make([]uuid.UUID, len(multiChoiceAnswer.Choices))
+	for i, choice := range multiChoiceAnswer.Choices {
+		choiceIDs[i] = choice.ChoiceID
+	}
+
+	return matchChoiceIDs(choiceIDs, pattern)
+}
+
 type DetailedMultiChoice struct {
 	question Question
 	formID   uuid.UUID
@@ -405,6 +439,26 @@ func (m DetailedMultiChoice) DisplayValue(rawValue json.RawMessage) (string, err
 		names[i] = choice.Snapshot.Name
 	}
 	return strings.Join(names, ", "), nil
+}
+
+func (m DetailedMultiChoice) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := m.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode detailed multiple choice answer: %w", err)
+	}
+
+	detailedMultiChoiceAnswer, ok := answer.(shared.DetailedMultipleChoiceAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.DetailedMultipleChoiceAnswer, got %T", answer)
+	}
+
+	// Check if any choice ID matches the pattern
+	choiceIDs := make([]uuid.UUID, len(detailedMultiChoiceAnswer.Choices))
+	for i, choice := range detailedMultiChoiceAnswer.Choices {
+		choiceIDs[i] = choice.ChoiceID
+	}
+
+	return matchChoiceIDs(choiceIDs, pattern)
 }
 
 type Ranking struct {
@@ -617,6 +671,26 @@ func (r Ranking) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return strings.Join(names, " > "), nil
 }
 
+func (r Ranking) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := r.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode ranking answer: %w", err)
+	}
+
+	rankingAnswer, ok := answer.(shared.RankingAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.RankingAnswer, got %T", answer)
+	}
+
+	// Check if any choice ID matches the pattern
+	choiceIDs := make([]uuid.UUID, len(rankingAnswer.RankedChoices))
+	for i, choice := range rankingAnswer.RankedChoices {
+		choiceIDs[i] = choice.ChoiceID
+	}
+
+	return matchChoiceIDs(choiceIDs, pattern)
+}
+
 // GenerateChoiceMetadata creates and validates metadata JSON for choice-based questions
 func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) ([]byte, error) {
 	// For choice questions, require at least one choice
@@ -790,4 +864,23 @@ func encodeChoiceIDsToRequest(choiceIDs []uuid.UUID) (json.RawMessage, error) {
 		strIDs[i] = id.String()
 	}
 	return json.Marshal(strIDs)
+}
+
+// matchChoiceID checks if a choice ID matches the given regex pattern
+func matchChoiceID(choiceID uuid.UUID, pattern string) (bool, error) {
+	return matchPattern(choiceID.String(), pattern)
+}
+
+// matchChoiceIDs checks if any of the choice IDs match the given regex pattern
+func matchChoiceIDs(choiceIDs []uuid.UUID, pattern string) (bool, error) {
+	for _, choiceID := range choiceIDs {
+		match, err := matchChoiceID(choiceID, pattern)
+		if err != nil {
+			return false, err
+		}
+		if match {
+			return true, nil
+		}
+	}
+	return false, nil
 }

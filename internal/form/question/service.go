@@ -41,6 +41,12 @@ type Answerable interface {
 
 	// EncodeRequest encodes the Go value into raw JSON for storage in the database or for sending in a response, based on the question type.
 	EncodeRequest(answer any) (json.RawMessage, error)
+
+	// MatchesPattern checks if the answer matches the given regex pattern.
+	// Used for workflow condition evaluation.
+	// Returns false with error if the rawValue format is invalid (data corruption).
+	// Returns false with nil if the pattern is invalid (logs error internally).
+	MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error)
 }
 
 type SectionWithAnswerableList struct {

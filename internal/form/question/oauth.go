@@ -89,6 +89,10 @@ func (o OAuthConnect) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return "", fmt.Errorf("DisplayValue not implemented for OAuthConnect question type")
 }
 
+func (o OAuthConnect) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	return false, errors.New("MatchesPattern is not supported for oauth_connect question type")
+}
+
 func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 	if provider == "" {
 		return nil, ErrMetadataValidate{
