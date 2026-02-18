@@ -163,6 +163,21 @@ func (s LinearScale) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return fmt.Sprintf("%d (%d-%d)", linearScaleAnswer.Value, s.MinVal, s.MaxVal), nil
 }
 
+func (s LinearScale) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode linear scale answer: %w", err)
+	}
+
+	linearScaleAnswer, ok := answer.(shared.LinearScaleAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.LinearScaleAnswer, got %T", answer)
+	}
+
+	// Match against the string representation of the value
+	return matchPattern(fmt.Sprintf("%d", linearScaleAnswer.Value), pattern)
+}
+
 type Rating struct {
 	question      Question
 	formID        uuid.UUID
@@ -276,6 +291,21 @@ func (s Rating) DisplayValue(rawValue json.RawMessage) (string, error) {
 	}
 
 	return fmt.Sprintf("%d (%d-%d)", ratingAnswer.Value, s.MinVal, s.MaxVal), nil
+}
+
+func (s Rating) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode rating answer: %w", err)
+	}
+
+	ratingAnswer, ok := answer.(shared.RatingAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.RatingAnswer, got %T", answer)
+	}
+
+	// Match against the string representation of the value
+	return matchPattern(fmt.Sprintf("%d", ratingAnswer.Value), pattern)
 }
 
 func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {

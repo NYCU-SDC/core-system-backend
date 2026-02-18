@@ -1,11 +1,5 @@
 -- Create ENUMs for sections and workflow nodes
 
--- Section progress enum (for form completion tracking)
-CREATE TYPE section_progress AS ENUM(
-    'draft',
-    'submitted'
-);
-
 -- Node type enum for workflow nodes
 CREATE TYPE node_type AS ENUM(
     'section',
@@ -19,7 +13,6 @@ CREATE TABLE IF NOT EXISTS sections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
-    progress section_progress NOT NULL DEFAULT 'draft',
     description TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -235,48 +235,6 @@ func (ns NullResponseProgress) Value() (driver.Value, error) {
 	return string(ns.ResponseProgress), nil
 }
 
-type SectionProgress string
-
-const (
-	SectionProgressDraft     SectionProgress = "draft"
-	SectionProgressSubmitted SectionProgress = "submitted"
-)
-
-func (e *SectionProgress) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = SectionProgress(s)
-	case string:
-		*e = SectionProgress(s)
-	default:
-		return fmt.Errorf("unsupported scan type for SectionProgress: %T", src)
-	}
-	return nil
-}
-
-type NullSectionProgress struct {
-	SectionProgress SectionProgress
-	Valid           bool // Valid is true if SectionProgress is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullSectionProgress) Scan(value interface{}) error {
-	if value == nil {
-		ns.SectionProgress, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.SectionProgress.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullSectionProgress) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.SectionProgress), nil
-}
-
 type Status string
 
 const (
@@ -537,7 +495,6 @@ type Section struct {
 	ID          uuid.UUID
 	FormID      uuid.UUID
 	Title       pgtype.Text
-	Progress    SectionProgress
 	Description pgtype.Text
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz

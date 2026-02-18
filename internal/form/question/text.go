@@ -92,6 +92,20 @@ func (s ShortText) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return shortTextAnswer.Value, nil
 }
 
+func (s ShortText) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode short text answer: %w", err)
+	}
+
+	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+	}
+
+	return matchPattern(shortTextAnswer.Value, pattern)
+}
+
 type LongText struct {
 	question Question
 	formID   uuid.UUID
@@ -178,6 +192,20 @@ func (l LongText) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return value, nil
 }
 
+func (l LongText) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := l.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode long text answer: %w", err)
+	}
+
+	longTextAnswer, ok := answer.(shared.LongTextAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+	}
+
+	return matchPattern(longTextAnswer.Value, pattern)
+}
+
 type Hyperlink struct {
 	question Question
 	formID   uuid.UUID
@@ -261,6 +289,20 @@ func (h Hyperlink) DisplayValue(rawValue json.RawMessage) (string, error) {
 	}
 
 	return hyperlinkAnswer.Value, nil
+}
+
+func (h Hyperlink) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := h.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode hyperlink answer: %w", err)
+	}
+
+	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+	}
+
+	return matchPattern(hyperlinkAnswer.Value, pattern)
 }
 
 // validateURL checks if the value is a valid URL

@@ -14,7 +14,7 @@ import (
 )
 
 type QuestionStore interface {
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
+	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
 }
 
 type FormStore interface {

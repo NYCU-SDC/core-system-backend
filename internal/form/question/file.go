@@ -194,6 +194,10 @@ func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return "", fmt.Errorf("DisplayValue not implemented for UploadFile question type")
 }
 
+func (u UploadFile) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	return false, errors.New("MatchesPattern is not supported for upload_file question type")
+}
+
 // GenerateUploadFileMetadata generates metadata for upload file question
 func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
 	if len(option.AllowedFileTypes) == 0 {

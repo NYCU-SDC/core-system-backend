@@ -167,12 +167,44 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	return i, err
 }
 
-const listByFormID = `-- name: ListByFormID :many
+const listSectionsByFormID = `-- name: ListSectionsByFormID :many
+SELECT id, form_id, title, description, created_at, updated_at
+FROM sections
+WHERE form_id = $1
+`
+
+func (q *Queries) ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error) {
+	rows, err := q.db.Query(ctx, listSectionsByFormID, formID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Section
+	for rows.Next() {
+		var i Section
+		if err := rows.Scan(
+			&i.ID,
+			&i.FormID,
+			&i.Title,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSectionsWithAnswersByFormID = `-- name: ListSectionsWithAnswersByFormID :many
 SELECT
     s.id as section_id,
     s.form_id,
     s.title,
-    s.progress,
     s.description,
     s.created_at,
     s.updated_at,
@@ -194,11 +226,10 @@ ORDER BY
     q."order" ASC
 `
 
-type ListByFormIDRow struct {
+type ListSectionsWithAnswersByFormIDRow struct {
 	SectionID           uuid.UUID
 	FormID              uuid.UUID
 	Title               pgtype.Text
-	Progress            SectionProgress
 	Description         pgtype.Text
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
@@ -214,20 +245,19 @@ type ListByFormIDRow struct {
 	QuestionUpdatedAt   pgtype.Timestamptz
 }
 
-func (q *Queries) ListByFormID(ctx context.Context, formID uuid.UUID) ([]ListByFormIDRow, error) {
-	rows, err := q.db.Query(ctx, listByFormID, formID)
+func (q *Queries) ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error) {
+	rows, err := q.db.Query(ctx, listSectionsWithAnswersByFormID, formID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListByFormIDRow
+	var items []ListSectionsWithAnswersByFormIDRow
 	for rows.Next() {
-		var i ListByFormIDRow
+		var i ListSectionsWithAnswersByFormIDRow
 		if err := rows.Scan(
 			&i.SectionID,
 			&i.FormID,
 			&i.Title,
-			&i.Progress,
 			&i.Description,
 			&i.CreatedAt,
 			&i.UpdatedAt,

@@ -300,6 +300,10 @@ func (d Date) DisplayValue(rawValue json.RawMessage) (string, error) {
 	return dateAnswer.String(), nil
 }
 
+func (d Date) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	return false, errors.New("MatchesPattern is not supported for date question type")
+}
+
 // GenerateDateMetadata creates and validates metadata JSON for date questions
 func GenerateDateMetadata(option DateOption) ([]byte, error) {
 	// Validate that at least one component is required
