@@ -420,8 +420,9 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 func getGenerateMetadata(req Request) ([]byte, error) {
 	// If source_id is provided, don't generate metadata
 	if req.SourceID != uuid.Nil {
-		switch req.Type {
-		case "single_choice", "multiple_choice", "dropdown", "ranking":
+		questionType := QuestionType(req.Type)
+		switch questionType {
+		case QuestionTypeSingleChoice, QuestionTypeMultipleChoice, QuestionTypeDropdown, QuestionTypeRanking:
 			if len(req.Choices) > 0 {
 				return nil, internal.ErrInvalidSourceIDWithChoices
 			}
@@ -431,20 +432,21 @@ func getGenerateMetadata(req Request) ([]byte, error) {
 		}
 	}
 
-	switch req.Type {
-	case "short_text", "long_text", "hyperlink":
+	questionType := QuestionType(req.Type)
+	switch questionType {
+	case QuestionTypeShortText, QuestionTypeLongText, QuestionTypeHyperlink:
 		return nil, nil
-	case "date":
+	case QuestionTypeDate:
 		return GenerateDateMetadata(req.Date)
-	case "single_choice", "multiple_choice", "detailed_multiple_choice", "dropdown", "ranking":
+	case QuestionTypeSingleChoice, QuestionTypeMultipleChoice, QuestionTypeDetailedMultipleChoice, QuestionTypeDropdown, QuestionTypeRanking:
 		return GenerateChoiceMetadata(req.Type, req.Choices)
-	case "linear_scale":
+	case QuestionTypeLinearScale:
 		return GenerateLinearScaleMetadata(req.Scale)
-	case "rating":
+	case QuestionTypeRating:
 		return GenerateRatingMetadata(req.Scale)
-	case "oauth_connect":
+	case QuestionTypeOauthConnect:
 		return GenerateOauthConnectMetadata(req.OauthConnect)
-	case "upload_file":
+	case QuestionTypeUploadFile:
 		return GenerateUploadFileMetadata(req.UploadFile)
 	default:
 		return nil, ErrUnsupportedQuestionType{
