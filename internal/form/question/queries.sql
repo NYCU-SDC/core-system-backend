@@ -97,7 +97,12 @@ FROM deleted_row
 WHERE q.section_id = deleted_row.section_id
   AND "order" > deleted_row.old_order;
 
--- name: ListByFormID :many
+-- name: ListSectionsByFormID :many
+SELECT *
+FROM sections
+WHERE form_id = $1;
+
+-- name: ListSectionsWithAnswersByFormID :many
 SELECT
     s.id as section_id,
     s.form_id,

@@ -19,7 +19,8 @@ type Querier interface {
 	Update(ctx context.Context, params UpdateParams) (UpdateRow, error)
 	UpdateOrder(ctx context.Context, params UpdateOrderParams) (UpdateOrderRow, error)
 	DeleteAndReorder(ctx context.Context, arg DeleteAndReorderParams) error
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]ListByFormIDRow, error)
+	ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error)
+	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 }
 
@@ -131,12 +132,32 @@ func (s *Service) DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id 
 	return nil
 }
 
-func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error) {
-	ctx, span := s.tracer.Start(ctx, "ListByFormID")
+func (s *Service) ListSections(ctx context.Context, formID uuid.UUID) (map[string]Section, error) {
+	ctx, span := s.tracer.Start(ctx, "ListSections")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	list, err := s.queries.ListByFormID(ctx, formID)
+	list, err := s.queries.ListSectionsByFormID(ctx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list sections by form id")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	sectionMap := make(map[string]Section)
+	for _, section := range list {
+		sectionMap[section.ID.String()] = section
+	}
+
+	return sectionMap, nil
+}
+
+func (s *Service) ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error) {
+	ctx, span := s.tracer.Start(ctx, "ListSectionsWithAnswersByFormID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	list, err := s.queries.ListSectionsWithAnswersByFormID(ctx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list questions by form id")
 		span.RecordError(err)
@@ -222,7 +243,7 @@ func (s *Service) GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	list, err := s.queries.ListByFormID(ctx, formID)
+	list, err := s.queries.ListSectionsWithAnswersByFormID(ctx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list questions by form id")
 		span.RecordError(err)

@@ -200,7 +200,7 @@ type Store interface {
 	Update(ctx context.Context, input UpdateParams) (Answerable, error)
 	UpdateOrder(ctx context.Context, input UpdateOrderParams) (Answerable, error)
 	DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error)
+	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error)
 }
 
 type Handler struct {
@@ -393,7 +393,7 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sectionWithQuestions, err := h.store.ListByFormID(traceCtx, formID)
+	sectionWithQuestions, err := h.store.ListSectionsWithAnswersByFormID(traceCtx, formID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

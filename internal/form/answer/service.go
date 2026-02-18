@@ -23,7 +23,7 @@ type Querier interface {
 }
 
 type QuestionStore interface {
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
+	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
 	GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID) (map[string]question.Answerable, error)
 }
 
@@ -61,7 +61,7 @@ func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore) *Servi
 	}
 }
 
-func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []Answerable, error) {
+func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []question.Answerable, map[string]question.Answerable, error) {
 	traceCtx, span := s.tracer.Start(ctx, "List")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -70,29 +70,29 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list answers")
 		span.RecordError(err)
-		return nil, nil, fmt.Errorf("failed to list answers: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to list answers: %w", err)
 	}
 
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
+		return nil, nil, nil, fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
 	}
 
 	transformedAnswers := make([]Answer, 0, len(answers))
-	answerableList := make([]Answerable, 0, len(answers))
+	answerableList := make([]question.Answerable, 0, len(answers))
 	for _, answer := range answers {
 		transformedAnswer, answerable, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
 		if err != nil {
 			logger.Error("failed to transform answer", zap.String("questionID", answer.QuestionID.String()), zap.Error(err))
 			span.RecordError(err)
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		transformedAnswers = append(transformedAnswers, transformedAnswer)
 		answerableList = append(answerableList, answerable)
 	}
 
 	logger.Info("successfully listed answers", zap.Int("count", len(transformedAnswers)), zap.String("responseID", responseID.String()))
-	return transformedAnswers, answerableList, nil
+	return transformedAnswers, answerableList, answerableMap, nil
 }
 
 func (s Service) Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error) {
