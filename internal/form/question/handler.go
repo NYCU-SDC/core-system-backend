@@ -3,7 +3,6 @@ package question
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -251,7 +250,7 @@ func (h *Handler) AddHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate and validate metadata (returns nil if source_id provided)
 	metadata, err := getGenerateMetadata(req)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to generate metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -310,7 +309,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate and validate metadata
 	metadata, err := getGenerateMetadata(req)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to update metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
