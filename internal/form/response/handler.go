@@ -19,11 +19,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type QuestionAnswerForGetResponse struct {
-	QuestionID string `json:"questionId" validate:"required,uuid"`
-	Answer     string `json:"answer" validate:"required"`
-}
-
 type AnswerForQuestionResponse struct {
 	ID          string    `json:"id" validate:"required,uuid"`
 	ResponseID  string    `json:"responseId" validate:"required,uuid"`
@@ -46,12 +41,12 @@ type ListResponse struct {
 }
 
 type GetResponse struct {
-	ID                   string                         `json:"id" validate:"required,uuid"`
-	FormID               string                         `json:"formId" validate:"required,uuid"`
-	SubmittedBy          string                         `json:"submittedBy" validate:"required,uuid"`
-	QuestionsAnswerPairs []QuestionAnswerForGetResponse `json:"questionsAnswerPairs" validate:"required,dive"`
-	CreatedAt            time.Time                      `json:"createdAt" validate:"required,datetime"` // for sorting
-	UpdatedAt            time.Time                      `json:"updatedAt" validate:"required,datetime"` // for marking if the response is updated
+	ID          string `json:"id" validate:"required,uuid"`
+	FormID      string `json:"formId" validate:"required,uuid"`
+	SubmittedBy string `json:"submittedBy" validate:"required,uuid"`
+	// Todo: add progress
+	CreatedAt time.Time `json:"createdAt" validate:"required,datetime"` // for sorting
+	UpdatedAt time.Time `json:"updatedAt" validate:"required,datetime"` // for marking if the response is updated
 }
 
 type AnswersForQuestionResponse struct {

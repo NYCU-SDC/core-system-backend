@@ -1,6 +1,8 @@
 package response
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/answer"
+	"NYCU-SDC/core-system-backend/internal/form/question"
 	"context"
 	"fmt"
 
@@ -24,13 +26,21 @@ type Querier interface {
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
 }
 
+type AnswerStore interface {
+	List(ctx context.Context, formID, responseID uuid.UUID) ([]answer.Answer, []answer.Answerable, error)
+}
+
+type SectionWithQuestionStore interface {
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
+}
+
 type Service struct {
 	logger  *zap.Logger
 	queries Querier
 	tracer  trace.Tracer
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore) *Service {
 	return &Service{
 		logger:  logger,
 		queries: New(db),
@@ -120,6 +130,16 @@ func (s Service) Get(ctx context.Context, id uuid.UUID) (FormResponse, error) {
 		span.RecordError(err)
 		return FormResponse{}, err
 	}
+
+	// Get Answer
+
+	// Get Question
+
+	// Run Workflow to Check If Section Need To Skip
+
+	// For-each Section Question to Get Section Status (Draft or Complete)
+
+	// Filling Struct to Return
 
 	return response, nil
 }
