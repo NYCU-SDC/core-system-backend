@@ -145,10 +145,10 @@ func main() {
 	questionService := question.NewService(logger, dbPool)
 	answerService := answer.NewService(logger, dbPool, questionService)
 	inboxService := inbox.NewService(logger, dbPool)
-	responseService := response.NewService(logger, dbPool, answerService)
+	workflowService := workflow.NewService(logger, dbPool, questionService)
+	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService)
 	formService := form.NewService(logger, dbPool, responseService)
 	submitService := submit.NewService(logger, formService, questionService, responseService)
-	workflowService := workflow.NewService(logger, dbPool, questionService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
 	// Handler

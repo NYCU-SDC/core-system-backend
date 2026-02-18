@@ -3,10 +3,13 @@ package response
 import (
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -40,13 +43,31 @@ type ListResponse struct {
 	ResponseJSONs []Response `json:"responses" validate:"required,dive"`
 }
 
-type GetResponse struct {
-	ID          string `json:"id" validate:"required,uuid"`
-	FormID      string `json:"formId" validate:"required,uuid"`
-	SubmittedBy string `json:"submittedBy" validate:"required,uuid"`
-	// Todo: add progress
-	CreatedAt time.Time `json:"createdAt" validate:"required,datetime"` // for sorting
-	UpdatedAt time.Time `json:"updatedAt" validate:"required,datetime"` // for marking if the response is updated
+type GetFormResponse struct {
+	ID       string           `json:"id" validate:"required,uuid"`
+	FormID   string           `json:"formId" validate:"required,uuid"`
+	Progress string           `json:"progress" validate:"required,oneof=DRAFT SUBMITTED"`
+	Sections []SectionDetails `json:"sections" validate:"required,dive"`
+}
+
+type SectionDetails struct {
+	ID            string          `json:"id" validate:"required,uuid"`
+	Title         string          `json:"title" validate:"required"`
+	Progress      string          `json:"progress" validate:"required,oneof=SKIPPED NOT_STARTED DRAFT COMPLETED"`
+	AnswerDetails []AnswerDetails `json:"answerDetails" validate:"required,dive"`
+}
+
+type AnswerDetails struct {
+	Question question.Response `json:"question" validate:"required"`
+	Payload  *AnswerPayload    `json:"payload"`
+}
+
+type AnswerPayload struct {
+	CreatedAt    time.Time       `json:"createdAt" validate:"required"`
+	UpdatedAt    time.Time       `json:"updatedAt" validate:"required"`
+	ResponseID   string          `json:"responseId" validate:"required,uuid"`
+	Answer       json.RawMessage `json:"answer" validate:"required"`
+	DisplayValue string          `json:"displayValue" validate:"required"`
 }
 
 type AnswersForQuestionResponse struct {
@@ -59,6 +80,7 @@ type CreateResponse struct {
 }
 
 type Store interface {
+	Get(ctx context.Context, id uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
@@ -123,58 +145,167 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, listResponse)
 }
 
-// Get retrieves a response by id
+// Get retrieves a response by id with all sections, questions and answers
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
-	//traceCtx, span := h.tracer.Start(r.Context(), "Get")
-	//defer span.End()
-	//logger := logutil.WithContext(traceCtx, h.logger)
-	//
-	//formIDStr := r.PathValue("formId")
-	//formID, err := internal.ParseUUID(formIDStr)
-	//if err != nil {
-	//	h.problemWriter.WriteError(traceCtx, w, err, logger)
-	//	return
-	//}
-	//
-	//idStr := r.PathValue("responseId")
-	//id, err := internal.ParseUUID(idStr)
-	//if err != nil {
-	//	h.problemWriter.WriteError(traceCtx, w, err, logger)
-	//	return
-	//}
-	//
-	//currentResponse, answers, err := h.store.Get(traceCtx, id)
-	//if err != nil {
-	//	h.problemWriter.WriteError(traceCtx, w, err, logger)
-	//	return
-	//}
-	//
-	//if currentResponse.FormID != formID {
-	//	h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseFormIDMismatch, logger)
-	//	return
-	//}
-	//
-	//questionAnswerResponses := make([]QuestionAnswerForGetResponse, len(answers))
-	//for i, answer := range answers {
-	//	q, err := h.questionStore.GetByID(traceCtx, answer.QuestionID)
-	//	if err != nil {
-	//		h.problemWriter.WriteError(traceCtx, w, err, logger)
-	//		return
-	//	}
-	//
-	//	questionAnswerResponses[i] = QuestionAnswerForGetResponse{
-	//		QuestionID: q.Question().ID.String(),
-	//	}
-	//}
-	//
-	//handlerutil.WriteJSONResponse(w, http.StatusOK, GetResponse{
-	//	ID:                   currentResponse.ID.String(),
-	//	FormID:               currentResponse.FormID.String(),
-	//	SubmittedBy:          currentResponse.SubmittedBy.String(),
-	//	QuestionsAnswerPairs: questionAnswerResponses,
-	//	CreatedAt:            currentResponse.CreatedAt.Time,
-	//	UpdatedAt:            currentResponse.UpdatedAt.Time,
-	//})
+	traceCtx, span := h.tracer.Start(r.Context(), "Get")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	// Parse formId from path
+	formIDStr := r.PathValue("formId")
+	formID, err := internal.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Parse responseId from path
+	responseIDStr := r.PathValue("responseId")
+	responseID, err := internal.ParseUUID(responseIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Get response with sections and answers from store
+	formResponse, sections, err := h.store.Get(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Verify formID matches
+	if formResponse.FormID != formID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseFormIDMismatch, logger)
+		return
+	}
+
+	// Convert to response format
+	response, err := h.toGetFormResponse(traceCtx, formResponse, sections)
+	if err != nil {
+		logger.Error("Failed to convert to GetFormResponse", zap.Error(err))
+		span.RecordError(err)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+// toGetFormResponse converts service layer data to handler response format
+func (h *Handler) toGetFormResponse(ctx context.Context, formResponse FormResponse, sections []SectionWithAnswerableAndAnswer) (GetFormResponse, error) {
+	traceCtx, span := h.tracer.Start(ctx, "toGetFormResponse")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	// Build answer map for quick lookup by question ID
+	answerMap := make(map[string]answer.Answer)
+
+	for _, section := range sections {
+		for _, ans := range section.Answer {
+			answerMap[ans.QuestionID.String()] = ans
+		}
+	}
+
+	// Convert sections
+	sectionDetails := make([]SectionDetails, len(sections))
+	for i, section := range sections {
+		// Convert section title (handle null)
+		sectionTitle := ""
+		if section.Section.Title.Valid {
+			sectionTitle = section.Section.Title.String
+		}
+
+		// Convert answerables to answer details
+		answerDetails := make([]AnswerDetails, len(section.Answerable))
+		for j, answerable := range section.Answerable {
+			// Convert question to response format
+			questionResponse, err := question.ToResponse(answerable)
+			if err != nil {
+				logger.Error("Failed to convert question to response",
+					zap.String("questionID", answerable.Question().ID.String()),
+					zap.Error(err))
+				span.RecordError(err)
+				return GetFormResponse{}, err
+			}
+
+			// Build answer details
+			answerDetails[j] = AnswerDetails{
+				Question: questionResponse,
+				Payload:  nil, // Default to nil if no answer
+			}
+
+			// If answer exists, populate payload
+			questionID := answerable.Question().ID.String()
+			if ans, hasAnswer := answerMap[questionID]; hasAnswer {
+				displayValue, err := answerable.DisplayValue(ans.Value)
+				if err != nil {
+					logger.Error("Failed to get display value",
+						zap.String("questionID", questionID),
+						zap.Error(err))
+					span.RecordError(err)
+					return GetFormResponse{}, err
+				}
+
+				// Decode and encode answer value
+				valueStruct, err := answerable.DecodeStorage(ans.Value)
+				if err != nil {
+					logger.Error("Failed to decode answer value from storage",
+						zap.String("questionID", questionID),
+						zap.Error(err))
+					span.RecordError(err)
+					return GetFormResponse{}, err
+				}
+
+				payload, err := answerable.EncodeRequest(valueStruct)
+				if err != nil {
+					logger.Error("Failed to encode answer value for response",
+						zap.String("questionID", questionID),
+						zap.Error(err))
+					span.RecordError(err)
+					return GetFormResponse{}, err
+				}
+
+				// Build answer payload with proper question type and value
+				answerPayload := map[string]interface{}{
+					"questionId":   questionID,
+					"questionType": strings.ToUpper(string(answerable.Question().Type)),
+					"value":        json.RawMessage(payload),
+				}
+
+				answerPayloadJSON, err := json.Marshal(answerPayload)
+				if err != nil {
+					logger.Error("Failed to marshal answer payload",
+						zap.String("questionID", questionID),
+						zap.Error(err))
+					span.RecordError(err)
+					return GetFormResponse{}, err
+				}
+
+				answerDetails[j].Payload = &AnswerPayload{
+					CreatedAt:    ans.CreatedAt.Time,
+					UpdatedAt:    ans.UpdatedAt.Time,
+					ResponseID:   formResponse.ID.String(),
+					Answer:       answerPayloadJSON,
+					DisplayValue: displayValue,
+				}
+			}
+		}
+
+		sectionDetails[i] = SectionDetails{
+			ID:            section.Section.ID.String(),
+			Title:         sectionTitle,
+			Progress:      strings.ToUpper(string(section.SectionProgress)),
+			AnswerDetails: answerDetails,
+		}
+	}
+
+	return GetFormResponse{
+		ID:       formResponse.ID.String(),
+		FormID:   formResponse.FormID.String(),
+		Progress: strings.ToUpper(string(formResponse.Progress)),
+		Sections: sectionDetails,
+	}, nil
 }
 
 // Create creates an empty response for a form
