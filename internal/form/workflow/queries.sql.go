@@ -180,8 +180,8 @@ WITH latest_workflow AS (
     FOR UPDATE
 ),
 new_section AS (
-    INSERT INTO sections (form_id, title, progress)
-    SELECT lw.form_id, 'New Section', 'draft'
+    INSERT INTO sections (form_id, title)
+    SELECT lw.form_id, 'New Section'
     FROM latest_workflow AS lw
     WHERE $3::node_type = 'section'
     RETURNING id

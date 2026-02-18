@@ -369,50 +369,6 @@ func createSingleChoiceAnswerable(t *testing.T, questionID, sectionID, formID, c
 	return answerable
 }
 
-// Helper function to create a ShortText answerable for testing
-func createShortTextAnswerable(t *testing.T, questionID, sectionID, formID uuid.UUID) question.Answerable {
-	q := question.Question{
-		ID:          questionID,
-		SectionID:   sectionID,
-		Required:    false,
-		Type:        "short_text",
-		Title:       pgtype.Text{String: "Test Question", Valid: true},
-		Description: pgtype.Text{String: "", Valid: false},
-		Metadata:    nil,
-		Order:       1,
-	}
-	answerable := question.NewShortText(q, formID)
-	return answerable
-}
-
-// Helper function to create a LinearScale answerable for testing
-func createLinearScaleAnswerable(t *testing.T, questionID, sectionID, formID uuid.UUID) question.Answerable {
-	scaleMetadata, err := json.Marshal(map[string]interface{}{
-		"scale": map[string]interface{}{
-			"icon":          "",
-			"minVal":        1,
-			"maxVal":        10,
-			"minValueLabel": "Low",
-			"maxValueLabel": "High",
-		},
-	})
-	require.NoError(t, err)
-
-	q := question.Question{
-		ID:          questionID,
-		SectionID:   sectionID,
-		Required:    false,
-		Type:        "linear_scale",
-		Title:       pgtype.Text{String: "Test Question", Valid: true},
-		Description: pgtype.Text{String: "", Valid: false},
-		Metadata:    scaleMetadata,
-		Order:       1,
-	}
-	answerable, err := question.NewLinearScale(q, formID)
-	require.NoError(t, err)
-	return answerable
-}
-
 // Helper function to create a MultipleChoice answerable for testing
 func createMultipleChoiceAnswerable(t *testing.T, questionID, sectionID, formID uuid.UUID, choiceIDs ...uuid.UUID) question.Answerable {
 	choices := make([]map[string]interface{}, len(choiceIDs))
