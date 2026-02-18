@@ -145,7 +145,7 @@ func main() {
 	questionService := question.NewService(logger, dbPool)
 	answerService := answer.NewService(logger, dbPool, questionService)
 	inboxService := inbox.NewService(logger, dbPool)
-	responseService := response.NewService(logger, dbPool)
+	responseService := response.NewService(logger, dbPool, answerService)
 	formService := form.NewService(logger, dbPool, responseService)
 	submitService := submit.NewService(logger, formService, questionService, responseService)
 	workflowService := workflow.NewService(logger, dbPool, questionService)
