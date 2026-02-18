@@ -92,6 +92,40 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;
 
+-- name: Patch :one
+WITH updated AS (
+    UPDATE forms
+    SET
+        title = COALESCE(sqlc.narg('title')::text, forms.title),
+        description = COALESCE(sqlc.narg('description')::text, forms.description),
+        preview_message = COALESCE(sqlc.narg('preview_message')::text, forms.preview_message),
+        last_editor = sqlc.arg('last_editor'),
+        deadline = COALESCE(sqlc.narg('deadline')::timestamptz, forms.deadline),
+        publish_time = COALESCE(sqlc.narg('publish_time')::timestamptz, forms.publish_time),
+        message_after_submission = COALESCE(sqlc.narg('message_after_submission')::text, forms.message_after_submission),
+        google_sheet_url = COALESCE(sqlc.narg('google_sheet_url')::text, forms.google_sheet_url),
+        visibility = COALESCE(sqlc.narg('visibility')::visibility, forms.visibility),
+        dressing_color = COALESCE(sqlc.narg('dressing_color')::text, forms.dressing_color),
+        dressing_header_font = COALESCE(sqlc.narg('dressing_header_font')::text, forms.dressing_header_font),
+        dressing_question_font = COALESCE(sqlc.narg('dressing_question_font')::text, forms.dressing_question_font),
+        dressing_text_font = COALESCE(sqlc.narg('dressing_text_font')::text, forms.dressing_text_font),
+        updated_at = now()
+    WHERE forms.id = sqlc.arg('id')
+    RETURNING *
+)
+SELECT 
+    f.*,
+    u.name as unit_name,
+    o.name as org_name,
+    usr.name as last_editor_name,
+    usr.username as last_editor_username,
+    usr.avatar_url as last_editor_avatar_url,
+    usr.emails as last_editor_email
+FROM updated f
+LEFT JOIN units u ON f.unit_id = u.id
+LEFT JOIN units o ON u.org_id = o.id
+LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;
+
 -- name: Delete :exec
 DELETE FROM forms WHERE id = $1;
 

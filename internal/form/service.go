@@ -21,6 +21,7 @@ import (
 type Querier interface {
 	Create(ctx context.Context, params CreateParams) (CreateRow, error)
 	Update(ctx context.Context, params UpdateParams) (UpdateRow, error)
+	Patch(ctx context.Context, params PatchParams) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	List(ctx context.Context, includeArchived pgtype.Bool) ([]ListRow, error)
@@ -202,6 +203,105 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, use
 	}
 
 	return updatedForm, nil
+}
+
+func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (UpdateRow, error) {
+	ctx, span := s.tracer.Start(ctx, "Patch")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	params := PatchParams{
+		ID:         id,
+		LastEditor: userID,
+	}
+
+	if request.Title != nil {
+		params.Title = pgtype.Text{String: *request.Title, Valid: true}
+	}
+
+	if request.Description != nil {
+		params.Description = pgtype.Text{String: *request.Description, Valid: true}
+	}
+
+	if request.PreviewMessage != nil {
+		params.PreviewMessage = pgtype.Text{String: *request.PreviewMessage, Valid: true}
+	}
+
+	if request.Deadline != nil {
+		params.Deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
+	}
+
+	if request.PublishTime != nil {
+		params.PublishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
+	}
+
+	if request.MessageAfterSubmission != nil {
+		params.MessageAfterSubmission = pgtype.Text{String: *request.MessageAfterSubmission, Valid: true}
+	}
+
+	if request.GoogleSheetUrl != nil {
+		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetUrl, Valid: true}
+	}
+
+	if request.Visibility != nil {
+		params.Visibility = NullVisibility{
+			Visibility: visibilityFromAPIFormat(*request.Visibility),
+			Valid:      true,
+		}
+	}
+
+	if request.Dressing != nil {
+		if request.Dressing.Color != "" {
+			params.DressingColor = pgtype.Text{String: request.Dressing.Color, Valid: true}
+		}
+		if request.Dressing.HeaderFont != "" {
+			params.DressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: true}
+		}
+		if request.Dressing.QuestionFont != "" {
+			params.DressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: true}
+		}
+		if request.Dressing.TextFont != "" {
+			params.DressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: true}
+		}
+	}
+
+	patchedForm, err := s.queries.Patch(ctx, params)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "patch form")
+		span.RecordError(err)
+		return UpdateRow{}, err
+	}
+
+	// Convert PatchRow to UpdateRow
+	updateRow := UpdateRow{
+		ID:                     patchedForm.ID,
+		Title:                  patchedForm.Title,
+		Description:            patchedForm.Description,
+		PreviewMessage:         patchedForm.PreviewMessage,
+		MessageAfterSubmission: patchedForm.MessageAfterSubmission,
+		Status:                 patchedForm.Status,
+		UnitID:                 patchedForm.UnitID,
+		LastEditor:             patchedForm.LastEditor,
+		Deadline:               patchedForm.Deadline,
+		CreatedAt:              patchedForm.CreatedAt,
+		UpdatedAt:              patchedForm.UpdatedAt,
+		Visibility:             patchedForm.Visibility,
+		GoogleSheetUrl:         patchedForm.GoogleSheetUrl,
+		PublishTime:            patchedForm.PublishTime,
+		CoverImageUrl:          patchedForm.CoverImageUrl,
+		DressingColor:          patchedForm.DressingColor,
+		DressingHeaderFont:     patchedForm.DressingHeaderFont,
+		DressingQuestionFont:   patchedForm.DressingQuestionFont,
+		DressingTextFont:       patchedForm.DressingTextFont,
+		UnitName:               patchedForm.UnitName,
+		OrgName:                patchedForm.OrgName,
+		LastEditorName:         patchedForm.LastEditorName,
+		LastEditorUsername:     patchedForm.LastEditorUsername,
+		LastEditorAvatarUrl:    patchedForm.LastEditorAvatarUrl,
+		LastEditorEmail:        patchedForm.LastEditorEmail,
+	}
+
+	return updateRow, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
