@@ -33,7 +33,8 @@ func (s ShortText) FormID() uuid.UUID {
 
 func (s ShortText) Validate(rawValue json.RawMessage) error {
 	var value string
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return fmt.Errorf("invalid short text value format: %w", err)
 	}
 
@@ -49,7 +50,8 @@ func (s ShortText) Validate(rawValue json.RawMessage) error {
 
 func (s ShortText) DecodeRequest(rawValue json.RawMessage) (any, error) {
 	var value string
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return nil, fmt.Errorf("invalid short text value format: %w", err)
 	}
 
@@ -58,7 +60,8 @@ func (s ShortText) DecodeRequest(rawValue json.RawMessage) (any, error) {
 
 func (s ShortText) DecodeStorage(rawValue json.RawMessage) (any, error) {
 	var answer shared.ShortTextAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
 		return nil, fmt.Errorf("invalid short text answer in storage: %w", err)
 	}
 
@@ -111,7 +114,8 @@ func (l LongText) FormID() uuid.UUID {
 
 func (l LongText) Validate(rawValue json.RawMessage) error {
 	var value string
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return fmt.Errorf("invalid long text value format: %w", err)
 	}
 
@@ -127,7 +131,8 @@ func (l LongText) Validate(rawValue json.RawMessage) error {
 
 func (l LongText) DecodeRequest(rawValue json.RawMessage) (any, error) {
 	var value string
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return nil, fmt.Errorf("invalid long text value format: %w", err)
 	}
 
@@ -136,7 +141,8 @@ func (l LongText) DecodeRequest(rawValue json.RawMessage) (any, error) {
 
 func (l LongText) DecodeStorage(rawValue json.RawMessage) (any, error) {
 	var answer shared.LongTextAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
 		return nil, fmt.Errorf("invalid long text answer in storage: %w", err)
 	}
 
@@ -194,7 +200,8 @@ func (h Hyperlink) FormID() uuid.UUID {
 
 func (h Hyperlink) Validate(rawValue json.RawMessage) error {
 	var value string
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return fmt.Errorf("invalid hyperlink value format: %w", err)
 	}
 
@@ -214,7 +221,8 @@ func (h Hyperlink) Validate(rawValue json.RawMessage) error {
 
 func (h Hyperlink) DecodeRequest(rawValue json.RawMessage) (any, error) {
 	var value string
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
 		return nil, fmt.Errorf("invalid hyperlink value format: %w", err)
 	}
 
@@ -223,7 +231,8 @@ func (h Hyperlink) DecodeRequest(rawValue json.RawMessage) (any, error) {
 
 func (h Hyperlink) DecodeStorage(rawValue json.RawMessage) (any, error) {
 	var answer shared.HyperlinkAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
 		return nil, fmt.Errorf("invalid hyperlink answer in storage: %w", err)
 	}
 

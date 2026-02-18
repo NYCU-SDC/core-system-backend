@@ -5,42 +5,43 @@ import (
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal/form/shared"
+
 	"github.com/google/uuid"
 )
 
 func TestShortText_DecodeRequest(t *testing.T) {
 	st := NewShortText(Question{ID: uuid.New()}, uuid.New())
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		expected    shared.ShortTextAnswer
-		shouldError bool
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expected      shared.ShortTextAnswer
+		expectedError bool
 	}{
 		{
-			name:        "Should decode valid short text value",
-			rawValue:    `"John Doe"`,
-			expected:    shared.ShortTextAnswer{Value: "John Doe"},
-			shouldError: false,
+			name:          "Should decode valid short text value",
+			rawValue:      `"John Doe"`,
+			expected:      shared.ShortTextAnswer{Value: "John Doe"},
+			expectedError: false,
 		},
 		{
-			name:        "Should decode empty string",
-			rawValue:    `""`,
-			expected:    shared.ShortTextAnswer{Value: ""},
-			shouldError: false,
+			name:          "Should decode empty string",
+			rawValue:      `""`,
+			expected:      shared.ShortTextAnswer{Value: ""},
+			expectedError: false,
 		},
 		{
-			name:        "Should return error for invalid JSON",
-			rawValue:    `not a string`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON",
+			rawValue:      `not a string`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := st.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := st.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -58,8 +59,8 @@ func TestShortText_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if answer.Value != tt.expected.Value {
-				t.Errorf("Expected value %q, got %q", tt.expected.Value, answer.Value)
+			if answer.Value != tc.expected.Value {
+				t.Errorf("Expected value %q, got %q", tc.expected.Value, answer.Value)
 			}
 		})
 	}
@@ -68,31 +69,31 @@ func TestShortText_DecodeRequest(t *testing.T) {
 func TestShortText_DecodeStorage(t *testing.T) {
 	st := NewShortText(Question{ID: uuid.New()}, uuid.New())
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		expected    shared.ShortTextAnswer
-		shouldError bool
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expected      shared.ShortTextAnswer
+		expectedError bool
 	}{
 		{
-			name:        "Should decode stored short text answer",
-			rawValue:    `{"value":"John Doe"}`,
-			expected:    shared.ShortTextAnswer{Value: "John Doe"},
-			shouldError: false,
+			name:          "Should decode stored short text answer",
+			rawValue:      `{"value":"John Doe"}`,
+			expected:      shared.ShortTextAnswer{Value: "John Doe"},
+			expectedError: false,
 		},
 		{
-			name:        "Should return error for invalid JSON structure",
-			rawValue:    `{"invalid":"field"}`,
-			expected:    shared.ShortTextAnswer{Value: ""},
-			shouldError: false, // Empty value is valid
+			name:          "Should return error for invalid JSON structure",
+			rawValue:      `{"invalid":"field"}`,
+			expected:      shared.ShortTextAnswer{Value: ""},
+			expectedError: false, // Empty value is valid
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := st.DecodeStorage(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := st.DecodeStorage(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -110,8 +111,8 @@ func TestShortText_DecodeStorage(t *testing.T) {
 				return
 			}
 
-			if answer.Value != tt.expected.Value {
-				t.Errorf("Expected value %q, got %q", tt.expected.Value, answer.Value)
+			if answer.Value != tc.expected.Value {
+				t.Errorf("Expected value %q, got %q", tc.expected.Value, answer.Value)
 			}
 		})
 	}
@@ -120,25 +121,25 @@ func TestShortText_DecodeStorage(t *testing.T) {
 func TestLongText_DecodeRequest(t *testing.T) {
 	lt := NewLongText(Question{ID: uuid.New()}, uuid.New())
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		expected    shared.LongTextAnswer
-		shouldError bool
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expected      shared.LongTextAnswer
+		expectedError bool
 	}{
 		{
-			name:        "Should decode valid long text value",
-			rawValue:    `"This is a long text answer with multiple sentences."`,
-			expected:    shared.LongTextAnswer{Value: "This is a long text answer with multiple sentences."},
-			shouldError: false,
+			name:          "Should decode valid long text value",
+			rawValue:      `"This is a long text answer with multiple sentences."`,
+			expected:      shared.LongTextAnswer{Value: "This is a long text answer with multiple sentences."},
+			expectedError: false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := lt.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := lt.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -156,8 +157,8 @@ func TestLongText_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if answer.Value != tt.expected.Value {
-				t.Errorf("Expected value %q, got %q", tt.expected.Value, answer.Value)
+			if answer.Value != tc.expected.Value {
+				t.Errorf("Expected value %q, got %q", tc.expected.Value, answer.Value)
 			}
 		})
 	}
@@ -166,25 +167,25 @@ func TestLongText_DecodeRequest(t *testing.T) {
 func TestHyperlink_DecodeRequest(t *testing.T) {
 	hl := NewHyperlink(Question{ID: uuid.New()}, uuid.New())
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		expected    shared.HyperlinkAnswer
-		shouldError bool
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expected      shared.HyperlinkAnswer
+		expectedError bool
 	}{
 		{
-			name:        "Should decode valid hyperlink value",
-			rawValue:    `"https://example.com"`,
-			expected:    shared.HyperlinkAnswer{Value: "https://example.com"},
-			shouldError: false,
+			name:          "Should decode valid hyperlink value",
+			rawValue:      `"https://example.com"`,
+			expected:      shared.HyperlinkAnswer{Value: "https://example.com"},
+			expectedError: false,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := hl.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := hl.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -202,8 +203,8 @@ func TestHyperlink_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if answer.Value != tt.expected.Value {
-				t.Errorf("Expected value %q, got %q", tt.expected.Value, answer.Value)
+			if answer.Value != tc.expected.Value {
+				t.Errorf("Expected value %q, got %q", tc.expected.Value, answer.Value)
 			}
 		})
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal/form/shared"
+
 	"github.com/google/uuid"
 )
 
@@ -41,16 +42,16 @@ func TestSingleChoice_DecodeRequest(t *testing.T) {
 		Choices:  choices,
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
-		validate    func(t *testing.T, result any)
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
+		validate      func(t *testing.T, result any)
 	}{
 		{
-			name:        "Should decode valid single choice",
-			rawValue:    `["11111111-1111-1111-1111-111111111111"]`,
-			shouldError: false,
+			name:          "Should decode valid single choice",
+			rawValue:      `["11111111-1111-1111-1111-111111111111"]`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.SingleChoiceAnswer)
 				if !ok {
@@ -68,37 +69,37 @@ func TestSingleChoice_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for empty array",
-			rawValue:    `[]`,
-			shouldError: true,
+			name:          "Should return error for empty array",
+			rawValue:      `[]`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for multiple selections",
-			rawValue:    `["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
-			shouldError: true,
+			name:          "Should return error for multiple selections",
+			rawValue:      `["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for invalid choice ID",
-			rawValue:    `["99999999-9999-9999-9999-999999999999"]`,
-			shouldError: true,
+			name:          "Should return error for invalid choice ID",
+			rawValue:      `["99999999-9999-9999-9999-999999999999"]`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for malformed UUID",
-			rawValue:    `["not-a-uuid"]`,
-			shouldError: true,
+			name:          "Should return error for malformed UUID",
+			rawValue:      `["not-a-uuid"]`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for invalid JSON format",
-			rawValue:    `"single-string"`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON format",
+			rawValue:      `"single-string"`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := sc.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := sc.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -110,8 +111,8 @@ func TestSingleChoice_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -125,16 +126,16 @@ func TestSingleChoice_DecodeStorage(t *testing.T) {
 		Choices:  choices,
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
-		validate    func(t *testing.T, result any)
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
+		validate      func(t *testing.T, result any)
 	}{
 		{
-			name:        "Should decode stored single choice answer",
-			rawValue:    `{"choiceId":"11111111-1111-1111-1111-111111111111","snapshot":{"name":"Option A","description":"First option"}}`,
-			shouldError: false,
+			name:          "Should decode stored single choice answer",
+			rawValue:      `{"choiceId":"11111111-1111-1111-1111-111111111111","snapshot":{"name":"Option A","description":"First option"}}`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.SingleChoiceAnswer)
 				if !ok {
@@ -149,17 +150,17 @@ func TestSingleChoice_DecodeStorage(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for invalid JSON",
-			rawValue:    `invalid json`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON",
+			rawValue:      `invalid json`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := sc.DecodeStorage(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := sc.DecodeStorage(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -171,8 +172,8 @@ func TestSingleChoice_DecodeStorage(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -186,11 +187,11 @@ func TestSingleChoice_EncodeRequest(t *testing.T) {
 		Choices:  choices,
 	}
 
-	tests := []struct {
-		name        string
-		answer      any
-		expected    string
-		shouldError bool
+	testCases := []struct {
+		name          string
+		answer        any
+		expected      string
+		expectedError bool
 	}{
 		{
 			name: "Should encode single choice answer",
@@ -201,21 +202,21 @@ func TestSingleChoice_EncodeRequest(t *testing.T) {
 					Description: "First option",
 				},
 			},
-			expected:    `["11111111-1111-1111-1111-111111111111"]`,
-			shouldError: false,
+			expected:      `["11111111-1111-1111-1111-111111111111"]`,
+			expectedError: false,
 		},
 		{
-			name:        "Should return error for wrong answer type",
-			answer:      "not a single choice answer",
-			shouldError: true,
+			name:          "Should return error for wrong answer type",
+			answer:        "not a single choice answer",
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := sc.EncodeRequest(tt.answer)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := sc.EncodeRequest(tc.answer)
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -227,8 +228,8 @@ func TestSingleChoice_EncodeRequest(t *testing.T) {
 				return
 			}
 
-			if string(result) != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, string(result))
+			if string(result) != tc.expected {
+				t.Errorf("Expected %s, got %s", tc.expected, string(result))
 			}
 		})
 	}
@@ -246,16 +247,16 @@ func TestMultiChoice_DecodeRequest(t *testing.T) {
 		Choices:  choices,
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
-		validate    func(t *testing.T, result any)
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
+		validate      func(t *testing.T, result any)
 	}{
 		{
-			name:        "Should decode multiple choices",
-			rawValue:    `["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
-			shouldError: false,
+			name:          "Should decode multiple choices",
+			rawValue:      `["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.MultipleChoiceAnswer)
 				if !ok {
@@ -276,9 +277,9 @@ func TestMultiChoice_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should decode single choice",
-			rawValue:    `["11111111-1111-1111-1111-111111111111"]`,
-			shouldError: false,
+			name:          "Should decode single choice",
+			rawValue:      `["11111111-1111-1111-1111-111111111111"]`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.MultipleChoiceAnswer)
 				if !ok {
@@ -290,22 +291,22 @@ func TestMultiChoice_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for empty array",
-			rawValue:    `[]`,
-			shouldError: true,
+			name:          "Should return error for empty array",
+			rawValue:      `[]`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for invalid choice ID",
-			rawValue:    `["99999999-9999-9999-9999-999999999999"]`,
-			shouldError: true,
+			name:          "Should return error for invalid choice ID",
+			rawValue:      `["99999999-9999-9999-9999-999999999999"]`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := mc.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := mc.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -317,8 +318,8 @@ func TestMultiChoice_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -332,11 +333,11 @@ func TestMultiChoice_EncodeRequest(t *testing.T) {
 		Choices:  choices,
 	}
 
-	tests := []struct {
-		name        string
-		answer      any
-		shouldError bool
-		validate    func(t *testing.T, result json.RawMessage)
+	testCases := []struct {
+		name          string
+		answer        any
+		expectedError bool
+		validate      func(t *testing.T, result json.RawMessage)
 	}{
 		{
 			name: "Should encode multiple choice answer",
@@ -355,7 +356,7 @@ func TestMultiChoice_EncodeRequest(t *testing.T) {
 					},
 				},
 			},
-			shouldError: false,
+			expectedError: false,
 			validate: func(t *testing.T, result json.RawMessage) {
 				var ids []string
 				if err := json.Unmarshal(result, &ids); err != nil {
@@ -374,17 +375,17 @@ func TestMultiChoice_EncodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for wrong answer type",
-			answer:      "not a multiple choice answer",
-			shouldError: true,
+			name:          "Should return error for wrong answer type",
+			answer:        "not a multiple choice answer",
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := mc.EncodeRequest(tt.answer)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := mc.EncodeRequest(tc.answer)
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -396,8 +397,8 @@ func TestMultiChoice_EncodeRequest(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -415,16 +416,16 @@ func TestRanking_DecodeRequest(t *testing.T) {
 		Rank:     choices,
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
-		validate    func(t *testing.T, result any)
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
+		validate      func(t *testing.T, result any)
 	}{
 		{
-			name:        "Should decode ranking with correct order",
-			rawValue:    `["33333333-3333-3333-3333-333333333333", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
-			shouldError: false,
+			name:          "Should decode ranking with correct order",
+			rawValue:      `["33333333-3333-3333-3333-333333333333", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.RankingAnswer)
 				if !ok {
@@ -450,22 +451,22 @@ func TestRanking_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for empty array",
-			rawValue:    `[]`,
-			shouldError: true,
+			name:          "Should return error for empty array",
+			rawValue:      `[]`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for invalid choice ID",
-			rawValue:    `["99999999-9999-9999-9999-999999999999"]`,
-			shouldError: true,
+			name:          "Should return error for invalid choice ID",
+			rawValue:      `["99999999-9999-9999-9999-999999999999"]`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := ranking.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ranking.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -477,8 +478,8 @@ func TestRanking_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -492,11 +493,11 @@ func TestRanking_EncodeRequest(t *testing.T) {
 		Rank:     choices,
 	}
 
-	tests := []struct {
-		name        string
-		answer      any
-		shouldError bool
-		validate    func(t *testing.T, result json.RawMessage)
+	testCases := []struct {
+		name          string
+		answer        any
+		expectedError bool
+		validate      func(t *testing.T, result json.RawMessage)
 	}{
 		{
 			name: "Should encode ranking answer in correct order",
@@ -523,7 +524,7 @@ func TestRanking_EncodeRequest(t *testing.T) {
 					},
 				},
 			},
-			shouldError: false,
+			expectedError: false,
 			validate: func(t *testing.T, result json.RawMessage) {
 				var ids []string
 				if err := json.Unmarshal(result, &ids); err != nil {
@@ -546,17 +547,17 @@ func TestRanking_EncodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for wrong answer type",
-			answer:      "not a ranking answer",
-			shouldError: true,
+			name:          "Should return error for wrong answer type",
+			answer:        "not a ranking answer",
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := ranking.EncodeRequest(tt.answer)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ranking.EncodeRequest(tc.answer)
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -568,8 +569,8 @@ func TestRanking_EncodeRequest(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}

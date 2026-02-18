@@ -147,7 +147,8 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 
 	// Parse and validate request body
 	var req AnswersRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
