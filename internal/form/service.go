@@ -273,33 +273,7 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 	}
 
 	// Convert PatchRow to UpdateRow
-	updateRow := UpdateRow{
-		ID:                     patchedForm.ID,
-		Title:                  patchedForm.Title,
-		Description:            patchedForm.Description,
-		PreviewMessage:         patchedForm.PreviewMessage,
-		MessageAfterSubmission: patchedForm.MessageAfterSubmission,
-		Status:                 patchedForm.Status,
-		UnitID:                 patchedForm.UnitID,
-		LastEditor:             patchedForm.LastEditor,
-		Deadline:               patchedForm.Deadline,
-		CreatedAt:              patchedForm.CreatedAt,
-		UpdatedAt:              patchedForm.UpdatedAt,
-		Visibility:             patchedForm.Visibility,
-		GoogleSheetUrl:         patchedForm.GoogleSheetUrl,
-		PublishTime:            patchedForm.PublishTime,
-		CoverImageUrl:          patchedForm.CoverImageUrl,
-		DressingColor:          patchedForm.DressingColor,
-		DressingHeaderFont:     patchedForm.DressingHeaderFont,
-		DressingQuestionFont:   patchedForm.DressingQuestionFont,
-		DressingTextFont:       patchedForm.DressingTextFont,
-		UnitName:               patchedForm.UnitName,
-		OrgName:                patchedForm.OrgName,
-		LastEditorName:         patchedForm.LastEditorName,
-		LastEditorUsername:     patchedForm.LastEditorUsername,
-		LastEditorAvatarUrl:    patchedForm.LastEditorAvatarUrl,
-		LastEditorEmail:        patchedForm.LastEditorEmail,
-	}
+	updateRow := UpdateRow(patchedForm)
 
 	return updateRow, nil
 }
