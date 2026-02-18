@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,7 +21,7 @@ import (
 //
 // If a condition cannot be evaluated (answer doesn't exist), the method stops and returns
 // only the sections that are certain to be filled up to that point (simplified version).
-func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers []Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error) {
+func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers []answer.Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error) {
 	ctx, span := s.tracer.Start(ctx, "ResolveSections")
 	defer span.End()
 
