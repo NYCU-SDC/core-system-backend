@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal/form/shared"
+
 	"github.com/google/uuid"
 )
 
@@ -27,16 +28,16 @@ func TestLinearScale_DecodeRequest(t *testing.T) {
 		MaxValueLabel: "Excellent",
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
-		validate    func(t *testing.T, result any)
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
+		validate      func(t *testing.T, result any)
 	}{
 		{
-			name:        "Should decode valid linear scale value within range",
-			rawValue:    `3`,
-			shouldError: false,
+			name:          "Should decode valid linear scale value within range",
+			rawValue:      `3`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.LinearScaleAnswer)
 				if !ok {
@@ -48,9 +49,9 @@ func TestLinearScale_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should decode minimum value",
-			rawValue:    `1`,
-			shouldError: false,
+			name:          "Should decode minimum value",
+			rawValue:      `1`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.LinearScaleAnswer)
 				if !ok {
@@ -62,9 +63,9 @@ func TestLinearScale_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should decode maximum value",
-			rawValue:    `5`,
-			shouldError: false,
+			name:          "Should decode maximum value",
+			rawValue:      `5`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.LinearScaleAnswer)
 				if !ok {
@@ -76,37 +77,37 @@ func TestLinearScale_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for value below minimum",
-			rawValue:    `0`,
-			shouldError: true,
+			name:          "Should return error for value below minimum",
+			rawValue:      `0`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for value above maximum",
-			rawValue:    `6`,
-			shouldError: true,
+			name:          "Should return error for value above maximum",
+			rawValue:      `6`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for negative value",
-			rawValue:    `-1`,
-			shouldError: true,
+			name:          "Should return error for negative value",
+			rawValue:      `-1`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for invalid JSON format",
-			rawValue:    `"not a number"`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON format",
+			rawValue:      `"not a number"`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for float value",
-			rawValue:    `3.5`,
-			shouldError: true,
+			name:          "Should return error for float value",
+			rawValue:      `3.5`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := ls.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ls.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -118,8 +119,8 @@ func TestLinearScale_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -133,16 +134,16 @@ func TestLinearScale_DecodeStorage(t *testing.T) {
 		MaxVal:   5,
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
-		validate    func(t *testing.T, result any)
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
+		validate      func(t *testing.T, result any)
 	}{
 		{
-			name:        "Should decode stored linear scale answer",
-			rawValue:    `{"value":3}`,
-			shouldError: false,
+			name:          "Should decode stored linear scale answer",
+			rawValue:      `{"value":3}`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.LinearScaleAnswer)
 				if !ok {
@@ -154,14 +155,14 @@ func TestLinearScale_DecodeStorage(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for invalid JSON",
-			rawValue:    `invalid json`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON",
+			rawValue:      `invalid json`,
+			expectedError: true,
 		},
 		{
-			name:        "Should decode even with missing value field",
-			rawValue:    `{}`,
-			shouldError: false,
+			name:          "Should decode even with missing value field",
+			rawValue:      `{}`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.LinearScaleAnswer)
 				if !ok {
@@ -174,11 +175,11 @@ func TestLinearScale_DecodeStorage(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := ls.DecodeStorage(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ls.DecodeStorage(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -190,8 +191,8 @@ func TestLinearScale_DecodeStorage(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -205,53 +206,53 @@ func TestLinearScale_EncodeRequest(t *testing.T) {
 		MaxVal:   5,
 	}
 
-	tests := []struct {
-		name        string
-		answer      any
-		expected    string
-		shouldError bool
+	testCases := []struct {
+		name          string
+		answer        any
+		expected      string
+		expectedError bool
 	}{
 		{
 			name: "Should encode linear scale answer",
 			answer: shared.LinearScaleAnswer{
 				Value: 3,
 			},
-			expected:    `3`,
-			shouldError: false,
+			expected:      `3`,
+			expectedError: false,
 		},
 		{
 			name: "Should encode minimum value",
 			answer: shared.LinearScaleAnswer{
 				Value: 1,
 			},
-			expected:    `1`,
-			shouldError: false,
+			expected:      `1`,
+			expectedError: false,
 		},
 		{
 			name: "Should encode maximum value",
 			answer: shared.LinearScaleAnswer{
 				Value: 5,
 			},
-			expected:    `5`,
-			shouldError: false,
+			expected:      `5`,
+			expectedError: false,
 		},
 		{
-			name:        "Should return error for wrong answer type",
-			answer:      "not a linear scale answer",
-			shouldError: true,
+			name:          "Should return error for wrong answer type",
+			answer:        "not a linear scale answer",
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for rating answer type",
-			answer:      shared.RatingAnswer{Value: 3},
-			shouldError: true,
+			name:          "Should return error for rating answer type",
+			answer:        shared.RatingAnswer{Value: 3},
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := ls.EncodeRequest(tt.answer)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ls.EncodeRequest(tc.answer)
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -263,8 +264,8 @@ func TestLinearScale_EncodeRequest(t *testing.T) {
 				return
 			}
 
-			if string(result) != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, string(result))
+			if string(result) != tc.expected {
+				t.Errorf("Expected %s, got %s", tc.expected, string(result))
 			}
 		})
 	}
@@ -291,16 +292,16 @@ func TestRating_DecodeRequest(t *testing.T) {
 		MaxValueLabel: "Great",
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
-		validate    func(t *testing.T, result any)
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
+		validate      func(t *testing.T, result any)
 	}{
 		{
-			name:        "Should decode valid rating value within range",
-			rawValue:    `7`,
-			shouldError: false,
+			name:          "Should decode valid rating value within range",
+			rawValue:      `7`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.RatingAnswer)
 				if !ok {
@@ -312,9 +313,9 @@ func TestRating_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should decode minimum value",
-			rawValue:    `1`,
-			shouldError: false,
+			name:          "Should decode minimum value",
+			rawValue:      `1`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.RatingAnswer)
 				if !ok {
@@ -326,9 +327,9 @@ func TestRating_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should decode maximum value",
-			rawValue:    `10`,
-			shouldError: false,
+			name:          "Should decode maximum value",
+			rawValue:      `10`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.RatingAnswer)
 				if !ok {
@@ -340,32 +341,32 @@ func TestRating_DecodeRequest(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for value below minimum",
-			rawValue:    `0`,
-			shouldError: true,
+			name:          "Should return error for value below minimum",
+			rawValue:      `0`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for value above maximum",
-			rawValue:    `11`,
-			shouldError: true,
+			name:          "Should return error for value above maximum",
+			rawValue:      `11`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for negative value",
-			rawValue:    `-1`,
-			shouldError: true,
+			name:          "Should return error for negative value",
+			rawValue:      `-1`,
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for invalid JSON format",
-			rawValue:    `"not a number"`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON format",
+			rawValue:      `"not a number"`,
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := rating.DecodeRequest(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := rating.DecodeRequest(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -377,8 +378,8 @@ func TestRating_DecodeRequest(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -393,16 +394,16 @@ func TestRating_DecodeStorage(t *testing.T) {
 		MaxVal:   10,
 	}
 
-	tests := []struct {
-		name        string
-		rawValue    string
-		shouldError bool
-		validate    func(t *testing.T, result any)
+	testCases := []struct {
+		name          string
+		rawValue      string
+		expectedError bool
+		validate      func(t *testing.T, result any)
 	}{
 		{
-			name:        "Should decode stored rating answer",
-			rawValue:    `{"value":7}`,
-			shouldError: false,
+			name:          "Should decode stored rating answer",
+			rawValue:      `{"value":7}`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.RatingAnswer)
 				if !ok {
@@ -414,14 +415,14 @@ func TestRating_DecodeStorage(t *testing.T) {
 			},
 		},
 		{
-			name:        "Should return error for invalid JSON",
-			rawValue:    `invalid json`,
-			shouldError: true,
+			name:          "Should return error for invalid JSON",
+			rawValue:      `invalid json`,
+			expectedError: true,
 		},
 		{
-			name:        "Should decode even with missing value field",
-			rawValue:    `{}`,
-			shouldError: false,
+			name:          "Should decode even with missing value field",
+			rawValue:      `{}`,
+			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.RatingAnswer)
 				if !ok {
@@ -434,11 +435,11 @@ func TestRating_DecodeStorage(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := rating.DecodeStorage(json.RawMessage(tt.rawValue))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := rating.DecodeStorage(json.RawMessage(tc.rawValue))
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -450,8 +451,8 @@ func TestRating_DecodeStorage(t *testing.T) {
 				return
 			}
 
-			if tt.validate != nil {
-				tt.validate(t, result)
+			if tc.validate != nil {
+				tc.validate(t, result)
 			}
 		})
 	}
@@ -466,53 +467,53 @@ func TestRating_EncodeRequest(t *testing.T) {
 		MaxVal:   10,
 	}
 
-	tests := []struct {
-		name        string
-		answer      any
-		expected    string
-		shouldError bool
+	testCases := []struct {
+		name          string
+		answer        any
+		expected      string
+		expectedError bool
 	}{
 		{
 			name: "Should encode rating answer",
 			answer: shared.RatingAnswer{
 				Value: 7,
 			},
-			expected:    `7`,
-			shouldError: false,
+			expected:      `7`,
+			expectedError: false,
 		},
 		{
 			name: "Should encode minimum value",
 			answer: shared.RatingAnswer{
 				Value: 1,
 			},
-			expected:    `1`,
-			shouldError: false,
+			expected:      `1`,
+			expectedError: false,
 		},
 		{
 			name: "Should encode maximum value",
 			answer: shared.RatingAnswer{
 				Value: 10,
 			},
-			expected:    `10`,
-			shouldError: false,
+			expected:      `10`,
+			expectedError: false,
 		},
 		{
-			name:        "Should return error for wrong answer type",
-			answer:      "not a rating answer",
-			shouldError: true,
+			name:          "Should return error for wrong answer type",
+			answer:        "not a rating answer",
+			expectedError: true,
 		},
 		{
-			name:        "Should return error for linear scale answer type",
-			answer:      shared.LinearScaleAnswer{Value: 7},
-			shouldError: true,
+			name:          "Should return error for linear scale answer type",
+			answer:        shared.LinearScaleAnswer{Value: 7},
+			expectedError: true,
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := rating.EncodeRequest(tt.answer)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := rating.EncodeRequest(tc.answer)
 
-			if tt.shouldError {
+			if tc.expectedError {
 				if err == nil {
 					t.Errorf("Expected error but got nil")
 				}
@@ -524,8 +525,8 @@ func TestRating_EncodeRequest(t *testing.T) {
 				return
 			}
 
-			if string(result) != tt.expected {
-				t.Errorf("Expected %s, got %s", tt.expected, string(result))
+			if string(result) != tc.expected {
+				t.Errorf("Expected %s, got %s", tc.expected, string(result))
 			}
 		})
 	}
