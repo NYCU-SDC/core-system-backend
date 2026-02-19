@@ -77,6 +77,16 @@ func toResponse(id uuid.UUID, filename, contentType string, size int64, uploaded
 	}
 }
 
+// parseFileIDFromRequest extracts and validates the file ID from the request path
+func (h *Handler) parseFileIDFromRequest(r *http.Request) (uuid.UUID, string, error) {
+	fileIDStr := r.PathValue("id")
+	fileID, err := uuid.Parse(fileIDStr)
+	if err != nil {
+		return uuid.UUID{}, fileIDStr, err
+	}
+	return fileID, fileIDStr, nil
+}
+
 // Download handles GET /files/{id} - downloads a file
 func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Download")
@@ -84,8 +94,7 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Get file ID from path
-	fileIDStr := r.PathValue("id")
-	fileID, err := uuid.Parse(fileIDStr)
+	fileID, fileIDStr, err := h.parseFileIDFromRequest(r)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFileID, logger)
 		return
@@ -117,8 +126,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Get file ID from path
-	fileIDStr := r.PathValue("id")
-	fileID, err := uuid.Parse(fileIDStr)
+	fileID, fileIDStr, err := h.parseFileIDFromRequest(r)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFileID, logger)
 		return
@@ -145,8 +153,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Get file ID from path
-	fileIDStr := r.PathValue("id")
-	fileID, err := uuid.Parse(fileIDStr)
+	fileID, fileIDStr, err := h.parseFileIDFromRequest(r)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFileID, logger)
 		return
