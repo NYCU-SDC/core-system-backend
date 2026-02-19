@@ -264,8 +264,8 @@ func main() {
 	mux.Handle("POST /api/forms/{id}/cover", authMiddleware.HandlerFunc(formHandler.UploadCoverImageHandler))
 	mux.Handle("GET /api/forms/{id}/cover", authMiddleware.HandlerFunc(formHandler.GetCoverImageHandler))
 	mux.Handle("GET /api/forms/fonts", authMiddleware.HandlerFunc(formHandler.GetFontsHandler))
-	mux.Handle("GET /api/forms/google-sheet-email", authMiddleware.HandlerFunc(formHandler.GetGoogleSheetEmailHandler))
-	mux.Handle("POST /api/forms/google-sheet/verify", authMiddleware.HandlerFunc(formHandler.VerifyGoogleSheetHandler))
+	mux.Handle("GET /api/forms/{formId}/google-sheet-email", authMiddleware.HandlerFunc(formHandler.GetGoogleSheetEmailHandler))
+	mux.Handle("POST /api/forms/{formId}/google-sheet/verify", authMiddleware.HandlerFunc(formHandler.VerifyGoogleSheetHandler))
 
 	// Question routes
 	mux.Handle("GET /api/forms/{id}/sections", authMiddleware.HandlerFunc(questionHandler.ListHandler))
