@@ -270,8 +270,8 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/publish", authMiddleware.HandlerFunc(publishHandler.PublishForm))
 	mux.Handle("POST /api/orgs/{slug}/forms", tenantCasbinAuthMiddleware.HandlerFunc(formHandler.CreateUnderOrgHandler))
 	mux.Handle("GET /api/orgs/{slug}/forms", tenantBasicMiddleware.HandlerFunc(formHandler.ListByOrgHandler))
-	mux.Handle("GET /api/forms/{formId}/google-sheet-email", authMiddleware.HandlerFunc(formHandler.GetGoogleSheetEmailHandler))
-	mux.Handle("POST /api/forms/{formId}/google-sheet/verify", authMiddleware.HandlerFunc(formHandler.VerifyGoogleSheetHandler))
+	mux.Handle("GET /api/forms/google-sheet-email", authMiddleware.HandlerFunc(formHandler.GetGoogleSheetEmailHandler))
+	mux.Handle("POST /api/forms/google-sheet/verify", authMiddleware.HandlerFunc(formHandler.VerifyGoogleSheetHandler))
 
 	// Question routes
 	mux.Handle("GET /api/forms/{formId}/sections", authMiddleware.HandlerFunc(questionHandler.ListHandler))

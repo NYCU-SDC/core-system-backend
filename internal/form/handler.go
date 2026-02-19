@@ -733,19 +733,6 @@ func (h *Handler) GetGoogleSheetEmailHandler(w http.ResponseWriter, r *http.Requ
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIDStr := r.PathValue("formId")
-	formID, err := handlerutil.ParseUUID(formIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	_, err = h.store.GetByID(traceCtx, formID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
 	getter, ok := h.store.(emailGetter)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
@@ -766,21 +753,8 @@ func (h *Handler) VerifyGoogleSheetHandler(w http.ResponseWriter, r *http.Reques
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIDStr := r.PathValue("formId")
-	formID, err := handlerutil.ParseUUID(formIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	_, err = h.store.GetByID(traceCtx, formID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
 	var req GoogleSheetVerifyRequest
-	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
