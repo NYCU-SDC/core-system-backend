@@ -26,10 +26,11 @@ type Request struct {
 }
 
 type Response struct {
-	ID        string    `json:"id" validate:"required,uuid"`
-	FormID    string    `json:"formId" validate:"required,uuid"`
-	CreatedAt time.Time `json:"createdAt" validate:"required,datetime"`
-	UpdatedAt time.Time `json:"updatedAt" validate:"required,datetime"`
+	ID        string    `json:"id"`
+	FormID    string    `json:"formId"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Progress  string    `json:"progress"`
 }
 
 type Operator interface {
@@ -99,6 +100,7 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		FormID:    newResponse.FormID.String(),
 		CreatedAt: newResponse.CreatedAt.Time,
 		UpdatedAt: newResponse.UpdatedAt.Time,
+		Progress:  strings.ToUpper(string(newResponse.Progress)),
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, submitResponse)
