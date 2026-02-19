@@ -178,3 +178,25 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) error {
 	_, err := q.db.Exec(ctx, update, arg.ID, arg.Progress)
 	return err
 }
+
+const updateSubmitted = `-- name: UpdateSubmitted :one
+UPDATE form_responses
+SET submitted_at = now(), progress = 'submitted'
+WHERE id = $1
+RETURNING id, form_id, submitted_by, submitted_at, progress, created_at, updated_at
+`
+
+func (q *Queries) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error) {
+	row := q.db.QueryRow(ctx, updateSubmitted, id)
+	var i FormResponse
+	err := row.Scan(
+		&i.ID,
+		&i.FormID,
+		&i.SubmittedBy,
+		&i.SubmittedAt,
+		&i.Progress,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

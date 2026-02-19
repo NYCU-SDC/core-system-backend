@@ -148,7 +148,7 @@ func main() {
 	workflowService := workflow.NewService(logger, dbPool, questionService)
 	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService)
 	formService := form.NewService(logger, dbPool, responseService)
-	submitService := submit.NewService(logger, formService, questionService, responseService)
+	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
 	// Handler
@@ -281,7 +281,7 @@ func main() {
 	// Response routes
 	mux.Handle("GET /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.List))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.Create))
-	mux.Handle("POST /api/responses/{id}/submit", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))
+	mux.Handle("POST /api/responses/{responseId}/submit", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Delete))
 
