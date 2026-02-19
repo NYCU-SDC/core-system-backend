@@ -101,11 +101,11 @@ func NewHandler(
 	nycuOauthConfig oauthprovider.NYCUOauth,
 ) *Handler {
 	getCallbackURL := func(provider string) string {
-	if oauthProxyBaseURL != "" {
-		return fmt.Sprintf("%s/api/auth/%s/callback", oauthProxyBaseURL, provider)
+		if oauthProxyBaseURL != "" {
+			return fmt.Sprintf("%s/api/auth/%s/callback", oauthProxyBaseURL, provider)
+		}
+		return fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseURL, provider)
 	}
-    return fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseURL, provider)
-}
 	googleOauthCallbackURL := getCallbackURL("google")
 	nycuOauthCallbackURL := getCallbackURL("nycu")
 
@@ -317,18 +317,21 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	refreshTokenCookie, err := r.Cookie(RefreshTokenCookieName)
 	if err != nil {
 		logger.Error("Failed to get refresh token cookie during logout", zap.Error(err))
+		h.clearAccessAndRefreshCookies(w)
 		return
 	}
 
 	refreshTokenID, err := uuid.Parse(refreshTokenCookie.Value)
 	if err != nil {
 		logger.Error("Invalid refresh token format during logout", zap.Error(err))
+		h.clearAccessAndRefreshCookies(w)
 		return
 	}
 
 	err = h.jwtStore.InactivateRefreshToken(traceCtx, refreshTokenID)
 	if err != nil {
 		logger.Warn("Failed to inactivate refresh token during logout", zap.Error(err))
+		h.clearAccessAndRefreshCookies(w)
 		return
 	}
 
@@ -460,7 +463,7 @@ func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, acce
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: sameSite,
-		Path:     "/api/auth/refresh",
+		Path:     "/",
 		MaxAge:   int(h.refreshTokenExpiration.Seconds()),
 		Domain:   domain,
 	})
@@ -482,7 +485,7 @@ func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     RefreshTokenCookieName,
 		Value:    "",
-		Path:     "/api/auth/refresh",
+		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
