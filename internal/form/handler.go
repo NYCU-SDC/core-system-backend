@@ -221,7 +221,7 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -284,7 +284,7 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -305,7 +305,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -522,7 +522,7 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -586,7 +586,7 @@ func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -612,7 +612,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)

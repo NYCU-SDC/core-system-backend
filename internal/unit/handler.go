@@ -291,9 +291,8 @@ func (h *Handler) GetUnitByID(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -384,13 +383,14 @@ func (h *Handler) UpdateUnit(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req Request
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
 		return
 	}
 
-	idStr := r.PathValue("id")
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -477,8 +477,8 @@ func (h *Handler) DeleteUnit(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -559,8 +559,8 @@ func (h *Handler) ListUnitSubUnits(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -610,8 +610,8 @@ func (h *Handler) ListUnitSubUnitIDs(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -675,8 +675,8 @@ func (h *Handler) AddUnitMember(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid unit ID: %w", err), logger)
 		return
@@ -739,8 +739,8 @@ func (h *Handler) ListUnitMembers(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid unit ID: %w", err), logger)
 		return
@@ -803,8 +803,8 @@ func (h *Handler) RemoveUnitMember(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid unit ID: %w", err), logger)
 		return
@@ -883,13 +883,8 @@ func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	if idStr == "" {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrMissingUnitID, logger)
-		return
-	}
-
-	unitID, err := uuid.Parse(idStr)
+	idStr := r.PathValue("unitId")
+	unitID, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidUnitID, logger)
 		return

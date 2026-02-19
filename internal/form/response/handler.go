@@ -117,7 +117,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -153,7 +153,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Parse formId from path
 	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -161,7 +161,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	// Parse responseId from path
 	responseIDStr := r.PathValue("responseId")
-	responseID, err := internal.ParseUUID(responseIDStr)
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -316,7 +316,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Extract form ID from path
 	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -349,7 +349,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	idStr := r.PathValue("responseId")
-	id, err := internal.ParseUUID(idStr)
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

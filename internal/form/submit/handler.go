@@ -1,7 +1,6 @@
 package submit
 
 import (
-	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
@@ -62,7 +61,7 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	responseIDStr := r.PathValue("responseId")
-	responseID, err := internal.ParseUUID(responseIDStr)
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
