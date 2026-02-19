@@ -444,3 +444,36 @@ func (q *Queries) UpdateOrder(ctx context.Context, arg UpdateOrderParams) (Updat
 	)
 	return i, err
 }
+
+const updateSection = `-- name: UpdateSection :one
+UPDATE sections
+SET title = $2, description = $3, updated_at = now()
+WHERE id = $1 AND form_id = $4
+RETURNING id, form_id, title, description, created_at, updated_at
+`
+
+type UpdateSectionParams struct {
+	ID          uuid.UUID
+	Title       pgtype.Text
+	Description pgtype.Text
+	FormID      uuid.UUID
+}
+
+func (q *Queries) UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error) {
+	row := q.db.QueryRow(ctx, updateSection,
+		arg.ID,
+		arg.Title,
+		arg.Description,
+		arg.FormID,
+	)
+	var i Section
+	err := row.Scan(
+		&i.ID,
+		&i.FormID,
+		&i.Title,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

@@ -144,3 +144,9 @@ SELECT
 FROM questions q
 JOIN sections s ON q.section_id = s.id
 WHERE q.id = $1;
+
+-- name: UpdateSection :one
+UPDATE sections
+SET title = $2, description = $3, updated_at = now()
+WHERE id = $1 AND form_id = $4
+RETURNING *;

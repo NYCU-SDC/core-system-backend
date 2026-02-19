@@ -3,6 +3,7 @@ package form
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/font"
+	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"fmt"
@@ -74,6 +75,18 @@ type Response struct {
 
 type CoverUploadResponse struct {
 	ImageURL string `json:"imageUrl"`
+}
+
+type SectionRequest struct {
+	Title       string  `json:"title" validate:"required"`
+	Description *string `json:"description"`
+}
+
+type SectionResponse struct {
+	ID          string `json:"id"`
+	FormID      string `json:"formId"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
 // statusToUppercase converts database status format (lowercase) to API format (uppercase).
@@ -168,6 +181,11 @@ type tenantStore interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 }
 
+type questionStore interface {
+	UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (question.Section, error)
+	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+}
+
 type Handler struct {
 	logger *zap.Logger
 	tracer trace.Tracer
@@ -175,8 +193,9 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	store       Store
-	tenantStore tenantStore
+	store         Store
+	tenantStore   tenantStore
+	questionStore questionStore
 }
 
 func NewHandler(
@@ -185,6 +204,7 @@ func NewHandler(
 	problemWriter *problem.HttpWriter,
 	store Store,
 	tenantStore tenantStore,
+	questionStore questionStore,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -193,6 +213,7 @@ func NewHandler(
 		problemWriter: problemWriter,
 		store:         store,
 		tenantStore:   tenantStore,
+		questionStore: questionStore,
 	}
 }
 
@@ -663,4 +684,50 @@ func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, fonts)
+}
+
+func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateSectionHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formIDStr := r.PathValue("formId")
+	formID, err := handlerutil.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	sectionIDStr := r.PathValue("sectionId")
+	sectionID, err := handlerutil.ParseUUID(sectionIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req SectionRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	description := ""
+	if req.Description != nil {
+		description = *req.Description
+	}
+
+	section, err := h.questionStore.UpdateSection(traceCtx, sectionID, formID, req.Title, description)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := SectionResponse{
+		ID:          section.ID.String(),
+		FormID:      section.FormID.String(),
+		Title:       section.Title.String,
+		Description: section.Description.String,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }

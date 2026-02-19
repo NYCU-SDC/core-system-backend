@@ -154,7 +154,7 @@ func main() {
 	// Handler
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService)
+	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
 	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService, tenantService, userService)
@@ -276,6 +276,7 @@ func main() {
 	mux.Handle("POST /api/sections/{id}/questions", authMiddleware.HandlerFunc(questionHandler.AddHandler))
 	mux.Handle("PUT /api/sections/{sectionId}/questions/{questionId}", authMiddleware.HandlerFunc(questionHandler.UpdateHandler))
 	mux.Handle("DELETE /api/sections/{sectionId}/questions/{questionId}", authMiddleware.HandlerFunc(questionHandler.DeleteHandler))
+	mux.Handle("PATCH /api/forms/{formId}/sections/{sectionId}", authMiddleware.HandlerFunc(formHandler.UpdateSectionHandler))
 
 	// Response routes
 	mux.Handle("GET /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.List))

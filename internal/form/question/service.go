@@ -9,6 +9,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -22,6 +23,7 @@ type Querier interface {
 	ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error)
 }
 
 type Answerable interface {
@@ -279,4 +281,24 @@ func (s *Service) GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID
 	}
 
 	return answerableMap, nil
+}
+
+func (s *Service) UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (Section, error) {
+	ctx, span := s.tracer.Start(ctx, "UpdateSection")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	section, err := s.queries.UpdateSection(ctx, UpdateSectionParams{
+		ID:          sectionID,
+		Title:       pgtype.Text{String: title, Valid: true},
+		Description: pgtype.Text{String: description, Valid: len(description) > 0},
+		FormID:      formID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "update section")
+		span.RecordError(err)
+		return Section{}, err
+	}
+
+	return section, nil
 }
