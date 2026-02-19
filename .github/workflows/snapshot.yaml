@@ -180,3 +180,52 @@ jobs:
                 }
               }
             }'
+
+  ScenarioQA:
+    needs: Deploy
+    runs-on: ubuntu-latest
+    env:
+      SNAPSHOT_BASE_URL: https://pr-${{ github.event.pull_request.number }}.core-system.sdc.nycu.club/api
+      SNAPSHOT_LOGIN_USER_ID: 4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e
+    steps:
+      - name: Checkout API scenarios repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/core-system-api
+          path: core-system-api
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Prepare scenario env
+        run: |
+          mkdir -p reports
+          cat > core-system-api/scenarios/user-journey/form-lifecycle/.env <<'EOF'
+          BASE_URL=${SNAPSHOT_BASE_URL}
+          LOGIN_USER_ID=${SNAPSHOT_LOGIN_USER_ID}
+          EOF
+
+      - name: Run smoke tests
+        run: npx --yes httpyac send scenarios/smoke/*.http --junit --all --timeout 30000 --var BASE_URL=${SNAPSHOT_BASE_URL} > ../reports/httpyac-smoke.xml
+        working-directory: core-system-api
+
+      - name: Run user-journey tests
+        run: npx --yes httpyac send scenarios/user-journey/form-lifecycle/*.http --junit --all --timeout 30000 > ../reports/httpyac-form-lifecycle.xml
+        working-directory: core-system-api
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: httpyac scenarios
+          path: reports/httpyac-*.xml
+          reporter: java-junit
+
+      - name: Upload test report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: httpyac-junit
+          path: reports/httpyac-*.xml
