@@ -166,8 +166,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 
 type Store interface {
 	Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error)
-	Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (UpdateRow, error)
-	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (UpdateRow, error)
+	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	List(ctx context.Context) ([]ListRow, error)

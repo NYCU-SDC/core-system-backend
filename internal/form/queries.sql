@@ -58,40 +58,6 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;  
 
--- name: Update :one
-WITH updated AS (
-    UPDATE forms
-    SET
-        title = $2,
-        description = $3,
-        preview_message = $4,
-        last_editor = $5,
-        deadline = $6,
-        publish_time = $7,
-        message_after_submission = $8,
-        google_sheet_url = $9,
-        visibility = $10,
-        dressing_color = $11,
-        dressing_header_font = $12,
-        dressing_question_font = $13,
-        dressing_text_font = $14,
-        updated_at = now()
-    WHERE forms.id = $1
-    RETURNING *
-)
-SELECT 
-    f.*,
-    u.name as unit_name,
-    o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
-FROM updated f
-LEFT JOIN units u ON f.unit_id = u.id
-LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;
-
 -- name: Patch :one
 WITH updated AS (
     UPDATE forms
