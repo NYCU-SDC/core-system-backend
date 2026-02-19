@@ -166,6 +166,11 @@ jobs:
                     "path": "/nycu-oauth",
                     "secret_name": "CLIENT_SECRET",
                     "env_name": "NYCU_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "ALLOW_ONBOARDING_LIST",
+                    "env_name": "ALLOW_ONBOARDING_LIST"
                   }
                 ]
               }
@@ -231,6 +236,11 @@ jobs:
                     "path": "/nycu-oauth",
                     "secret_name": "CLIENT_SECRET",
                     "env_name": "NYCU_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "ALLOW_ONBOARDING_LIST",
+                    "env_name": "ALLOW_ONBOARDING_LIST"
                   }
                 ]
               }

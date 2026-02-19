@@ -22,6 +22,7 @@ services:
       GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
       NYCU_OAUTH_CLIENT_ID: ${NYCU_OAUTH_CLIENT_ID}
       NYCU_OAUTH_CLIENT_SECRET: ${NYCU_OAUTH_CLIENT_SECRET}
+      ALLOW_ONBOARDING_LIST: "elvismao.070512@gmail.com"
       ALLOW_ORIGINS: "*"
     labels:
       - "vector.enable=true"
