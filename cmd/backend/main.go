@@ -150,15 +150,13 @@ func main() {
 	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService)
 	formService := form.NewService(logger, dbPool, responseService)
 	submitService := submit.NewService(logger, formService, questionService, responseService)
-	workflowService := workflow.NewService(logger, dbPool, questionService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 	fileService := file.NewService(logger, dbPool)
 
 	// Handler
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, fileService)
-	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService)
+	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService, fileService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
 	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService, tenantService, userService)
