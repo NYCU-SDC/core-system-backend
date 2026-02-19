@@ -211,7 +211,7 @@ func (h *Handler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIDStr := r.PathValue("id")
+	formIDStr := r.PathValue("formId")
 	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -252,7 +252,7 @@ func (h *Handler) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIDStr := r.PathValue("id")
+	formIDStr := r.PathValue("formId")
 	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
