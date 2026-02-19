@@ -256,6 +256,27 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Google Sheet setting is form-scoped; validate accessibility before persisting.
+	if req.GoogleSheetUrl != nil && *req.GoogleSheetUrl != "" {
+		spreadsheetID, err := extractSpreadsheetID(*req.GoogleSheetUrl)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+
+		v, ok := h.store.(verifier)
+		if !ok {
+			h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+			return
+		}
+
+		err = v.VerifySpreadsheetReadable(traceCtx, spreadsheetID)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+	}
+
 	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
