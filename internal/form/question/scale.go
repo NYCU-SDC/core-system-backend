@@ -175,7 +175,11 @@ func (s LinearScale) MatchesPattern(rawValue json.RawMessage, pattern string) (b
 	}
 
 	// Match against the string representation of the value
-	return matchPattern(fmt.Sprintf("%d", linearScaleAnswer.Value), pattern)
+	match, err := matchPattern(fmt.Sprintf("%d", linearScaleAnswer.Value), pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for linear scale answer: %w", err)
+	}
+	return match, nil
 }
 
 type Rating struct {
@@ -305,7 +309,11 @@ func (s Rating) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, 
 	}
 
 	// Match against the string representation of the value
-	return matchPattern(fmt.Sprintf("%d", ratingAnswer.Value), pattern)
+	match, err := matchPattern(fmt.Sprintf("%d", ratingAnswer.Value), pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for rating answer: %w", err)
+	}
+	return match, nil
 }
 
 func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {
