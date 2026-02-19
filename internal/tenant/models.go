@@ -193,46 +193,46 @@ func (ns NullQuestionType) Value() (driver.Value, error) {
 	return string(ns.QuestionType), nil
 }
 
-type SectionProgress string
+type ResponseProgress string
 
 const (
-	SectionProgressDraft     SectionProgress = "draft"
-	SectionProgressSubmitted SectionProgress = "submitted"
+	ResponseProgressDraft     ResponseProgress = "draft"
+	ResponseProgressSubmitted ResponseProgress = "submitted"
 )
 
-func (e *SectionProgress) Scan(src interface{}) error {
+func (e *ResponseProgress) Scan(src interface{}) error {
 	switch s := src.(type) {
 	case []byte:
-		*e = SectionProgress(s)
+		*e = ResponseProgress(s)
 	case string:
-		*e = SectionProgress(s)
+		*e = ResponseProgress(s)
 	default:
-		return fmt.Errorf("unsupported scan type for SectionProgress: %T", src)
+		return fmt.Errorf("unsupported scan type for ResponseProgress: %T", src)
 	}
 	return nil
 }
 
-type NullSectionProgress struct {
-	SectionProgress SectionProgress
-	Valid           bool // Valid is true if SectionProgress is not NULL
+type NullResponseProgress struct {
+	ResponseProgress ResponseProgress
+	Valid            bool // Valid is true if ResponseProgress is not NULL
 }
 
 // Scan implements the Scanner interface.
-func (ns *NullSectionProgress) Scan(value interface{}) error {
+func (ns *NullResponseProgress) Scan(value interface{}) error {
 	if value == nil {
-		ns.SectionProgress, ns.Valid = "", false
+		ns.ResponseProgress, ns.Valid = "", false
 		return nil
 	}
 	ns.Valid = true
-	return ns.SectionProgress.Scan(value)
+	return ns.ResponseProgress.Scan(value)
 }
 
 // Value implements the driver Valuer interface.
-func (ns NullSectionProgress) Value() (driver.Value, error) {
+func (ns NullResponseProgress) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
 	}
-	return string(ns.SectionProgress), nil
+	return string(ns.ResponseProgress), nil
 }
 
 type Status string
@@ -408,8 +408,7 @@ type Answer struct {
 	ID         uuid.UUID
 	ResponseID uuid.UUID
 	QuestionID uuid.UUID
-	Type       QuestionType
-	Value      string
+	Value      []byte
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
 }
@@ -468,6 +467,7 @@ type FormResponse struct {
 	FormID      uuid.UUID
 	SubmittedBy uuid.UUID
 	SubmittedAt pgtype.Timestamptz
+	Progress    ResponseProgress
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
@@ -506,7 +506,6 @@ type Section struct {
 	ID          uuid.UUID
 	FormID      uuid.UUID
 	Title       pgtype.Text
-	Progress    SectionProgress
 	Description pgtype.Text
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz

@@ -19,7 +19,7 @@ import (
 // GetFromContext extracts the authenticated user from request context
 func GetFromContext(ctx context.Context) (*User, bool) {
 	userData, ok := ctx.Value(internal.UserContextKey).(*User)
-	return userData, ok 																																																																																																																																																							
+	return userData, ok
 }
 
 func ConvertEmailsToSlice(emails interface{}) []string {
@@ -57,12 +57,13 @@ type ProfileResponse struct {
 
 // MeResponse represents the response format for /user/me endpoint
 type MeResponse struct {
-	ID        string   `json:"id"`
-	Username  string   `json:"username"`
-	Name      string   `json:"name"`
-	AvatarUrl string   `json:"avatarUrl"`
-	Role      string   `json:"role"`
-	Emails    []string `json:"emails"`
+	ID          string   `json:"id"`
+	Username    string   `json:"username"`
+	Name        string   `json:"name"`
+	AvatarUrl   string   `json:"avatarUrl"`
+	Role        string   `json:"role"`
+	Emails      []string `json:"emails"`
+	IsOnboarded bool     `json:"isOnboarded"`
 }
 
 // OnboardingRequest represents the request format for /user/onboarding endpoint
@@ -121,12 +122,13 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MeResponse{
-		ID:        currentUser.ID.String(),
-		Username:  currentUser.Username.String,
-		Name:      currentUser.Name.String,
-		AvatarUrl: currentUser.AvatarUrl.String,
-		Role:      roleStr,
-		Emails:    emails,
+		ID:          currentUser.ID.String(),
+		Username:    currentUser.Username.String,
+		Name:        currentUser.Name.String,
+		AvatarUrl:   currentUser.AvatarUrl.String,
+		Role:        roleStr,
+		Emails:      emails,
+		IsOnboarded: currentUser.IsOnboarded,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -172,12 +174,13 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MeResponse{
-		ID:        newUser.ID.String(),
-		Username:  newUser.Username.String,
-		Name:      newUser.Name.String,
-		AvatarUrl: newUser.AvatarUrl.String,
-		Role:      roleStr,
-		Emails:    emails,
+		ID:          newUser.ID.String(),
+		Username:    newUser.Username.String,
+		Name:        newUser.Name.String,
+		AvatarUrl:   newUser.AvatarUrl.String,
+		Role:        roleStr,
+		Emails:      emails,
+		IsOnboarded: newUser.IsOnboarded,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)

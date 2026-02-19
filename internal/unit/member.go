@@ -192,3 +192,12 @@ func (s *Service) RemoveMember(ctx context.Context, unitType Type, id uuid.UUID,
 
 	return nil
 }
+
+func (role UnitRole) IsValidMemberRole() bool {
+	switch role {
+	case UnitRoleAdmin, UnitRoleMember:
+		return true
+	default:
+		return false
+	}
+}

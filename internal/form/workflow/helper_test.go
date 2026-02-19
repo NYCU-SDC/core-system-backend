@@ -455,6 +455,14 @@ func createMockAnswerable(t *testing.T, formID uuid.UUID, questionType question.
 		})
 		require.NoError(t, err)
 		q.Metadata = metadata
+	case questionType == question.QuestionTypeDate:
+		metadata, err := question.GenerateDateMetadata(question.DateOption{
+			HasYear:  true,
+			HasMonth: true,
+			HasDay:   true,
+		})
+		require.NoError(t, err)
+		q.Metadata = metadata
 	default:
 		q.Metadata = []byte("{}")
 	}

@@ -3,7 +3,6 @@ package question
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -28,6 +27,7 @@ type Request struct {
 	Choices      []ChoiceOption   `json:"choices,omitempty" validate:"omitempty,required_if=Type SINGLE_CHOICE,required_if=Type MULTIPLE_CHOICE,required_if=Type DETAILED_MULTIPLE_CHOICE,required_if=Type DROPDOWN,required_if=Type RANKING,dive"`
 	Scale        ScaleOption      `json:"scale,omitempty" validate:"omitempty,required_if=Type LINEAR_SCALE,required_if=Type RATING"`
 	UploadFile   UploadFileOption `json:"uploadFile,omitempty" validate:"omitempty,required_if=Type UPLOAD_FILE"`
+	Date         DateOption       `json:"date,omitempty"`
 	OauthConnect string           `json:"oauthConnect,omitempty" validate:"required_if=Type OAUTH_CONNECT"`
 	SourceID     uuid.UUID        `json:"sourceId,omitempty"`
 }
@@ -42,15 +42,37 @@ type Response struct {
 	Choices      []Choice          `json:"choices,omitempty"`
 	Scale        *ScaleOption      `json:"scale,omitempty"`
 	UploadFile   *UploadFileOption `json:"uploadFile,omitempty"`
+	Date         *DateOption       `json:"date,omitempty"`
 	OauthConnect string            `json:"oauthConnect,omitempty"`
 	SourceID     string            `json:"sourceId,omitempty"`
 	CreatedAt    time.Time         `json:"createdAt"`
 	UpdatedAt    time.Time         `json:"updatedAt"`
 }
 
+type SectionPayload struct {
+	ID          uuid.UUID `json:"id"`
+	FormID      uuid.UUID `json:"formId"`
+	Title       string    `json:"title"`
+	Progress    string    `json:"progress"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 type SectionResponse struct {
-	Section   Section
-	Questions []Response
+	Section   SectionPayload `json:"section"`
+	Questions []Response     `json:"questions"`
+}
+
+func ToSection(section Section) SectionPayload {
+	return SectionPayload{
+		ID:          section.ID,
+		FormID:      section.FormID,
+		Title:       section.Title.String,
+		Description: section.Description.String,
+		CreatedAt:   section.CreatedAt.Time,
+		UpdatedAt:   section.UpdatedAt.Time,
+	}
 }
 
 func ToResponse(answerable Answerable) (Response, error) {
@@ -142,6 +164,31 @@ func ToResponse(answerable Answerable) (Response, error) {
 			}
 		}
 		response.OauthConnect = string(provider)
+	case QuestionTypeDate:
+		// If metadata is nil, use default values
+		if q.Metadata == nil {
+			response.Date = &DateOption{
+				HasYear:  true,
+				HasMonth: true,
+				HasDay:   true,
+			}
+		} else {
+			dateMetadata, err := ExtractDateMetadata(q.Metadata)
+			if err != nil {
+				return response, ErrInvalidMetadata{
+					QuestionID: q.ID.String(),
+					RawData:    q.Metadata,
+					Message:    err.Error(),
+				}
+			}
+			response.Date = &DateOption{
+				HasYear:  dateMetadata.HasYear,
+				HasMonth: dateMetadata.HasMonth,
+				HasDay:   dateMetadata.HasDay,
+				MinDate:  dateMetadata.MinDate,
+				MaxDate:  dateMetadata.MaxDate,
+			}
+		}
 	}
 
 	return response, nil
@@ -152,7 +199,7 @@ type Store interface {
 	Update(ctx context.Context, input UpdateParams) (Answerable, error)
 	UpdateOrder(ctx context.Context, input UpdateOrderParams) (Answerable, error)
 	DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithQuestions, error)
+	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error)
 }
 
 type Handler struct {
@@ -202,7 +249,7 @@ func (h *Handler) AddHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate and validate metadata (returns nil if source_id provided)
 	metadata, err := getGenerateMetadata(req)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to generate metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -252,7 +299,8 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req Request
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -261,7 +309,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate and validate metadata
 	metadata, err := getGenerateMetadata(req)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to update metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -345,7 +393,7 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sectionWithQuestions, err := h.store.ListByFormID(traceCtx, formID)
+	sectionWithQuestions, err := h.store.ListSectionsWithAnswersByFormID(traceCtx, formID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -353,8 +401,8 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]SectionResponse, len(sectionWithQuestions))
 	for i, s := range sectionWithQuestions {
-		responses[i].Section = sectionWithQuestions[i].Section
-		for _, q := range s.Questions {
+		responses[i].Section = ToSection(sectionWithQuestions[i].Section)
+		for _, q := range s.AnswerableList {
 			response, err := ToResponse(q)
 			if err != nil {
 				h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -370,8 +418,9 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 func getGenerateMetadata(req Request) ([]byte, error) {
 	// If source_id is provided, don't generate metadata
 	if req.SourceID != uuid.Nil {
-		switch req.Type {
-		case "single_choice", "multiple_choice", "dropdown", "ranking":
+		questionType := QuestionType(req.Type)
+		switch questionType {
+		case QuestionTypeSingleChoice, QuestionTypeMultipleChoice, QuestionTypeDropdown, QuestionTypeRanking:
 			if len(req.Choices) > 0 {
 				return nil, internal.ErrInvalidSourceIDWithChoices
 			}
@@ -381,18 +430,21 @@ func getGenerateMetadata(req Request) ([]byte, error) {
 		}
 	}
 
-	switch req.Type {
-	case "short_text", "long_text", "date", "hyperlink":
+	questionType := QuestionType(req.Type)
+	switch questionType {
+	case QuestionTypeShortText, QuestionTypeLongText, QuestionTypeHyperlink:
 		return nil, nil
-	case "single_choice", "multiple_choice", "detailed_multiple_choice", "dropdown", "ranking":
+	case QuestionTypeDate:
+		return GenerateDateMetadata(req.Date)
+	case QuestionTypeSingleChoice, QuestionTypeMultipleChoice, QuestionTypeDetailedMultipleChoice, QuestionTypeDropdown, QuestionTypeRanking:
 		return GenerateChoiceMetadata(req.Type, req.Choices)
-	case "linear_scale":
+	case QuestionTypeLinearScale:
 		return GenerateLinearScaleMetadata(req.Scale)
-	case "rating":
+	case QuestionTypeRating:
 		return GenerateRatingMetadata(req.Scale)
-	case "oauth_connect":
+	case QuestionTypeOauthConnect:
 		return GenerateOauthConnectMetadata(req.OauthConnect)
-	case "upload_file":
+	case QuestionTypeUploadFile:
 		return GenerateUploadFileMetadata(req.UploadFile)
 	default:
 		return nil, ErrUnsupportedQuestionType{

@@ -6,6 +6,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -26,8 +27,8 @@ type Request struct {
 }
 
 type AnswerRequest struct {
-	QuestionID string `json:"questionId" validate:"required,uuid"`
-	Value      string `json:"value" validate:"required"`
+	QuestionID string          `json:"questionId" validate:"required,uuid"`
+	Value      json.RawMessage `json:"value"`
 }
 
 func (a AnswerRequest) ToAnswerParam() shared.AnswerParam {

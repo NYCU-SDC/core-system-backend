@@ -70,21 +70,6 @@ CREATE TABLE IF NOT EXISTS unit_members (
     role unit_role NOT NULL DEFAULT 'member',
     PRIMARY KEY (unit_id, member_id)
 );
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE TABLE IF NOT EXISTS files (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    original_filename VARCHAR(255) NOT NULL,
-    content_type VARCHAR(100) NOT NULL,
-    size BIGINT NOT NULL,
-    data BYTEA NOT NULL,
-    uploaded_by UUID,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_files_uploaded_by ON files(uploaded_by);
-CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);
 CREATE TYPE db_strategy AS ENUM ('shared', 'isolated');
 
 CREATE TABLE IF NOT EXISTS tenants
@@ -129,24 +114,21 @@ CREATE TABLE IF NOT EXISTS workflow_versions (
 CREATE INDEX idx_workflow_versions_is_active ON workflow_versions(form_id, is_active) WHERE is_active = true;
 
 CREATE INDEX idx_workflow_versions_latest ON workflow_versions(form_id, updated_at DESC);
+CREATE TYPE response_progress AS ENUM (
+    'draft',
+    'submitted'
+);
+
 CREATE TABLE IF NOT EXISTS form_responses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
     submitted_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     submitted_at TIMESTAMPTZ DEFAULT NULL,
+    progress response_progress NOT NULL DEFAULT 'draft',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE TABLE IF NOT EXISTS answers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    response_id UUID NOT NULL REFERENCES form_responses(id) ON DELETE CASCADE,
-    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
-    type question_type NOT NULL,
-    value TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);CREATE TYPE status AS ENUM(
+CREATE TYPE status AS ENUM(
     'draft',
     'published',
     'archived'
@@ -186,17 +168,10 @@ CREATE TABLE IF NOT EXISTS form_covers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Section progress enum (for form completion tracking)
-CREATE TYPE section_progress AS ENUM(
-    'draft',
-    'submitted'
-);
-
 CREATE TABLE IF NOT EXISTS sections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
     title VARCHAR(255) DEFAULT NULL,
-    progress section_progress NOT NULL DEFAULT 'draft',
     description TEXT DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -204,6 +179,15 @@ CREATE TABLE IF NOT EXISTS sections (
 
 CREATE INDEX idx_sections_form_id ON sections(form_id);
 
+CREATE TABLE IF NOT EXISTS answers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    response_id UUID NOT NULL REFERENCES form_responses(id) ON DELETE CASCADE,
+    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    value JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(response_id, question_id)
+);
 CREATE TYPE question_type AS ENUM(
     'short_text',
     'long_text',

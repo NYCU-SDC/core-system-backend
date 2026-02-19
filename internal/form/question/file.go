@@ -100,15 +100,10 @@ func (u UploadFile) FormID() uuid.UUID {
 	return u.formID
 }
 
-func (u UploadFile) Validate(value string) error {
-	if strings.TrimSpace(value) == "" {
-		return nil // Empty is allowed if not required
-	}
-
-	// value should be JSON array of file URLs or IDs
-	// Example: ["file-id-1", "file-id-2"]
+func (u UploadFile) Validate(rawValue json.RawMessage) error {
+	// Parse the JSON array of file URLs/IDs
 	var fileIDs []string
-	if err := json.Unmarshal([]byte(value), &fileIDs); err != nil {
+	if err := json.Unmarshal(rawValue, &fileIDs); err != nil {
 		return fmt.Errorf("invalid file upload value format: %w", err)
 	}
 
@@ -168,6 +163,30 @@ func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
 		MaxFileAmount:    uploadFile.MaxFileAmount,
 		MaxFileSizeLimit: uploadFile.MaxFileSizeLimit,
 	}, nil
+}
+
+func (u UploadFile) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement upload file decoding from API request
+	return nil, errors.New("not implemented yet")
+}
+
+func (u UploadFile) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement upload file decoding from storage
+	return nil, errors.New("not implemented yet")
+}
+
+func (u UploadFile) EncodeRequest(answer any) (json.RawMessage, error) {
+	// TODO: Implement upload file encoding to API request format
+	return nil, errors.New("not implemented yet")
+}
+
+func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
+	// TODO: Implement DisplayValue for UploadFile
+	return "", fmt.Errorf("DisplayValue not implemented for UploadFile question type")
+}
+
+func (u UploadFile) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	return false, errors.New("MatchesPattern is not supported for upload_file question type")
 }
 
 // GenerateUploadFileMetadata generates metadata for upload file question
