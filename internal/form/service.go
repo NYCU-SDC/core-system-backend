@@ -1,9 +1,12 @@
 package form
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"slices"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -16,6 +19,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+
+	"google.golang.org/api/option"
+	"google.golang.org/api/sheets/v4"
 )
 
 type Querier interface {
@@ -440,4 +446,55 @@ func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, erro
 	}
 
 	return imageData, nil
+}
+
+func (s *Service) GetServiceAccountEmail() string {
+	return os.Getenv("GOOGLE_SERVICE_ACCOUNT_EMAIL")
+}
+
+func (s *Service) VerifySpreadsheetReadable(ctx context.Context, spreadsheetID string) error {
+	ctx, span := s.tracer.Start(ctx, "VerifySpreadsheetReadable")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	serviceAccountKey := os.Getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
+	if serviceAccountKey == "" {
+		err := fmt.Errorf("%w: GOOGLE_SERVICE_ACCOUNT_KEY is not set", internal.ErrInternalServerError)
+		span.RecordError(err)
+		logger.Error("missing google service account key", zap.Error(err))
+		return err
+	}
+
+	// initialize google sheets api client
+	srv, err := sheets.NewService(
+		ctx,
+		option.WithAuthCredentialsJSON(option.ServiceAccount, []byte(serviceAccountKey)),
+		option.WithScopes(sheets.SpreadsheetsReadonlyScope),
+	)
+	if err != nil {
+		err = fmt.Errorf("failed to create sheets service: %w", err)
+		span.RecordError(err)
+		logger.Error("failed to create sheets service", zap.Error(err))
+		return err
+	}
+
+	// try to access
+	_, err = srv.Spreadsheets.Get(spreadsheetID).
+		Fields("spreadsheetId").
+		Context(ctx).
+		Do()
+	if err != nil {
+		email := s.GetServiceAccountEmail()
+		if email != "" {
+			err = fmt.Errorf("%w: %s", internal.ErrGoogleSheetAccessDenied, email)
+		} else {
+			err = fmt.Errorf("failed to access spreadsheet: %w", err)
+		}
+
+		span.RecordError(err)
+		logger.Warn("failed to access spreadsheet", zap.String("spreadsheet_id", spreadsheetID), zap.Error(err))
+		return err
+	}
+
+	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"time"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -76,6 +77,27 @@ type Response struct {
 type CoverUploadResponse struct {
 	ImageURL string `json:"imageUrl"`
 }
+type GoogleSheetEmailResponse struct {
+	Email string `json:"email"`
+}
+type GoogleSheetVerifyRequest struct {
+	GoogleSheetURL string `json:"googleSheetUrl" validate:"required"`
+}
+
+type GoogleSheetVerifyResponse struct {
+	IsValid bool `json:"isValid"`
+}
+
+type emailGetter interface {
+	GetServiceAccountEmail() string
+}
+
+type verifier interface {
+	VerifySpreadsheetReadable(ctx context.Context, spreadsheetID string) error
+}
+
+// Google IDs allow alphanumeric characters, hyphens, and underscores.
+var spreadsheetIDPattern = regexp.MustCompile(`spreadsheets/d/([a-zA-Z0-9_-]+)`)
 
 type SectionRequest struct {
 	Title       string  `json:"title" validate:"required"`
@@ -232,6 +254,27 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
+	}
+
+	// Google Sheet setting is form-scoped; validate accessibility before persisting.
+	if req.GoogleSheetUrl != nil && *req.GoogleSheetUrl != "" {
+		spreadsheetID, err := extractSpreadsheetID(*req.GoogleSheetUrl)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+
+		v, ok := h.store.(verifier)
+		if !ok {
+			h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+			return
+		}
+
+		err = v.VerifySpreadsheetReadable(traceCtx, spreadsheetID)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
 	}
 
 	currentUser, ok := user.GetFromContext(traceCtx)
@@ -683,6 +726,67 @@ func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, fonts)
+}
+
+func (h *Handler) GetGoogleSheetEmailHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetGoogleSheetEmailHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	getter, ok := h.store.(emailGetter)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+		return
+	}
+
+	email := getter.GetServiceAccountEmail()
+	if email == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, GoogleSheetEmailResponse{Email: email})
+}
+
+func (h *Handler) VerifyGoogleSheetHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "VerifyGoogleSheetHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var req GoogleSheetVerifyRequest
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	spreadsheetID, err := extractSpreadsheetID(req.GoogleSheetURL)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	v, ok := h.store.(verifier)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+		return
+	}
+
+	err = v.VerifySpreadsheetReadable(traceCtx, spreadsheetID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, GoogleSheetVerifyResponse{IsValid: true})
+}
+
+func extractSpreadsheetID(sheetURL string) (string, error) {
+	matches := spreadsheetIDPattern.FindStringSubmatch(sheetURL)
+	if len(matches) < 2 {
+		return "", internal.ErrGoogleSheetURLInvalid
+	}
+	return matches[1], nil
 }
 
 func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {

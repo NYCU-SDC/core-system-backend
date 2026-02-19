@@ -84,11 +84,13 @@ var (
 	ErrSearchTooLong              = errors.New("search string exceeds maximum length")
 
 	// Form Errors
-	ErrFormNotFound            = errors.New("form not found")
-	ErrFormNotDraft            = fmt.Errorf("form is not in draft status")
-	ErrFormDeadlinePassed      = errors.New("form deadline has passed")
+	ErrFormNotFound                 = errors.New("form not found")
+	ErrFormNotDraft                 = fmt.Errorf("form is not in draft status")
+	ErrFormDeadlinePassed           = errors.New("form deadline has passed")
 	ErrCoverImageTooLarge      = errors.New("cover image exceeds maximum size")
 	ErrCoverImageInvalidFormat = errors.New("cover image format is invalid")
+	ErrGoogleSheetURLInvalid   = errors.New("invalid google sheet url format")
+	ErrGoogleSheetAccessDenied = errors.New("cannot access google sheet")
 
 	// Question Errors
 	ErrQuestionNotFound           = errors.New("question not found")
@@ -208,6 +210,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("cover image exceeds maximum size (max 2MB)")
 	case errors.Is(err, ErrCoverImageInvalidFormat):
 		return problem.NewValidateProblem("cover image must be a WebP file")
+	case errors.Is(err, ErrGoogleSheetURLInvalid):
+		return problem.NewValidateProblem("invalid google sheet url format")
+	case errors.Is(err, ErrGoogleSheetAccessDenied):
+		return problem.NewValidateProblem("cannot access google sheet, please share with service account")
 
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):
