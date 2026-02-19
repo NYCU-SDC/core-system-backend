@@ -3,9 +3,28 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/NYCU-SDC/summer/pkg/problem"
+	"github.com/google/uuid"
 )
+
+type ErrResponseNotComplete struct {
+	NotCompleteSections []struct {
+		Title    string
+		ID       uuid.UUID
+		Progress string
+	}
+}
+
+func (s ErrResponseNotComplete) Error() string {
+	sectionIDs := make([]string, len(s.NotCompleteSections))
+	for i, section := range s.NotCompleteSections {
+		sectionIDs[i] = fmt.Sprintf("Title: %s, ID: %s, Progress: %s", section.Title, section.ID.String(), section.Progress)
+	}
+
+	return "response is not complete, not complete sections: " + strings.Join(sectionIDs, "; ")
+}
 
 var (
 	// Auth Errors
@@ -218,6 +237,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("response not found")
 	case errors.Is(err, ErrResponseAlreadyExists):
 		return problem.NewValidateProblem("user already has a response for this form")
+
+	// Submit Errors
+	case errors.Is(err, ErrResponseNotComplete{}):
+		return problem.NewValidateProblem(err.Error())
 
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):

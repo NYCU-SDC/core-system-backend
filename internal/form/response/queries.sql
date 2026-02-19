@@ -26,6 +26,12 @@ UPDATE form_responses
 SET updated_at = now(), progress = $2
 WHERE id = $1;
 
+-- name: UpdateSubmitted :one
+UPDATE form_responses
+SET submitted_at = now(), progress = 'submitted'
+WHERE id = $1
+RETURNING *;
+
 -- name: Delete :exec
 DELETE FROM form_responses
 WHERE id = $1;

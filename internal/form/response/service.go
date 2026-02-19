@@ -24,6 +24,7 @@ type Querier interface {
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
+	UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error)
 }
 
 type WorkflowResolver interface {
@@ -352,4 +353,19 @@ func (s Service) Delete(ctx context.Context, id uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func (s Service) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UpdateSubmitted")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formResponse, err := s.queries.UpdateSubmitted(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "update response submitted status")
+		span.RecordError(err)
+		return FormResponse{}, err
+	}
+
+	return formResponse, nil
 }
