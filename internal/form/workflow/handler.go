@@ -39,6 +39,137 @@ type Handler struct {
 	store Store
 }
 
+// nodeTypeToUppercase converts database node type format (lowercase) to API format (uppercase).
+func nodeTypeToUppercase(nt NodeType) string {
+	switch nt {
+	case NodeTypeSection:
+		return "SECTION"
+	case NodeTypeCondition:
+		return "CONDITION"
+	case NodeTypeStart:
+		return "START"
+	case NodeTypeEnd:
+		return "END"
+	default:
+		return string(nt)
+	}
+}
+
+// nodeTypeToLowercase converts API node type format (uppercase) to database format (lowercase).
+func nodeTypeToLowercase(apiType string) string {
+	switch apiType {
+	case "SECTION":
+		return "section"
+	case "CONDITION":
+		return "condition"
+	case "START":
+		return "start"
+	case "END":
+		return "end"
+	default:
+		return strings.ToLower(apiType)
+	}
+}
+
+// workflowToAPIFormat converts workflow JSON from database format to API format (type: lowercase -> uppercase).
+func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
+	var nodes []map[string]interface{}
+	err := json.Unmarshal(dbWorkflow, &nodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
+	}
+
+	for i := range nodes {
+		typeVal, ok := nodes[i]["type"].(string)
+		if ok {
+			nodes[i]["type"] = nodeTypeToUppercase(NodeType(typeVal))
+		}
+	}
+
+	result, err := json.Marshal(nodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalWorkflow, err)
+	}
+	return result, nil
+}
+
+// mergeTypeFromDB merges type information from database workflow into API request.
+// API request may not contain 'type' field, so we need to retrieve it from the database.
+// If a node ID exists in API request but not in database, returns an error.
+func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
+	// Parse API workflow (request from client)
+	var apiNodes []map[string]interface{}
+	err := json.Unmarshal(apiWorkflow, &apiNodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalAPIWorkflow, err)
+	}
+
+	// Parse database workflow
+	var dbNodes []map[string]interface{}
+	err = json.Unmarshal(dbWorkflow, &dbNodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalDBWorkflow, err)
+	}
+
+	// Build a map of node ID -> type from database
+	dbNodeTypeMap := make(map[string]string)
+	for _, dbNode := range dbNodes {
+		nodeID, idOk := dbNode["id"].(string)
+		nodeType, typeOk := dbNode["type"].(string)
+		if idOk && typeOk {
+			dbNodeTypeMap[nodeID] = nodeType
+		}
+	}
+
+	// Merge type information into API nodes
+	for i := range apiNodes {
+		nodeID, ok := apiNodes[i]["id"].(string)
+		if !ok || nodeID == "" {
+			// Node ID is required, but let validator handle this error
+			continue
+		}
+
+		// Check if node exists in database
+		dbType, exists := dbNodeTypeMap[nodeID]
+		if !exists {
+			return nil, fmt.Errorf("%w: node with id '%s' not found in current workflow, please create it first using CreateNode API", internal.ErrWorkflowNodeNotFound, nodeID)
+		}
+
+		// Add type from database to API node
+		apiNodes[i]["type"] = dbType
+	}
+
+	// Marshal merged nodes back to JSON
+	result, err := json.Marshal(apiNodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalMergedWorkflow, err)
+	}
+
+	return result, nil
+}
+
+// workflowFromAPIFormat converts workflow JSON from API format to database format (type: uppercase -> lowercase).
+func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
+	var nodes []map[string]interface{}
+	err := json.Unmarshal(apiWorkflow, &nodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
+	}
+
+	for i := range nodes {
+		typeVal, ok := nodes[i]["type"].(string)
+		if ok {
+			nodes[i]["type"] = nodeTypeToLowercase(typeVal)
+		}
+	}
+
+	result, err := json.Marshal(nodes)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", internal.ErrMarshalWorkflow, err)
+	}
+	return result, nil
+}
+
 func NewHandler(
 	logger *zap.Logger,
 	validator *validator.Validate,
@@ -93,6 +224,13 @@ func (h *Handler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert workflow types from database format to API format
+	apiWorkflow, err := workflowToAPIFormat([]byte(row.Workflow))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow to API format: %w", err), logger)
+		return
+	}
+
 	// Check validation status
 	validationInfos, err := h.store.GetValidationInfo(traceCtx, formID, []byte(row.Workflow))
 	if err != nil {
@@ -102,7 +240,7 @@ func (h *Handler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := GetWorkflowResponse{
-		Workflow: json.RawMessage(row.Workflow),
+		Workflow: json.RawMessage(apiWorkflow),
 		Info:     validationInfos,
 	}
 
@@ -150,15 +288,43 @@ func (h *Handler) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid JSON in request body: %w", err), logger)
 		return
 	}
-	req = json.RawMessage(bodyBytes)
+	req = bodyBytes
 
-	row, err := h.store.Update(traceCtx, formID, []byte(req), currentUser.ID)
+	// Get current workflow from database to merge type information
+	currentRow, err := h.store.Get(traceCtx, formID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, json.RawMessage(row.Workflow))
+	// Merge type information from database into API request
+	mergedWorkflow, err := mergeTypeFromDB(req, currentRow.Workflow)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to merge type information: %w", err), logger)
+		return
+	}
+
+	// Convert workflow types from API format to database format
+	dbWorkflow, err := workflowFromAPIFormat(mergedWorkflow)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow from API format: %w", err), logger)
+		return
+	}
+
+	row, err := h.store.Update(traceCtx, formID, dbWorkflow, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Convert response back to API format
+	apiWorkflow, err := workflowToAPIFormat(row.Workflow)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow to API format: %w", err), logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, json.RawMessage(apiWorkflow))
 }
 
 func (h *Handler) CreateNode(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +362,7 @@ func (h *Handler) CreateNode(w http.ResponseWriter, r *http.Request) {
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, createNodeResponse{
 		ID:    created.NodeID.String(),
-		Type:  string(created.NodeType),
+		Type:  nodeTypeToUppercase(created.NodeType),
 		Label: created.NodeLabel,
 	})
 }

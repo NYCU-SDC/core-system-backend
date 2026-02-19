@@ -3,12 +3,11 @@ package submit
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form"
+	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"context"
-	"fmt"
-	"time"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -17,8 +16,12 @@ import (
 	"go.uber.org/zap"
 )
 
+type AnswerStore interface {
+	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]answer.Answer, []answer.Answerable, []error)
+}
+
 type QuestionStore interface {
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithQuestions, error)
+	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
 }
 
 type FormStore interface {
@@ -26,7 +29,10 @@ type FormStore interface {
 }
 
 type FormResponseStore interface {
-	CreateOrUpdate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam, questionType []response.QuestionType) (response.FormResponse, error)
+	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (response.FormResponse, error)
+	Get(ctx context.Context, id uuid.UUID) (response.FormResponse, []response.SectionWithAnswerableAndAnswer, error)
+	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	UpdateSubmitted(ctx context.Context, id uuid.UUID) (response.FormResponse, error)
 }
 
 type Service struct {
@@ -36,103 +42,83 @@ type Service struct {
 	formStore     FormStore
 	questionStore QuestionStore
 	responseStore FormResponseStore
+	answerStore   AnswerStore
 }
 
-func NewService(logger *zap.Logger, formStore FormStore, questionStore QuestionStore, formResponseStore FormResponseStore) *Service {
+func NewService(logger *zap.Logger, formStore FormStore, questionStore QuestionStore, formResponseStore FormResponseStore, answerStore AnswerStore) *Service {
 	return &Service{
 		logger:        logger,
 		tracer:        otel.Tracer("submit/service"),
 		formStore:     formStore,
 		questionStore: questionStore,
 		responseStore: formResponseStore,
+		answerStore:   answerStore,
 	}
 }
 
-// Submit handles a user's submission for a specific form.
-// It performs the following steps:
-// 1. Retrieves all questions associated with the form.
-// 2. Validates the submitted answers against the corresponding questions.
-//   - If any validation fails or if an answer references a nonexistent question, it accumulates the errors.
-//   - Validates that all required questions have been answered.
-//
-// 3. If there are validation errors, returns them without saving.
-// 4. If validation passes, creates or updates the response record using the answer values and question types.
-//
-// Returns the saved form response if successful, or a list of validation/database errors otherwise.
-func (s *Service) Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error) {
+// Submit updates answers for a response, validates all sections are complete, and marks the response as submitted
+// Returns an error if any section is not completed or skipped
+func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error) {
 	traceCtx, span := s.tracer.Start(ctx, "Submit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// Check form deadline before processing submission
-	formDetails, err := s.formStore.GetByID(traceCtx, formID)
+	// Get the form ID associated with this response
+	formID, err := s.responseStore.GetFormIDByID(traceCtx, responseID)
 	if err != nil {
+		logger.Error("failed to get form id by response id", zap.Error(err))
 		return response.FormResponse{}, []error{err}
 	}
 
-	// Validate form deadline
-	if formDetails.Deadline.Valid && formDetails.Deadline.Time.Before(time.Now()) {
-		return response.FormResponse{}, []error{internal.ErrFormDeadlinePassed}
+	// Upsert all provided answers
+	_, _, errs := s.answerStore.Upsert(traceCtx, formID, responseID, answers)
+	if len(errs) > 0 {
+		logger.Error("failed to upsert answers", zap.Int("numErrors", len(errs)))
+		return response.FormResponse{}, errs
 	}
 
-	list, err := s.questionStore.ListByFormID(traceCtx, formID)
+	// Get the updated response with all sections to validate completion
+	_, sections, err := s.responseStore.Get(traceCtx, responseID)
 	if err != nil {
+		logger.Error("failed to get response after upsert", zap.Error(err))
 		return response.FormResponse{}, []error{err}
 	}
 
-	// Validate answers against questions
-	var questionTypes []response.QuestionType
-	validationErrors := make([]error, 0)
-	answeredQuestionIDs := make(map[string]bool)
+	// Collect all incomplete sections (not completed or skipped)
+	notCompleteSections := make([]struct {
+		Title    string
+		ID       uuid.UUID
+		Progress string
+	}, 0, len(sections))
+	for _, section := range sections {
+		currentProgress := section.SectionProgress
+		if currentProgress != response.SectionProgressCompleted && currentProgress != response.SectionProgressSkipped {
+			notCompleteSections = append(notCompleteSections, struct {
+				Title    string
+				ID       uuid.UUID
+				Progress string
+			}{
+				Title:    section.Section.Title.String,
+				ID:       section.Section.ID,
+				Progress: string(currentProgress),
+			})
 
-	for _, ans := range answers {
-		var found bool
-		for _, section := range list {
-			for _, q := range section.Questions {
-				if q.Question().ID.String() == ans.QuestionID {
-					found = true
-					answeredQuestionIDs[ans.QuestionID] = true
-
-					// Validate answer value
-					err := q.Validate(ans.Value)
-					if err != nil {
-						validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
-					}
-
-					questionTypes = append(questionTypes, response.QuestionType(q.Question().Type))
-
-					break
-				}
-			}
-		}
-
-		if !found {
-			validationErrors = append(validationErrors, fmt.Errorf("question with ID %s not found in form %s", ans.QuestionID, formID))
+			logger.Warn("section not complete after submit", zap.String("sectionID", section.Section.ID.String()), zap.String("progress", string(currentProgress)))
 		}
 	}
 
-	// Check for required questions that were not answered
-	for _, section := range list {
-		for _, q := range section.Questions {
-			if q.Question().Required && !answeredQuestionIDs[q.Question().ID.String()] {
-				validationErrors = append(validationErrors, fmt.Errorf("question ID %s is required but not answered", q.Question().ID.String()))
-			}
-		}
+	// Return error if any sections are incomplete
+	if len(notCompleteSections) > 0 {
+		logger.Warn("response not complete after submit", zap.Int("numNotCompleteSections", len(notCompleteSections)))
+		return response.FormResponse{}, []error{internal.ErrResponseNotComplete{NotCompleteSections: notCompleteSections}}
 	}
 
-	if len(validationErrors) > 0 {
-		logger.Error("validation errors occurred", zap.Error(fmt.Errorf("validation errors occurred")), zap.Any("errors", validationErrors))
-		span.RecordError(fmt.Errorf("validation errors occurred"))
-		validationErrors = append([]error{internal.ErrValidationFailed}, validationErrors...)
-		return response.FormResponse{}, validationErrors
-	}
-
-	result, err := s.responseStore.CreateOrUpdate(traceCtx, formID, userID, answers, questionTypes)
+	// Mark the response as submitted
+	formResponse, err := s.responseStore.UpdateSubmitted(ctx, responseID)
 	if err != nil {
-		logger.Error("failed to create or update form response", zap.Error(err), zap.String("formID", formID.String()), zap.String("userID", userID.String()))
-		span.RecordError(err)
+		logger.Error("failed to update response to submitted", zap.Error(err))
 		return response.FormResponse{}, []error{err}
 	}
 
-	return result, nil
+	return formResponse, nil
 }

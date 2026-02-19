@@ -134,11 +134,17 @@ CREATE TABLE IF NOT EXISTS questions(
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TYPE response_progress AS ENUM (
+    'draft',
+    'submitted'
+);
+
 CREATE TABLE IF NOT EXISTS form_responses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
     submitted_by UUID NOT NULL REFERENCES users(id),
     submitted_at TIMESTAMPTZ DEFAULT NULL,
+    progress response_progress NOT NULL DEFAULT 'draft',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -150,7 +156,8 @@ CREATE TABLE IF NOT EXISTS answers (
     type question_type NOT NULL,
     value TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(response_id, question_id)
 );
 
 CREATE TYPE content_type AS ENUM(

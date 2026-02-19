@@ -26,11 +26,11 @@ import (
 
 type Querier interface {
 	Create(ctx context.Context, params CreateParams) (CreateRow, error)
-	Update(ctx context.Context, params UpdateParams) (UpdateRow, error)
+	Patch(ctx context.Context, params PatchParams) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
-	List(ctx context.Context) ([]ListRow, error)
-	ListByUnit(ctx context.Context, unitID pgtype.UUID) ([]ListByUnitRow, error)
+	List(ctx context.Context, includeArchived pgtype.Bool) ([]ListRow, error)
+	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
@@ -86,6 +86,19 @@ func NewService(logger *zap.Logger, db DBTX, responseStore ResponseStore) *Servi
 	}
 }
 
+// visibilityFromAPIFormat converts API visibility format (uppercase) to database format (lowercase).
+func visibilityFromAPIFormat(v string) Visibility {
+	switch v {
+	case "PUBLIC":
+		return VisibilityPublic
+	case "PRIVATE":
+		return VisibilityPrivate
+	default:
+		// Fallback for backward compatibility
+		return Visibility(v)
+	}
+}
+
 func buildFormFieldsFromRequest(request Request) formFields {
 	form := formFields{}
 
@@ -127,7 +140,7 @@ func buildFormFieldsFromRequest(request Request) formFields {
 	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
 	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""}
 	form.messageAfterSubmission = request.MessageAfterSubmission
-	form.visibility = request.Visibility
+	form.visibility = visibilityFromAPIFormat(request.Visibility)
 	form.title = request.Title
 
 	return form
@@ -165,36 +178,74 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	return newForm, nil
 }
 
-func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (UpdateRow, error) {
-	ctx, span := s.tracer.Start(ctx, "Update")
+func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error) {
+	ctx, span := s.tracer.Start(ctx, "Patch")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	fields := buildFormFieldsFromRequest(request)
-
-	updatedForm, err := s.queries.Update(ctx, UpdateParams{
-		ID:                     id,
-		Title:                  fields.title,
-		Description:            fields.description,
-		PreviewMessage:         fields.previewMessage,
-		LastEditor:             userID,
-		Deadline:               fields.deadline,
-		PublishTime:            fields.publishTime,
-		MessageAfterSubmission: fields.messageAfterSubmission,
-		GoogleSheetUrl:         fields.googleSheetURL,
-		Visibility:             fields.visibility,
-		DressingColor:          fields.dressingColor,
-		DressingHeaderFont:     fields.dressingHeaderFont,
-		DressingQuestionFont:   fields.dressingQuestionFont,
-		DressingTextFont:       fields.dressingTextFont,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "update form")
-		span.RecordError(err)
-		return UpdateRow{}, err
+	params := PatchParams{
+		ID:         id,
+		LastEditor: userID,
 	}
 
-	return updatedForm, nil
+	if request.Title != nil {
+		params.Title = pgtype.Text{String: *request.Title, Valid: true}
+	}
+
+	if request.Description != nil {
+		params.Description = pgtype.Text{String: *request.Description, Valid: true}
+	}
+
+	if request.PreviewMessage != nil {
+		params.PreviewMessage = pgtype.Text{String: *request.PreviewMessage, Valid: true}
+	}
+
+	if request.Deadline != nil {
+		params.Deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
+	}
+
+	if request.PublishTime != nil {
+		params.PublishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
+	}
+
+	if request.MessageAfterSubmission != nil {
+		params.MessageAfterSubmission = pgtype.Text{String: *request.MessageAfterSubmission, Valid: true}
+	}
+
+	if request.GoogleSheetUrl != nil {
+		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetUrl, Valid: true}
+	}
+
+	if request.Visibility != nil {
+		params.Visibility = NullVisibility{
+			Visibility: visibilityFromAPIFormat(*request.Visibility),
+			Valid:      true,
+		}
+	}
+
+	if request.Dressing != nil {
+		if request.Dressing.Color != "" {
+			params.DressingColor = pgtype.Text{String: request.Dressing.Color, Valid: true}
+		}
+		if request.Dressing.HeaderFont != "" {
+			params.DressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: true}
+		}
+		if request.Dressing.QuestionFont != "" {
+			params.DressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: true}
+		}
+		if request.Dressing.TextFont != "" {
+			params.DressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: true}
+		}
+	}
+
+	patchedForm, err := s.queries.Patch(ctx, params)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "patch form")
+		span.RecordError(err)
+		return PatchRow{}, err
+	}
+
+	return patchedForm, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
@@ -232,7 +283,7 @@ func (s *Service) List(ctx context.Context) ([]ListRow, error) {
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	forms, err := s.queries.List(ctx)
+	forms, err := s.queries.List(ctx, pgtype.Bool{Valid: false})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms")
 		span.RecordError(err)
@@ -247,7 +298,9 @@ func (s *Service) ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUni
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	forms, err := s.queries.ListByUnit(ctx, pgtype.UUID{Bytes: unitID, Valid: true})
+	forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
+		UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
+	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms by unit")
 		span.RecordError(err)
@@ -298,7 +351,9 @@ func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, user
 
 	allForms := make(map[uuid.UUID]ListByUnitRow)
 	for _, unitID := range unitIDs {
-		forms, err := s.queries.ListByUnit(ctx, pgtype.UUID{Bytes: unitID, Valid: true})
+		forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
+			UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
+		})
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "list forms by unit")
 			span.RecordError(err)

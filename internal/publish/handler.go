@@ -26,8 +26,8 @@ type Request struct {
 	UnitIDs []uuid.UUID `json:"unitIds"`
 }
 
-type PublishFormResponse struct {
-	Visibility form.Visibility `json:"visibility"`
+type Response struct {
+	Visibility string `json:"visibility"`
 }
 
 type Handler struct {
@@ -78,15 +78,9 @@ func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(ctx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	formID, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
-		h.problemWriter.WriteError(ctx, w, err, logger)
-		return
-	}
-
-	var req Request
-	if err := handlerutil.ParseAndValidateRequestBody(ctx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(ctx, w, err, logger)
 		return
 	}
@@ -97,13 +91,13 @@ func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	visibility, err := h.service.PublishForm(ctx, formID, req.UnitIDs, currentUser.ID)
+	visibility, err := h.service.PublishForm(ctx, formID, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(ctx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, PublishFormResponse{
-		Visibility: visibility,
+	handlerutil.WriteJSONResponse(w, http.StatusOK, Response{
+		Visibility: form.VisibilityToUppercase(visibility),
 	})
 }

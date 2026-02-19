@@ -58,25 +58,25 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;  
 
--- name: Update :one
+-- name: Patch :one
 WITH updated AS (
     UPDATE forms
     SET
-        title = $2,
-        description = $3,
-        preview_message = $4,
-        last_editor = $5,
-        deadline = $6,
-        publish_time = $7,
-        message_after_submission = $8,
-        google_sheet_url = $9,
-        visibility = $10,
-        dressing_color = $11,
-        dressing_header_font = $12,
-        dressing_question_font = $13,
-        dressing_text_font = $14,
+        title = COALESCE(sqlc.narg('title')::text, forms.title),
+        description = COALESCE(sqlc.narg('description')::text, forms.description),
+        preview_message = COALESCE(sqlc.narg('preview_message')::text, forms.preview_message),
+        last_editor = sqlc.arg('last_editor'),
+        deadline = COALESCE(sqlc.narg('deadline')::timestamptz, forms.deadline),
+        publish_time = COALESCE(sqlc.narg('publish_time')::timestamptz, forms.publish_time),
+        message_after_submission = COALESCE(sqlc.narg('message_after_submission')::text, forms.message_after_submission),
+        google_sheet_url = COALESCE(sqlc.narg('google_sheet_url')::text, forms.google_sheet_url),
+        visibility = COALESCE(sqlc.narg('visibility')::visibility, forms.visibility),
+        dressing_color = COALESCE(sqlc.narg('dressing_color')::text, forms.dressing_color),
+        dressing_header_font = COALESCE(sqlc.narg('dressing_header_font')::text, forms.dressing_header_font),
+        dressing_question_font = COALESCE(sqlc.narg('dressing_question_font')::text, forms.dressing_question_font),
+        dressing_text_font = COALESCE(sqlc.narg('dressing_text_font')::text, forms.dressing_text_font),
         updated_at = now()
-    WHERE forms.id = $1
+    WHERE forms.id = sqlc.arg('id')
     RETURNING *
 )
 SELECT 
@@ -123,6 +123,7 @@ FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+WHERE (f.status <> 'archived' OR sqlc.narg(include_archived)::boolean IS TRUE)
 ORDER BY f.updated_at DESC;
 
 -- name: ListByUnit :many
@@ -139,6 +140,7 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.unit_id = $1
+AND (f.status <> 'archived' OR sqlc.narg(include_archived)::boolean IS TRUE)
 ORDER BY f.updated_at DESC;
 
 -- name: SetStatus :one

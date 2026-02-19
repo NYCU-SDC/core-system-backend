@@ -34,8 +34,8 @@ func (o OAuthConnect) FormID() uuid.UUID {
 	return o.formID
 }
 
-func (o OAuthConnect) Validate(value string) error {
-	// TODO
+func (o OAuthConnect) Validate(rawValue json.RawMessage) error {
+	// TODO: Implement OAuth validation
 	return errors.New("not implemented")
 }
 
@@ -67,6 +67,30 @@ func NewOAuthConnect(q Question, formID uuid.UUID) (OAuthConnect, error) {
 		formID:   formID,
 		Provider: provider,
 	}, nil
+}
+
+func (o OAuthConnect) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement OAuth connect decoding from API request
+	return nil, errors.New("not implemented yet")
+}
+
+func (o OAuthConnect) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	// TODO: Implement OAuth connect decoding from storage
+	return nil, errors.New("not implemented yet")
+}
+
+func (o OAuthConnect) EncodeRequest(answer any) (json.RawMessage, error) {
+	// TODO: Implement OAuth connect encoding to API request format
+	return nil, errors.New("not implemented yet")
+}
+
+func (o OAuthConnect) DisplayValue(rawValue json.RawMessage) (string, error) {
+	// TODO: Implement DisplayValue for OAuthConnect
+	return "", fmt.Errorf("DisplayValue not implemented for OAuthConnect question type")
+}
+
+func (o OAuthConnect) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	return false, errors.New("MatchesPattern is not supported for oauth_connect question type")
 }
 
 func GenerateOauthConnectMetadata(provider string) ([]byte, error) {

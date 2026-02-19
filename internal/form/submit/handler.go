@@ -1,10 +1,9 @@
 package submit
 
 import (
-	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
-	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"errors"
 	"net/http"
@@ -22,30 +21,19 @@ import (
 )
 
 type Request struct {
-	Answers []AnswerRequest `json:"answers" validate:"required,dive"`
-}
-
-type AnswerRequest struct {
-	QuestionID string `json:"questionId" validate:"required,uuid"`
-	Value      string `json:"value" validate:"required"`
-}
-
-func (a AnswerRequest) ToAnswerParam() shared.AnswerParam {
-	return shared.AnswerParam{
-		QuestionID: a.QuestionID,
-		Value:      a.Value,
-	}
+	Answers []answer.Payload `json:"answers" validate:"required,dive"`
 }
 
 type Response struct {
-	ID        string    `json:"id" validate:"required,uuid"`
-	FormID    string    `json:"formId" validate:"required,uuid"`
-	CreatedAt time.Time `json:"createdAt" validate:"required,datetime"`
-	UpdatedAt time.Time `json:"updatedAt" validate:"required,datetime"`
+	ID        string    `json:"id"`
+	FormID    string    `json:"formId"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Progress  string    `json:"progress"`
 }
 
 type Operator interface {
-	Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
+	Submit(ctx context.Context, responseID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
 }
 
 type Handler struct {
@@ -72,8 +60,8 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	responseIDStr := r.PathValue("responseId")
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -86,18 +74,15 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentUser, ok := user.GetFromContext(traceCtx)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
-		return
+	answerParams := make([]shared.AnswerParam, 0, len(request.Answers))
+	for _, answerRequest := range request.Answers {
+		answerParams = append(answerParams, shared.AnswerParam{
+			QuestionID: answerRequest.QuestionID,
+			Value:      answerRequest.Value,
+		})
 	}
 
-	answerParams := make([]shared.AnswerParam, len(request.Answers))
-	for i, answer := range request.Answers {
-		answerParams[i] = answer.ToAnswerParam()
-	}
-
-	newResponse, errs := h.operator.Submit(traceCtx, formID, currentUser.ID, answerParams)
+	newResponse, errs := h.operator.Submit(traceCtx, responseID, answerParams)
 	if errs != nil {
 		// Convert errors to strings and join them for better error handling
 		errorStrings := make([]string, len(errs))
@@ -114,6 +99,7 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		FormID:    newResponse.FormID.String(),
 		CreatedAt: newResponse.CreatedAt.Time,
 		UpdatedAt: newResponse.UpdatedAt.Time,
+		Progress:  strings.ToUpper(string(newResponse.Progress)),
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, submitResponse)

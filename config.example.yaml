@@ -43,3 +43,6 @@ google_oauth:
 nycu_oauth:
   client_id: "your-nycu-oauth-client-id"
   client_secret: "your-nycu-oauth-client-secret"
+  
+# Allowed list of emails for onboarding, use comma to separate multiple emails
+allow_onboarding_list:

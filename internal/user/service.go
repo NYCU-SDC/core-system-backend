@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -13,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+	"net/url"
 )
 
 type Querier interface {
@@ -161,7 +161,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	}
 
 	logger.Debug("Created auth entry", zap.String("user_id", newUser.ID.String()), zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
-	return newUser.ID, err
+	return newUser.ID, nil
 }
 
 func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email string) error {
@@ -218,6 +218,25 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
 		return User{}, internal.ErrDatabaseError
+	}
+
+	userEmails, err := s.GetEmailsByID(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get user emails by id")
+		span.RecordError(err)
+		return User{}, internal.ErrDatabaseError
+	}
+	isAllowed := false
+	for _, userEmail := range userEmails {
+		if IsAllowed(userEmail) {
+			isAllowed = true
+			break
+		}
+	}
+	if !isAllowed {
+		err := internal.ErrUserNotInAllowedList
+		logger.Warn(fmt.Sprintf("%s: user_id=%s", err.Error(), id.String()))
+		return User{}, err
 	}
 
 	if userInfo.IsOnboarded {

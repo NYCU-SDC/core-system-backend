@@ -1,6 +1,7 @@
 CREATE TYPE status AS ENUM(
     'draft',
-    'published'
+    'published',
+    'archived'
 );
 
 CREATE TYPE visibility AS ENUM(
@@ -37,17 +38,10 @@ CREATE TABLE IF NOT EXISTS form_covers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Section progress enum (for form completion tracking)
-CREATE TYPE section_progress AS ENUM(
-    'draft',
-    'submitted'
-);
-
 CREATE TABLE IF NOT EXISTS sections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
     title VARCHAR(255) DEFAULT NULL,
-    progress section_progress NOT NULL DEFAULT 'draft',
     description TEXT DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

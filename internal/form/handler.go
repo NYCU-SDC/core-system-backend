@@ -3,6 +3,7 @@ package form
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/font"
+	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"fmt"
@@ -30,14 +31,27 @@ type DressingRequest struct {
 
 type Request struct {
 	Title                  string           `json:"title" validate:"required"`
-	Description            string           `json:"description" validate:"required"`
+	Description            string           `json:"description"`
 	PreviewMessage         string           `json:"previewMessage"`
 	Deadline               *time.Time       `json:"deadline"`
 	PublishTime            *time.Time       `json:"publishTime"`
-	MessageAfterSubmission string           `json:"messageAfterSubmission" validate:"required"`
+	MessageAfterSubmission string           `json:"messageAfterSubmission"`
 	GoogleSheetUrl         string           `json:"googleSheetUrl"`
-	Visibility             Visibility       `json:"visibility" validate:"required,oneof=public private"`
+	Visibility             string           `json:"visibility" validate:"required,oneof=PUBLIC PRIVATE"`
 	CoverImageUrl          string           `json:"coverImageUrl"`
+	Dressing               *DressingRequest `json:"dressing"`
+}
+
+type PatchRequest struct {
+	Title                  *string          `json:"title" validate:"omitempty"`
+	Description            *string          `json:"description" validate:"omitempty"`
+	PreviewMessage         *string          `json:"previewMessage"`
+	Deadline               *time.Time       `json:"deadline"`
+	PublishTime            *time.Time       `json:"publishTime"`
+	MessageAfterSubmission *string          `json:"messageAfterSubmission" validate:"omitempty"`
+	GoogleSheetUrl         *string          `json:"googleSheetUrl"`
+	Visibility             *string          `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
+	CoverImageUrl          *string          `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
 }
 
@@ -48,7 +62,6 @@ type Response struct {
 	PreviewMessage         string               `json:"previewMessage"`
 	Status                 string               `json:"status"`
 	UnitID                 string               `json:"unitId"`
-	OrgID                  string               `json:"orgId"`
 	LastEditor             user.ProfileResponse `json:"lastEditor"`
 	Deadline               *time.Time           `json:"deadline"`
 	CreatedAt              time.Time            `json:"createdAt"`
@@ -56,7 +69,7 @@ type Response struct {
 	PublishTime            *time.Time           `json:"publishTime"`
 	MessageAfterSubmission string               `json:"messageAfterSubmission"`
 	GoogleSheetUrl         string               `json:"googleSheetUrl"`
-	Visibility             Visibility           `json:"visibility"`
+	Visibility             string               `json:"visibility"`
 	CoverImageUrl          string               `json:"coverImageUrl"`
 	Dressing               DressingRequest      `json:"dressing"`
 }
@@ -86,6 +99,44 @@ type verifier interface {
 // Google IDs allow alphanumeric characters, hyphens, and underscores.
 var spreadsheetIDPattern = regexp.MustCompile(`spreadsheets/d/([a-zA-Z0-9_-]+)`)
 
+type SectionRequest struct {
+	Title       string  `json:"title" validate:"required"`
+	Description *string `json:"description"`
+}
+
+type SectionResponse struct {
+	ID          string `json:"id"`
+	FormID      string `json:"formId"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+// statusToUppercase converts database status format (lowercase) to API format (uppercase).
+func statusToUppercase(s Status) string {
+	switch s {
+	case StatusDraft:
+		return "DRAFT"
+	case StatusPublished:
+		return "PUBLISHED"
+	case StatusArchived:
+		return "ARCHIVED"
+	default:
+		return string(s)
+	}
+}
+
+// VisibilityToUppercase converts database visibility format (lowercase) to API format (uppercase).
+func VisibilityToUppercase(v Visibility) string {
+	switch v {
+	case VisibilityPublic:
+		return "PUBLIC"
+	case VisibilityPrivate:
+		return "PRIVATE"
+	default:
+		return string(v)
+	}
+}
+
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline, publishTime is null when empty/invalid.
 func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
@@ -109,9 +160,8 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		Title:          form.Title,
 		Description:    form.Description.String,
 		PreviewMessage: form.PreviewMessage.String,
-		Status:         string(form.Status),
-		UnitID:         unitName,
-		OrgID:          orgName,
+		Status:         statusToUppercase(form.Status),
+		UnitID:         form.UnitID.String(),
 		LastEditor: user.ProfileResponse{
 			ID:        editor.ID,
 			Name:      editor.Name.String,
@@ -123,7 +173,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		CreatedAt:              form.CreatedAt.Time,
 		UpdatedAt:              form.UpdatedAt.Time,
 		MessageAfterSubmission: form.MessageAfterSubmission,
-		Visibility:             form.Visibility,
+		Visibility:             VisibilityToUppercase(form.Visibility),
 		GoogleSheetUrl:         form.GoogleSheetUrl.String,
 		PublishTime:            publishTime,
 		CoverImageUrl:          form.CoverImageUrl.String,
@@ -138,7 +188,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 
 type Store interface {
 	Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error)
-	Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (UpdateRow, error)
+	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	List(ctx context.Context) ([]ListRow, error)
@@ -152,6 +202,11 @@ type tenantStore interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 }
 
+type questionStore interface {
+	UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (question.Section, error)
+	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+}
+
 type Handler struct {
 	logger *zap.Logger
 	tracer trace.Tracer
@@ -159,8 +214,9 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	store       Store
-	tenantStore tenantStore
+	store         Store
+	tenantStore   tenantStore
+	questionStore questionStore
 }
 
 func NewHandler(
@@ -169,6 +225,7 @@ func NewHandler(
 	problemWriter *problem.HttpWriter,
 	store Store,
 	tenantStore tenantStore,
+	questionStore questionStore,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -177,22 +234,23 @@ func NewHandler(
 		problemWriter: problemWriter,
 		store:         store,
 		tenantStore:   tenantStore,
+		questionStore: questionStore,
 	}
 }
 
-func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UpdateHandler")
+func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "PatchHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	var req Request
+	var req PatchRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -204,7 +262,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.Update(traceCtx, id, req, currentUser.ID)
+	currentForm, err := h.store.Patch(traceCtx, id, req, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -248,7 +306,7 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -269,7 +327,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -486,7 +544,7 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -550,7 +608,7 @@ func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -569,6 +627,70 @@ func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+}
+
+func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ArchiveHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("formId")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	_, err = h.store.SetStatus(traceCtx, id, StatusArchived, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentForm, err := h.store.GetByID(traceCtx, id)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := ToResponse(Form{
+		ID:                     currentForm.ID,
+		Title:                  currentForm.Title,
+		Description:            currentForm.Description,
+		PreviewMessage:         currentForm.PreviewMessage,
+		Status:                 currentForm.Status,
+		UnitID:                 currentForm.UnitID,
+		LastEditor:             currentForm.LastEditor,
+		Deadline:               currentForm.Deadline,
+		CreatedAt:              currentForm.CreatedAt,
+		UpdatedAt:              currentForm.UpdatedAt,
+		MessageAfterSubmission: currentForm.MessageAfterSubmission,
+		Visibility:             currentForm.Visibility,
+		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
+		PublishTime:            currentForm.PublishTime,
+		CoverImageUrl:          currentForm.CoverImageUrl,
+		DressingColor:          currentForm.DressingColor,
+		DressingHeaderFont:     currentForm.DressingHeaderFont,
+		DressingQuestionFont:   currentForm.DressingQuestionFont,
+		DressingTextFont:       currentForm.DressingTextFont,
+	},
+		currentForm.UnitName.String,
+		currentForm.OrgName.String,
+		user.User{
+			ID:        currentForm.LastEditor,
+			Name:      currentForm.LastEditorName,
+			Username:  currentForm.LastEditorUsername,
+			AvatarUrl: currentForm.LastEditorAvatarUrl,
+		},
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
 func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
@@ -670,4 +792,50 @@ func extractSpreadsheetID(sheetURL string) (string, error) {
 		return "", internal.ErrGoogleSheetURLInvalid
 	}
 	return matches[1], nil
+}
+
+func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateSectionHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formIDStr := r.PathValue("formId")
+	formID, err := handlerutil.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	sectionIDStr := r.PathValue("sectionId")
+	sectionID, err := handlerutil.ParseUUID(sectionIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req SectionRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	description := ""
+	if req.Description != nil {
+		description = *req.Description
+	}
+
+	section, err := h.questionStore.UpdateSection(traceCtx, sectionID, formID, req.Title, description)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := SectionResponse{
+		ID:          section.ID.String(),
+		FormID:      section.FormID.String(),
+		Title:       section.Title.String,
+		Description: section.Description.String,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }

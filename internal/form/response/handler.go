@@ -3,10 +3,13 @@ package response
 import (
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -18,11 +21,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
-
-type QuestionAnswerForGetResponse struct {
-	QuestionID string `json:"questionId" validate:"required,uuid"`
-	Answer     string `json:"answer" validate:"required"`
-}
 
 type AnswerForQuestionResponse struct {
 	ID          string    `json:"id" validate:"required,uuid"`
@@ -45,13 +43,31 @@ type ListResponse struct {
 	ResponseJSONs []Response `json:"responses" validate:"required,dive"`
 }
 
-type GetResponse struct {
-	ID                   string                         `json:"id" validate:"required,uuid"`
-	FormID               string                         `json:"formId" validate:"required,uuid"`
-	SubmittedBy          string                         `json:"submittedBy" validate:"required,uuid"`
-	QuestionsAnswerPairs []QuestionAnswerForGetResponse `json:"questionsAnswerPairs" validate:"required,dive"`
-	CreatedAt            time.Time                      `json:"createdAt" validate:"required,datetime"` // for sorting
-	UpdatedAt            time.Time                      `json:"updatedAt" validate:"required,datetime"` // for marking if the response is updated
+type GetFormResponse struct {
+	ID       string           `json:"id" validate:"required,uuid"`
+	FormID   string           `json:"formId" validate:"required,uuid"`
+	Progress string           `json:"progress" validate:"required,oneof=DRAFT SUBMITTED"`
+	Sections []SectionDetails `json:"sections" validate:"required,dive"`
+}
+
+type SectionDetails struct {
+	ID            string          `json:"id" validate:"required,uuid"`
+	Title         string          `json:"title" validate:"required"`
+	Progress      string          `json:"progress" validate:"required,oneof=SKIPPED NOT_STARTED DRAFT COMPLETED"`
+	AnswerDetails []AnswerDetails `json:"answerDetails" validate:"required,dive"`
+}
+
+type AnswerDetails struct {
+	Question question.Response `json:"question" validate:"required"`
+	Payload  *AnswerPayload    `json:"payload"`
+}
+
+type AnswerPayload struct {
+	CreatedAt    time.Time       `json:"createdAt" validate:"required"`
+	UpdatedAt    time.Time       `json:"updatedAt" validate:"required"`
+	ResponseID   string          `json:"responseId" validate:"required,uuid"`
+	Answer       json.RawMessage `json:"answer" validate:"required"`
+	DisplayValue string          `json:"displayValue" validate:"required"`
 }
 
 type AnswersForQuestionResponse struct {
@@ -64,11 +80,10 @@ type CreateResponse struct {
 }
 
 type Store interface {
-	Get(ctx context.Context, formID uuid.UUID, responseID uuid.UUID) (FormResponse, []Answer, error)
+	Get(ctx context.Context, id uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
+	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
-	GetAnswersByQuestionID(ctx context.Context, questionID uuid.UUID, formID uuid.UUID) ([]GetAnswersByQuestionIDRow, error)
-	CreateEmpty(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 }
 
 type QuestionStore interface {
@@ -95,14 +110,14 @@ func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter
 	}
 }
 
-// ListHandler lists all responses for a form
-func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ListHandler")
+// List lists all responses for a form
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "List")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -126,139 +141,182 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:   currentResponse.UpdatedAt.Time,
 		}
 	}
+
 	handlerutil.WriteJSONResponse(w, http.StatusOK, listResponse)
 }
 
-// GetHandler retrieves a response by id
-func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetHandler")
+// Get retrieves a response by id with all sections, questions and answers
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	// Parse formId from path
 	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	idStr := r.PathValue("responseId")
-	id, err := internal.ParseUUID(idStr)
+	// Parse responseId from path
+	responseIDStr := r.PathValue("responseId")
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	currentResponse, answers, err := h.store.Get(traceCtx, formID, id)
+	// Get response with sections and answers from store
+	formResponse, sections, err := h.store.Get(traceCtx, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	questionAnswerResponses := make([]QuestionAnswerForGetResponse, len(answers))
-	for i, answer := range answers {
-		q, err := h.questionStore.GetByID(traceCtx, answer.QuestionID)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-
-		questionAnswerResponses[i] = QuestionAnswerForGetResponse{
-			QuestionID: q.Question().ID.String(),
-			Answer:     answer.Value,
-		}
+	// Verify formID matches
+	if formResponse.FormID != formID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseFormIDMismatch, logger)
+		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, GetResponse{
-		ID:                   currentResponse.ID.String(),
-		FormID:               currentResponse.FormID.String(),
-		SubmittedBy:          currentResponse.SubmittedBy.String(),
-		QuestionsAnswerPairs: questionAnswerResponses,
-		CreatedAt:            currentResponse.CreatedAt.Time,
-		UpdatedAt:            currentResponse.UpdatedAt.Time,
-	})
+	// Convert to response format
+	response, err := h.toGetFormResponse(traceCtx, formResponse, sections)
+	if err != nil {
+		logger.Error("Failed to convert to GetFormResponse", zap.Error(err))
+		span.RecordError(err)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-// DeleteHandler deletes a response by id
-func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "DeleteHandler")
+// toGetFormResponse converts service layer data to handler response format
+func (h *Handler) toGetFormResponse(ctx context.Context, formResponse FormResponse, sections []SectionWithAnswerableAndAnswer) (GetFormResponse, error) {
+	traceCtx, span := h.tracer.Start(ctx, "toGetFormResponse")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("responseId")
-	id, err := internal.ParseUUID(idStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
+	// Build answer map for quick lookup by question ID
+	answerMap := make(map[string]answer.Answer)
 
-	err = h.store.Delete(traceCtx, id)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
-}
-
-// GetAnswersByQuestionIDHandler gets answers by question id
-func (h *Handler) GetAnswersByQuestionIDHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetAnswersByQuestionIDHandler")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	questionIDStr := r.PathValue("questionId")
-	questionID, err := internal.ParseUUID(questionIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	answers, err := h.store.GetAnswersByQuestionID(traceCtx, questionID, formID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	currentQuestion, err := h.questionStore.GetByID(traceCtx, questionID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	questionAnswerResponse := AnswersForQuestionResponse{
-		Question: currentQuestion.Question(),
-		Answers:  make([]AnswerForQuestionResponse, len(answers)),
-	}
-	for i, answer := range answers {
-		questionAnswerResponse.Answers[i] = AnswerForQuestionResponse{
-			ID:          answer.ID.String(),
-			ResponseID:  answer.ResponseID.String(),
-			SubmittedBy: answer.SubmittedBy.String(),
-			Value:       answer.Value,
-			CreatedAt:   answer.CreatedAt.Time,
-			UpdatedAt:   answer.UpdatedAt.Time,
+	for _, section := range sections {
+		for _, ans := range section.Answer {
+			answerMap[ans.QuestionID.String()] = ans
 		}
 	}
-	handlerutil.WriteJSONResponse(w, http.StatusOK, questionAnswerResponse)
+
+	// Convert sections
+	sectionDetails := make([]SectionDetails, len(sections))
+	for i, section := range sections {
+		// Convert section title (handle null)
+		sectionTitle := ""
+		if section.Section.Title.Valid {
+			sectionTitle = section.Section.Title.String
+		}
+
+		// Convert answerables to answer details
+		answerDetails := make([]AnswerDetails, len(section.Answerable))
+		for j, answerable := range section.Answerable {
+			// Convert question to response format
+			questionResponse, err := question.ToResponse(answerable)
+			if err != nil {
+				logger.Error("Failed to convert question to response",
+					zap.String("questionID", answerable.Question().ID.String()),
+					zap.Error(err))
+				span.RecordError(err)
+				return GetFormResponse{}, err
+			}
+
+			// Build answer details
+			answerDetails[j] = AnswerDetails{
+				Question: questionResponse,
+				Payload:  nil, // Default to nil if no answer
+			}
+
+			// If answer exists, populate payload
+			questionID := answerable.Question().ID.String()
+			if ans, hasAnswer := answerMap[questionID]; hasAnswer {
+				displayValue, err := answerable.DisplayValue(ans.Value)
+				if err != nil {
+					logger.Error("Failed to get display value",
+						zap.String("questionID", questionID),
+						zap.Error(err))
+					span.RecordError(err)
+					return GetFormResponse{}, err
+				}
+
+				// Decode and encode answer value
+				valueStruct, err := answerable.DecodeStorage(ans.Value)
+				if err != nil {
+					logger.Error("Failed to decode answer value from storage",
+						zap.String("questionID", questionID),
+						zap.Error(err))
+					span.RecordError(err)
+					return GetFormResponse{}, err
+				}
+
+				payload, err := answerable.EncodeRequest(valueStruct)
+				if err != nil {
+					logger.Error("Failed to encode answer value for response",
+						zap.String("questionID", questionID),
+						zap.Error(err))
+					span.RecordError(err)
+					return GetFormResponse{}, err
+				}
+
+				// Build answer payload with proper question type and value
+				answerPayload := map[string]interface{}{
+					"questionId":   questionID,
+					"questionType": strings.ToUpper(string(answerable.Question().Type)),
+					"value":        json.RawMessage(payload),
+				}
+
+				answerPayloadJSON, err := json.Marshal(answerPayload)
+				if err != nil {
+					logger.Error("Failed to marshal answer payload",
+						zap.String("questionID", questionID),
+						zap.Error(err))
+					span.RecordError(err)
+					return GetFormResponse{}, err
+				}
+
+				answerDetails[j].Payload = &AnswerPayload{
+					CreatedAt:    ans.CreatedAt.Time,
+					UpdatedAt:    ans.UpdatedAt.Time,
+					ResponseID:   formResponse.ID.String(),
+					Answer:       answerPayloadJSON,
+					DisplayValue: displayValue,
+				}
+			}
+		}
+
+		sectionDetails[i] = SectionDetails{
+			ID:            section.Section.ID.String(),
+			Title:         sectionTitle,
+			Progress:      strings.ToUpper(string(section.SectionProgress)),
+			AnswerDetails: answerDetails,
+		}
+	}
+
+	return GetFormResponse{
+		ID:       formResponse.ID.String(),
+		FormID:   formResponse.FormID.String(),
+		Progress: strings.ToUpper(string(formResponse.Progress)),
+		Sections: sectionDetails,
+	}, nil
 }
 
-// CreateFormResponseHandler creates an empty response for a form
-func (h *Handler) CreateFormResponseHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "CreateFormResponseHandler")
+// Create creates an empty response for a form
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Create")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Extract form ID from path
 	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -272,7 +330,7 @@ func (h *Handler) CreateFormResponseHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Create empty response
-	newResponse, err := h.store.CreateEmpty(traceCtx, formID, currentUser.ID)
+	newResponse, err := h.store.Create(traceCtx, formID, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -282,4 +340,26 @@ func (h *Handler) CreateFormResponseHandler(w http.ResponseWriter, r *http.Reque
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, CreateResponse{
 		ID: newResponse.ID.String(),
 	})
+}
+
+// Delete deletes a response by id
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Delete")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("responseId")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.store.Delete(traceCtx, id)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
