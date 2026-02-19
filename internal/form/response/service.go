@@ -181,7 +181,7 @@ func (s Service) Get(ctx context.Context, id uuid.UUID) (FormResponse, []Section
 	// Resolve which sections are active based on workflow conditions
 	sectionIDs, err := s.workflowResolver.ResolveSections(traceCtx, response.FormID, answerPayload, answerableMap)
 	if err != nil {
-		err = fmt.Errorf("failed to resolve sections: %w", err)
+		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
 		logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", response.ID.String()))
 		span.RecordError(err)
 		return FormResponse{}, nil, err

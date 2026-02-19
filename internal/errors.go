@@ -84,8 +84,9 @@ var (
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 
 	// Workflow Errors
-	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
-	ErrWorkflowNotActive        = errors.New("workflow is not active")
+	ErrWorkflowValidationFailed     = errors.New("workflow validation failed")
+	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
+	ErrWorkflowNotActive            = errors.New("workflow is not active")
 	ErrUnmarshalWorkflow        = errors.New("failed to unmarshal workflow")
 	ErrMarshalWorkflow          = errors.New("failed to marshal workflow")
 	ErrUnmarshalAPIWorkflow     = errors.New("failed to unmarshal API workflow")
@@ -226,6 +227,8 @@ func ErrorHandler(err error) problem.Problem {
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
+	case errors.Is(err, ErrWorkflowResolveSectionsFailed):
+		return problem.NewValidateProblem("failed to resolve workflow sections")
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
 	case errors.Is(err, ErrUnmarshalWorkflow):
