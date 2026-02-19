@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
@@ -91,7 +90,7 @@ func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 
 	// Parse responseId from path
 	responseIDStr := r.PathValue("responseId")
-	responseID, err := internal.ParseUUID(responseIDStr)
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -99,7 +98,7 @@ func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 
 	// Parse questionId from path
 	questionIDStr := r.PathValue("questionId")
-	questionID, err := internal.ParseUUID(questionIDStr)
+	questionID, err := handlerutil.ParseUUID(questionIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -139,7 +138,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 
 	// Parse responseId from path
 	responseIDStr := r.PathValue("responseId")
-	responseID, err := internal.ParseUUID(responseIDStr)
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
