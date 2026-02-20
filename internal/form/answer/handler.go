@@ -3,11 +3,13 @@ package answer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
@@ -59,7 +61,7 @@ type Store interface {
 }
 
 type QuestionGetter interface {
-	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	ListTypesByIDs(ctx context.Context, ids []uuid.UUID) (map[string]question.QuestionType, error)
 }
 
 type ResponseStore interface {
@@ -166,6 +168,31 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Collect all question IDs first for a single batch type lookup
+	questionIDs := make([]uuid.UUID, 0, len(req.Answers))
+	for _, answerRequest := range req.Answers {
+		questionID, parseErr := handlerutil.ParseUUID(answerRequest.QuestionID)
+		if parseErr != nil {
+			h.problemWriter.WriteError(traceCtx, w, parseErr, logger)
+			return
+		}
+		questionIDs = append(questionIDs, questionID)
+	}
+
+	// Batch-fetch question types and reject any upload_file questions up front
+	typeMap, err := h.questionStore.ListTypesByIDs(traceCtx, questionIDs)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	for _, answerRequest := range req.Answers {
+		if typeMap[answerRequest.QuestionID] == question.QuestionTypeUploadFile {
+			logger.Warn("attempted to update upload_file question via PATCH answers", zap.String("questionID", answerRequest.QuestionID))
+			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("question %s is of type upload_file and must be answered via the file upload endpoint: %w", answerRequest.QuestionID, internal.ErrQuestionTypeMismatch), logger)
+			return
+		}
+	}
+
 	answerParams := make([]shared.AnswerParam, 0, len(req.Answers))
 	for _, answerRequest := range req.Answers {
 		answerParams = append(answerParams, shared.AnswerParam{
@@ -257,7 +284,7 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Upload files and upsert answer
-	uploadedFiles, answer, answerable, err := h.store.UploadFiles(traceCtx, formID, responseID, questionID, fileHeaders, nil)
+	uploadedFiles, _, _, err := h.store.UploadFiles(traceCtx, formID, responseID, questionID, fileHeaders, nil)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -268,9 +295,6 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		zap.String("questionID", questionID.String()),
 		zap.Int("fileCount", len(uploadedFiles)),
 	)
-
-	_ = answer
-	_ = answerable
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, UploadFilesResponse{
 		Files: uploadedFiles,

@@ -23,6 +23,7 @@ type Querier interface {
 	ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	ListTypesByIDs(ctx context.Context, ids []uuid.UUID) ([]ListTypesByIDsRow, error)
 	UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error)
 }
 
@@ -237,6 +238,27 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Answerable, error)
 
 	q := row.ToQuestion()
 	return NewAnswerable(q, row.FormID)
+}
+
+// ListTypesByIDs returns a map of question ID (as string) to QuestionType for the given IDs.
+// This is a batch query to avoid N+1 queries when checking question types for multiple questions.
+func (s *Service) ListTypesByIDs(ctx context.Context, ids []uuid.UUID) (map[string]QuestionType, error) {
+	ctx, span := s.tracer.Start(ctx, "ListTypesByIDs")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	rows, err := s.queries.ListTypesByIDs(ctx, ids)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list question types by ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	result := make(map[string]QuestionType, len(rows))
+	for _, row := range rows {
+		result[row.ID.String()] = row.Type
+	}
+	return result, nil
 }
 
 // GetAnswerableMapByFormID returns a map of question ID (as string) to Answerable for efficient lookups.
