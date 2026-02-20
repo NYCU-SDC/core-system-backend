@@ -240,13 +240,6 @@ jobs:
           fail-on-empty: false
           fail-on-error: false
 
-      - name: Upload test report artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: httpyac-junit
-          path: reports/httpyac-*.xml
-
       - name: Teardown compose
         if: always()
         run: docker compose -f .deploy/ci/compose.yaml down -v
