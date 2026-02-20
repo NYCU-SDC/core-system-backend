@@ -313,6 +313,17 @@ func (q *Queries) ListTypesByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]L
 	return items, nil
 }
 
+const sectionExists = `-- name: SectionExists :one
+SELECT EXISTS(SELECT 1 FROM sections WHERE id = $1)
+`
+
+func (q *Queries) SectionExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, sectionExists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const update = `-- name: Update :one
 WITH updated AS (
     UPDATE questions

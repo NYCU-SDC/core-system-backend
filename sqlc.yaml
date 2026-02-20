@@ -15,19 +15,6 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
   - engine: "postgresql"
-    queries: "./internal/file/queries.sql"
-    schema: "./internal/database/full_schema.sql"
-    gen:
-      go:
-        package: "file"
-        out: "./internal/file"
-        sql_package: "pgx/v5"
-        overrides:
-          - db_type: "uuid"
-            go_type:
-              import: "github.com/google/uuid"
-              type: "UUID"
-  - engine: "postgresql"
     queries: "./internal/tenant/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:
@@ -125,6 +112,19 @@ sql:
       go:
         package: "inbox"
         out: "./internal/inbox"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/file/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "file"
+        out: "./internal/file"
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"

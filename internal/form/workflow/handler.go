@@ -206,7 +206,7 @@ type GetWorkflowResponse struct {
 	Info     []ValidationInfo `json:"info"`
 }
 
-func (h *Handler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetWorkflow")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
@@ -247,7 +247,7 @@ func (h *Handler) GetWorkflow(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "UpdateWorkflow")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
@@ -327,7 +327,7 @@ func (h *Handler) UpdateWorkflow(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, json.RawMessage(apiWorkflow))
 }
 
-func (h *Handler) CreateNode(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateNodeHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "CreateNode")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
@@ -367,7 +367,7 @@ func (h *Handler) CreateNode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) DeleteNode(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteNodeHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "DeleteNode")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
