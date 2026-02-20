@@ -259,20 +259,17 @@ func main() {
 	mux.Handle("PUT /api/orgs/{slug}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.UpdateOrg))
 	mux.Handle("DELETE /api/orgs/{slug}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.DeleteOrg))
 
-	// Organization Relations
-	// ----------------------
+	// -- Organization Relations
 	mux.Handle("GET /api/orgs/{slug}/units", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnits))
 	mux.Handle("GET /api/orgs/{slug}/unit-ids", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnitIDs))
 	mux.Handle("POST /api/orgs/relations", authMiddleware.HandlerFunc(unitHandler.AddParentChild))
 
-	// Organization Membership
-	// ----------------------
+	// -- Organization Membership
 	mux.Handle("GET /api/orgs/{slug}/members", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgMembers))
 	mux.Handle("POST /api/orgs/{slug}/members", tenantAuthMiddleware.HandlerFunc(unitHandler.AddOrgMember))
 	mux.Handle("DELETE /api/orgs/{slug}/members/{member_id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.RemoveOrgMember))
 
-	// Organization Slug
-	// ----------------------
+	// -- Organization Slug
 	mux.Handle("GET /api/orgs/{slug}/status", basicMiddleware.HandlerFunc(tenantHandler.GetStatus))
 	mux.Handle("GET /api/orgs/{slug}/history", basicMiddleware.HandlerFunc(tenantHandler.GetStatusWithHistory))
 
@@ -286,8 +283,7 @@ func main() {
 	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunits", tenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitSubUnits))
 	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunit-ids", tenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitSubUnitIDs))
 
-	// Unit Membership
-	// ----------------------
+	// -- Unit Membership
 	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/members", tenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitMembers))
 	mux.Handle("POST /api/orgs/{slug}/units/{unitId}/members", tenantAuthMiddleware.HandlerFunc(unitHandler.AddUnitMember))
 	mux.Handle("PATCH /api/orgs/{slug}/units/{unitId}/members/{member_id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.UpdateUnitMemberRole))
@@ -306,12 +302,12 @@ func main() {
 	mux.Handle("PATCH /api/forms/{formId}", authMiddleware.HandlerFunc(formHandler.PatchHandler))
 	mux.Handle("DELETE /api/forms/{formId}", authMiddleware.HandlerFunc(formHandler.DeleteHandler))
 
-	// Form Resource
+	// -- Form Resource
 	mux.Handle("GET /api/forms/fonts", authMiddleware.HandlerFunc(formHandler.GetFontsHandler))
 	mux.Handle("GET /api/forms/{formId}/cover", authMiddleware.HandlerFunc(formHandler.GetCoverImageHandler))
 	mux.Handle("POST /api/forms/{formId}/cover", authMiddleware.HandlerFunc(formHandler.UploadCoverImageHandler))
 
-	// Form Operations
+	// -- Form Operations
 	mux.Handle("POST /api/forms/{formId}/archive", authMiddleware.HandlerFunc(formHandler.ArchiveHandler))
 	mux.Handle("POST /api/forms/{formId}/publish", authMiddleware.HandlerFunc(publishHandler.PublishForm))
 
@@ -336,7 +332,7 @@ func main() {
 	// --- (Update response is not allowed)
 	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Delete))
 
-	// Response Operations
+	// -- Response Operations
 	mux.Handle("POST /api/responses/{responseId}/submit", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))
 
 	// Answer Management
