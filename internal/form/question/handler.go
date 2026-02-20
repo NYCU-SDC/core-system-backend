@@ -232,7 +232,7 @@ func (h *Handler) AddHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	sectionIDStr := r.PathValue("id")
+	sectionIDStr := r.PathValue("sectionId")
 	sectionID, err := handlerutil.ParseUUID(sectionIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -386,7 +386,7 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIDStr := r.PathValue("id")
+	formIDStr := r.PathValue("formId")
 	formID, err := handlerutil.ParseUUID(formIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)

@@ -3,9 +3,28 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/NYCU-SDC/summer/pkg/problem"
+	"github.com/google/uuid"
 )
+
+type ErrResponseNotComplete struct {
+	NotCompleteSections []struct {
+		Title    string
+		ID       uuid.UUID
+		Progress string
+	}
+}
+
+func (s ErrResponseNotComplete) Error() string {
+	sectionIDs := make([]string, len(s.NotCompleteSections))
+	for i, section := range s.NotCompleteSections {
+		sectionIDs[i] = fmt.Sprintf("Title: %s, ID: %s, Progress: %s", section.Title, section.ID.String(), section.Progress)
+	}
+
+	return "response is not complete, not complete sections: " + strings.Join(sectionIDs, "; ")
+}
 
 var (
 	// Auth Errors
@@ -82,8 +101,15 @@ var (
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 
 	// Workflow Errors
-	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
-	ErrWorkflowNotActive        = errors.New("workflow is not active")
+	ErrWorkflowValidationFailed     = errors.New("workflow validation failed")
+	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
+	ErrWorkflowNotActive            = errors.New("workflow is not active")
+	ErrUnmarshalWorkflow        = errors.New("failed to unmarshal workflow")
+	ErrMarshalWorkflow          = errors.New("failed to marshal workflow")
+	ErrUnmarshalAPIWorkflow     = errors.New("failed to unmarshal API workflow")
+	ErrUnmarshalDBWorkflow      = errors.New("failed to unmarshal database workflow")
+	ErrWorkflowNodeNotFound     = errors.New("node not found in current workflow")
+	ErrMarshalMergedWorkflow    = errors.New("failed to marshal merged workflow")
 
 	// File Errors
 	ErrFileNotFound          = errors.New("file not found")
@@ -97,12 +123,6 @@ var (
 	ErrInvalidFileType       = errors.New("file type is not allowed")
 	ErrCoverImageTooLarge    = errors.New("cover image exceeds maximum size")
 	ErrInvalidImageFormat    = errors.New("image format is invalid")
-	ErrUnmarshalWorkflow     = errors.New("failed to unmarshal workflow")
-	ErrMarshalWorkflow       = errors.New("failed to marshal workflow")
-	ErrUnmarshalAPIWorkflow  = errors.New("failed to unmarshal API workflow")
-	ErrUnmarshalDBWorkflow   = errors.New("failed to unmarshal database workflow")
-	ErrWorkflowNodeNotFound  = errors.New("node not found in current workflow")
-	ErrMarshalMergedWorkflow = errors.New("failed to marshal merged workflow")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -230,6 +250,10 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrResponseAlreadyExists):
 		return problem.NewValidateProblem("user already has a response for this form")
 
+	// Submit Errors
+	case errors.Is(err, ErrResponseNotComplete{}):
+		return problem.NewValidateProblem(err.Error())
+
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
@@ -237,6 +261,8 @@ func ErrorHandler(err error) problem.Problem {
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
+	case errors.Is(err, ErrWorkflowResolveSectionsFailed):
+		return problem.NewValidateProblem("failed to resolve workflow sections")
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
 	case errors.Is(err, ErrUnmarshalWorkflow):

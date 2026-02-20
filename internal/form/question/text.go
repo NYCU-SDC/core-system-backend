@@ -103,7 +103,11 @@ func (s ShortText) MatchesPattern(rawValue json.RawMessage, pattern string) (boo
 		return false, fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
 	}
 
-	return matchPattern(shortTextAnswer.Value, pattern)
+	match, err := matchPattern(shortTextAnswer.Value, pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for short text answer: %w", err)
+	}
+	return match, nil
 }
 
 type LongText struct {
@@ -203,7 +207,11 @@ func (l LongText) MatchesPattern(rawValue json.RawMessage, pattern string) (bool
 		return false, fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
 	}
 
-	return matchPattern(longTextAnswer.Value, pattern)
+	match, err := matchPattern(longTextAnswer.Value, pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for long text answer: %w", err)
+	}
+	return match, nil
 }
 
 type Hyperlink struct {
@@ -302,7 +310,11 @@ func (h Hyperlink) MatchesPattern(rawValue json.RawMessage, pattern string) (boo
 		return false, fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
 	}
 
-	return matchPattern(hyperlinkAnswer.Value, pattern)
+	match, err := matchPattern(hyperlinkAnswer.Value, pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for hyperlink answer: %w", err)
+	}
+	return match, nil
 }
 
 // validateURL checks if the value is a valid URL

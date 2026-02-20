@@ -78,7 +78,7 @@ func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(ctx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	formID, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(ctx, w, err, logger)

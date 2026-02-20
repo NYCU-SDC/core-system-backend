@@ -20,7 +20,6 @@ import (
 
 type Querier interface {
 	Create(ctx context.Context, params CreateParams) (CreateRow, error)
-	Update(ctx context.Context, params UpdateParams) (UpdateRow, error)
 	Patch(ctx context.Context, params PatchParams) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
@@ -173,39 +172,7 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	return newForm, nil
 }
 
-func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (UpdateRow, error) {
-	ctx, span := s.tracer.Start(ctx, "Update")
-	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
-
-	fields := buildFormFieldsFromRequest(request)
-
-	updatedForm, err := s.queries.Update(ctx, UpdateParams{
-		ID:                     id,
-		Title:                  fields.title,
-		Description:            fields.description,
-		PreviewMessage:         fields.previewMessage,
-		LastEditor:             userID,
-		Deadline:               fields.deadline,
-		PublishTime:            fields.publishTime,
-		MessageAfterSubmission: fields.messageAfterSubmission,
-		GoogleSheetUrl:         fields.googleSheetURL,
-		Visibility:             fields.visibility,
-		DressingColor:          fields.dressingColor,
-		DressingHeaderFont:     fields.dressingHeaderFont,
-		DressingQuestionFont:   fields.dressingQuestionFont,
-		DressingTextFont:       fields.dressingTextFont,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "update form")
-		span.RecordError(err)
-		return UpdateRow{}, err
-	}
-
-	return updatedForm, nil
-}
-
-func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (UpdateRow, error) {
+func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error) {
 	ctx, span := s.tracer.Start(ctx, "Patch")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -269,13 +236,10 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "patch form")
 		span.RecordError(err)
-		return UpdateRow{}, err
+		return PatchRow{}, err
 	}
 
-	// Convert PatchRow to UpdateRow
-	updateRow := UpdateRow(patchedForm)
-
-	return updateRow, nil
+	return patchedForm, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {

@@ -880,7 +880,11 @@ func encodeChoiceIDsToRequest(choiceIDs []uuid.UUID) (json.RawMessage, error) {
 
 // matchChoiceID checks if a choice ID matches the given regex pattern
 func matchChoiceID(choiceID uuid.UUID, pattern string) (bool, error) {
-	return matchPattern(choiceID.String(), pattern)
+	match, err := matchPattern(choiceID.String(), pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match choice ID: %w", err)
+	}
+	return match, nil
 }
 
 // matchChoiceIDs checks if any of the choice IDs match the given regex pattern
