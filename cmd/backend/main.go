@@ -306,6 +306,8 @@ func main() {
 	// File routes
 	mux.Handle("GET /api/files/{id}", basicMiddleware.HandlerFunc(fileHandler.Download))
 	mux.Handle("GET /api/files/{id}/info", authMiddleware.HandlerFunc(fileHandler.GetByID))
+
+	// Todo: Admin only endpoint
 	mux.Handle("GET /api/files", authMiddleware.HandlerFunc(fileHandler.List))
 	mux.Handle("GET /api/files/me", authMiddleware.HandlerFunc(fileHandler.ListMyFiles))
 
