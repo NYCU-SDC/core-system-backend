@@ -1,7 +1,6 @@
 package file
 
 import (
-	"NYCU-SDC/core-system-backend/internal"
 	"context"
 	"fmt"
 	"io"
@@ -15,85 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// FileValidator defines validation rules for file uploads
-type FileValidator struct {
-	MaxSize      int64              // Maximum file size in bytes
-	AllowedTypes []string           // Allowed MIME types (empty means all types allowed)
-	MagicBytes   map[string][]byte  // Magic bytes to validate file format (key: format name, value: magic bytes)
-	CustomCheck  func([]byte) error // Custom validation function
-}
-
-// ValidateFile validates file data against the validator rules
-func (v *FileValidator) ValidateFile(data []byte, contentType string) error {
-	// Check size
-	if v.MaxSize > 0 && int64(len(data)) > v.MaxSize {
-		return internal.ErrFileTooLarge
-	}
-
-	// Check content type if specified
-	if len(v.AllowedTypes) > 0 {
-		allowed := false
-		for _, t := range v.AllowedTypes {
-			if t == contentType {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return internal.ErrInvalidFileType
-		}
-	}
-
-	// Check magic bytes if specified
-	if len(v.MagicBytes) > 0 {
-		valid := false
-		for _, magic := range v.MagicBytes {
-			if len(data) >= len(magic) {
-				match := true
-				for i, b := range magic {
-					if data[i] != b {
-						match = false
-						break
-					}
-				}
-				if match {
-					valid = true
-					break
-				}
-			}
-		}
-		if !valid {
-			return internal.ErrInvalidImageFormat
-		}
-	}
-
-	// Custom validation
-	if v.CustomCheck != nil {
-		if err := v.CustomCheck(data); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// WebPValidator returns a validator for WebP images
-func WebPValidator(maxSize int64) *FileValidator {
-	return &FileValidator{
-		MaxSize:      maxSize,
-		AllowedTypes: []string{"image/webp"},
-		CustomCheck: func(data []byte) error {
-			// WebP validation: RIFF header + WEBP signature
-			if len(data) < 12 ||
-				string(data[0:4]) != "RIFF" ||
-				string(data[8:12]) != "WEBP" {
-				return internal.ErrInvalidImageFormat
-			}
-			return nil
-		},
-	}
-}
-
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (File, error)
 	GetByID(ctx context.Context, id uuid.UUID) (File, error)
@@ -106,103 +26,52 @@ type Querier interface {
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger    *zap.Logger
+	queries   Querier
+	tracer    trace.Tracer
+	validator *Validator
 }
 
 func NewService(logger *zap.Logger, db DBTX) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("file/service"),
+		logger:    logger,
+		queries:   New(db),
+		tracer:    otel.Tracer("file/service"),
+		validator: NewValidator(),
 	}
 }
 
-// SaveFileWithValidation saves a file with custom validation rules
-// validator can be nil to skip validation
-func (s *Service) SaveFileWithValidation(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, size int64, uploadedBy *uuid.UUID, validator *FileValidator) (File, error) {
-	traceCtx, span := s.tracer.Start(ctx, "SaveFileWithValidation")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	// Read file content into memory
-	data, err := io.ReadAll(fileContent)
-	if err != nil {
-		logger.Error("Failed to read file content", zap.Error(err))
-		span.RecordError(err)
-		return File{}, fmt.Errorf("failed to read file content: %w", err)
-	}
-
-	// Validate file if validator is provided
-	if validator != nil {
-		if err := validator.ValidateFile(data, contentType); err != nil {
-			logger.Warn("File validation failed", zap.Error(err))
-			span.RecordError(err)
-			return File{}, err
-		}
-	}
-
-	// Verify size
-	actualSize := int64(len(data))
-	if actualSize != size {
-		logger.Warn("File size mismatch", zap.Int64("expected", size), zap.Int64("actual", actualSize))
-		size = actualSize // Use actual size
-	}
-
-	// Convert uploadedBy to pgtype.UUID
-	var pgUploadedBy pgtype.UUID
-	if uploadedBy != nil {
-		pgUploadedBy = pgtype.UUID{
-			Bytes: [16]byte(*uploadedBy),
-			Valid: true,
-		}
-	}
-
-	// Create database record with file data
-	file, err := s.queries.Create(traceCtx, CreateParams{
-		OriginalFilename: originalFilename,
-		ContentType:      contentType,
-		Size:             size,
-		Data:             data,
-		UploadedBy:       pgUploadedBy,
-	})
-	if err != nil {
-		logger.Error("Failed to create file record", zap.Error(err))
-		span.RecordError(err)
-		return File{}, databaseutil.WrapDBError(err, logger, "create file record")
-	}
-
-	logger.Info("File saved successfully with validation",
-		zap.String("file_id", file.ID.String()),
-		zap.String("original_filename", originalFilename),
-		zap.Int64("size", size),
-	)
-
-	return file, nil
-}
-
-// SaveFile saves the uploaded file data to database
+// SaveFile saves the uploaded file data to database with validation
 // uploadedBy can be nil for system uploads
-func (s *Service) SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, size int64, uploadedBy *uuid.UUID) (File, error) {
+// opts are validation options (e.g., WithWebP(), WithMaxSize(1024))
+func (s *Service) SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...ValidatorOption) (File, error) {
 	traceCtx, span := s.tracer.Start(ctx, "SaveFile")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	// Read file content into memory
-	data, err := io.ReadAll(fileContent)
-	if err != nil {
-		logger.Error("Failed to read file content", zap.Error(err))
-		span.RecordError(err)
-		return File{}, fmt.Errorf("failed to read file content: %w", err)
+	// Validate and read file content using internal validator
+	var data []byte
+	var err error
+
+	if len(opts) > 0 {
+		// Validation is requested
+		data, err = s.validator.ValidateStream(fileContent, contentType, opts...)
+		if err != nil {
+			logger.Warn("File validation failed", zap.Error(err))
+			span.RecordError(err)
+			return File{}, err
+		}
+	} else {
+		// No validation, just read the stream
+		data, err = io.ReadAll(fileContent)
+		if err != nil {
+			logger.Error("Failed to read file content", zap.Error(err))
+			span.RecordError(err)
+			return File{}, fmt.Errorf("failed to read file content: %w", err)
+		}
 	}
 
-	// Verify size
-	actualSize := int64(len(data))
-	if actualSize != size {
-		logger.Warn("File size mismatch", zap.Int64("expected", size), zap.Int64("actual", actualSize))
-		size = actualSize // Use actual size
-	}
+	size := int64(len(data))
 
 	// Convert uploadedBy to pgtype.UUID
 	var pgUploadedBy pgtype.UUID

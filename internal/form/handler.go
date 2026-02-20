@@ -197,11 +197,11 @@ type Handler struct {
 	store         Store
 	tenantStore   tenantStore
 	questionStore questionStore
-	fileService fileService
+	fileService   fileService
 }
 
 type fileService interface {
-	SaveFileWithValidation(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, size int64, uploadedBy *uuid.UUID, validator *file.FileValidator) (file.File, error)
+	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
 	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
 }
 
@@ -563,18 +563,15 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 		}
 	}()
 
-	// Use file service with WebP validator
-	validator := file.WebPValidator(maxBytes)
-
-	// Save to file service (system upload, no user attribution)
-	savedFile, err := h.fileService.SaveFileWithValidation(
+	// Save to file service with WebP validation (system upload, no user attribution)
+	savedFile, err := h.fileService.SaveFile(
 		traceCtx,
 		fileData,
 		header.Filename,
 		"image/webp",
-		header.Size,
 		nil, // system upload
-		validator,
+		file.WithWebP(),
+		file.WithMaxSize(maxBytes),
 	)
 	if err != nil {
 		logger.Error("Failed to save cover image", zap.Error(err))
