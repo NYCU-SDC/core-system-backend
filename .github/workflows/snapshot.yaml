@@ -217,35 +217,17 @@ jobs:
         run: mkdir -p reports
 
       - name: Run smoke tests
-        continue-on-error: true
-        run: npx --yes httpyac send scenarios/smoke/*.http --junit --all --timeout 30000 --var BASE_URL=${QA_BASE_URL} > ../reports/httpyac-smoke.xml
+        run: npx --yes httpyac send scenarios/smoke/*.http --all --timeout 30000 --var BASE_URL=${QA_BASE_URL}
         working-directory: core-system-api
 
       - name: Run user-journey tests
         continue-on-error: true
         run: |
-          # Find all subdirectories under user-journey
-          for subdir in scenarios/user-journey/*/; do
-            if [ -d "$subdir" ]; then
-              subfolder_name=$(basename "$subdir")
-              echo "Processing subfolder: $subfolder_name"
-              
-              # Process each .http file in the subfolder
-              for http_file in "$subdir"*.http; do
-                if [ -f "$http_file" ]; then
-                  filename=$(basename "$http_file" .http)
-                  output_file="../reports/httpyac-${subfolder_name}-${filename}.xml"
-                  
-                  echo "  Running: $http_file -> $output_file"
-                  npx --yes httpyac send "$http_file" \
-                    --junit --all --timeout 30000 \
-                    --var BASE_URL=${QA_BASE_URL} \
-                    --var LOGIN_USER_ID=${QA_LOGIN_USER_ID} \
-                    > "$output_file" || true
-                fi
-              done
-            fi
-          done
+          npx --yes httpyac send "scenarios/user-journey/**/*.http" \
+            --junit --all --timeout 30000 \
+            --var BASE_URL=${QA_BASE_URL} \
+            --var LOGIN_USER_ID=${QA_LOGIN_USER_ID} \
+            > ../reports/user-journey-all.xml
         working-directory: core-system-api
 
       - name: List generated reports
@@ -257,9 +239,10 @@ jobs:
         uses: dorny/test-reporter@v2
         with:
           name: httpyac scenarios
-          path: reports/httpyac-*.xml
+          path: reports/*.xml
           reporter: java-junit
-          fail-on-empty: false
+          list-tests: failed
+          only-summary: false
           fail-on-error: false
 
       - name: Teardown compose
