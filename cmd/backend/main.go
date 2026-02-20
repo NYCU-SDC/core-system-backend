@@ -137,7 +137,10 @@ func main() {
 	problemWriter := internal.NewProblemWriter()
 	user.InitAllowedList(cfg.AllowOnboardingList)
 
+	// ============================================
 	// Service
+	// ============================================
+
 	fileService := file.NewService(logger, dbPool)
 	userService := user.NewService(logger, dbPool, fileService)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
@@ -153,7 +156,10 @@ func main() {
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
+	// ============================================
 	// Handler
+	// ============================================
+
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService, fileService)
@@ -167,7 +173,11 @@ func main() {
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
 	fileHandler := file.NewHandler(logger, validator, problemWriter, fileService)
 
+	// ============================================
 	// Middleware
+	// ============================================
+
+	// Middleware Initialization
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
 	corsMiddleware := cors.NewMiddleware(logger, cfg.AllowOrigins)
 	jwtMiddleware := jwt.NewMiddleware(logger, validator, problemWriter, jwtService)
