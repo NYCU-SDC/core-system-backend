@@ -90,6 +90,7 @@ var (
 
 	// Question Errors
 	ErrQuestionNotFound           = errors.New("question not found")
+	ErrSectionNotFound            = errors.New("section not found")
 	ErrQuestionRequired           = errors.New("question is required but not answered")
 	ErrValidationFailed           = errors.New("validation failed")
 	ErrInvalidSourceIDWithChoices = errors.New("cannot specify both source_id and choices")
@@ -237,6 +238,8 @@ func ErrorHandler(err error) problem.Problem {
 	// Question Errors
 	case errors.Is(err, ErrQuestionNotFound):
 		return problem.NewNotFoundProblem("question not found")
+	case errors.Is(err, ErrSectionNotFound):
+		return problem.NewNotFoundProblem("section not found")
 	case errors.Is(err, ErrQuestionRequired):
 		return problem.NewValidateProblem("question is required but not answered")
 	case errors.Is(err, ErrInvalidSourceIDWithChoices):
