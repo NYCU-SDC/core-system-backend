@@ -270,7 +270,7 @@ func (h *Handler) toGetFormResponse(ctx context.Context, formResponse FormRespon
 				answerPayload := map[string]interface{}{
 					"questionId":   questionID,
 					"questionType": strings.ToUpper(string(answerable.Question().Type)),
-					"value":        json.RawMessage(payload),
+					"value":        payload,
 				}
 
 				answerPayloadJSON, err := json.Marshal(answerPayload)
