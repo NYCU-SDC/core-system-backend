@@ -223,7 +223,29 @@ jobs:
 
       - name: Run user-journey tests
         continue-on-error: true
-        run: npx --yes httpyac send scenarios/user-journey/form-lifecycle/*.http --junit --all --timeout 30000 --var BASE_URL=${QA_BASE_URL} --var LOGIN_USER_ID=${QA_LOGIN_USER_ID} > ../reports/httpyac-form-lifecycle.xml
+        run: |
+          # Find all subdirectories under user-journey
+          for subdir in scenarios/user-journey/*/; do
+            if [ -d "$subdir" ]; then
+              subfolder_name=$(basename "$subdir")
+              echo "Processing subfolder: $subfolder_name"
+              
+              # Process each .http file in the subfolder
+              for http_file in "$subdir"*.http; do
+                if [ -f "$http_file" ]; then
+                  filename=$(basename "$http_file" .http)
+                  output_file="../reports/httpyac-${subfolder_name}-${filename}.xml"
+                  
+                  echo "  Running: $http_file -> $output_file"
+                  npx --yes httpyac send "$http_file" \
+                    --junit --all --timeout 30000 \
+                    --var BASE_URL=${QA_BASE_URL} \
+                    --var LOGIN_USER_ID=${QA_LOGIN_USER_ID} \
+                    > "$output_file" || true
+                fi
+              done
+            fi
+          done
         working-directory: core-system-api
 
       - name: List generated reports
