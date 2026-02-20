@@ -107,50 +107,6 @@ func resolveAvatarUrl(name, avatarUrl string) string {
 	return avatarUrl
 }
 
-// downloadAndSaveAvatar downloads an avatar from a URL and saves it to the file service
-// Returns the backend URL for the saved avatar, or empty string if failed
-func (s *Service) downloadAndSaveAvatar(ctx context.Context, avatarURL string, userID uuid.UUID) string {
-	logger := logutil.WithContext(ctx, s.logger)
-
-	// Skip if no avatar URL
-	if avatarURL == "" {
-		return ""
-	}
-
-	// Skip if already a backend URL
-	if strings.HasPrefix(avatarURL, "/api/files/") {
-		return avatarURL
-	}
-
-	// Generate filename for avatar
-	filename := fmt.Sprintf("avatar-%s", userID.String())
-
-	// Build validation options for avatar images
-	const maxAvatarSize = 5 * 1024 * 1024 // 5MB
-	validationOpts := []file.ValidatorOption{
-		file.WithMaxSize(maxAvatarSize),
-		file.WithImageFormats(), // Accept JPEG, PNG, or WebP
-	}
-
-	// Use file service to download and save avatar
-	savedFile, err := s.fileOperator.DownloadFromURL(ctx, avatarURL, filename, &userID, validationOpts...)
-	if err != nil {
-		logger.Warn("Failed to download and save avatar",
-			zap.String("url", avatarURL),
-			zap.Error(err))
-		return ""
-	}
-
-	// Return backend URL
-	backendURL := fmt.Sprintf("/api/files/%s", savedFile.ID.String())
-	logger.Info("Successfully downloaded and saved avatar",
-		zap.String("original_url", avatarURL),
-		zap.String("backend_url", backendURL),
-		zap.String("user_id", userID.String()))
-
-	return backendURL
-}
-
 func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "FindOrCreate")
 	defer span.End()
@@ -251,6 +207,50 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	}
 
 	return newUser.ID, nil
+}
+
+// downloadAndSaveAvatar downloads an avatar from a URL and saves it to the file service
+// Returns the backend URL for the saved avatar, or empty string if failed
+func (s *Service) downloadAndSaveAvatar(ctx context.Context, avatarURL string, userID uuid.UUID) string {
+	logger := logutil.WithContext(ctx, s.logger)
+
+	// Skip if no avatar URL
+	if avatarURL == "" {
+		return ""
+	}
+
+	// Skip if already a backend URL
+	if strings.HasPrefix(avatarURL, "/api/files/") {
+		return avatarURL
+	}
+
+	// Generate filename for avatar
+	filename := fmt.Sprintf("avatar-%s", userID.String())
+
+	// Build validation options for avatar images
+	const maxAvatarSize = 5 * 1024 * 1024 // 5MB
+	validationOpts := []file.ValidatorOption{
+		file.WithMaxSize(maxAvatarSize),
+		file.WithImageFormats(), // Accept JPEG, PNG, or WebP
+	}
+
+	// Use file service to download and save avatar
+	savedFile, err := s.fileOperator.DownloadFromURL(ctx, avatarURL, filename, &userID, validationOpts...)
+	if err != nil {
+		logger.Warn("Failed to download and save avatar",
+			zap.String("url", avatarURL),
+			zap.Error(err))
+		return ""
+	}
+
+	// Return backend URL
+	backendURL := fmt.Sprintf("/api/files/%s", savedFile.ID.String())
+	logger.Info("Successfully downloaded and saved avatar",
+		zap.String("original_url", avatarURL),
+		zap.String("backend_url", backendURL),
+		zap.String("user_id", userID.String()))
+
+	return backendURL
 }
 
 func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email string) error {
