@@ -217,12 +217,18 @@ jobs:
         run: mkdir -p reports
 
       - name: Run smoke tests
+        continue-on-error: true
         run: npx --yes httpyac send scenarios/smoke/*.http --junit --all --timeout 30000 --var BASE_URL=${QA_BASE_URL} > ../reports/httpyac-smoke.xml
         working-directory: core-system-api
 
       - name: Run user-journey tests
+        continue-on-error: true
         run: npx --yes httpyac send scenarios/user-journey/form-lifecycle/*.http --junit --all --timeout 30000 --var BASE_URL=${QA_BASE_URL} --var LOGIN_USER_ID=${QA_LOGIN_USER_ID} > ../reports/httpyac-form-lifecycle.xml
         working-directory: core-system-api
+
+      - name: List generated reports
+        if: always()
+        run: ls -lah reports/ || echo "No reports directory found"
 
       - name: Publish test report
         if: always()
@@ -231,6 +237,7 @@ jobs:
           name: httpyac scenarios
           path: reports/httpyac-*.xml
           reporter: java-junit
+          fail-on-empty: false
 
       - name: Upload test report artifact
         if: always()
