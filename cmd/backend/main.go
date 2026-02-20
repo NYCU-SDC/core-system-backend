@@ -248,7 +248,7 @@ func main() {
 	mux.Handle("GET /api/forms/me", authMiddleware.HandlerFunc(unitHandler.ListFormsOfCurrentUser))
 
 	// ============================================
-	// Tenant and Unit routes
+	// Organization and Unit routes
 	// ============================================
 
 	// Organization Management
