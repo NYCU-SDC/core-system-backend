@@ -2,7 +2,6 @@ package user
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
-	"context"
 	"net/http"
 	"strings"
 
@@ -15,12 +14,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
-
-// GetFromContext extracts the authenticated user from request context
-func GetFromContext(ctx context.Context) (*User, bool) {
-	userData, ok := ctx.Value(internal.UserContextKey).(*User)
-	return userData, ok
-}
 
 func ConvertEmailsToSlice(emails interface{}) []string {
 	if emails == nil {
@@ -146,7 +139,7 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get authenticated userfrom context
+	// Get authenticated user from context
 	currentUser, ok := GetFromContext(traceCtx)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
