@@ -2,7 +2,6 @@ package file
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
-	"NYCU-SDC/core-system-backend/internal/user"
 	"bytes"
 	"net/http"
 	"strconv"
@@ -242,14 +241,14 @@ func (h *Handler) ListMyFiles(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Get current user
-	currentUser, ok := user.GetFromContext(traceCtx)
+	currentUserID, ok := internal.GetUserIDFromContext(traceCtx)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
 		return
 	}
 
 	// Get files uploaded by user (metadata only, without binary data)
-	files, err := h.service.GetByUploadedBy(traceCtx, currentUser.ID)
+	files, err := h.service.GetByUploadedBy(traceCtx, currentUserID)
 	if err != nil {
 		logger.Error("Failed to get user files", zap.Error(err))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
