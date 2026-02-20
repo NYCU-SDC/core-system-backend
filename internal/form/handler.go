@@ -2,6 +2,7 @@ package form
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/file"
 	"NYCU-SDC/core-system-backend/internal/form/font"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/user"
@@ -195,6 +196,12 @@ type Handler struct {
 	store         Store
 	tenantStore   tenantStore
 	questionStore questionStore
+	fileService   FileService
+}
+
+type FileService interface {
+	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
+	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
 }
 
 func NewHandler(
@@ -204,6 +211,7 @@ func NewHandler(
 	store Store,
 	tenantStore tenantStore,
 	questionStore questionStore,
+	fileService FileService,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -213,6 +221,7 @@ func NewHandler(
 		store:         store,
 		tenantStore:   tenantStore,
 		questionStore: questionStore,
+		fileService:   fileService,
 	}
 }
 
@@ -523,7 +532,7 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	idStr := r.PathValue("formId")
-	id, err := handlerutil.ParseUUID(idStr)
+	formID, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -534,46 +543,45 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMultipart, logger)
 		return
 	}
 
-	file, _, err := r.FormFile("coverImage")
+	fileData, header, err := r.FormFile("coverImage")
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMultipart, logger)
 		return
 	}
 	defer func() {
-		if err := file.Close(); err != nil {
+		if err := fileData.Close(); err != nil {
 			logutil.WithContext(traceCtx, logger).Warn(
 				"failed to close cover image file",
-				zap.String("form_id", id.String()),
+				zap.String("form_id", formID.String()),
 				zap.Error(err),
 			)
 		}
 	}()
 
-	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	// Save to file service with WebP validation (system upload, no user attribution)
+	savedFile, err := h.fileService.SaveFile(
+		traceCtx,
+		fileData,
+		header.Filename,
+		"image/webp",
+		nil, // system upload
+		file.WithWebP(),
+		file.WithMaxSize(maxBytes),
+	)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to read cover image: %w", err), logger)
-		return
-	}
-	if int64(len(imageBytes)) > maxBytes {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageTooLarge, logger)
-		return
-	}
-
-	// WebP validation
-	if len(imageBytes) < 12 ||
-		string(imageBytes[0:4]) != "RIFF" ||
-		string(imageBytes[8:12]) != "WEBP" {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageInvalidFormat, logger)
+		logger.Error("Failed to save cover image", zap.Error(err))
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		span.RecordError(err)
 		return
 	}
 
-	coverImageURL := fmt.Sprintf("/api/forms/%s/cover", id.String())
-
-	if err := h.store.UploadCoverImage(traceCtx, id, imageBytes, coverImageURL); err != nil {
+	// Update form's cover_image_url
+	coverImageURL := fmt.Sprintf("/api/forms/%s/cover", formID.String())
+	if err := h.store.UploadCoverImage(traceCtx, formID, savedFile.Data, coverImageURL); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

@@ -422,6 +422,17 @@ type Auth struct {
 	UpdatedAt  pgtype.Timestamptz
 }
 
+type File struct {
+	ID               uuid.UUID
+	OriginalFilename string
+	ContentType      string
+	Size             int64
+	Data             []byte
+	UploadedBy       pgtype.UUID
+	CreatedAt        pgtype.Timestamptz
+	UpdatedAt        pgtype.Timestamptz
+}
+
 type Form struct {
 	ID                     uuid.UUID
 	Title                  string
