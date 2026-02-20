@@ -137,6 +137,9 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// Get file ID from path
 	fileID, fileIDStr, ok := h.parseAndValidateFileID(w, r, logger)
 	if !ok {
+		logger.Warn("Invalid file ID", zap.String("file_id", fileIDStr))
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFileID, logger)
+		span.RecordError(internal.ErrInvalidFileID)
 		return
 	}
 
@@ -163,6 +166,9 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Get file ID from path
 	fileID, fileIDStr, ok := h.parseAndValidateFileID(w, r, logger)
 	if !ok {
+		logger.Warn("Invalid file ID", zap.String("file_id", fileIDStr))
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFileID, logger)
+		span.RecordError(internal.ErrInvalidFileID)
 		return
 	}
 
