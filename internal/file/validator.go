@@ -81,15 +81,7 @@ func WithMaxSize(size int64) ValidatorOption {
 func WithWebP() ValidatorOption {
 	return func(c *validatorConfig) {
 		c.allowedTypes = []string{"image/webp"}
-		c.checkFormat = func(data []byte) error {
-			// WebP validation: RIFF header + WEBP signature
-			if len(data) < 12 ||
-				string(data[0:4]) != "RIFF" ||
-				string(data[8:12]) != "WEBP" {
-				return internal.ErrInvalidImageFormat
-			}
-			return nil
-		}
+		c.checkFormat = validateWebP
 	}
 }
 
@@ -97,13 +89,7 @@ func WithWebP() ValidatorOption {
 func WithJPEG() ValidatorOption {
 	return func(c *validatorConfig) {
 		c.allowedTypes = []string{"image/jpeg"}
-		c.checkFormat = func(data []byte) error {
-			// JPEG validation: check magic bytes FF D8 FF
-			if len(data) < 3 || data[0] != 0xFF || data[1] != 0xD8 || data[2] != 0xFF {
-				return internal.ErrInvalidImageFormat
-			}
-			return nil
-		}
+		c.checkFormat = validateJPEG
 	}
 }
 
@@ -111,19 +97,7 @@ func WithJPEG() ValidatorOption {
 func WithPNG() ValidatorOption {
 	return func(c *validatorConfig) {
 		c.allowedTypes = []string{"image/png"}
-		c.checkFormat = func(data []byte) error {
-			// PNG validation: check PNG signature
-			pngSignature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
-			if len(data) < len(pngSignature) {
-				return internal.ErrInvalidImageFormat
-			}
-			for i, b := range pngSignature {
-				if data[i] != b {
-					return internal.ErrInvalidImageFormat
-				}
-			}
-			return nil
-		}
+		c.checkFormat = validatePNG
 	}
 }
 
@@ -139,4 +113,60 @@ func WithCustomValidation(check func([]byte) error) ValidatorOption {
 	return func(c *validatorConfig) {
 		c.checkFormat = check
 	}
+}
+
+// WithImageFormats configures validation for common image formats (JPEG, PNG, WebP)
+// Accepts any of these formats - validates both content-type and magic bytes
+func WithImageFormats() ValidatorOption {
+	return func(c *validatorConfig) {
+		c.allowedTypes = []string{"image/jpeg", "image/png", "image/webp"}
+		c.checkFormat = func(data []byte) error {
+			// Try each format validator - if any succeeds, accept the file
+			if err := validateJPEG(data); err == nil {
+				return nil
+			}
+			if err := validatePNG(data); err == nil {
+				return nil
+			}
+			if err := validateWebP(data); err == nil {
+				return nil
+			}
+			return internal.ErrInvalidImageFormat
+		}
+	}
+}
+
+// validateJPEG checks if data is a valid JPEG image
+func validateJPEG(data []byte) error {
+	// JPEG validation: check magic bytes FF D8 FF
+	if len(data) < 3 || data[0] != 0xFF || data[1] != 0xD8 || data[2] != 0xFF {
+		return internal.ErrInvalidImageFormat
+	}
+	return nil
+}
+
+// validatePNG checks if data is a valid PNG image
+func validatePNG(data []byte) error {
+	// PNG validation: check PNG signature
+	pngSignature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+	if len(data) < len(pngSignature) {
+		return internal.ErrInvalidImageFormat
+	}
+	for i, b := range pngSignature {
+		if data[i] != b {
+			return internal.ErrInvalidImageFormat
+		}
+	}
+	return nil
+}
+
+// validateWebP checks if data is a valid WebP image
+func validateWebP(data []byte) error {
+	// WebP validation: RIFF header + WEBP signature
+	if len(data) < 12 ||
+		string(data[0:4]) != "RIFF" ||
+		string(data[8:12]) != "WEBP" {
+		return internal.ErrInvalidImageFormat
+	}
+	return nil
 }

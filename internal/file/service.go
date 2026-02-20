@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"path"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -77,7 +79,7 @@ func (s *Service) SaveFile(ctx context.Context, fileContent io.Reader, originalF
 	var pgUploadedBy pgtype.UUID
 	if uploadedBy != nil {
 		pgUploadedBy = pgtype.UUID{
-			Bytes: [16]byte(*uploadedBy),
+			Bytes: *uploadedBy,
 			Valid: true,
 		}
 	}
@@ -209,4 +211,60 @@ func (s *Service) Count(ctx context.Context) (int64, error) {
 	}
 
 	return count, nil
+}
+
+// DownloadFromURL downloads a file from the given URL and saves it to the database
+// This method exposes the server IP and should ONLY be used for trusted sources
+// (e.g., downloading Google Profile Avatar)
+// url is the source URL to download from
+// filename is the desired filename; if empty, it will be extracted from the URL
+// uploadedBy can be nil for system uploads
+// opts are validation options (e.g., WithWebP(), WithMaxSize(1024))
+func (s *Service) DownloadFromURL(ctx context.Context, url string, filename string, uploadedBy *uuid.UUID, opts ...ValidatorOption) (File, error) {
+	traceCtx, span := s.tracer.Start(ctx, "DownloadFromURL")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	logger.Info("Downloading file from URL",
+		zap.String("url", url),
+	)
+
+	// Download the file
+	resp, err := http.Get(url)
+	if err != nil {
+		logger.Error("Failed to download file from URL",
+			zap.String("url", url),
+			zap.Error(err))
+		span.RecordError(err)
+		return File{}, fmt.Errorf("failed to download file from URL: %w", err)
+	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("bad status code: %d", resp.StatusCode)
+		logger.Error("Failed to download file: bad status",
+			zap.String("url", url),
+			zap.Int("status", resp.StatusCode))
+		span.RecordError(err)
+		return File{}, err
+	}
+
+	// Determine content type from response header
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream" // default
+	}
+
+	// Use provided filename or extract from URL path
+	if filename == "" {
+		filename = path.Base(url)
+		if filename == "/" || filename == "." {
+			filename = "downloaded_file"
+		}
+	}
+
+	// Save the downloaded file using existing SaveFile method
+	return s.SaveFile(traceCtx, resp.Body, filename, contentType, uploadedBy, opts...)
 }

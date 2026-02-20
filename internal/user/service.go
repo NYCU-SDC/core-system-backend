@@ -7,9 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
-	"path"
 	"strings"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -47,6 +45,7 @@ type Querier interface {
 // Following Go best practice: interfaces are defined by the consumer, not the provider
 type FileOperator interface {
 	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
+	DownloadFromURL(ctx context.Context, url string, filename string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
 }
 
 type Service struct {
@@ -123,65 +122,20 @@ func (s *Service) downloadAndSaveAvatar(ctx context.Context, avatarURL string, u
 		return avatarURL
 	}
 
-	// Download avatar
-	resp, err := http.Get(avatarURL)
-	if err != nil {
-		logger.Warn("Failed to download avatar",
-			zap.String("url", avatarURL),
-			zap.Error(err))
-		return ""
-	}
-	defer func(Body io.ReadCloser) {
-		_ = Body.Close()
-	}(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		logger.Error("Failed to download avatar: bad status",
-			zap.String("url", avatarURL),
-			zap.Int("status", resp.StatusCode))
-		return ""
-	}
-
-	// Determine content type and filename
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "image/jpeg" // default
-	}
-
-	// Extract extension from URL or content type
-	ext := path.Ext(avatarURL)
-	if ext == "" {
-		switch contentType {
-		case "image/jpeg", "image/jpg":
-			ext = ".jpg"
-		case "image/png":
-			ext = ".png"
-		case "image/webp":
-			ext = ".webp"
-		default:
-			ext = ".jpg"
-		}
-	}
-
-	filename := fmt.Sprintf("avatar-%s%s", userID.String(), ext)
+	// Generate filename for avatar
+	filename := fmt.Sprintf("avatar-%s", userID.String())
 
 	// Build validation options for avatar images
 	const maxAvatarSize = 5 * 1024 * 1024 // 5MB
-	validationOpts := []file.ValidatorOption{file.WithMaxSize(maxAvatarSize)}
-
-	// Add format-specific validation based on content type
-	switch contentType {
-	case "image/jpeg", "image/jpg":
-		validationOpts = append(validationOpts, file.WithJPEG())
-	case "image/png":
-		validationOpts = append(validationOpts, file.WithPNG())
-	case "image/webp":
-		validationOpts = append(validationOpts, file.WithWebP())
+	validationOpts := []file.ValidatorOption{
+		file.WithMaxSize(maxAvatarSize),
+		file.WithImageFormats(), // Accept JPEG, PNG, or WebP
 	}
 
-	savedFile, err := s.fileOperator.SaveFile(ctx, resp.Body, filename, contentType, &userID, validationOpts...)
+	// Use file service to download and save avatar
+	savedFile, err := s.fileOperator.DownloadFromURL(ctx, avatarURL, filename, &userID, validationOpts...)
 	if err != nil {
-		logger.Warn("Failed to save avatar to file service",
+		logger.Warn("Failed to download and save avatar",
 			zap.String("url", avatarURL),
 			zap.Error(err))
 		return ""
