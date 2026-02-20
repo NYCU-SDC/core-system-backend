@@ -148,7 +148,7 @@ func main() {
 	unitService := unit.NewService(logger, dbPool, tenantService)
 	distributeService := distribute.NewService(logger, unitService)
 	questionService := question.NewService(logger, dbPool)
-	answerService := answer.NewService(logger, dbPool, questionService)
+	answerService := answer.NewService(logger, dbPool, questionService, fileService)
 	inboxService := inbox.NewService(logger, dbPool)
 	workflowService := workflow.NewService(logger, dbPool, questionService)
 	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService)
@@ -339,6 +339,7 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(answerHandler.GetQuestionResponse))
 	mux.Handle("PATCH /api/responses/{responseId}/answers", authMiddleware.HandlerFunc(answerHandler.UpdateFormResponse))
+	mux.Handle("POST /api/responses/{responseId}/questions/{questionId}/files", authMiddleware.HandlerFunc(answerHandler.UploadQuestionFiles))
 
 	// Workflow Management
 	// ----------------------

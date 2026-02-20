@@ -3,6 +3,7 @@ package answer
 import (
 	"context"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -46,9 +47,15 @@ type UpdateResponse struct {
 	Answers []Response `json:"answers"`
 }
 
+// UploadFilesResponse is the response for a successful file upload
+type UploadFilesResponse struct {
+	Files []UploadedFileMetadata `json:"files"`
+}
+
 type Store interface {
 	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
+	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]UploadedFileMetadata, Answer, Answerable, error)
 }
 
 type QuestionGetter interface {
@@ -201,7 +208,77 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
+// UploadQuestionFiles uploads files for an upload_file question and creates/updates the answer.
+// POST /responses/{responseId}/questions/{questionId}/files
+func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UploadQuestionFiles")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	// Parse responseId from path
+	responseIDStr := r.PathValue("responseId")
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Parse questionId from path
+	questionIDStr := r.PathValue("questionId")
+	questionID, err := handlerutil.ParseUUID(questionIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Get formID from responseID
+	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Parse multipart form (limit to maxFiles * 10 MB each)
+	const maxFileSize int64 = 10 << 20 // 10 MB per file
+	const maxFiles = 10
+	const maxBodySize = maxFileSize * maxFiles
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+	if err := r.ParseMultipartForm(maxBodySize); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	fileHeaders := r.MultipartForm.File["file"]
+	if len(fileHeaders) == 0 {
+		err := handlerutil.NewValidationError("file", nil, "no files provided in the \"file\" field")
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Upload files and upsert answer
+	uploadedFiles, answer, answerable, err := h.store.UploadFiles(traceCtx, formID, responseID, questionID, fileHeaders, nil)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	logger.Info("successfully uploaded files",
+		zap.String("responseID", responseID.String()),
+		zap.String("questionID", questionID.String()),
+		zap.Int("fileCount", len(uploadedFiles)),
+	)
+
+	_ = answer
+	_ = answerable
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, UploadFilesResponse{
+		Files: uploadedFiles,
+	})
+}
+
 func (h *Handler) ToResponse(context context.Context, answer Answer, answerable Answerable, responseID uuid.UUID) (Response, error) {
+
 	traceCtx, span := h.tracer.Start(context, "ToResponse")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)

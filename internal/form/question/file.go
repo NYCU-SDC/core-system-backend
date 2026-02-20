@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal/form/shared"
+
 	"github.com/google/uuid"
 )
 
@@ -166,23 +168,52 @@ func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
 }
 
 func (u UploadFile) DecodeRequest(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement upload file decoding from API request
-	return nil, errors.New("not implemented yet")
+	// API request sends a plain JSON array of file ID strings: ["uuid1", "uuid2"]
+	var fileIDs []string
+	if err := json.Unmarshal(rawValue, &fileIDs); err != nil {
+		return nil, fmt.Errorf("invalid upload file value format: expected array of file IDs: %w", err)
+	}
+
+	return shared.UploadFileAnswer{FileIDs: fileIDs}, nil
 }
 
 func (u UploadFile) DecodeStorage(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement upload file decoding from storage
-	return nil, errors.New("not implemented yet")
+	// Storage format: {"fileIds": ["uuid1", "uuid2"]}
+	var answer shared.UploadFileAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid upload file answer in storage: %w", err)
+	}
+
+	return answer, nil
 }
 
 func (u UploadFile) EncodeRequest(answer any) (json.RawMessage, error) {
-	// TODO: Implement upload file encoding to API request format
-	return nil, errors.New("not implemented yet")
+	uploadFileAnswer, ok := answer.(shared.UploadFileAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.UploadFileAnswer, got %T", answer)
+	}
+
+	// API response returns a plain array of file ID strings
+	return json.Marshal(uploadFileAnswer.FileIDs)
 }
 
 func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
-	// TODO: Implement DisplayValue for UploadFile
-	return "", fmt.Errorf("DisplayValue not implemented for UploadFile question type")
+	answer, err := u.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	uploadFileAnswer, ok := answer.(shared.UploadFileAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.UploadFileAnswer, got %T", answer)
+	}
+
+	count := len(uploadFileAnswer.FileIDs)
+	if count == 0 {
+		return "0 files", nil
+	}
+
+	return fmt.Sprintf("%d file(s): %s", count, strings.Join(uploadFileAnswer.FileIDs, ", ")), nil
 }
 
 func (u UploadFile) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {

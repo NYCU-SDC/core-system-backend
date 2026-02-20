@@ -2,15 +2,20 @@ package answer
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/file"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"mime/multipart"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -25,6 +30,20 @@ type Querier interface {
 type QuestionStore interface {
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
 	GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID) (map[string]question.Answerable, error)
+}
+
+// FileService defines the file storage operations needed by the answer service
+type FileService interface {
+	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+}
+
+// UploadedFileMetadata contains the metadata of an uploaded file returned after upload
+type UploadedFileMetadata struct {
+	FileID           uuid.UUID `json:"fileId"`
+	OriginalFilename string    `json:"originalFilename"`
+	ContentType      string    `json:"contentType"`
+	Size             int64     `json:"size"`
 }
 
 type Answerable interface {
@@ -50,14 +69,16 @@ type Service struct {
 	tracer  trace.Tracer
 
 	questionStore QuestionStore
+	fileService   FileService
 }
 
-func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileService FileService) *Service {
 	return &Service{
 		logger:        logger,
 		queries:       New(db),
 		tracer:        otel.Tracer("answer/service"),
 		questionStore: questionStore,
+		fileService:   fileService,
 	}
 }
 
@@ -252,4 +273,135 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 	logger.Info("successfully upserted answers", zap.Int("count", len(upsertedAnswers)))
 	return transformedAnswers, answerableList, nil
+}
+
+// UploadFiles uploads files for an upload_file question and upserts the answer.
+// It validates that the question exists, belongs to the form, and is of type upload_file.
+// Files are saved via fileService, and the resulting file IDs are stored as the answer.
+//
+// Eventual consistency for orphan file cleanup:
+//   - If saving a new file fails mid-loop, already-saved new files are cleaned up.
+//   - If Upsert fails, all newly saved files are cleaned up.
+//   - After a successful Upsert, old file IDs from the previous answer are deleted
+//     on a best-effort basis; failures are logged as warnings but do not affect the response.
+func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]UploadedFileMetadata, Answer, Answerable, error) {
+	traceCtx, span := s.tracer.Start(ctx, "UploadFiles")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Get the answerable map to validate question type and membership
+	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
+	if err != nil {
+		s.logger.Error("failed to get answerable map for form", zap.String("formID", formID.String()), zap.Error(err))
+		span.RecordError(err)
+		return nil, Answer{}, nil, internal.ErrInternalServerError
+	}
+
+	answerable, found := answerableMap[questionID.String()]
+	if !found {
+		return nil, Answer{}, nil, internal.ErrQuestionNotFound
+	}
+
+	// Validate the question is of upload_file type
+	if answerable.Question().Type != question.QuestionTypeUploadFile {
+		s.logger.Error("invalid question type", zap.String("questionID", questionID.String()), zap.String("expectedType", string(question.QuestionTypeUploadFile)), zap.String("actualType", string(answerable.Question().Type)))
+		span.RecordError(internal.ErrQuestionTypeMismatch)
+		return nil, Answer{}, nil, internal.ErrQuestionTypeMismatch
+	}
+
+	// Read old file IDs from the existing answer (if any) for later cleanup
+	var oldFileIDs []string
+	existingAnswer, err := s.queries.GetByResponseIDAndQuestionID(traceCtx, GetByResponseIDAndQuestionIDParams{
+		ResponseID: responseID,
+		QuestionID: questionID,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		s.logger.Error("failed to get existing answer for answer", zap.String("questionID", questionID.String()), zap.Error(err))
+		span.RecordError(err)
+		return nil, Answer{}, nil, fmt.Errorf("failed to get existing answer for question %s: %w", questionID, internal.ErrInternalServerError)
+	}
+	if err == nil {
+		// Parse the existing file IDs out of the stored JSONB value
+		var existingUploadAnswer shared.UploadFileAnswer
+		if jsonErr := json.Unmarshal(existingAnswer.Value, &existingUploadAnswer); jsonErr == nil {
+			oldFileIDs = existingUploadAnswer.FileIDs
+		}
+	}
+
+	// deleteFiles is a best-effort helper that logs warnings on failure
+	deleteFiles := func(ids []string) {
+		for _, idStr := range ids {
+			id, parseErr := uuid.Parse(idStr)
+			if parseErr != nil {
+				logger.Warn("failed to parse file ID for cleanup", zap.String("fileID", idStr), zap.Error(parseErr))
+				continue
+			}
+			if delErr := s.fileService.Delete(traceCtx, id); delErr != nil {
+				logger.Warn("failed to delete orphan file", zap.String("fileID", idStr), zap.Error(delErr))
+			}
+		}
+	}
+
+	// Save each uploaded file; on failure clean up any already-saved new files
+	uploadedMeta := make([]UploadedFileMetadata, 0, len(files))
+	fileIDs := make([]string, 0, len(files))
+
+	for _, fh := range files {
+		f, err := fh.Open()
+		if err != nil {
+			s.logger.Error("failed to open uploaded file", zap.String("fileID", fh.Filename), zap.Error(err))
+			span.RecordError(err)
+			deleteFiles(fileIDs)
+			return nil, Answer{}, nil, fmt.Errorf("failed to open uploaded file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
+		}
+
+		savedFile, saveErr := s.fileService.SaveFile(traceCtx, f, fh.Filename, fh.Header.Get("Content-Type"), uploadedBy)
+		_ = f.Close()
+
+		if saveErr != nil {
+			s.logger.Error("failed to save uploaded file", zap.String("fileID", fh.Filename), zap.Error(saveErr))
+			span.RecordError(saveErr)
+			deleteFiles(fileIDs)
+			return nil, Answer{}, nil, fmt.Errorf("failed to save file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
+		}
+
+		fileIDs = append(fileIDs, savedFile.ID.String())
+		uploadedMeta = append(uploadedMeta, UploadedFileMetadata{
+			FileID:           savedFile.ID,
+			OriginalFilename: savedFile.OriginalFilename,
+			ContentType:      savedFile.ContentType,
+			Size:             savedFile.Size,
+		})
+	}
+
+	// Build the answer value (plain JSON array of file IDs) and upsert
+	answerValue, err := json.Marshal(fileIDs)
+	if err != nil {
+		s.logger.Error("failed to marshal upload file answer value", zap.String("questionID", questionID.String()), zap.Error(err))
+		span.RecordError(err)
+		deleteFiles(fileIDs)
+		return nil, Answer{}, nil, fmt.Errorf("failed to marshal upload file answer: %w", internal.ErrInternalServerError)
+	}
+
+	upsertedAnswers, answerableList, errs := s.Upsert(traceCtx, formID, responseID, []shared.AnswerParam{
+		{QuestionID: questionID.String(), Value: answerValue},
+	})
+	if len(errs) > 0 {
+		s.logger.Error("failed to upsert upload file answer", zap.String("questionID", questionID.String()), zap.Error(errs[0]))
+		span.RecordError(errs[0])
+		deleteFiles(fileIDs)
+		return nil, Answer{}, nil, fmt.Errorf("failed to upsert upload file answer: %w", errs[0])
+	}
+
+	// Best-effort: delete old files now that the new answer is committed
+	if len(oldFileIDs) > 0 {
+		deleteFiles(oldFileIDs)
+	}
+
+	logger.Info("successfully uploaded files and upserted answer",
+		zap.String("questionID", questionID.String()),
+		zap.Int("fileCount", len(fileIDs)),
+	)
+
+	return uploadedMeta, upsertedAnswers[0], answerableList[0], nil
 }
