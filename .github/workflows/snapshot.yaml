@@ -182,12 +182,26 @@ jobs:
             }'
 
   ScenarioQA:
-    needs: Deploy
+    needs: Build
     runs-on: ubuntu-latest
     env:
-      SNAPSHOT_BASE_URL: https://pr-${{ github.event.pull_request.number }}.core-system.sdc.nycu.club/api
-      SNAPSHOT_LOGIN_USER_ID: 4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e
+      QA_BASE_URL: http://localhost:18080/api
+      QA_LOGIN_USER_ID: 4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e
+      BACKEND_IMAGE: nycusdc/core-system-backend:pr-${{ github.event.number }}
     steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+
+      - name: Pull backend image for QA
+        run: docker pull ${BACKEND_IMAGE}
+
+      - name: Start QA backend stack
+        run: docker compose -f .deploy/ci/compose.yaml up -d --wait
+
+      - name: Seed QA user
+        run: |
+          cat .deploy/ci/seed.sql | docker compose -f .deploy/ci/compose.yaml exec -T postgres psql -U postgres -d core_system -v ON_ERROR_STOP=1
+
       - name: Checkout API scenarios repo
         uses: actions/checkout@v4
         with:
@@ -199,20 +213,15 @@ jobs:
         with:
           node-version: 24
 
-      - name: Prepare scenario env
-        run: |
-          mkdir -p reports
-          cat > core-system-api/scenarios/user-journey/form-lifecycle/.env <<'EOF'
-          BASE_URL=${SNAPSHOT_BASE_URL}
-          LOGIN_USER_ID=${SNAPSHOT_LOGIN_USER_ID}
-          EOF
+      - name: Prepare reports dir
+        run: mkdir -p reports
 
       - name: Run smoke tests
-        run: npx --yes httpyac send scenarios/smoke/*.http --junit --all --timeout 30000 --var BASE_URL=${SNAPSHOT_BASE_URL} > ../reports/httpyac-smoke.xml
+        run: npx --yes httpyac send scenarios/smoke/*.http --junit --all --timeout 30000 --var BASE_URL=${QA_BASE_URL} > ../reports/httpyac-smoke.xml
         working-directory: core-system-api
 
       - name: Run user-journey tests
-        run: npx --yes httpyac send scenarios/user-journey/form-lifecycle/*.http --junit --all --timeout 30000 > ../reports/httpyac-form-lifecycle.xml
+        run: npx --yes httpyac send scenarios/user-journey/form-lifecycle/*.http --junit --all --timeout 30000 --var BASE_URL=${QA_BASE_URL} --var LOGIN_USER_ID=${QA_LOGIN_USER_ID} > ../reports/httpyac-form-lifecycle.xml
         working-directory: core-system-api
 
       - name: Publish test report
@@ -229,3 +238,7 @@ jobs:
         with:
           name: httpyac-junit
           path: reports/httpyac-*.xml
+
+      - name: Teardown compose
+        if: always()
+        run: docker compose -f .deploy/ci/compose.yaml down -v

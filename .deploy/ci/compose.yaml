@@ -1,0 +1,46 @@
+name: core-system-ci
+
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-core-system-backend:ci}
+    ports:
+      - "18080:8080"
+    networks:
+      - core_system_ci
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DEV: "true"
+      ENV: "ci"
+      HOST: "0.0.0.0"
+      BASE_URL: "http://localhost:18080"
+      DATABASE_URL: postgres://postgres:password@postgres:5432/core_system?sslmode=disable
+      MIGRATION_SOURCE: file:///app/migrations
+      OTEL_COLLECTOR_URL: ""
+      OAUTH_PROXY_BASE_URL: ""
+      OAUTH_PROXY_SECRET: ""
+      GOOGLE_OAUTH_CLIENT_ID: "dummy"
+      GOOGLE_OAUTH_CLIENT_SECRET: "dummy"
+      NYCU_OAUTH_CLIENT_ID: "dummy"
+      NYCU_OAUTH_CLIENT_SECRET: "dummy"
+      VERSION: "ci"
+      ALLOW_ORIGINS: "*"
+
+  postgres:
+    image: postgres:18
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: core_system
+    networks:
+      - core_system_ci
+
+  networks:
+    core_system_ci:
+      driver: bridge

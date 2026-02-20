@@ -15,7 +15,6 @@ error_handling() {
 }
 
 export VERSION="pr-$PR_NUMBER"
-SEED_FILE="$(cd "$(dirname "$0")" && pwd)/seed.sql"
 
 enable_error_handling="false"
 [ ! -d "$VERSION" ] && enable_error_handling="true"
@@ -31,8 +30,3 @@ if [ "$enable_error_handling" == "true" ]; then
 else
     docker compose up -d --wait
 fi
-
-if [ -f "$SEED_FILE" ]; then
-    cat "$SEED_FILE" | docker compose exec -T postgres psql -U postgres -d core_system -v ON_ERROR_STOP=1
-fi
-
