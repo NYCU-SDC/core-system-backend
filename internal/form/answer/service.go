@@ -38,14 +38,6 @@ type FileService interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
-// UploadedFileMetadata contains the metadata of an uploaded file returned after upload
-type UploadedFileMetadata struct {
-	FileID           uuid.UUID `json:"fileId"`
-	OriginalFilename string    `json:"originalFilename"`
-	ContentType      string    `json:"contentType"`
-	Size             int64     `json:"size"`
-}
-
 type Answerable interface {
 	Question() question.Question
 
@@ -284,7 +276,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 //   - If Upsert fails, all newly saved files are cleaned up.
 //   - After a successful Upsert, old file IDs from the previous answer are deleted
 //     on a best-effort basis; failures are logged as warnings but do not affect the response.
-func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]UploadedFileMetadata, Answer, Answerable, error) {
+func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UploadFiles")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -321,10 +313,12 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		return nil, Answer{}, nil, fmt.Errorf("failed to get existing answer for question %s: %w", questionID, internal.ErrInternalServerError)
 	}
 	if err == nil {
-		// Parse the existing file IDs out of the stored JSONB value
+		// Extract old file IDs from the stored answer for later cleanup
 		var existingUploadAnswer shared.UploadFileAnswer
 		if jsonErr := json.Unmarshal(existingAnswer.Value, &existingUploadAnswer); jsonErr == nil {
-			oldFileIDs = existingUploadAnswer.FileIDs
+			for _, entry := range existingUploadAnswer.Files {
+				oldFileIDs = append(oldFileIDs, entry.FileID.String())
+			}
 		}
 	}
 
@@ -343,7 +337,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	}
 
 	// Save each uploaded file; on failure clean up any already-saved new files
-	uploadedMeta := make([]UploadedFileMetadata, 0, len(files))
+	entries := make([]shared.UploadFileEntry, 0, len(files))
 	fileIDs := make([]string, 0, len(files))
 
 	for _, fh := range files {
@@ -366,7 +360,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		}
 
 		fileIDs = append(fileIDs, savedFile.ID.String())
-		uploadedMeta = append(uploadedMeta, UploadedFileMetadata{
+		entries = append(entries, shared.UploadFileEntry{
 			FileID:           savedFile.ID,
 			OriginalFilename: savedFile.OriginalFilename,
 			ContentType:      savedFile.ContentType,
@@ -374,8 +368,8 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		})
 	}
 
-	// Build the answer value (plain JSON array of file IDs) and upsert
-	answerValue, err := json.Marshal(fileIDs)
+	// Build the answer value as a full UploadFileAnswer and upsert
+	answerValue, err := json.Marshal(shared.UploadFileAnswer{Files: entries})
 	if err != nil {
 		s.logger.Error("failed to marshal upload file answer value", zap.String("questionID", questionID.String()), zap.Error(err))
 		span.RecordError(err)
@@ -403,5 +397,5 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		zap.Int("fileCount", len(fileIDs)),
 	)
 
-	return uploadedMeta, upsertedAnswers[0], answerableList[0], nil
+	return entries, upsertedAnswers[0], answerableList[0], nil
 }

@@ -103,15 +103,13 @@ func (u UploadFile) FormID() uuid.UUID {
 }
 
 func (u UploadFile) Validate(rawValue json.RawMessage) error {
-	// Parse the JSON array of file URLs/IDs
-	var fileIDs []string
-	if err := json.Unmarshal(rawValue, &fileIDs); err != nil {
+	var answer shared.UploadFileAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
 		return fmt.Errorf("invalid file upload value format: %w", err)
 	}
 
-	// Check max file amount
-	if int32(len(fileIDs)) > u.MaxFileAmount {
-		return fmt.Errorf("too many files: %d (max: %d)", len(fileIDs), u.MaxFileAmount)
+	if int32(len(answer.Files)) > u.MaxFileAmount {
+		return fmt.Errorf("too many files: %d (max: %d)", len(answer.Files), u.MaxFileAmount)
 	}
 
 	return nil
@@ -168,17 +166,17 @@ func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
 }
 
 func (u UploadFile) DecodeRequest(rawValue json.RawMessage) (any, error) {
-	// API request sends a plain JSON array of file ID strings: ["uuid1", "uuid2"]
-	var fileIDs []string
-	if err := json.Unmarshal(rawValue, &fileIDs); err != nil {
-		return nil, fmt.Errorf("invalid upload file value format: expected array of file IDs: %w", err)
+	// Request format (from UploadFiles): {"files": [{"fileId": "...", "originalFilename": "...", "contentType": "...", "size": 0}]}
+	var answer shared.UploadFileAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid upload file value format: %w", err)
 	}
 
-	return shared.UploadFileAnswer{FileIDs: fileIDs}, nil
+	return answer, nil
 }
 
 func (u UploadFile) DecodeStorage(rawValue json.RawMessage) (any, error) {
-	// Storage format: {"fileIds": ["uuid1", "uuid2"]}
+	// Storage format: {"files": [{"fileId": "...", "originalFilename": "...", "contentType": "...", "size": 0}]}
 	var answer shared.UploadFileAnswer
 	if err := json.Unmarshal(rawValue, &answer); err != nil {
 		return nil, fmt.Errorf("invalid upload file answer in storage: %w", err)
@@ -193,8 +191,8 @@ func (u UploadFile) EncodeRequest(answer any) (json.RawMessage, error) {
 		return nil, fmt.Errorf("expected shared.UploadFileAnswer, got %T", answer)
 	}
 
-	// API response returns a plain array of file ID strings
-	return json.Marshal(uploadFileAnswer.FileIDs)
+	// API response returns the full files array with metadata
+	return json.Marshal(uploadFileAnswer.Files)
 }
 
 func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
@@ -208,12 +206,16 @@ func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
 		return "", fmt.Errorf("expected shared.UploadFileAnswer, got %T", answer)
 	}
 
-	count := len(uploadFileAnswer.FileIDs)
+	count := len(uploadFileAnswer.Files)
 	if count == 0 {
 		return "0 files", nil
 	}
 
-	return fmt.Sprintf("%d file(s): %s", count, strings.Join(uploadFileAnswer.FileIDs, ", ")), nil
+	parts := make([]string, 0, count)
+	for _, f := range uploadFileAnswer.Files {
+		parts = append(parts, fmt.Sprintf("%s (%d bytes)", f.OriginalFilename, f.Size))
+	}
+	return fmt.Sprintf("%d file(s): %s", count, strings.Join(parts, ", ")), nil
 }
 
 func (u UploadFile) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
