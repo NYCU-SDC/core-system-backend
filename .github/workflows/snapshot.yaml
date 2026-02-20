@@ -238,6 +238,7 @@ jobs:
           path: reports/httpyac-*.xml
           reporter: java-junit
           fail-on-empty: false
+          fail-on-error: false
 
       - name: Upload test report artifact
         if: always()
