@@ -86,6 +86,17 @@ func (h *Handler) parseFileIDFromRequest(r *http.Request) (uuid.UUID, string, er
 	return fileID, fileIDStr, nil
 }
 
+// parseAndValidateFileID extracts the file ID from request and handles errors
+// Returns the parsed UUID and a boolean indicating success
+func (h *Handler) parseAndValidateFileID(w http.ResponseWriter, r *http.Request, logger *zap.Logger) (uuid.UUID, string, bool) {
+	fileID, fileIDStr, err := h.parseFileIDFromRequest(r)
+	if err != nil {
+		h.problemWriter.WriteError(r.Context(), w, internal.ErrInvalidFileID, logger)
+		return uuid.UUID{}, fileIDStr, false
+	}
+	return fileID, fileIDStr, true
+}
+
 // Download handles GET /files/{id} - downloads a file
 func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "Download")
@@ -93,9 +104,8 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Get file ID from path
-	fileID, fileIDStr, err := h.parseFileIDFromRequest(r)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFileID, logger)
+	fileID, fileIDStr, ok := h.parseAndValidateFileID(w, r, logger)
+	if !ok {
 		return
 	}
 
@@ -125,9 +135,8 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Get file ID from path
-	fileID, fileIDStr, err := h.parseFileIDFromRequest(r)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFileID, logger)
+	fileID, fileIDStr, ok := h.parseAndValidateFileID(w, r, logger)
+	if !ok {
 		return
 	}
 
@@ -152,9 +161,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	// Get file ID from path
-	fileID, fileIDStr, err := h.parseFileIDFromRequest(r)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidFileID, logger)
+	fileID, fileIDStr, ok := h.parseAndValidateFileID(w, r, logger)
+	if !ok {
 		return
 	}
 
