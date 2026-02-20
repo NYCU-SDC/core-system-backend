@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"slices"
 
+	"NYCU-SDC/core-system-backend/internal"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -20,6 +21,7 @@ type Querier interface {
 	Update(ctx context.Context, params UpdateParams) (UpdateRow, error)
 	UpdateOrder(ctx context.Context, params UpdateOrderParams) (UpdateOrderRow, error)
 	DeleteAndReorder(ctx context.Context, arg DeleteAndReorderParams) error
+	SectionExists(ctx context.Context, id uuid.UUID) (bool, error)
 	ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
@@ -75,6 +77,16 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, e
 	ctx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
+
+	exists, err := s.queries.SectionExists(ctx, input.SectionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check section exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		return nil, internal.ErrSectionNotFound
+	}
 
 	row, err := s.queries.Create(ctx, input)
 	if err != nil {
