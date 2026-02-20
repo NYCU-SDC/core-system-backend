@@ -196,10 +196,10 @@ type Handler struct {
 	store         Store
 	tenantStore   tenantStore
 	questionStore questionStore
-	fileService   fileService
+	fileService   FileService
 }
 
-type fileService interface {
+type FileService interface {
 	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
 	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
 }
@@ -211,6 +211,7 @@ func NewHandler(
 	store Store,
 	tenantStore tenantStore,
 	questionStore questionStore,
+	fileService FileService,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
