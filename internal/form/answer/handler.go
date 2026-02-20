@@ -49,13 +49,13 @@ type UpdateResponse struct {
 
 // UploadFilesResponse is the response for a successful file upload
 type UploadFilesResponse struct {
-	Files []UploadedFileMetadata `json:"files"`
+	Files []shared.UploadFileEntry `json:"files"`
 }
 
 type Store interface {
 	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
-	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]UploadedFileMetadata, Answer, Answerable, error)
+	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
 }
 
 type QuestionGetter interface {
