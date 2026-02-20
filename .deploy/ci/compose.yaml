@@ -41,6 +41,6 @@ services:
     networks:
       - core_system_ci
 
-  networks:
-    core_system_ci:
-      driver: bridge
+networks:
+  core_system_ci:
+    driver: bridge
