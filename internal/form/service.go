@@ -26,7 +26,7 @@ type Querier interface {
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
-	FormExists(ctx context.Context, id uuid.UUID) (bool, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type UserFormStatus string
@@ -266,12 +266,12 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 }
 
 // FormExists reports whether a form with the given ID exists (so response package can use *form.Service as FormStore without form importing response).
-func (s *Service) FormExists(ctx context.Context, id uuid.UUID) (bool, error) {
+func (s *Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 	ctx, span := s.tracer.Start(ctx, "FormExists")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	exists, err := s.queries.FormExists(ctx, id)
+	exists, err := s.queries.Exists(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check form exists")
 		span.RecordError(err)
