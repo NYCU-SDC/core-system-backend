@@ -92,6 +92,7 @@ var (
 	ErrQuestionNotFound           = errors.New("question not found")
 	ErrSectionNotFound            = errors.New("section not found")
 	ErrQuestionRequired           = errors.New("question is required but not answered")
+	ErrQuestionTypeMismatch       = errors.New("question type does not match the expected type")
 	ErrValidationFailed           = errors.New("validation failed")
 	ErrInvalidSourceIDWithChoices = errors.New("cannot specify both source_id and choices")
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
@@ -102,28 +103,28 @@ var (
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 
 	// Workflow Errors
-	ErrWorkflowValidationFailed     = errors.New("workflow validation failed")
+	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
 	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
-	ErrWorkflowNotActive            = errors.New("workflow is not active")
-	ErrUnmarshalWorkflow        = errors.New("failed to unmarshal workflow")
-	ErrMarshalWorkflow          = errors.New("failed to marshal workflow")
-	ErrUnmarshalAPIWorkflow     = errors.New("failed to unmarshal API workflow")
-	ErrUnmarshalDBWorkflow      = errors.New("failed to unmarshal database workflow")
-	ErrWorkflowNodeNotFound     = errors.New("node not found in current workflow")
-	ErrMarshalMergedWorkflow    = errors.New("failed to marshal merged workflow")
+	ErrWorkflowNotActive             = errors.New("workflow is not active")
+	ErrUnmarshalWorkflow             = errors.New("failed to unmarshal workflow")
+	ErrMarshalWorkflow               = errors.New("failed to marshal workflow")
+	ErrUnmarshalAPIWorkflow          = errors.New("failed to unmarshal API workflow")
+	ErrUnmarshalDBWorkflow           = errors.New("failed to unmarshal database workflow")
+	ErrWorkflowNodeNotFound          = errors.New("node not found in current workflow")
+	ErrMarshalMergedWorkflow         = errors.New("failed to marshal merged workflow")
 
 	// File Errors
-	ErrFileNotFound          = errors.New("file not found")
-	ErrFileTooLarge          = errors.New("file exceeds maximum size")
-	ErrInvalidFileID         = errors.New("invalid file ID")
-	ErrInvalidMultipart      = errors.New("failed to parse multipart form")
-	ErrFailedToSaveFile      = errors.New("failed to save file")
-	ErrFailedToDeleteFile    = errors.New("failed to delete file")
-	ErrInvalidLimit          = errors.New("invalid limit parameter")
-	ErrInvalidOffset         = errors.New("invalid offset parameter")
-	ErrInvalidFileType       = errors.New("file type is not allowed")
-	ErrCoverImageTooLarge    = errors.New("cover image exceeds maximum size")
-	ErrInvalidImageFormat    = errors.New("image format is invalid")
+	ErrFileNotFound       = errors.New("file not found")
+	ErrFileTooLarge       = errors.New("file exceeds maximum size")
+	ErrInvalidFileID      = errors.New("invalid file ID")
+	ErrInvalidMultipart   = errors.New("failed to parse multipart form")
+	ErrFailedToSaveFile   = errors.New("failed to save file")
+	ErrFailedToDeleteFile = errors.New("failed to delete file")
+	ErrInvalidLimit       = errors.New("invalid limit parameter")
+	ErrInvalidOffset      = errors.New("invalid offset parameter")
+	ErrInvalidFileType    = errors.New("file type is not allowed")
+	ErrCoverImageTooLarge = errors.New("cover image exceeds maximum size")
+	ErrInvalidImageFormat = errors.New("image format is invalid")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -242,6 +243,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("section not found")
 	case errors.Is(err, ErrQuestionRequired):
 		return problem.NewValidateProblem("question is required but not answered")
+	case errors.Is(err, ErrQuestionTypeMismatch):
+		return problem.NewValidateProblem("question type does not match the expected type")
 	case errors.Is(err, ErrInvalidSourceIDWithChoices):
 		return problem.NewBadRequestProblem("cannot specify both source_id and choices")
 	case errors.Is(err, ErrInvalidSourceIDForType):
