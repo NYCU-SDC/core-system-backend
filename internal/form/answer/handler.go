@@ -63,6 +63,7 @@ type Store interface {
 }
 
 type QuestionGetter interface {
+	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 	ListTypesByIDs(ctx context.Context, ids []uuid.UUID) (map[string]question.QuestionType, error)
 }
 
