@@ -20,7 +20,8 @@ type Querier interface {
 	Get(ctx context.Context, arg GetParams) (FormResponse, error)
 	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
-	Exists(ctx context.Context, arg ExistsParams) (bool, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	ExistsByFormIDAndSubmittedBy(ctx context.Context, arg ExistsByFormIDAndSubmittedByParams) (bool, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
@@ -29,10 +30,6 @@ type Querier interface {
 
 type WorkflowResolver interface {
 	ResolveSections(ctx context.Context, formID uuid.UUID, answers []answer.Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error)
-}
-
-type FormStore interface {
-	FormExists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type AnswerStore interface {
@@ -60,10 +57,9 @@ type Service struct {
 	answerStore              AnswerStore
 	sectionWithQuestionStore SectionWithQuestionStore
 	workflowResolver         WorkflowResolver
-	formStore                FormStore
 }
 
-func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver, formStore FormStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver) *Service {
 	return &Service{
 		logger:  logger,
 		queries: New(db),
@@ -72,7 +68,6 @@ func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionSto
 		answerStore:              answerStore,
 		sectionWithQuestionStore: sectionStore,
 		workflowResolver:         workflowResolver,
-		formStore:                formStore,
 	}
 }
 
@@ -84,7 +79,7 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// Check if user already has a response for this form
-	exists, err := s.queries.Exists(traceCtx, ExistsParams{
+	exists, err := s.queries.ExistsByFormIDAndSubmittedBy(traceCtx, ExistsByFormIDAndSubmittedByParams{
 		FormID:      formID,
 		SubmittedBy: userID,
 	})
@@ -120,16 +115,6 @@ func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResp
 	traceCtx, span := s.tracer.Start(ctx, "ListByFormID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
-
-	formExists, err := s.formStore.FormExists(traceCtx, formID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "form", "id", formID.String(), logger, "check form exists")
-		span.RecordError(err)
-		return []FormResponse{}, err
-	}
-	if !formExists {
-		return []FormResponse{}, internal.ErrFormNotFound
-	}
 
 	responses, err := s.queries.ListByFormID(traceCtx, formID)
 	if err != nil {
@@ -356,6 +341,22 @@ func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, er
 	}
 
 	return formID, nil
+}
+
+// Exists returns whether a response with the given id exists.
+func (s Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Exists")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.queries.Exists(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "check response exists")
+		span.RecordError(err)
+		return false, err
+	}
+
+	return exists, nil
 }
 
 // Delete deletes a response by id
