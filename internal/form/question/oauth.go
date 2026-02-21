@@ -135,7 +135,11 @@ func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 
 	oauthProvider := OauthProvider(strings.ToLower(provider))
 	if !validOauthProviders[oauthProvider] {
-		return nil, fmt.Errorf("invalid OAuth provider: %s", provider)
+		return nil, ErrMetadataValidate{
+			QuestionID: "oauth_connect",
+			RawData:    []byte(fmt.Sprintf("%v", provider)),
+			Message:    "invalid provider provided for oauth_connect question",
+		}
 	}
 
 	metadata := map[string]any{
