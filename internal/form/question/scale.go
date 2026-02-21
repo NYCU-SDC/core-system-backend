@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
@@ -318,15 +319,15 @@ func (s Rating) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, 
 
 func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {
 	if option.MinVal >= option.MaxVal {
-		return nil, fmt.Errorf("minVal (%d) must be less than maxVal (%d)", option.MinVal, option.MaxVal)
+		return nil, fmt.Errorf("%w: minVal (%d) must be less than maxVal (%d)", internal.ErrValidationFailed, option.MinVal, option.MaxVal)
 	}
 
 	if option.MinVal < 1 || option.MinVal > 10 {
-		return nil, fmt.Errorf("minVal must be between 1 and 10, got %d", option.MinVal)
+		return nil, fmt.Errorf("%w: minVal must be between 1 and 10, got %d", internal.ErrValidationFailed, option.MinVal)
 	}
 
 	if option.MaxVal < 1 || option.MaxVal > 10 {
-		return nil, fmt.Errorf("maxVal must be between 1 and 10, got %d", option.MaxVal)
+		return nil, fmt.Errorf("%w: maxVal must be between 1 and 10, got %d", internal.ErrValidationFailed, option.MaxVal)
 	}
 
 	metadata := map[string]any{
@@ -338,23 +339,23 @@ func GenerateLinearScaleMetadata(option ScaleOption) ([]byte, error) {
 
 func GenerateRatingMetadata(option ScaleOption) ([]byte, error) {
 	if option.Icon == "" {
-		return nil, errors.New("icon is required for rating questions")
+		return nil, fmt.Errorf("%w: icon is required for rating questions", internal.ErrValidationFailed)
 	}
 
 	if option.MinVal >= option.MaxVal {
-		return nil, fmt.Errorf("minVal (%d) must be less than maxVal (%d)", option.MinVal, option.MaxVal)
+		return nil, fmt.Errorf("%w: minVal (%d) must be less than maxVal (%d)", internal.ErrValidationFailed, option.MinVal, option.MaxVal)
 	}
 
 	if option.MinVal < 1 {
-		return nil, fmt.Errorf("minVal must be at least 1 for rating, got %d", option.MinVal)
+		return nil, fmt.Errorf("%w: minVal must be at least 1 for rating, got %d", internal.ErrValidationFailed, option.MinVal)
 	}
 
 	if option.MaxVal > 10 {
-		return nil, fmt.Errorf("maxVal must be at most 10 for rating, got %d", option.MaxVal)
+		return nil, fmt.Errorf("%w: maxVal must be at most 10 for rating, got %d", internal.ErrValidationFailed, option.MaxVal)
 	}
 
 	if !validIcons[option.Icon] {
-		return nil, fmt.Errorf("invalid icon: %s", option.Icon)
+		return nil, fmt.Errorf("%w: invalid icon: %s", internal.ErrValidationFailed, option.Icon)
 	}
 
 	metadata := map[string]any{
