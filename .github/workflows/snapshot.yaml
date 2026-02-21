@@ -163,7 +163,17 @@ jobs:
                       "path": "/nycu-oauth",
                       "secret_name": "CLIENT_SECRET",
                       "env_name": "NYCU_OAUTH_CLIENT_SECRET"
-                    }
+                    },
+                  {
+                    "path": "/github-oauth",
+                    "secret_name": "CLIENT_ID",
+                    "env_name": "GITHUB_OAUTH_CLIENT_ID"
+                  },
+                  {
+                    "path": "/github-oauth",
+                    "secret_name": "CLIENT_SECRET",
+                    "env_name": "GITHUB_OAUTH_CLIENT_SECRET"
+                  }
                   ]
                 }
               },
