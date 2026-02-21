@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal/form/shared"
+
 	"github.com/google/uuid"
 )
 
@@ -101,15 +103,13 @@ func (u UploadFile) FormID() uuid.UUID {
 }
 
 func (u UploadFile) Validate(rawValue json.RawMessage) error {
-	// Parse the JSON array of file URLs/IDs
-	var fileIDs []string
-	if err := json.Unmarshal(rawValue, &fileIDs); err != nil {
+	var answer shared.UploadFileAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
 		return fmt.Errorf("invalid file upload value format: %w", err)
 	}
 
-	// Check max file amount
-	if int32(len(fileIDs)) > u.MaxFileAmount {
-		return fmt.Errorf("too many files: %d (max: %d)", len(fileIDs), u.MaxFileAmount)
+	if int32(len(answer.Files)) > u.MaxFileAmount {
+		return fmt.Errorf("too many files: %d (max: %d)", len(answer.Files), u.MaxFileAmount)
 	}
 
 	return nil
@@ -166,23 +166,56 @@ func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
 }
 
 func (u UploadFile) DecodeRequest(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement upload file decoding from API request
-	return nil, errors.New("not implemented yet")
+	// Request format (from UploadFiles): {"files": [{"fileId": "...", "originalFilename": "...", "contentType": "...", "size": 0}]}
+	var answer shared.UploadFileAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid upload file value format: %w", err)
+	}
+
+	return answer, nil
 }
 
 func (u UploadFile) DecodeStorage(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement upload file decoding from storage
-	return nil, errors.New("not implemented yet")
+	// Storage format: {"files": [{"fileId": "...", "originalFilename": "...", "contentType": "...", "size": 0}]}
+	var answer shared.UploadFileAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid upload file answer in storage: %w", err)
+	}
+
+	return answer, nil
 }
 
 func (u UploadFile) EncodeRequest(answer any) (json.RawMessage, error) {
-	// TODO: Implement upload file encoding to API request format
-	return nil, errors.New("not implemented yet")
+	uploadFileAnswer, ok := answer.(shared.UploadFileAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.UploadFileAnswer, got %T", answer)
+	}
+
+	// API response returns the full files array with metadata
+	return json.Marshal(uploadFileAnswer.Files)
 }
 
 func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
-	// TODO: Implement DisplayValue for UploadFile
-	return "", fmt.Errorf("DisplayValue not implemented for UploadFile question type")
+	answer, err := u.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	uploadFileAnswer, ok := answer.(shared.UploadFileAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.UploadFileAnswer, got %T", answer)
+	}
+
+	count := len(uploadFileAnswer.Files)
+	if count == 0 {
+		return "0 files", nil
+	}
+
+	parts := make([]string, 0, count)
+	for _, f := range uploadFileAnswer.Files {
+		parts = append(parts, fmt.Sprintf("%s (%d bytes)", f.OriginalFilename, f.Size))
+	}
+	return fmt.Sprintf("%d file(s): %s", count, strings.Join(parts, ", ")), nil
 }
 
 func (u UploadFile) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {

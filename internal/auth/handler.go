@@ -315,29 +315,36 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	baseURL, err := url.Parse(h.baseURL)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+		return
+	}
+	domain := baseURL.Host
+
 	// Inactivate the current refresh token from cookie
 	refreshTokenCookie, err := r.Cookie(RefreshTokenCookieName)
 	if err != nil {
 		logger.Error("Failed to get refresh token cookie during logout", zap.Error(err))
-		h.clearAccessAndRefreshCookies(w)
+		h.clearAccessAndRefreshCookies(w, domain)
 		return
 	}
 
 	refreshTokenID, err := uuid.Parse(refreshTokenCookie.Value)
 	if err != nil {
 		logger.Error("Invalid refresh token format during logout", zap.Error(err))
-		h.clearAccessAndRefreshCookies(w)
+		h.clearAccessAndRefreshCookies(w, domain)
 		return
 	}
 
 	err = h.jwtStore.InactivateRefreshToken(traceCtx, refreshTokenID)
 	if err != nil {
 		logger.Warn("Failed to inactivate refresh token during logout", zap.Error(err))
-		h.clearAccessAndRefreshCookies(w)
+		h.clearAccessAndRefreshCookies(w, domain)
 		return
 	}
 
-	h.clearAccessAndRefreshCookies(w)
+	h.clearAccessAndRefreshCookies(w, domain)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, map[string]string{"message": "Successfully logged out"})
 }
@@ -472,8 +479,14 @@ func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, acce
 }
 
 // clearAccessAndRefreshCookies sets the access/refresh cookies to empty values and negative MaxAge
-// negative means the cookies will be deleted, zero means the cookies will expire at the end of the session
-func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter) {
+func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter, domain string) {
+	var sameSite http.SameSite
+	if h.devMode {
+		sameSite = http.SameSiteNoneMode
+	} else {
+		sameSite = http.SameSiteStrictMode
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     AccessTokenCookieName,
 		Value:    "",
@@ -481,7 +494,8 @@ func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
+		Domain:   domain,
 	})
 
 	http.SetCookie(w, &http.Cookie{
@@ -491,6 +505,7 @@ func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: sameSite,
+		Domain:   domain,
 	})
 }

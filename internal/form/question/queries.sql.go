@@ -282,6 +282,37 @@ func (q *Queries) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 	return items, nil
 }
 
+const listTypesByIDs = `-- name: ListTypesByIDs :many
+SELECT id, type
+FROM questions
+WHERE id = ANY($1::uuid[])
+`
+
+type ListTypesByIDsRow struct {
+	ID   uuid.UUID
+	Type QuestionType
+}
+
+func (q *Queries) ListTypesByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]ListTypesByIDsRow, error) {
+	rows, err := q.db.Query(ctx, listTypesByIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTypesByIDsRow
+	for rows.Next() {
+		var i ListTypesByIDsRow
+		if err := rows.Scan(&i.ID, &i.Type); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const sectionExists = `-- name: SectionExists :one
 SELECT EXISTS(SELECT 1 FROM sections WHERE id = $1)
 `

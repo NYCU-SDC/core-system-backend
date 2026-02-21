@@ -117,9 +117,17 @@ type RatingAnswer struct {
 	Value int `json:"value"` // Numeric value within configured min/max range
 }
 
+// UploadFileEntry represents a single uploaded file with its metadata
+type UploadFileEntry struct {
+	FileID           uuid.UUID `json:"fileId"`
+	OriginalFilename string    `json:"originalFilename"`
+	ContentType      string    `json:"contentType"`
+	Size             int64     `json:"size"`
+}
+
 // UploadFileAnswer represents answer for upload_file question type
 type UploadFileAnswer struct {
-	FileIDs []string `json:"fileIds"` // Array of uploaded file IDs or URLs
+	Files []UploadFileEntry `json:"files"`
 }
 
 // OAuthConnectAnswer represents answer for oauth_connect question type

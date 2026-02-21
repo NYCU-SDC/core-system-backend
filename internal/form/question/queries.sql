@@ -130,6 +130,11 @@ ORDER BY
     s.id ASC,
     q."order" ASC;
 
+-- name: ListTypesByIDs :many
+SELECT id, type
+FROM questions
+WHERE id = ANY($1::uuid[]);
+
 -- name: GetByID :one
 SELECT 
     q.id,
