@@ -133,18 +133,6 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 			return uuid.UUID{}, err
 		}
 
-		// For existing users, only update name and username, keep existing avatar
-		_, err = s.queries.Update(traceCtx, UpdateParams{
-			ID:       existingUserID,
-			Name:     pgtype.Text{String: name, Valid: name != ""},
-			Username: pgtype.Text{String: username, Valid: username != ""},
-		})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "update existing user")
-			span.RecordError(err)
-			return uuid.UUID{}, err
-		}
-
 		logger.Debug("Updated existing user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID), zap.String("user_id", existingUserID.String()))
 		return existingUserID, nil
 	}

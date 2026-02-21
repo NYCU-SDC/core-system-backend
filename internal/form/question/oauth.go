@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
+	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
 )
@@ -35,8 +38,14 @@ func (o OAuthConnect) FormID() uuid.UUID {
 }
 
 func (o OAuthConnect) Validate(rawValue json.RawMessage) error {
-	// TODO: Implement OAuth validation
-	return errors.New("not implemented")
+	var v shared.OAuthConnectAnswer
+	if err := json.Unmarshal(rawValue, &v); err != nil {
+		return fmt.Errorf("invalid oauth_connect answer: %w", err)
+	}
+	if v.Provider == "" || v.ProviderID == "" {
+		return errors.New("oauth_connect answer must have provider and providerId")
+	}
+	return nil
 }
 
 func NewOAuthConnect(q Question, formID uuid.UUID) (OAuthConnect, error) {
@@ -70,23 +79,45 @@ func NewOAuthConnect(q Question, formID uuid.UUID) (OAuthConnect, error) {
 }
 
 func (o OAuthConnect) DecodeRequest(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement OAuth connect decoding from API request
-	return nil, errors.New("not implemented yet")
+	var v shared.OAuthConnectAnswer
+	if err := json.Unmarshal(rawValue, &v); err != nil {
+		return nil, fmt.Errorf("failed to decode oauth_connect answer from request: %w", err)
+	}
+	return v, nil
 }
 
 func (o OAuthConnect) DecodeStorage(rawValue json.RawMessage) (any, error) {
-	// TODO: Implement OAuth connect decoding from storage
-	return nil, errors.New("not implemented yet")
+	var v shared.OAuthConnectAnswer
+	if err := json.Unmarshal(rawValue, &v); err != nil {
+		return nil, fmt.Errorf("failed to decode oauth_connect answer from storage: %w", err)
+	}
+	return v, nil
 }
 
 func (o OAuthConnect) EncodeRequest(answer any) (json.RawMessage, error) {
-	// TODO: Implement OAuth connect encoding to API request format
-	return nil, errors.New("not implemented yet")
+	v, ok := answer.(shared.OAuthConnectAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.OAuthConnectAnswer, got %T", answer)
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode oauth_connect answer: %w", err)
+	}
+	return raw, nil
 }
 
 func (o OAuthConnect) DisplayValue(rawValue json.RawMessage) (string, error) {
-	// TODO: Implement DisplayValue for OAuthConnect
-	return "", fmt.Errorf("DisplayValue not implemented for OAuthConnect question type")
+	var v shared.OAuthConnectAnswer
+	if err := json.Unmarshal(rawValue, &v); err != nil {
+		return "", fmt.Errorf("failed to decode oauth_connect answer for display: %w", err)
+	}
+	if v.Username != "" && v.Email != "" {
+		return fmt.Sprintf("%s(%s)", v.Username, v.Email), nil
+	}
+	if v.Username != "" {
+		return v.Username, nil
+	}
+	return v.Email, nil
 }
 
 func (o OAuthConnect) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
@@ -102,13 +133,17 @@ func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 		}
 	}
 
-	oauthProvider := OauthProvider(provider)
+	oauthProvider := OauthProvider(strings.ToLower(provider))
 	if !validOauthProviders[oauthProvider] {
-		return nil, fmt.Errorf("invalid OAuth provider: %s", provider)
+		return nil, ErrMetadataValidate{
+			QuestionID: "oauth_connect",
+			RawData:    []byte(fmt.Sprintf("%v", provider)),
+			Message:    "invalid provider provided for oauth_connect question",
+		}
 	}
 
 	metadata := map[string]any{
-		"oauthConnect": provider,
+		"oauthConnect": strings.ToLower(provider),
 	}
 
 	return json.Marshal(metadata)
