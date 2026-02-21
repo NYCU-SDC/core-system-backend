@@ -185,8 +185,8 @@ func ToResponse(answerable Answerable) (Response, error) {
 				HasYear:  dateMetadata.HasYear,
 				HasMonth: dateMetadata.HasMonth,
 				HasDay:   dateMetadata.HasDay,
-				MinDate:  dateMetadata.MinDate,
-				MaxDate:  dateMetadata.MaxDate,
+				MinDate:  DateField{Time: dateMetadata.MinDate},
+				MaxDate:  DateField{Time: dateMetadata.MaxDate},
 			}
 		}
 	}
