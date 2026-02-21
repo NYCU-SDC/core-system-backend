@@ -30,7 +30,7 @@ type FormStore interface {
 
 type FormResponseStore interface {
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (response.FormResponse, error)
-	Get(ctx context.Context, id uuid.UUID) (response.FormResponse, []response.SectionWithAnswerableAndAnswer, error)
+	Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (response.FormResponse, []response.SectionWithAnswerableAndAnswer, error)
 	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (response.FormResponse, error)
 }
@@ -78,7 +78,7 @@ func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []sh
 	}
 
 	// Get the updated response with all sections to validate completion
-	_, sections, err := s.responseStore.Get(traceCtx, responseID)
+	_, sections, err := s.responseStore.Get(traceCtx, responseID, formID)
 	if err != nil {
 		logger.Error("failed to get response after upsert", zap.Error(err))
 		return response.FormResponse{}, []error{err}

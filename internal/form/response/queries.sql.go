@@ -65,11 +65,16 @@ func (q *Queries) Exists(ctx context.Context, arg ExistsParams) (bool, error) {
 
 const get = `-- name: Get :one
 SELECT id, form_id, submitted_by, submitted_at, progress, created_at, updated_at FROM form_responses
-WHERE id = $1
+WHERE id = $1 AND form_id = $2
 `
 
-func (q *Queries) Get(ctx context.Context, id uuid.UUID) (FormResponse, error) {
-	row := q.db.QueryRow(ctx, get, id)
+type GetParams struct {
+	ID     uuid.UUID
+	FormID uuid.UUID
+}
+
+func (q *Queries) Get(ctx context.Context, arg GetParams) (FormResponse, error) {
+	row := q.db.QueryRow(ctx, get, arg.ID, arg.FormID)
 	var i FormResponse
 	err := row.Scan(
 		&i.ID,

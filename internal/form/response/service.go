@@ -1,12 +1,12 @@
 package response
 
 import (
-	"NYCU-SDC/core-system-backend/internal/form/answer"
-	"NYCU-SDC/core-system-backend/internal/form/question"
 	"context"
 	"fmt"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/answer"
+	"NYCU-SDC/core-system-backend/internal/form/question"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -17,7 +17,7 @@ import (
 )
 
 type Querier interface {
-	Get(ctx context.Context, id uuid.UUID) (FormResponse, error)
+	Get(ctx context.Context, arg GetParams) (FormResponse, error)
 	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
 	Exists(ctx context.Context, arg ExistsParams) (bool, error)
@@ -143,13 +143,16 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 
 // Get retrieves a form response by ID along with its sections, questions, and answers
 // The sections are returned in workflow order (active sections first, then skipped sections)
-func (s Service) Get(ctx context.Context, id uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error) {
+func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// Get the form response
-	response, err := s.queries.Get(traceCtx, id)
+	response, err := s.queries.Get(traceCtx, GetParams{
+		ID:     id,
+		FormID: formID,
+	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get response by id")
 		span.RecordError(err)
