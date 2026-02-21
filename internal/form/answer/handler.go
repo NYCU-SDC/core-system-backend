@@ -70,6 +70,7 @@ type QuestionGetter interface {
 
 type ResponseStore interface {
 	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 // OAuthProvider is the interface needed to initiate and complete an OAuth flow.
@@ -207,6 +208,16 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	exists, err := h.responseStore.Exists(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if !exists {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotFound, logger)
 		return
 	}
 
