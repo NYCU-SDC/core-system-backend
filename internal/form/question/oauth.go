@@ -143,7 +143,7 @@ func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 	}
 
 	metadata := map[string]any{
-		"oauthConnect": provider,
+		"oauthConnect": strings.ToLower(provider),
 	}
 
 	return json.Marshal(metadata)
