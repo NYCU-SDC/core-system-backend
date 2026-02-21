@@ -341,10 +341,11 @@ func main() {
 
 	// Answer Management
 	// ----------------------
-	mux.Handle("GET /api/oauth/questions/{provider}", basicMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
-	mux.Handle("GET /api/oauth/questions/{provider}/callback", basicMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(answerHandler.GetQuestionResponse))
 	mux.Handle("PATCH /api/responses/{responseId}/answers", authMiddleware.HandlerFunc(answerHandler.UpdateFormResponse))
+	mux.Handle("POST /api/responses/{responseId}/questions/{questionId}/files", authMiddleware.HandlerFunc(answerHandler.UploadQuestionFiles))
+	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", basicMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
+	mux.Handle("GET /api/oauth/questions/{provider}/callback", basicMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
 
 	// Workflow Management
 	// ----------------------
