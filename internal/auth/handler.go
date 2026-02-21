@@ -30,8 +30,10 @@ const (
 type JWTIssuer interface {
 	New(ctx context.Context, user user.User) (string, error)
 	NewState(ctx context.Context, service, environment, callbackURL, redirectURL string) (string, error)
+	NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string) (string, error)
 	Parse(ctx context.Context, tokenString string) (user.User, error)
 	ParseState(ctx context.Context, tokenString string) (string, error)
+	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
 }
