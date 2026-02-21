@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"NYCU-SDC/core-system-backend/internal"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -60,17 +61,23 @@ type SectionWithAnswerableList struct {
 	AnswerableList []Answerable
 }
 
-type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+type FormStore interface {
+	FormExists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+type Service struct {
+	logger    *zap.Logger
+	queries   Querier
+	tracer    trace.Tracer
+	formStore FormStore
+}
+
+func NewService(logger *zap.Logger, db DBTX, formStore FormStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("question/service"),
+		logger:    logger,
+		queries:   New(db),
+		formStore: formStore,
+		tracer:    otel.Tracer("question/service"),
 	}
 }
 
