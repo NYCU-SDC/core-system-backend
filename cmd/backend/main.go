@@ -152,7 +152,7 @@ func main() {
 	answerService := answer.NewService(logger, dbPool, questionService, fileService)
 	inboxService := inbox.NewService(logger, dbPool)
 	workflowService := workflow.NewService(logger, dbPool, questionService)
-	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService, formService)
+	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService)
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
