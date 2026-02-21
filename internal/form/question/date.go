@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
@@ -308,14 +309,14 @@ func (d Date) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, er
 func GenerateDateMetadata(option DateOption) ([]byte, error) {
 	// Validate that at least one component is required
 	if !option.HasYear && !option.HasMonth && !option.HasDay {
-		return nil, errors.New("at least one of hasYear, hasMonth, or hasDay must be true")
+		return nil, fmt.Errorf("%w: at least one of hasYear, hasMonth, or hasDay must be true", internal.ErrValidationFailed)
 	}
 
 	// Validate date range if both min and max are provided
 	if option.MinDate != nil && option.MaxDate != nil {
 		if option.MinDate.After(*option.MaxDate) {
-			return nil, fmt.Errorf("minDate (%s) must be before or equal to maxDate (%s)",
-				option.MinDate.Format(time.RFC3339), option.MaxDate.Format(time.RFC3339))
+			return nil, fmt.Errorf("%w: minDate (%s) must be before or equal to maxDate (%s)",
+				internal.ErrValidationFailed, option.MinDate.Format(time.RFC3339), option.MaxDate.Format(time.RFC3339))
 		}
 	}
 
