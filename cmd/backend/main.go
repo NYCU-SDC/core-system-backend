@@ -265,7 +265,7 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/orgs/{slug}/units", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnits))
 	mux.Handle("GET /api/orgs/{slug}/unit-ids", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnitIDs))
-	mux.Handle("POST /api/orgs/relations", casbinAuthMiddleware.HandlerFunc(unitHandler.AddParentChild))
+	mux.Handle("POST /api/orgs/relations", authMiddleware.HandlerFunc(unitHandler.AddParentChild))
 
 	// Organization Membership
 	// ----------------------

@@ -7,8 +7,8 @@ p, admin, *, /api/orgs/:slug, PUT, allow
 p, admin, *, /api/orgs/:slug/units, GET, allow
 p, member, *, /api/orgs/:slug/units, GET, allow
 p, admin, *, /api/orgs/:slug/unit-ids, GET, allow
-p, member, *, /api/orgs/:slug/units-ids, GET, allow
-p, admin, *, /api/orgs/relations, POST, allow
+p, member, *, /api/orgs/:slug/unit-ids, GET, allow
+# p, admin, *, /api/orgs/relations, POST, allow
 
 # Group5: Organization Membership
 p, admin, *, /api/orgs/:slug/members, GET, allow
@@ -23,10 +23,10 @@ p, member, *, /api/orgs/:slug/units/:unitId, GET, allow
 p, admin, *, /api/orgs/:slug/units, POST, allow
 p, admin, *, /api/orgs/:slug/units/:unitId, PUT, allow
 p, admin, *, /api/orgs/:slug/units/:unitId, DELETE, allow
-p, admin, *, /api/orgs/:slug/units/:unitID/subunits, GET allow
-p, member, *, /api/orgs/:slug/units/:unitID/subunits, GET allow
-p, admin, *, /api/orgs/:slug/units/:unitID/subunit-ids, GET allow
-p, member, *, /api/orgs/:slug/units/:unitID/subunit-ids, GET allow
+p, admin, *, /api/orgs/:slug/units/:unitId/subunits, GET, allow
+p, member, *, /api/orgs/:slug/units/:unitId/subunits, GET, allow
+p, admin, *, /api/orgs/:slug/units/:unitId/subunit-ids, GET, allow
+p, member, *, /api/orgs/:slug/units/:unitId/subunit-ids, GET, allow
 
 # Group8: Unit Membership
 p, admin, *, /api/orgs/:slug/units/:unitId/members, GET, allow
