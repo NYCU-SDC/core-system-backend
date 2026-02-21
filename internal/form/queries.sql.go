@@ -263,6 +263,33 @@ func (q *Queries) GetCoverImage(ctx context.Context, formID uuid.UUID) ([]byte, 
 	return image_data, err
 }
 
+const getUnitIDByFormID = `-- name: GetUnitIDByFormID :one
+SELECT unit_id
+FROM forms
+WHERE id = $1
+`
+
+func (q *Queries) GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getUnitIDByFormID, id)
+	var unit_id pgtype.UUID
+	err := row.Scan(&unit_id)
+	return unit_id, err
+}
+
+const getUnitIDBySectionID = `-- name: GetUnitIDBySectionID :one
+SELECT f.unit_id
+FROM sections s
+JOIN forms f ON s.form_id = f.id
+WHERE s.id = $1
+`
+
+func (q *Queries) GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getUnitIDBySectionID, id)
+	var unit_id pgtype.UUID
+	err := row.Scan(&unit_id)
+	return unit_id, err
+}
+
 const list = `-- name: List :many
 SELECT 
     f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,

@@ -206,7 +206,7 @@ func main() {
 	}
 
 	// Casbin Middleware
-	casbinMiddleware := casbin.NewMiddleware(logger, problemWriter, enforcer, unitService, tenantService)
+	casbinMiddleware := casbin.NewMiddleware(logger, problemWriter, enforcer, unitService, tenantService, formService)
 	tenantCasbinAuthMiddleware := tenantAuthMiddleware.Append(casbinMiddleware.Middleware)
 
 	// HTTP Server

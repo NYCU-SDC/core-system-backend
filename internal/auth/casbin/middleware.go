@@ -25,12 +25,18 @@ type tenantReader interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 }
 
+type formReader interface {
+	GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+}
+
 type Middleware struct {
 	tracer        trace.Tracer
 	logger        *zap.Logger
 	enforcer      *casbin.Enforcer
 	unitReader    unitReader
 	tenantReader  tenantReader
+	formReader    formReader
 	problemWriter *problem.HttpWriter
 }
 
@@ -40,6 +46,7 @@ func NewMiddleware(
 	enforcer *casbin.Enforcer,
 	unitReader unitReader,
 	tenantReader tenantReader,
+	formReader formReader,
 ) *Middleware {
 	return &Middleware{
 		tracer:        otel.Tracer("auth/middleware"),
@@ -47,6 +54,7 @@ func NewMiddleware(
 		enforcer:      enforcer,
 		unitReader:    unitReader,
 		tenantReader:  tenantReader,
+		formReader:    formReader,
 		problemWriter: problemWriter,
 	}
 }
@@ -67,6 +75,8 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 		var unitID uuid.UUID
 		unitIDStr := r.PathValue("unitId")
 		slug := r.PathValue("slug")
+		formIDStr := r.PathValue("formId")
+		sectionIDStr := r.PathValue("sectionId")
 
 		if unitIDStr != "" {
 			// unit
@@ -94,6 +104,34 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			}
 
 			unitID = orgID
+
+		} else if formIDStr != "" {
+			formID, err := uuid.Parse(formIDStr)
+			if err != nil {
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrValidationFailed, logger)
+				return
+			}
+
+			unitID, err = m.formReader.GetUnitIDByFormID(traceCtx, formID)
+			if err != nil {
+				logger.Warn("form not found", zap.Error(err))
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrNotFound, logger)
+				return
+			}
+
+		} else if sectionIDStr != "" {
+			sectionID, err := uuid.Parse(sectionIDStr)
+			if err != nil {
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrValidationFailed, logger)
+				return
+			}
+
+			unitID, err = m.formReader.GetUnitIDBySectionID(traceCtx, sectionID)
+			if err != nil {
+				logger.Warn("section not found", zap.Error(err))
+				m.problemWriter.WriteError(traceCtx, w, internal.ErrNotFound, logger)
+				return
+			}
 
 		} else {
 			next(w, r)

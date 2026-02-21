@@ -166,3 +166,14 @@ RETURNING id;
 
 -- name: GetCoverImage :one
 SELECT image_data FROM form_covers WHERE form_id = $1;
+
+-- name: GetUnitIDByFormID :one
+SELECT unit_id
+FROM forms
+WHERE id = $1;
+
+-- name: GetUnitIDBySectionID :one
+SELECT f.unit_id
+FROM sections s
+JOIN forms f ON s.form_id = f.id
+WHERE s.id = $1;
