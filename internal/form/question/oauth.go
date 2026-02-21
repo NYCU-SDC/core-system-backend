@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
@@ -132,7 +133,7 @@ func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 		}
 	}
 
-	oauthProvider := OauthProvider(provider)
+	oauthProvider := OauthProvider(strings.ToLower(provider))
 	if !validOauthProviders[oauthProvider] {
 		return nil, fmt.Errorf("invalid OAuth provider: %s", provider)
 	}
