@@ -291,23 +291,16 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	// Resolve and validate provider from path
-	providerName := strings.ToLower(r.PathValue("provider"))
-	provider, ok := h.oauthProvider[providerName]
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %s", internal.ErrProviderNotFound, providerName), logger)
-		return
-	}
-
-	// Parse query parameters
-	responseIDStr := r.URL.Query().Get("responseId")
+	// Parse responseId from path
+	responseIDStr := r.PathValue("responseId")
 	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	questionIDStr := r.URL.Query().Get("questionId")
+	// Parse questionId from path
+	questionIDStr := r.PathValue("questionId")
 	questionID, err := handlerutil.ParseUUID(questionIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -336,7 +329,7 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	oauthProvider, parseErr := question.ExtractOauthConnect(q.Metadata)
+	providerName, parseErr := question.ExtractOauthConnect(q.Metadata)
 	if parseErr != nil {
 		logger.Error("failed to extract oauth provider from question metadata", zap.String("questionID", questionID.String()), zap.Error(parseErr))
 		span.RecordError(parseErr)
@@ -344,8 +337,11 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if string(oauthProvider) != providerName {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: question %s requires provider %s, got %s", internal.ErrProviderNotFound, questionID, oauthProvider, providerName), logger)
+	provider, ok := h.oauthProvider[string(providerName)]
+	if !ok {
+		logger.Error("oauth provider not found for question", zap.String("questionID", questionID.String()), zap.String("providerName", string(providerName)))
+		span.RecordError(fmt.Errorf("oauth provider not found for question: %s", providerName))
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %s", internal.ErrProviderNotFound, providerName), logger)
 		return
 	}
 
