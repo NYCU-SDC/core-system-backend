@@ -458,6 +458,7 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 		ProviderID: authInfo.ProviderID,
 		Email:      email,
 		Username:   userInfo.Username.String,
+		AvatarURL:  userInfo.AvatarUrl.String,
 	})
 	if err != nil {
 		logger.Error("failed to marshal OAuthConnectAnswer", zap.Error(err))

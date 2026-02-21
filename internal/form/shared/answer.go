@@ -136,4 +136,5 @@ type OAuthConnectAnswer struct {
 	ProviderID string `json:"providerId"` // User ID from the OAuth provider
 	Email      string `json:"email"`      // Connected account email
 	Username   string `json:"username"`   // Connected account username (if available)
+	AvatarURL  string `json:"avatarUrl"`  // Connected account avatar URL (if available)
 }
