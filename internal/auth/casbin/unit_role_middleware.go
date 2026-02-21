@@ -30,7 +30,7 @@ type formReader interface {
 	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
-type Middleware struct {
+type UnitMiddleware struct {
 	tracer        trace.Tracer
 	logger        *zap.Logger
 	enforcer      *casbin.Enforcer
@@ -40,15 +40,15 @@ type Middleware struct {
 	problemWriter *problem.HttpWriter
 }
 
-func NewMiddleware(
+func NewUnitMiddleware(
 	logger *zap.Logger,
 	problemWriter *problem.HttpWriter,
 	enforcer *casbin.Enforcer,
 	unitReader unitReader,
 	tenantReader tenantReader,
 	formReader formReader,
-) *Middleware {
-	return &Middleware{
+) *UnitMiddleware {
+	return &UnitMiddleware{
 		tracer:        otel.Tracer("auth/middleware"),
 		logger:        logger,
 		enforcer:      enforcer,
@@ -59,7 +59,7 @@ func NewMiddleware(
 	}
 }
 
-func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
+func (m *UnitMiddleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		traceCtx, span := m.tracer.Start(r.Context(), "AuthMiddleware")
@@ -134,6 +134,7 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			}
 
 		} else {
+			logger.Warn("unit middleware skipped: no scope found")
 			next(w, r)
 			return
 		}

@@ -1,4 +1,9 @@
 # Group4: Organization Management
+p, admin, global, /api/orgs, GET, allow
+p, admin, global, /api/orgs, POST, allow
+p, admin, global, /api/orgs/:slug, DELETE, allow
+
+# Group4: Organization Management
 p, admin, *, /api/orgs/:slug, GET, allow
 p, member, *, /api/orgs/:slug, GET, allow
 p, admin, *, /api/orgs/:slug, PUT, allow
