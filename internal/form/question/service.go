@@ -30,6 +30,11 @@ type Querier interface {
 	UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error)
 }
 
+// FormStore is used to check form existence for operations that require it (e.g. list sections by form ID).
+type FormStore interface {
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+}
+
 type Answerable interface {
 	Question() Question
 	FormID() uuid.UUID
@@ -61,15 +66,11 @@ type SectionWithAnswerableList struct {
 	AnswerableList []Answerable
 }
 
-type FormStore interface {
-	FormExists(ctx context.Context, id uuid.UUID) (bool, error)
-}
-
 type Service struct {
 	logger    *zap.Logger
 	queries   Querier
-	tracer    trace.Tracer
 	formStore FormStore
+	tracer    trace.Tracer
 }
 
 func NewService(logger *zap.Logger, db DBTX, formStore FormStore) *Service {
@@ -178,6 +179,16 @@ func (s *Service) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 	ctx, span := s.tracer.Start(ctx, "ListSectionsWithAnswersByFormID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
+
+	exists, err := s.formStore.Exists(ctx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		return nil, internal.ErrFormNotFound
+	}
 
 	list, err := s.queries.ListSectionsWithAnswersByFormID(ctx, formID)
 	if err != nil {
