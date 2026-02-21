@@ -164,7 +164,7 @@ func main() {
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService, fileService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
-	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService, jwtService, cfg.GoogleOauth.ClientID, cfg.GoogleOauth.ClientSecret, cfg.GitHubOauth.ClientID, cfg.GitHubOauth.ClientSecret, cfg.BaseURL)
+	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService, jwtService, cfg.GoogleOauth.ClientID, cfg.GoogleOauth.ClientSecret, cfg.GitHubOauth.ClientID, cfg.GitHubOauth.ClientSecret, cfg.BaseURL, cfg.OauthProxyBaseURL)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, formService, tenantService, userService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
 	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService)
@@ -341,7 +341,8 @@ func main() {
 
 	// Answer Management
 	// ----------------------
-	mux.Handle("GET /api/oauth/questions/{provider}", basicMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccount))
+	mux.Handle("GET /api/oauth/questions/{provider}", basicMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
+	mux.Handle("GET /api/oauth/questions/{provider}/callback", basicMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(answerHandler.GetQuestionResponse))
 	mux.Handle("PATCH /api/responses/{responseId}/answers", authMiddleware.HandlerFunc(answerHandler.UpdateFormResponse))
 

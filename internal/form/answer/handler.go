@@ -13,6 +13,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/auth/oauthprovider"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
+	"NYCU-SDC/core-system-backend/internal/user"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -71,10 +72,12 @@ type ResponseStore interface {
 	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
-// OAuthProvider is the minimal interface needed to initiate an OAuth flow.
+// OAuthProvider is the interface needed to initiate and complete an OAuth flow.
 type OAuthProvider interface {
 	Name() string
 	Config() *oauth2.Config
+	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
+	GetUserInfo(ctx context.Context, token *oauth2.Token) (user.User, user.Auth, string, error)
 }
 
 // JWTIssuer is the minimal interface needed to generate a form OAuth state token.
@@ -84,16 +87,17 @@ type JWTIssuer interface {
 }
 
 type Handler struct {
-	logger        *zap.Logger
-	validator     *validator.Validate
-	problemWriter *problem.HttpWriter
-	store         Store
-	questionStore QuestionGetter
-	responseStore ResponseStore
-	jwtIssuer     JWTIssuer
-	oauthProvider map[string]OAuthProvider
-	baseURL       string
-	tracer        trace.Tracer
+	logger            *zap.Logger
+	validator         *validator.Validate
+	problemWriter     *problem.HttpWriter
+	store             Store
+	questionStore     QuestionGetter
+	responseStore     ResponseStore
+	jwtIssuer         JWTIssuer
+	oauthProvider     map[string]OAuthProvider
+	baseURL           string
+	oauthProxyBaseURL string
+	tracer            trace.Tracer
 }
 
 func NewHandler(
@@ -107,9 +111,13 @@ func NewHandler(
 	googleClientID, googleClientSecret string,
 	githubClientID, githubClientSecret string,
 	baseURL string,
+	oauthProxyBaseURL string,
 ) *Handler {
 	getCallbackURL := func(provider string) string {
-		return fmt.Sprintf("%s/api/oauth/callback/%s", baseURL, provider)
+		if oauthProxyBaseURL != "" {
+			return fmt.Sprintf("%s/api/auth/%s/callback", oauthProxyBaseURL, provider)
+		}
+		return fmt.Sprintf("%s/api/oauth/questions/%s/callback", baseURL, provider)
 	}
 	providers := map[string]OAuthProvider{
 		"google": oauthprovider.NewGoogleConfig(googleClientID, googleClientSecret, getCallbackURL("google")),
@@ -117,16 +125,17 @@ func NewHandler(
 	}
 
 	return &Handler{
-		logger:        logger,
-		validator:     validator,
-		problemWriter: problemWriter,
-		store:         store,
-		questionStore: questionStore,
-		responseStore: responseStore,
-		jwtIssuer:     jwtIssuer,
-		oauthProvider: providers,
-		baseURL:       baseURL,
-		tracer:        otel.Tracer("answer/handler"),
+		logger:            logger,
+		validator:         validator,
+		problemWriter:     problemWriter,
+		store:             store,
+		questionStore:     questionStore,
+		responseStore:     responseStore,
+		jwtIssuer:         jwtIssuer,
+		oauthProvider:     providers,
+		baseURL:           baseURL,
+		oauthProxyBaseURL: oauthProxyBaseURL,
+		tracer:            otel.Tracer("answer/handler"),
 	}
 }
 
@@ -275,10 +284,10 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-// ConnectOAuthAccount initiates the OAuth flow for answering an oauth_connect question.
+// ConnectOAuthAccountStart initiates the OAuth flow for answering an oauth_connect question.
 // GET /api/oauth/questions/{provider}?responseId=<uuid>&questionId=<uuid>&r=<optional_redirect>
-func (h *Handler) ConnectOAuthAccount(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ConnectOAuthAccount")
+func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ConnectOAuthAccountStart")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -340,8 +349,12 @@ func (h *Handler) ConnectOAuthAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build the callback URL for this form OAuth flow
-	callbackURL := fmt.Sprintf("%s/api/oauth/callback/%s", h.baseURL, providerName)
+	// The callback URL here is passed as state to Oauth Proxy to determine where to redirect back to after authentication.
+	// If oauthProxyBaseURL is set, the callback URL will point to the Oauth Proxy which then redirects to our callback endpoint after successful authentication.
+	callbackURL := ""
+	if h.oauthProxyBaseURL != "" {
+		callbackURL = fmt.Sprintf("%s/api/oauth/questions/%s/callback", h.baseURL, providerName)
+	}
 
 	// Generate a signed state JWT carrying the form context
 	state, err := h.jwtIssuer.NewFormState(traceCtx, callbackURL, responseID, questionID, redirectURL)
@@ -355,6 +368,121 @@ func (h *Handler) ConnectOAuthAccount(w http.ResponseWriter, r *http.Request) {
 	// Redirect to the OAuth provider's authorization page
 	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, authURL, http.StatusFound)
+}
+
+// OAuthAnswerCallback handles the OAuth provider callback for form question OAuth connect.
+// GET /api/oauth/callback/{provider}?code=...&state=...&error=...
+func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "OAuthAnswerCallback")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	providerName := strings.ToLower(r.PathValue("provider"))
+	provider, ok := h.oauthProvider[providerName]
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %s", internal.ErrProviderNotFound, providerName), logger)
+		return
+	}
+
+	q := r.URL.Query()
+	oauthErr := q.Get("error")
+	code := q.Get("code")
+	stateToken := q.Get("state")
+
+	// Parse state JWT to recover redirectURL and form context.
+	// Must be done before any redirect so we know where to send the user.
+	_, responseID, questionID, redirectURL, err := h.jwtIssuer.ParseFormState(traceCtx, stateToken)
+	if err != nil {
+		logger.Warn("failed to parse form state JWT", zap.Error(err))
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: invalid state", internal.ErrInvalidCallbackInfo), logger)
+		return
+	}
+
+	// Helper: redirect with status params to the user-facing redirect URL
+	redirectWithStatus := func(status, errCode string) {
+		if redirectURL == "" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if errCode != "" {
+			http.Redirect(w, r, redirectURL+"?status="+status+"&error="+errCode, http.StatusFound)
+		} else {
+			http.Redirect(w, r, redirectURL+"?status="+status, http.StatusFound)
+		}
+	}
+
+	// If the provider returned an error (e.g. user denied access), redirect immediately
+	if oauthErr != "" {
+		logger.Warn("OAuth provider returned error", zap.String("error", oauthErr))
+		span.RecordError(fmt.Errorf("oauth provider error: %s", oauthErr))
+		redirectWithStatus("error", oauthErr)
+		return
+	}
+
+	if code == "" {
+		logger.Warn("OAuth callback missing code parameter")
+		redirectWithStatus("error", "missing_code")
+		return
+	}
+
+	// Exchange authorization code for token
+	token, err := provider.Exchange(traceCtx, code)
+	if err != nil {
+		logger.Error("failed to exchange OAuth code for token", zap.Error(err))
+		span.RecordError(err)
+		redirectWithStatus("error", "exchange_failed")
+		return
+	}
+
+	// Fetch user info from provider
+	userInfo, authInfo, email, err := provider.GetUserInfo(traceCtx, token)
+	if err != nil {
+		logger.Error("failed to get user info from OAuth provider", zap.Error(err))
+		span.RecordError(err)
+		redirectWithStatus("error", "userinfo_failed")
+		return
+	}
+
+	// Get formID from responseID (needed by Upsert)
+	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
+	if err != nil {
+		logger.Error("failed to get form ID for response", zap.String("responseID", responseID.String()), zap.Error(err))
+		span.RecordError(err)
+		redirectWithStatus("error", "internal_error")
+		return
+	}
+
+	// Build and marshal the answer value
+	answerValue, err := json.Marshal(shared.OAuthConnectAnswer{
+		Provider:   providerName,
+		ProviderID: authInfo.ProviderID,
+		Email:      email,
+		Username:   userInfo.Username.String,
+	})
+	if err != nil {
+		logger.Error("failed to marshal OAuthConnectAnswer", zap.Error(err))
+		span.RecordError(err)
+		redirectWithStatus("error", "internal_error")
+		return
+	}
+
+	// Upsert the answer
+	_, _, errs := h.store.Upsert(traceCtx, formID, responseID, []shared.AnswerParam{
+		{QuestionID: questionID.String(), Value: answerValue},
+	})
+	if len(errs) > 0 {
+		logger.Error("failed to upsert OAuth connect answer", zap.Error(errs[0]))
+		span.RecordError(errs[0])
+		redirectWithStatus("error", "internal_error")
+		return
+	}
+
+	logger.Info("successfully stored OAuth connect answer",
+		zap.String("provider", providerName),
+		zap.String("responseID", responseID.String()),
+		zap.String("questionID", questionID.String()),
+	)
+	redirectWithStatus("success", "")
 }
 
 // UploadQuestionFiles uploads files for an upload_file question and creates/updates the answer.
