@@ -449,8 +449,11 @@ func (h *Handler) InternalAPITokenLogin(w http.ResponseWriter, r *http.Request) 
 // setAccessAndRefreshCookies sets the access/refresh cookies with HTTP-only and secure flags
 func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, accessTokenID, refreshTokenID string) {
 	var sameSite http.SameSite
+	secure := true
 	if h.devMode {
-		sameSite = http.SameSiteNoneMode
+		sameSite = http.SameSiteLaxMode
+		domain = ""
+		secure = false
 	} else {
 		sameSite = http.SameSiteStrictMode
 	}
@@ -459,7 +462,7 @@ func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, acce
 		Name:     AccessTokenCookieName,
 		Value:    accessTokenID,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: sameSite,
 		Path:     "/",
 		MaxAge:   int(h.accessTokenExpiration.Seconds()),
@@ -470,7 +473,7 @@ func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, acce
 		Name:     RefreshTokenCookieName,
 		Value:    refreshTokenID,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: sameSite,
 		Path:     "/",
 		MaxAge:   int(h.refreshTokenExpiration.Seconds()),
@@ -481,8 +484,11 @@ func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, acce
 // clearAccessAndRefreshCookies sets the access/refresh cookies to empty values and negative MaxAge
 func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter, domain string) {
 	var sameSite http.SameSite
+	secure := true
 	if h.devMode {
-		sameSite = http.SameSiteNoneMode
+		sameSite = http.SameSiteLaxMode
+		domain = ""
+		secure = false
 	} else {
 		sameSite = http.SameSiteStrictMode
 	}
@@ -493,7 +499,7 @@ func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter, domain str
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: sameSite,
 		Domain:   domain,
 	})
@@ -504,7 +510,7 @@ func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter, domain str
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: sameSite,
 		Domain:   domain,
 	})
