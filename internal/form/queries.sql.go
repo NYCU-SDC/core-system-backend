@@ -175,12 +175,12 @@ func (q *Queries) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const formExists = `-- name: FormExists :one
+const exists = `-- name: Exists :one
 SELECT EXISTS(SELECT 1 FROM forms WHERE id = $1)
 `
 
-func (q *Queries) FormExists(ctx context.Context, id uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, formExists, id)
+func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, exists, id)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
