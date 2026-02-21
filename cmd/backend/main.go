@@ -207,7 +207,9 @@ func main() {
 
 	// Casbin Middleware
 	casbinMiddleware := casbin.NewMiddleware(logger, problemWriter, enforcer, unitService, tenantService, formService)
-	tenantCasbinAuthMiddleware := tenantAuthMiddleware.Append(casbinMiddleware.Middleware)
+	casbinAuthMiddleware := authMiddleware.Append(casbinMiddleware.Middleware)
+	casbinTenantBasicMiddleware := tenantBasicMiddleware.Append(casbinMiddleware.Middleware)
+	casbinTenantAuthMiddleware := tenantAuthMiddleware.Append(casbinMiddleware.Middleware)
 
 	// HTTP Server
 	mux := http.NewServeMux()
@@ -254,22 +256,22 @@ func main() {
 	// Organization Management
 	// ----------------------
 	mux.Handle("GET /api/orgs", basicMiddleware.HandlerFunc(unitHandler.GetAllOrganizations))
-	mux.Handle("GET /api/orgs/{slug}", tenantBasicMiddleware.HandlerFunc(unitHandler.GetOrgByID))
+	mux.Handle("GET /api/orgs/{slug}", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.GetOrgByID))
 	mux.Handle("POST /api/orgs", authMiddleware.HandlerFunc(unitHandler.CreateOrg))
-	mux.Handle("PUT /api/orgs/{slug}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.UpdateOrg))
-	mux.Handle("DELETE /api/orgs/{slug}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.DeleteOrg))
+	mux.Handle("PUT /api/orgs/{slug}", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.UpdateOrg))
+	mux.Handle("DELETE /api/orgs/{slug}", tenantAuthMiddleware.HandlerFunc(unitHandler.DeleteOrg))
 
 	// Organization Relations
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/units", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnits))
-	mux.Handle("GET /api/orgs/{slug}/unit-ids", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnitIDs))
-	mux.Handle("POST /api/orgs/relations", authMiddleware.HandlerFunc(unitHandler.AddParentChild))
+	mux.Handle("GET /api/orgs/{slug}/units", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnits))
+	mux.Handle("GET /api/orgs/{slug}/unit-ids", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnitIDs))
+	mux.Handle("POST /api/orgs/relations", casbinAuthMiddleware.HandlerFunc(unitHandler.AddParentChild))
 
 	// Organization Membership
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/members", tenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgMembers))
-	mux.Handle("POST /api/orgs/{slug}/members", tenantAuthMiddleware.HandlerFunc(unitHandler.AddOrgMember))
-	mux.Handle("DELETE /api/orgs/{slug}/members/{member_id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.RemoveOrgMember))
+	mux.Handle("GET /api/orgs/{slug}/members", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgMembers))
+	mux.Handle("POST /api/orgs/{slug}/members", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.AddOrgMember))
+	mux.Handle("DELETE /api/orgs/{slug}/members/{member_id}", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.RemoveOrgMember))
 
 	// Organization Slug
 	// ----------------------
@@ -278,20 +280,20 @@ func main() {
 
 	// Unit Management
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", tenantBasicMiddleware.HandlerFunc(unitHandler.GetUnitByID))
-	mux.Handle("POST /api/orgs/{slug}/units", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.CreateUnit))
-	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.UpdateUnit))
-	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.DeleteUnit))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.GetUnitByID))
+	mux.Handle("POST /api/orgs/{slug}/units", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.CreateUnit))
+	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.UpdateUnit))
+	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.DeleteUnit))
 
-	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunits", tenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitSubUnits))
-	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunit-ids", tenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitSubUnitIDs))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunits", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitSubUnits))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunit-ids", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitSubUnitIDs))
 
 	// Unit Membership
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/members", tenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitMembers))
-	mux.Handle("POST /api/orgs/{slug}/units/{unitId}/members", tenantAuthMiddleware.HandlerFunc(unitHandler.AddUnitMember))
-	mux.Handle("PATCH /api/orgs/{slug}/units/{unitId}/members/{member_id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.UpdateUnitMemberRole))
-	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}/members/{member_id}", tenantCasbinAuthMiddleware.HandlerFunc(unitHandler.RemoveUnitMember))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/members", casbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitMembers))
+	mux.Handle("POST /api/orgs/{slug}/units/{unitId}/members", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.AddUnitMember))
+	mux.Handle("PATCH /api/orgs/{slug}/units/{unitId}/members/{member_id}", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.UpdateUnitMemberRole))
+	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}/members/{member_id}", casbinTenantAuthMiddleware.HandlerFunc(unitHandler.RemoveUnitMember))
 
 	// ============================================
 	// Form routes
@@ -301,32 +303,32 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/forms", authMiddleware.HandlerFunc(formHandler.ListHandler))
 	mux.Handle("GET /api/forms/{formId}", authMiddleware.HandlerFunc(formHandler.GetHandler))
-	mux.Handle("GET /api/orgs/{slug}/forms", tenantBasicMiddleware.HandlerFunc(formHandler.ListByOrgHandler))
-	mux.Handle("POST /api/orgs/{slug}/forms", tenantCasbinAuthMiddleware.HandlerFunc(formHandler.CreateUnderOrgHandler))
-	mux.Handle("PATCH /api/forms/{formId}", authMiddleware.HandlerFunc(formHandler.PatchHandler))
-	mux.Handle("DELETE /api/forms/{formId}", authMiddleware.HandlerFunc(formHandler.DeleteHandler))
+	mux.Handle("GET /api/orgs/{slug}/forms", casbinTenantBasicMiddleware.HandlerFunc(formHandler.ListByOrgHandler))
+	mux.Handle("POST /api/orgs/{slug}/forms", casbinTenantAuthMiddleware.HandlerFunc(formHandler.CreateUnderOrgHandler))
+	mux.Handle("PATCH /api/forms/{formId}", casbinAuthMiddleware.HandlerFunc(formHandler.PatchHandler))
+	mux.Handle("DELETE /api/forms/{formId}", casbinAuthMiddleware.HandlerFunc(formHandler.DeleteHandler))
 
 	// Form Resource
 	mux.Handle("GET /api/forms/fonts", authMiddleware.HandlerFunc(formHandler.GetFontsHandler))
 	mux.Handle("GET /api/forms/{formId}/cover", authMiddleware.HandlerFunc(formHandler.GetCoverImageHandler))
-	mux.Handle("POST /api/forms/{formId}/cover", authMiddleware.HandlerFunc(formHandler.UploadCoverImageHandler))
+	mux.Handle("POST /api/forms/{formId}/cover", casbinAuthMiddleware.HandlerFunc(formHandler.UploadCoverImageHandler))
 
 	// Form Operations
-	mux.Handle("POST /api/forms/{formId}/archive", authMiddleware.HandlerFunc(formHandler.ArchiveHandler))
-	mux.Handle("POST /api/forms/{formId}/publish", authMiddleware.HandlerFunc(publishHandler.PublishForm))
+	mux.Handle("POST /api/forms/{formId}/archive", casbinAuthMiddleware.HandlerFunc(formHandler.ArchiveHandler))
+	mux.Handle("POST /api/forms/{formId}/publish", casbinAuthMiddleware.HandlerFunc(publishHandler.PublishForm))
 
 	// Section Management
 	// ----------------------
 	// --- (Get sections will also return questions)
 	mux.Handle("GET /api/forms/{formId}/sections", authMiddleware.HandlerFunc(questionHandler.ListHandler))
 	// --- (Create sections via the workflow endpoint, not a direct sections API call)
-	mux.Handle("PATCH /api/forms/{formId}/sections/{sectionId}", authMiddleware.HandlerFunc(formHandler.UpdateSectionHandler))
+	mux.Handle("PATCH /api/forms/{formId}/sections/{sectionId}", casbinAuthMiddleware.HandlerFunc(formHandler.UpdateSectionHandler))
 
 	// Question Management
 	// ----------------------
-	mux.Handle("POST /api/sections/{sectionId}/questions", authMiddleware.HandlerFunc(questionHandler.AddHandler))
-	mux.Handle("PUT /api/sections/{sectionId}/questions/{questionId}", authMiddleware.HandlerFunc(questionHandler.UpdateHandler))
-	mux.Handle("DELETE /api/sections/{sectionId}/questions/{questionId}", authMiddleware.HandlerFunc(questionHandler.DeleteHandler))
+	mux.Handle("POST /api/sections/{sectionId}/questions", casbinAuthMiddleware.HandlerFunc(questionHandler.AddHandler))
+	mux.Handle("PUT /api/sections/{sectionId}/questions/{questionId}", casbinAuthMiddleware.HandlerFunc(questionHandler.UpdateHandler))
+	mux.Handle("DELETE /api/sections/{sectionId}/questions/{questionId}", casbinAuthMiddleware.HandlerFunc(questionHandler.DeleteHandler))
 
 	// Response Management
 	// ----------------------
@@ -334,7 +336,7 @@ func main() {
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.Create))
 	// --- (Update response is not allowed)
-	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Delete))
+	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", casbinAuthMiddleware.HandlerFunc(responseHandler.Delete))
 
 	// Response Operations
 	mux.Handle("POST /api/responses/{responseId}/submit", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))
@@ -350,9 +352,9 @@ func main() {
 	// Workflow Management
 	// ----------------------
 	mux.Handle("GET /api/forms/{formId}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetHandler))
-	mux.Handle("POST /api/forms/{formId}/workflow/nodes", authMiddleware.HandlerFunc(workflowHandler.CreateNodeHandler))
-	mux.Handle("PUT /api/forms/{formId}/workflow", authMiddleware.HandlerFunc(workflowHandler.UpdateHandler))
-	mux.Handle("DELETE /api/forms/{formId}/workflow/nodes/{nodeId}", authMiddleware.HandlerFunc(workflowHandler.DeleteNodeHandler))
+	mux.Handle("POST /api/forms/{formId}/workflow/nodes", casbinAuthMiddleware.HandlerFunc(workflowHandler.CreateNodeHandler))
+	mux.Handle("PUT /api/forms/{formId}/workflow", casbinAuthMiddleware.HandlerFunc(workflowHandler.UpdateHandler))
+	mux.Handle("DELETE /api/forms/{formId}/workflow/nodes/{nodeId}", casbinAuthMiddleware.HandlerFunc(workflowHandler.DeleteNodeHandler))
 
 	// ============================================
 	// File routes

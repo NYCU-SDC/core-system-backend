@@ -1,11 +1,78 @@
-p, admin, *, /api/orgs/:slug/units, POST, allow
+# Group4: Organization Management
+p, admin, *, /api/orgs/:slug, GET, allow
+p, member, *, /api/orgs/:slug, GET, allow
 p, admin, *, /api/orgs/:slug, PUT, allow
+
+# Group5: Organization Relations
+p, admin, *, /api/orgs/:slug/units, GET, allow
+p, member, *, /api/orgs/:slug/units, GET, allow
+p, admin, *, /api/orgs/:slug/unit-ids, GET, allow
+p, member, *, /api/orgs/:slug/units-ids, GET, allow
+p, admin, *, /api/orgs/relations, POST, allow
+
+# Group5: Organization Membership
+p, admin, *, /api/orgs/:slug/members, GET, allow
+p, member, *, /api/orgs/:slug/members, GET, allow
+p, admin, *, /api/orgs/:slug/members, POST, allow
+p, member, *, /api/orgs/:slug/members, POST, allow
+p, admin, *, /api/orgs/:slug/members/:memberId, DELETE, allow
+
+# Group7: Unit Management
+p, admin, *, /api/orgs/:slug/units/:unitId, GET, allow
+p, member, *, /api/orgs/:slug/units/:unitId, GET, allow
+p, admin, *, /api/orgs/:slug/units, POST, allow
 p, admin, *, /api/orgs/:slug/units/:unitId, PUT, allow
 p, admin, *, /api/orgs/:slug/units/:unitId, DELETE, allow
-p, admin, *, /api/orgs/:slug, DELETE, allow
-p, admin, *, /api/orgs/:slug/members/:memberId, DELETE, allow
-p, admin, *, /api/orgs/:slug/units/:unitId/members/:memberId, DELETE, allow
-p, admin, *, /api/orgs/:slug/units/:unitId/members/:memberId, PATCH, allow
+p, admin, *, /api/orgs/:slug/units/:unitID/subunits, GET allow
+p, member, *, /api/orgs/:slug/units/:unitID/subunits, GET allow
+p, admin, *, /api/orgs/:slug/units/:unitID/subunit-ids, GET allow
+p, member, *, /api/orgs/:slug/units/:unitID/subunit-ids, GET allow
 
-p, member, *, /api/orgs/:slug/forms, POST, allow
+# Group8: Unit Membership
+p, admin, *, /api/orgs/:slug/units/:unitId/members, GET, allow
+p, member, *, /api/orgs/:slug/units/:unitId/members, GET, allow
+p, admin, *, /api/orgs/:slug/units/:unitId/members, POST, allow
+p, member, *, /api/orgs/:slug/units/:unitId/members, POST, allow
+p, admin, *, /api/orgs/:slug/units/:unitId/members/:memberId, PATCH, allow
+p, admin, *, /api/orgs/:slug/units/:unitId/members/:memberId, DELETE, allow
+
+# Group9: Form Management
+p, admin,  *, /api/orgs/:slug/forms, GET, allow
+p, member, *, /api/orgs/:slug/forms, GET, allow
 p, admin,  *, /api/orgs/:slug/forms, POST, allow
+p, member, *, /api/orgs/:slug/forms, POST, allow
+p, admin, *, /api/forms/:formId, PATCH, allow
+p, member, *, /api/forms/:formId, PATCH, allow
+p, admin, *, /api/forms/:formId, DELETE, allow
+p, member, *, /api/forms/:formId, DELETE, allow
+
+# Group10: Form Resource
+p, admin, *, /api/forms/:formId/cover, POST, allow
+p, member, *, /api/forms/:formId/cover, POST, allow
+
+# Group10: Form Operations
+p, admin, *, /api/forms/:formId/archive, POST, allow
+p, member, *, /api/forms/:formId/archive, POST, allow
+p, admin, *, /api/forms/:formId/publish, POST, allow
+p, member, *, /api/forms/:formId/publish, POST, allow
+
+# Group11: Section Management
+p, admin, *, /api/forms/:formId/sections/:sectionId, PATCH, allow
+p, member, *, /api/forms/:formId/sections/:sectionId, PATCH, allow
+p, admin, *, /api/sections/:sectionId/questions, POST, allow
+p, member, *, /api/sections/:sectionId/questions, POST, allow
+p, admin, *, /api/sections/:sectionId/questions/:questionId, PUT, allow
+p, member, *, /api/sections/:sectionId/questions/:questionId, PUT, allow
+p, admin, *, /api/sections/:sectionId/questions/:questionId, DELETE, allow
+p, member, *, /api/sections/:sectionId/questions/:questionId, DELETE, allow
+
+# Group12: Response Management
+p, admin, *, /api/forms/:formId/responses/:responseId, DELETE, allow
+
+# Group14: Workflow Management
+p, admin, *, /api/forms/:formId/workflow/nodes, POST, allow
+p, member, *, /api/forms/:formId/workflow/nodes, POST, allow
+p, admin, *, /api/forms/:formId/workflow, PUT, allow
+p, member, *, /api/forms/:formId/workflow, PUT, allow
+p, admin, *, /api/forms/:formId/workflow/nodes/:nodeId, DELETE, allow
+p, member, *, /api/forms/:formId/workflow/nodes/:nodeId, DELETE, allow
