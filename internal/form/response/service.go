@@ -353,7 +353,7 @@ func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, er
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
 		span.RecordError(err)
-		return uuid.Nil, nil
+		return uuid.Nil, err
 	}
 
 	return formID, nil
