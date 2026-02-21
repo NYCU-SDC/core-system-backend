@@ -110,6 +110,9 @@ LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.id = $1;
 
+-- name: FormExists :one
+SELECT EXISTS(SELECT 1 FROM forms WHERE id = $1);
+
 -- name: List :many
 SELECT 
     f.*,
