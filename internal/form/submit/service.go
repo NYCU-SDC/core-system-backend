@@ -8,11 +8,13 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"context"
+	"errors"
 	"slices"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -71,6 +73,9 @@ func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []sh
 	// Get the form ID associated with this response
 	formID, err := s.responseStore.GetFormIDByID(traceCtx, responseID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return response.FormResponse{}, []error{internal.ErrResponseNotFound}
+		}
 		logger.Error("failed to get form id by response id", zap.Error(err))
 		return response.FormResponse{}, []error{err}
 	}
