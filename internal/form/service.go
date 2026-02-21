@@ -1,10 +1,8 @@
 package form
 
 import (
-	"NYCU-SDC/core-system-backend/internal/form/response"
 	"context"
 	"errors"
-	"slices"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5"
@@ -28,10 +26,7 @@ type Querier interface {
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
-}
-
-type ResponseStore interface {
-	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]response.FormResponse, error)
+	FormExists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type UserFormStatus string
@@ -65,18 +60,16 @@ type formFields struct {
 }
 
 type Service struct {
-	logger        *zap.Logger
-	queries       Querier
-	tracer        trace.Tracer
-	responseStore ResponseStore
+	logger  *zap.Logger
+	queries Querier
+	tracer  trace.Tracer
 }
 
-func NewService(logger *zap.Logger, db DBTX, responseStore ResponseStore) *Service {
+func NewService(logger *zap.Logger, db DBTX) *Service {
 	return &Service{
-		logger:        logger,
-		queries:       New(db),
-		tracer:        otel.Tracer("forms/service"),
-		responseStore: responseStore,
+		logger:  logger,
+		queries: New(db),
+		tracer:  otel.Tracer("forms/service"),
 	}
 }
 
@@ -272,6 +265,22 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	return currentForm, nil
 }
 
+// FormExists reports whether a form with the given ID exists (so response package can use *form.Service as FormStore without form importing response).
+func (s *Service) FormExists(ctx context.Context, id uuid.UUID) (bool, error) {
+	ctx, span := s.tracer.Start(ctx, "FormExists")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	exists, err := s.queries.FormExists(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return false, err
+	}
+
+	return exists, nil
+}
+
 func (s *Service) List(ctx context.Context) ([]ListRow, error) {
 	ctx, span := s.tracer.Start(ctx, "ListForms")
 	defer span.End()
@@ -287,14 +296,12 @@ func (s *Service) List(ctx context.Context) ([]ListRow, error) {
 	return forms, nil
 }
 
-func (s *Service) ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUnitRow, error) {
+func (s *Service) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error) {
 	ctx, span := s.tracer.Start(ctx, "ListByUnit")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
-		UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
-	})
+	forms, err := s.queries.ListByUnit(ctx, arg)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms by unit")
 		span.RecordError(err)
@@ -321,85 +328,6 @@ func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status Status, us
 	}
 
 	return updated, nil
-}
-
-func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]UserForm, error) {
-	ctx, span := s.tracer.Start(ctx, "ListFormsOfUser")
-	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
-
-	responses, err := s.responseStore.ListBySubmittedBy(ctx, userID)
-	if err != nil {
-		span.RecordError(err)
-		return []UserForm{}, err
-	}
-
-	formStatusMap := make(map[uuid.UUID]UserFormStatus)
-	for _, response := range responses {
-		status := UserFormStatusInProgress
-		if response.SubmittedAt.Valid {
-			status = UserFormStatusCompleted
-		}
-		formStatusMap[response.FormID] = status
-	}
-
-	allForms := make(map[uuid.UUID]ListByUnitRow)
-	for _, unitID := range unitIDs {
-		forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
-			UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
-		})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "list forms by unit")
-			span.RecordError(err)
-			return []UserForm{}, err
-		}
-
-		for _, form := range forms {
-			allForms[form.ID] = form
-		}
-	}
-
-	userForms := make([]UserForm, 0, len(allForms))
-	for formID, form := range allForms {
-		status, exists := formStatusMap[formID]
-		if !exists {
-			status = UserFormStatusNotStarted
-		}
-
-		userForms = append(userForms, UserForm{
-			FormID:   formID,
-			Title:    form.Title,
-			Deadline: form.Deadline,
-			Status:   status,
-		})
-	}
-
-	slices.SortFunc(userForms, func(a, b UserForm) int {
-
-		if a.Deadline.Valid != b.Deadline.Valid {
-			if a.Deadline.Valid {
-				return -1
-			}
-			return 1
-		}
-
-		if a.Deadline.Valid {
-			if n := a.Deadline.Time.Compare(b.Deadline.Time); n != 0 {
-				return n
-			}
-		}
-
-		if a.Title < b.Title {
-			return -1
-		}
-		if a.Title > b.Title {
-			return 1
-		}
-
-		return 0
-	})
-
-	return userForms, nil
 }
 
 func (s *Service) UploadCoverImage(ctx context.Context, formID uuid.UUID, imageData []byte, coverImageURL string) error {
