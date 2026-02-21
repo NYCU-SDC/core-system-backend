@@ -190,3 +190,71 @@ jobs:
                 }
               }
             }'
+
+  ScenarioQA:
+    needs: Build
+    runs-on: ubuntu-latest
+    env:
+      QA_BASE_URL: http://localhost:18080/api
+      QA_LOGIN_USER_ID: 4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e
+      BACKEND_IMAGE: nycusdc/core-system-backend:pr-${{ github.event.number }}
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+
+      - name: Pull backend image for QA
+        run: docker pull ${BACKEND_IMAGE}
+
+      - name: Start QA backend stack
+        run: docker compose -f .deploy/ci/compose.yaml up -d --wait
+
+      - name: Seed QA user
+        run: |
+          cat .deploy/ci/seed.sql | docker compose -f .deploy/ci/compose.yaml exec -T postgres psql -U postgres -d core_system -v ON_ERROR_STOP=1
+
+      - name: Checkout API scenarios repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/core-system-api
+          path: core-system-api
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Prepare reports dir
+        run: mkdir -p reports
+
+      - name: Run smoke tests
+        run: npx --yes httpyac send scenarios/smoke/*.http --all --timeout 30000 --var BASE_URL=${QA_BASE_URL}
+        working-directory: core-system-api
+
+      - name: Run user-journey tests
+        continue-on-error: true
+        run: |
+          npx --yes httpyac send "scenarios/user-journey/**/*.http" \
+            --junit --all --timeout 30000 \
+            --var BASE_URL=${QA_BASE_URL} \
+            --var LOGIN_USER_ID=${QA_LOGIN_USER_ID} \
+            > ../reports/user-journey-all.xml
+        working-directory: core-system-api
+
+      - name: List generated reports
+        if: always()
+        run: ls -lah reports/ || echo "No reports directory found"
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: httpyac scenarios
+          path: reports/*.xml
+          reporter: java-junit
+          list-tests: failed
+          only-summary: false
+          fail-on-error: false
+
+      - name: Teardown compose
+        if: always()
+        run: docker compose -f .deploy/ci/compose.yaml down -v
