@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
@@ -237,7 +238,7 @@ func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
 	for i, ft := range option.AllowedFileTypes {
 		fileType := FileType(strings.ToLower(strings.TrimSpace(ft)))
 		if !isValidFileType(fileType) {
-			return nil, fmt.Errorf("invalid file type: %s", ft)
+			return nil, fmt.Errorf("%w: invalid file type %s", internal.ErrInvalidFileType, ft)
 		}
 		fileTypes[i] = fileType
 	}
