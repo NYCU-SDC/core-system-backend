@@ -226,11 +226,11 @@ func (u UploadFile) MatchesPattern(rawValue json.RawMessage, pattern string) (bo
 // GenerateUploadFileMetadata generates metadata for upload file question
 func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
 	if len(option.AllowedFileTypes) == 0 {
-		return nil, errors.New("allowedFileTypes cannot be empty")
+		return nil, fmt.Errorf("%w: allowedFileTypes cannot be empty", internal.ErrValidationFailed)
 	}
 
 	if option.MaxFileAmount < 1 || option.MaxFileAmount > 10 {
-		return nil, fmt.Errorf("maxFileAmount must be between 1 and 10, got: %d", option.MaxFileAmount)
+		return nil, fmt.Errorf("%w: maxFileAmount must be between 1 and 10, got: %d", internal.ErrValidationFailed, option.MaxFileAmount)
 	}
 
 	// Validate and convert file types
@@ -246,7 +246,7 @@ func GenerateUploadFileMetadata(option UploadFileOption) ([]byte, error) {
 	// Validate file size limit (1 byte to 10 MB)
 	const maxFileSizeBytes int64 = 10485760 // 10 MB in bytes
 	if option.MaxFileSizeLimit < 1 || option.MaxFileSizeLimit > maxFileSizeBytes {
-		return nil, fmt.Errorf("file size limit must be between 1 and %d bytes (10 MB), got: %d", maxFileSizeBytes, option.MaxFileSizeLimit)
+		return nil, fmt.Errorf("%w: file size limit must be between 1 and %d bytes (10 MB), got: %d", internal.ErrValidationFailed, maxFileSizeBytes, option.MaxFileSizeLimit)
 	}
 
 	metadata := map[string]any{
