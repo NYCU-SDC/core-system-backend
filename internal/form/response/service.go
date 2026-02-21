@@ -49,6 +49,10 @@ type SectionWithAnswerableAndAnswer struct {
 	Answer     []answer.Answer
 }
 
+type FormStore interface {
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+}
+
 type Service struct {
 	logger  *zap.Logger
 	queries Querier
@@ -57,9 +61,10 @@ type Service struct {
 	answerStore              AnswerStore
 	sectionWithQuestionStore SectionWithQuestionStore
 	workflowResolver         WorkflowResolver
+	formStore                FormStore
 }
 
-func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver) *Service {
+func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver, formStore FormStore) *Service {
 	return &Service{
 		logger:  logger,
 		queries: New(db),
@@ -68,6 +73,7 @@ func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionSto
 		answerStore:              answerStore,
 		sectionWithQuestionStore: sectionStore,
 		workflowResolver:         workflowResolver,
+		formStore:                formStore,
 	}
 }
 
@@ -115,6 +121,16 @@ func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResp
 	traceCtx, span := s.tracer.Start(ctx, "ListByFormID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.formStore.Exists(traceCtx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return []FormResponse{}, err
+	}
+	if !exists {
+		return []FormResponse{}, internal.ErrFormNotFound
+	}
 
 	responses, err := s.queries.ListByFormID(traceCtx, formID)
 	if err != nil {
