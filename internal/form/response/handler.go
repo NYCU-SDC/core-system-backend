@@ -80,7 +80,7 @@ type CreateResponse struct {
 }
 
 type Store interface {
-	Get(ctx context.Context, id uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
+	Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
@@ -168,7 +168,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get response with sections and answers from store
-	formResponse, sections, err := h.store.Get(traceCtx, responseID)
+	formResponse, sections, err := h.store.Get(traceCtx, responseID, formID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

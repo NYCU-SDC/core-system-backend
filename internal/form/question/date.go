@@ -6,17 +6,54 @@ import (
 	"fmt"
 	"time"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
 )
 
+// DateField parses minDate/maxDate from JSON and returns a validation error on invalid format.
+type DateField struct {
+	Time *time.Time
+}
+
+func (o *DateField) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		o.Time = nil
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	if s == "" {
+		o.Time = nil
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t, err = time.Parse("2006-01-02", s)
+	}
+	if err != nil {
+		return fmt.Errorf("%w: invalid date format for minDate/maxDate: %v", internal.ErrValidationFailed, err)
+	}
+	o.Time = &t
+	return nil
+}
+
+func (o DateField) MarshalJSON() ([]byte, error) {
+	if o.Time == nil {
+		return []byte("null"), nil
+	}
+	return o.Time.MarshalJSON()
+}
+
 type DateOption struct {
-	HasYear  bool       `json:"hasYear"`
-	HasMonth bool       `json:"hasMonth"`
-	HasDay   bool       `json:"hasDay"`
-	MinDate  *time.Time `json:"minDate,omitempty"`
-	MaxDate  *time.Time `json:"maxDate,omitempty"`
+	HasYear  bool      `json:"hasYear"`
+	HasMonth bool      `json:"hasMonth"`
+	HasDay   bool      `json:"hasDay"`
+	MinDate  DateField `json:"minDate,omitempty"`
+	MaxDate  DateField `json:"maxDate,omitempty"`
 }
 
 type DateMetadata struct {
@@ -308,19 +345,25 @@ func (d Date) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, er
 func GenerateDateMetadata(option DateOption) ([]byte, error) {
 	// Validate that at least one component is required
 	if !option.HasYear && !option.HasMonth && !option.HasDay {
-		return nil, errors.New("at least one of hasYear, hasMonth, or hasDay must be true")
+		return nil, fmt.Errorf("%w: at least one of hasYear, hasMonth, or hasDay must be true", internal.ErrValidationFailed)
 	}
 
 	// Validate date range if both min and max are provided
-	if option.MinDate != nil && option.MaxDate != nil {
-		if option.MinDate.After(*option.MaxDate) {
-			return nil, fmt.Errorf("minDate (%s) must be before or equal to maxDate (%s)",
-				option.MinDate.Format(time.RFC3339), option.MaxDate.Format(time.RFC3339))
+	if option.MinDate.Time != nil && option.MaxDate.Time != nil {
+		if option.MinDate.Time.After(*option.MaxDate.Time) {
+			return nil, fmt.Errorf("%w: minDate (%s) must be before or equal to maxDate (%s)",
+				internal.ErrValidationFailed, option.MinDate.Time.Format(time.RFC3339), option.MaxDate.Time.Format(time.RFC3339))
 		}
 	}
 
 	metadata := map[string]any{
-		"date": DateMetadata(option),
+		"date": DateMetadata{
+			HasYear:  option.HasYear,
+			HasMonth: option.HasMonth,
+			HasDay:   option.HasDay,
+			MinDate:  option.MinDate.Time,
+			MaxDate:  option.MaxDate.Time,
+		},
 	}
 
 	return json.Marshal(metadata)

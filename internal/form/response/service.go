@@ -1,26 +1,29 @@
 package response
 
 import (
-	"NYCU-SDC/core-system-backend/internal/form/answer"
-	"NYCU-SDC/core-system-backend/internal/form/question"
 	"context"
 	"fmt"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/answer"
+	"NYCU-SDC/core-system-backend/internal/form/question"
+	"errors"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
 type Querier interface {
-	Get(ctx context.Context, id uuid.UUID) (FormResponse, error)
+	Get(ctx context.Context, arg GetParams) (FormResponse, error)
 	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
-	Exists(ctx context.Context, arg ExistsParams) (bool, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	ExistsByFormIDAndSubmittedBy(ctx context.Context, arg ExistsByFormIDAndSubmittedByParams) (bool, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
@@ -48,6 +51,10 @@ type SectionWithAnswerableAndAnswer struct {
 	Answer     []answer.Answer
 }
 
+type FormStore interface {
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+}
+
 type Service struct {
 	logger  *zap.Logger
 	queries Querier
@@ -56,9 +63,10 @@ type Service struct {
 	answerStore              AnswerStore
 	sectionWithQuestionStore SectionWithQuestionStore
 	workflowResolver         WorkflowResolver
+	formStore                FormStore
 }
 
-func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver) *Service {
+func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver, formStore FormStore) *Service {
 	return &Service{
 		logger:  logger,
 		queries: New(db),
@@ -67,6 +75,7 @@ func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionSto
 		answerStore:              answerStore,
 		sectionWithQuestionStore: sectionStore,
 		workflowResolver:         workflowResolver,
+		formStore:                formStore,
 	}
 }
 
@@ -78,7 +87,7 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// Check if user already has a response for this form
-	exists, err := s.queries.Exists(traceCtx, ExistsParams{
+	exists, err := s.queries.ExistsByFormIDAndSubmittedBy(traceCtx, ExistsByFormIDAndSubmittedByParams{
 		FormID:      formID,
 		SubmittedBy: userID,
 	})
@@ -115,6 +124,16 @@ func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResp
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	exists, err := s.formStore.Exists(traceCtx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return []FormResponse{}, err
+	}
+	if !exists {
+		return []FormResponse{}, internal.ErrFormNotFound
+	}
+
 	responses, err := s.queries.ListByFormID(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "form_id", formID.String(), logger, "list responses by form id")
@@ -143,14 +162,20 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 
 // Get retrieves a form response by ID along with its sections, questions, and answers
 // The sections are returned in workflow order (active sections first, then skipped sections)
-func (s Service) Get(ctx context.Context, id uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error) {
+func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// Get the form response
-	response, err := s.queries.Get(traceCtx, id)
+	response, err := s.queries.Get(traceCtx, GetParams{
+		ID:     id,
+		FormID: formID,
+	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return FormResponse{}, nil, internal.ErrResponseNotFound
+		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get response by id")
 		span.RecordError(err)
 		return FormResponse{}, nil, err
@@ -333,10 +358,26 @@ func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, er
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
 		span.RecordError(err)
-		return uuid.Nil, nil
+		return uuid.Nil, err
 	}
 
 	return formID, nil
+}
+
+// Exists returns whether a response with the given id exists.
+func (s Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Exists")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.queries.Exists(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "check response exists")
+		span.RecordError(err)
+		return false, err
+	}
+
+	return exists, nil
 }
 
 // Delete deletes a response by id
