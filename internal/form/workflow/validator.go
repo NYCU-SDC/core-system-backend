@@ -647,7 +647,7 @@ func mapToConditionRule(mapRule map[string]interface{}) node.ConditionRule {
 	source, _ := mapRule["source"].(string)
 	rule.Source = node.ConditionSource(source)
 	rule.NodeID, _ = mapRule["nodeId"].(string)
-	rule.Key, _ = mapRule["key"].(string)
+	rule.Question, _ = mapRule["question"].(string)
 	rule.ChoiceOptionID, _ = mapRule["choiceOptionId"].(string)
 	rule.Pattern, _ = mapRule["pattern"].(string)
 	return rule
@@ -671,36 +671,36 @@ func validateDraftConditionQuestion(
 	rule := mapToConditionRule(ruleMap)
 
 	// Only validate question existence and type compatibility in draft mode.
-	if rule.Key == "" {
-		return fmt.Errorf("condition node '%s' conditionRule.key cannot be empty", nodeID)
+	if rule.Question == "" {
+		return fmt.Errorf("condition node '%s' conditionRule.question cannot be empty", nodeID)
 	}
 
-	questionID, err := uuid.Parse(rule.Key)
+	questionID, err := uuid.Parse(rule.Question)
 	if err != nil {
-		return fmt.Errorf("condition node '%s' conditionRule.key '%s' is not a valid UUID", nodeID, rule.Key)
+		return fmt.Errorf("condition node '%s' conditionRule.question '%s' is not a valid UUID", nodeID, rule.Question)
 	}
 
 	answerable, err := questionStore.GetByID(ctx, questionID)
 	if err != nil {
-		return fmt.Errorf("condition node '%s' references non-existent question '%s' in conditionRule.key", nodeID, rule.Key)
+		return fmt.Errorf("condition node '%s' references non-existent question '%s' in conditionRule.question", nodeID, rule.Question)
 	}
 
 	q := answerable.Question()
 
 	// Validate question belongs to the form
 	if answerable.FormID() != formID {
-		return fmt.Errorf("condition node '%s' references question '%s' that belongs to a different form", nodeID, rule.Key)
+		return fmt.Errorf("condition node '%s' references question '%s' that belongs to a different form", nodeID, rule.Question)
 	}
 
-	// Validate question type matches condition source (same rules as strict mode).
+	// Validate question type matches condition source (source normalized to uppercase in mapToConditionRule).
 	switch rule.Source {
 	case node.ConditionSourceChoice:
 		if !question.ContainsType(question.ChoiceTypes, q.Type) {
-			return fmt.Errorf("condition node '%s' with source 'choice' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.ChoiceTypes), rule.Key, q.Type)
+			return fmt.Errorf("condition node '%s' with source 'CHOICE' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.ChoiceTypes), rule.Question, q.Type)
 		}
 	case node.ConditionSourceNonChoice:
 		if !question.ContainsType(question.NonChoiceTypes, q.Type) {
-			return fmt.Errorf("condition node '%s' with source 'nonChoice' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.NonChoiceTypes), rule.Key, q.Type)
+			return fmt.Errorf("condition node '%s' with source 'NONCHOICE' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.NonChoiceTypes), rule.Question, q.Type)
 		}
 	}
 	return nil

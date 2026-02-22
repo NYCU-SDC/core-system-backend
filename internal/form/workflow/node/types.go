@@ -25,15 +25,15 @@ type Validatable interface {
 type ConditionSource string
 
 const (
-	ConditionSourceChoice    ConditionSource = "choice"
-	ConditionSourceNonChoice ConditionSource = "nonChoice"
+	ConditionSourceChoice    ConditionSource = "CHOICE"
+	ConditionSourceNonChoice ConditionSource = "NONCHOICE"
 )
 
 // ConditionRule represents a condition rule for condition nodes
 type ConditionRule struct {
 	Source         ConditionSource `json:"source"`
 	NodeID         string          `json:"nodeId"`
-	Key            string          `json:"key"`
+	Question       string          `json:"question"`
 	ChoiceOptionID string          `json:"choiceOptionId,omitempty"` // For choice source
 	Pattern        string          `json:"pattern"`
 }

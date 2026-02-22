@@ -159,7 +159,7 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  referenceNodeID.String(),
-				"key":     "answer",
+				"question":     "answer",
 				"pattern": "yes",
 			},
 		},
@@ -226,7 +226,7 @@ func createWorkflow_InvalidNextTrueRef(t *testing.T) []byte {
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  sectionID.String(),
-				"key":     uuid.New().String(),
+				"question":     uuid.New().String(),
 				"pattern": "yes",
 			},
 		},
@@ -269,7 +269,7 @@ func createWorkflow_InvalidNextFalseRef(t *testing.T) []byte {
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  sectionID.String(),
-				"key":     uuid.New().String(),
+				"question":     uuid.New().String(),
 				"pattern": "yes",
 			},
 		},
@@ -312,7 +312,7 @@ func createWorkflow_InvalidConditionRefs(t *testing.T) []byte {
 			"conditionRule": map[string]interface{}{
 				"source":  "non-choice",
 				"nodeId":  sectionID.String(),
-				"key":     uuid.New().String(),
+				"question":     uuid.New().String(),
 				"pattern": "^no$",
 			},
 		},
@@ -358,7 +358,7 @@ func createWorkflow_ConditionRule(t *testing.T, questionID string) []byte {
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  sectionID.String(),
-				"key":     questionID,
+				"question":     questionID,
 				"pattern": "yes",
 			},
 		},
@@ -400,7 +400,7 @@ func createWorkflow_ConditionRuleSourceWithQuestionID(t *testing.T, source strin
 			"conditionRule": map[string]interface{}{
 				"source":  source,
 				"nodeId":  sectionID.String(),
-				"key":     questionID,
+				"question":     questionID,
 				"pattern": "yes",
 			},
 		},
@@ -652,7 +652,7 @@ func createWorkflow_ConditionRefsSectionAfter(t *testing.T, formID uuid.UUID) ([
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  sectionID.String(),
-				"key":     questionID.String(),
+				"question":     questionID.String(),
 				"pattern": "yes",
 			},
 		},
@@ -689,7 +689,7 @@ func createWorkflow_ConditionRefsSectionBefore(t *testing.T, formID uuid.UUID) (
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  sectionID.String(),
-				"key":     questionID.String(),
+				"question":     questionID.String(),
 				"pattern": "yes",
 			},
 		},
@@ -725,7 +725,7 @@ func createWorkflow_ConditionRefsSelf(t *testing.T, formID uuid.UUID) ([]byte, w
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  conditionID.String(),
-				"key":     questionID.String(),
+				"question":     questionID.String(),
 				"pattern": "yes",
 			},
 		},
@@ -784,7 +784,7 @@ func createWorkflow_MultipleConditionsInvalidSectionRefs(t *testing.T, formID uu
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  section1ID.String(),
-				"key":     questionID.String(),
+				"question":     questionID.String(),
 				"pattern": "yes",
 			},
 		},
@@ -797,7 +797,7 @@ func createWorkflow_MultipleConditionsInvalidSectionRefs(t *testing.T, formID uu
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  section2ID.String(),
-				"key":     questionID.String(),
+				"question":     questionID.String(),
 				"pattern": "no",
 			},
 		},

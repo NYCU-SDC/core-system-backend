@@ -121,7 +121,7 @@ func TestService_ResolveSections_WithCondition_ChoiceTrue(t *testing.T) {
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  sectionAID.String(),
-				"key":     questionID.String(),
+				"question": questionID.String(),
 				"pattern": "^" + choiceID.String() + "$", // Exact match for choice ID
 			},
 		},
@@ -229,7 +229,7 @@ func TestService_ResolveSections_MultipleChoice_AnyMatch(t *testing.T) {
 			"conditionRule": map[string]interface{}{
 				"source":  "choice",
 				"nodeId":  sectionAID.String(),
-				"key":     questionID.String(),
+				"question": questionID.String(),
 				"pattern": "^" + targetChoiceID.String() + "$",
 			},
 		},
