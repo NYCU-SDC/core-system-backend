@@ -197,7 +197,7 @@ func main() {
 	authMiddleware = authMiddleware.Append(jwtMiddleware.AuthenticateMiddleware)
 
 	// Tenant-aware Middleware
-	tenantBasicMiddleware := basicMiddleware.Append(tenantMiddleware.Middleware)
+	//tenantBasicMiddleware := basicMiddleware.Append(tenantMiddleware.Middleware)
 	tenantAuthMiddleware := authMiddleware.Append(tenantMiddleware.Middleware)
 
 	casbinCfg := casbin.Config{
@@ -212,11 +212,9 @@ func main() {
 	// Casbin Middleware
 	unitCasbinMiddleware := casbin.NewUnitMiddleware(logger, problemWriter, enforcer, unitService, tenantService, formService)
 	unitCasbinAuthMiddleware := authMiddleware.Append(unitCasbinMiddleware.Middleware)
-	unitCasbinTenantBasicMiddleware := tenantBasicMiddleware.Append(unitCasbinMiddleware.Middleware)
 	unitCasbinTenantAuthMiddleware := tenantAuthMiddleware.Append(unitCasbinMiddleware.Middleware)
 
 	globalCasbinMiddleware := casbin.NewGlobalMiddleware(logger, problemWriter, enforcer)
-	globalCasbinBasicMiddleware := basicMiddleware.Append(globalCasbinMiddleware.Middleware)
 	globalCasbinAuthMiddleware := authMiddleware.Append(globalCasbinMiddleware.Middleware)
 	globalCasbinTenantAuthMiddleware := tenantAuthMiddleware.Append(globalCasbinMiddleware.Middleware)
 
@@ -264,21 +262,21 @@ func main() {
 
 	// Organization Management
 	// ----------------------
-	mux.Handle("GET /api/orgs", globalCasbinBasicMiddleware.HandlerFunc(unitHandler.GetAllOrganizations))
-	mux.Handle("GET /api/orgs/{slug}", unitCasbinTenantBasicMiddleware.HandlerFunc(unitHandler.GetOrgByID))
+	mux.Handle("GET /api/orgs", globalCasbinAuthMiddleware.HandlerFunc(unitHandler.GetAllOrganizations))
+	mux.Handle("GET /api/orgs/{slug}", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.GetOrgByID))
 	mux.Handle("POST /api/orgs", globalCasbinAuthMiddleware.HandlerFunc(unitHandler.CreateOrg))
 	mux.Handle("PUT /api/orgs/{slug}", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.UpdateOrg))
 	mux.Handle("DELETE /api/orgs/{slug}", globalCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.DeleteOrg))
 
 	// Organization Relations
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/units", unitCasbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnits))
-	mux.Handle("GET /api/orgs/{slug}/unit-ids", unitCasbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgSubUnitIDs))
+	mux.Handle("GET /api/orgs/{slug}/units", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.ListOrgSubUnits))
+	mux.Handle("GET /api/orgs/{slug}/unit-ids", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.ListOrgSubUnitIDs))
 	mux.Handle("POST /api/orgs/relations", authMiddleware.HandlerFunc(unitHandler.AddParentChild))
 
 	// Organization Membership
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/members", unitCasbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListOrgMembers))
+	mux.Handle("GET /api/orgs/{slug}/members", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.ListOrgMembers))
 	mux.Handle("POST /api/orgs/{slug}/members", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.AddOrgMember))
 	mux.Handle("DELETE /api/orgs/{slug}/members/{member_id}", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.RemoveOrgMember))
 
@@ -289,17 +287,17 @@ func main() {
 
 	// Unit Management
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", unitCasbinTenantBasicMiddleware.HandlerFunc(unitHandler.GetUnitByID))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.GetUnitByID))
 	mux.Handle("POST /api/orgs/{slug}/units", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.CreateUnit))
 	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.UpdateUnit))
 	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.DeleteUnit))
 
-	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunits", unitCasbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitSubUnits))
-	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunit-ids", unitCasbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitSubUnitIDs))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunits", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.ListUnitSubUnits))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitID}/subunit-ids", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.ListUnitSubUnitIDs))
 
 	// Unit Membership
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/members", unitCasbinTenantBasicMiddleware.HandlerFunc(unitHandler.ListUnitMembers))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/members", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.ListUnitMembers))
 	mux.Handle("POST /api/orgs/{slug}/units/{unitId}/members", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.AddUnitMember))
 	mux.Handle("PATCH /api/orgs/{slug}/units/{unitId}/members/{member_id}", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.UpdateUnitMemberRole))
 	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}/members/{member_id}", unitCasbinTenantAuthMiddleware.HandlerFunc(unitHandler.RemoveUnitMember))
@@ -312,7 +310,7 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/forms", authMiddleware.HandlerFunc(formHandler.ListHandler))
 	mux.Handle("GET /api/forms/{formId}", authMiddleware.HandlerFunc(formHandler.GetHandler))
-	mux.Handle("GET /api/orgs/{slug}/forms", unitCasbinTenantBasicMiddleware.HandlerFunc(formHandler.ListByOrgHandler))
+	mux.Handle("GET /api/orgs/{slug}/forms", unitCasbinTenantAuthMiddleware.HandlerFunc(formHandler.ListByOrgHandler))
 	mux.Handle("POST /api/orgs/{slug}/forms", unitCasbinTenantAuthMiddleware.HandlerFunc(formHandler.CreateUnderOrgHandler))
 	mux.Handle("PATCH /api/forms/{formId}", unitCasbinAuthMiddleware.HandlerFunc(formHandler.PatchHandler))
 	mux.Handle("DELETE /api/forms/{formId}", unitCasbinAuthMiddleware.HandlerFunc(formHandler.DeleteHandler))
