@@ -3,6 +3,7 @@ package user
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/file"
+
 	"context"
 	"errors"
 	"fmt"
@@ -53,6 +54,7 @@ type Service struct {
 	queries      Querier
 	tracer       trace.Tracer
 	fileOperator FileOperator
+	orgWriter    OrgMemberWriter
 }
 
 type Profile struct {
@@ -63,12 +65,22 @@ type Profile struct {
 	Emails    []string
 }
 
-func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator) *Service {
+type OrgMemberWriter interface {
+	AddMemberWithRole(
+		ctx context.Context,
+		unitID uuid.UUID,
+		memberID uuid.UUID,
+		role string,
+	) error
+}
+
+func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter) *Service {
 	return &Service{
 		logger:       logger,
 		queries:      New(db),
 		tracer:       otel.Tracer("user/service"),
 		fileOperator: fileOperator,
+		orgWriter:    orgWriter,
 	}
 }
 
@@ -107,7 +119,7 @@ func resolveAvatarUrl(name, avatarUrl string) string {
 	return avatarUrl
 }
 
-func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
+func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, email string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "FindOrCreate")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -140,8 +152,25 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	// User doesn't exist, create new user
 	logger.Info("User not found, creating new user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
 
-	if len(role) == 0 {
-		role = []string{"user"}
+	defaultRoles := DefaultGlobalRoles(email)
+
+	roleSet := map[string]struct{}{}
+
+	for _, r := range role {
+		roleSet[r] = struct{}{}
+	}
+
+	for _, r := range defaultRoles {
+		roleSet[r] = struct{}{}
+	}
+
+	var finalRoles []string
+	for r := range roleSet {
+		finalRoles = append(finalRoles, r)
+	}
+
+	if len(finalRoles) == 0 {
+		finalRoles = []string{"user"}
 	}
 
 	// Create user first with a placeholder avatar
@@ -150,7 +179,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		Name:      pgtype.Text{String: name, Valid: name != ""},
 		Username:  pgtype.Text{String: username, Valid: username != ""},
 		AvatarUrl: pgtype.Text{String: placeholderAvatar, Valid: true},
-		Role:      role,
+		Role:      finalRoles,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create user")
@@ -191,6 +220,23 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 					zap.String("user_id", newUser.ID.String()),
 					zap.Error(err))
 			}
+		}
+	}
+
+	defaultOrgID := uuid.MustParse("cfc4e7f4-629f-420e-a79d-a58849cfd236")
+	defaultOrgRole, ok := DefaultOrgRole(email)
+
+	if ok && s.orgWriter != nil {
+		err := s.orgWriter.AddMemberWithRole(
+			traceCtx,
+			defaultOrgID,
+			newUser.ID,
+			defaultOrgRole,
+		)
+
+		if err != nil {
+			logger.Warn("failed to apply default org role",
+				zap.Error(err))
 		}
 	}
 

@@ -42,6 +42,8 @@ type Config struct {
 	NYCUOauth                 Oauth.NYCUOauth   `yaml:"nycu_oauth"`
 
 	AllowOnboardingList string `yaml:"allow_onboarding_list" envconfig:"ALLOW_ONBOARDING_LIST"`
+	DefaultGlobalRoles  string `yaml:"default_global_roles" envconfig:"DEFAULT_GLOBAL_ROLES"`
+	DefaultOrgRoles     string `yaml:"default_org_roles" envconfig:"DEFAULT_ORG_ROLES"`
 
 	CasbinModelPath  string `yaml:"casbin_model_path"  envconfig:"CASBIN_MODEL_PATH"`
 	CasbinPolicyPath string `yaml:"casbin_policy_path" envconfig:"CASBIN_POLICY_PATH"`
@@ -144,6 +146,8 @@ func Load() (Config, *LogBuffer) {
 		GitHubOauth:               Oauth.GitHubOauth{},
 		NYCUOauth:                 Oauth.NYCUOauth{},
 		AllowOnboardingList:       "",
+		DefaultGlobalRoles:        "",
+		DefaultOrgRoles:           "",
 		CasbinModelPath:           "internal/auth/casbin/model.conf",
 		CasbinPolicyPath:          "internal/auth/casbin/policy.csv",
 	}

@@ -26,6 +26,8 @@ type Querier interface {
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
+	GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
+	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
@@ -368,4 +370,48 @@ func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, erro
 	}
 
 	return imageData, nil
+}
+
+func (s *Service) GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	ctx, span := s.tracer.Start(ctx, "GetUnitIDByFormID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	unitID, err := s.queries.GetUnitIDByFormID(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get unit id by form id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	if !unitID.Valid {
+		err := errors.New("unit id is null")
+		logger.Error("invalid unit id", zap.Error(err))
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return unitID.Bytes, nil
+}
+
+func (s *Service) GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	ctx, span := s.tracer.Start(ctx, "GetUnitIDBySectionID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	unitID, err := s.queries.GetUnitIDBySectionID(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get unit id by section id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	if !unitID.Valid {
+		err := errors.New("unit id is null")
+		logger.Error("invalid unit id", zap.Error(err))
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return unitID.Bytes, nil
 }
