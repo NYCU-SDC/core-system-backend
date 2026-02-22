@@ -137,6 +137,10 @@ func main() {
 	problemWriter := internal.NewProblemWriter()
 	user.InitAllowedList(cfg.AllowOnboardingList)
 
+	// Init Default Role
+	user.InitDefaultGlobalRole(cfg.DefaultGlobalRoles)
+	user.InitDefaultOrgRole(cfg.DefaultOrgRoles)
+
 	// ============================================
 	// Service
 	// ============================================

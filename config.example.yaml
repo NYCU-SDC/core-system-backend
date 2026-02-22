@@ -51,3 +51,13 @@ github_oauth:
 
 # Allowed list of emails for onboarding, use comma to separate multiple emails
 allow_onboarding_list:
+
+# default global user role
+# Format:
+#   <email>: <role>
+default_global_roles:
+
+# default org role
+# Format:
+#   <email>: <role>
+default_org_roles:

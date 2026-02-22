@@ -107,7 +107,7 @@ func resolveAvatarUrl(name, avatarUrl string) string {
 	return avatarUrl
 }
 
-func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
+func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, email string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "FindOrCreate")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -140,8 +140,25 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	// User doesn't exist, create new user
 	logger.Info("User not found, creating new user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
 
-	if len(role) == 0 {
-		role = []string{"user"}
+	defaultRoles := DefaultGlobalRoles(email)
+
+	roleSet := map[string]struct{}{}
+
+	for _, r := range role {
+		roleSet[r] = struct{}{}
+	}
+
+	for _, r := range defaultRoles {
+		roleSet[r] = struct{}{}
+	}
+
+	var finalRoles []string
+	for r := range roleSet {
+		finalRoles = append(finalRoles, r)
+	}
+
+	if len(finalRoles) == 0 {
+		finalRoles = []string{"user"}
 	}
 
 	// Create user first with a placeholder avatar
@@ -150,7 +167,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		Name:      pgtype.Text{String: name, Valid: name != ""},
 		Username:  pgtype.Text{String: username, Valid: username != ""},
 		AvatarUrl: pgtype.Text{String: placeholderAvatar, Valid: true},
-		Role:      role,
+		Role:      finalRoles,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create user")
