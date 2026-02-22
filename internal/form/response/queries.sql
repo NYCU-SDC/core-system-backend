@@ -5,7 +5,7 @@ RETURNING *;
 
 -- name: Get :one
 SELECT * FROM form_responses
-WHERE id = $1;
+WHERE id = $1 AND form_id = $2;
 
 -- name: GetFormIDByID :one
 SELECT form_id FROM form_responses
@@ -37,4 +37,7 @@ DELETE FROM form_responses
 WHERE id = $1;
 
 -- name: Exists :one
+SELECT EXISTS(SELECT 1 FROM form_responses WHERE id = $1);
+
+-- name: ExistsByFormIDAndSubmittedBy :one
 SELECT EXISTS(SELECT 1 FROM form_responses WHERE form_id = $1 AND submitted_by = $2);

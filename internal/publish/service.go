@@ -1,17 +1,18 @@
 package publish
 
 import (
-	"NYCU-SDC/core-system-backend/internal"
-	"NYCU-SDC/core-system-backend/internal/inbox"
 	"context"
+	"errors"
 
-	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
-	logutil "github.com/NYCU-SDC/summer/pkg/log"
-
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
+	"NYCU-SDC/core-system-backend/internal/inbox"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/google/uuid"
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -110,6 +111,10 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, editor uuid
 	// check form existence and status
 	targetForm, err := s.store.GetByID(ctx, formID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(internal.ErrFormNotFound)
+			return "", internal.ErrFormNotFound
+		}
 		err = databaseutil.WrapDBError(err, logger, "getting form by id")
 		span.RecordError(err)
 		return "", err

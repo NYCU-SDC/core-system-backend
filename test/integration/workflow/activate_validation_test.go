@@ -326,7 +326,7 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 			}
 
 			// Create question service to satisfy QuestionStore interface
-			questionService := question.NewService(logger, db)
+			questionService := question.NewService(logger, db, nil)
 
 			// Create workflow service with real dependencies
 			workflowService := workflow.NewService(logger, db, questionService)

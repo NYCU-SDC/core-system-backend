@@ -17,6 +17,7 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -171,7 +172,7 @@ type Store interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	List(ctx context.Context) ([]ListRow, error)
-	ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUnitRow, error)
+	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
 	UploadCoverImage(ctx context.Context, id uuid.UUID, data []byte, coverImageURL string) error
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
@@ -487,7 +488,9 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	forms, err := h.store.ListByUnit(traceCtx, orgID)
+	forms, err := h.store.ListByUnit(traceCtx, ListByUnitParams{
+		UnitID: pgtype.UUID{Bytes: orgID, Valid: true},
+	})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

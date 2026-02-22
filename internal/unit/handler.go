@@ -41,9 +41,7 @@ type Store interface {
 	UpdateUnitMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, newRole UnitRole) error
 }
 
-type formStore interface {
-	Create(ctx context.Context, req form.Request, unitID uuid.UUID, userID uuid.UUID) (form.CreateRow, error)
-	ListByUnit(context.Context, uuid.UUID) ([]form.ListByUnitRow, error)
+type formSubmitStore interface {
 	ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]form.UserForm, error)
 }
 
@@ -58,14 +56,14 @@ type userStore interface {
 	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
 }
 type Handler struct {
-	logger        *zap.Logger
-	tracer        trace.Tracer
-	validator     *validator.Validate
-	problemWriter *problem.HttpWriter
-	store         Store
-	formStore     formStore
-	tenantStore   tenantStore
-	userStore     userStore
+	logger          *zap.Logger
+	tracer          trace.Tracer
+	validator       *validator.Validate
+	problemWriter   *problem.HttpWriter
+	store           Store
+	formSubmitStore formSubmitStore
+	tenantStore     tenantStore
+	userStore       userStore
 }
 
 func NewHandler(
@@ -73,19 +71,19 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	store Store,
-	formStore formStore,
+	formSubmitStore formSubmitStore,
 	tenantStore tenantStore,
 	userStore userStore,
 ) *Handler {
 	return &Handler{
-		logger:        logger,
-		validator:     validator,
-		problemWriter: problemWriter,
-		store:         store,
-		formStore:     formStore,
-		tenantStore:   tenantStore,
-		userStore:     userStore,
-		tracer:        otel.Tracer("unit/handler"),
+		logger:          logger,
+		validator:       validator,
+		problemWriter:   problemWriter,
+		store:           store,
+		formSubmitStore: formSubmitStore,
+		tenantStore:     tenantStore,
+		userStore:       userStore,
+		tracer:          otel.Tracer("unit/handler"),
 	}
 }
 
@@ -853,7 +851,7 @@ func (h *Handler) ListFormsOfCurrentUser(w http.ResponseWriter, r *http.Request)
 		unitIDs = append(unitIDs, org.Unit.ID)
 	}
 
-	userForms, err := h.formStore.ListFormsOfUser(traceCtx, unitIDs, currentUser.ID)
+	userForms, err := h.formSubmitStore.ListFormsOfUser(traceCtx, unitIDs, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get forms of user: %w", err), logger)
 		return
