@@ -366,6 +366,9 @@ func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, er
 
 	formID, err := s.queries.GetFormIDByID(traceCtx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, internal.ErrResponseNotFound
+		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
 		span.RecordError(err)
 		return uuid.Nil, err
