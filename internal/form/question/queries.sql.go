@@ -255,8 +255,7 @@ LEFT JOIN questions q ON s.id = q.section_id
 WHERE s.form_id = $1
 ORDER BY
     s.id ASC,
-    q."order" ASC,
-    q.updated_at DESC
+    q."order" ASC
 `
 
 type ListSectionsWithAnswersByFormIDRow struct {
