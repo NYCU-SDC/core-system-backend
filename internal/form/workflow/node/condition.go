@@ -108,12 +108,6 @@ func (n *ConditionNode) validateConditionRule(ctx context.Context, formID uuid.U
 		return fmt.Errorf("condition node '%s' has invalid conditionRule.source: '%s'", nodeID, rule.Source)
 	}
 
-	// Validate nodeId exists
-	_, exists := nodeMap[rule.NodeID]
-	if !exists {
-		return fmt.Errorf("condition node '%s' references non-existent node '%s' in conditionRule.nodeId", nodeID, rule.NodeID)
-	}
-
 	// Validate question
 	if rule.Question == "" {
 		return fmt.Errorf("condition node '%s' conditionRule.question cannot be empty", nodeID)

@@ -150,7 +150,6 @@ func (s *Service) evaluateCondition(conditionNode map[string]interface{}, answer
 
 	var conditionRule struct {
 		Source   string `json:"source"`   // "CHOICE" or "NONCHOICE"
-		NodeID   string `json:"nodeId"`   // Referenced section node ID (unused in resolver)
 		Question string `json:"question"` // Question ID
 		Pattern  string `json:"pattern"`  // Regex pattern
 	}

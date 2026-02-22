@@ -533,37 +533,9 @@ func TestValidateDraft_ConditionSectionOrder(t *testing.T) {
 
 	testCases := []testCase{
 		{
-			name: "error - condition references section that comes after it",
-			setup: func(t *testing.T) ([]byte, workflow.QuestionStore) {
-				return createWorkflow_ConditionRefsSectionAfter(t, formID)
-			},
-			expectedErr: true,
-		},
-		{
-			name: "valid - condition references section that comes before it",
-			setup: func(t *testing.T) ([]byte, workflow.QuestionStore) {
-				return createWorkflow_ConditionRefsSectionBefore(t, formID)
-			},
-			expectedErr: false,
-		},
-		{
-			name: "error - condition references itself via nodeId",
-			setup: func(t *testing.T) ([]byte, workflow.QuestionStore) {
-				return createWorkflow_ConditionRefsSelf(t, formID)
-			},
-			expectedErr: true,
-		},
-		{
 			name:        "valid - condition without conditionRule",
 			setup:       func(t *testing.T) ([]byte, workflow.QuestionStore) { return createWorkflow_ConditionNoRule(t) },
 			expectedErr: false,
-		},
-		{
-			name: "error - multiple conditions with invalid section references",
-			setup: func(t *testing.T) ([]byte, workflow.QuestionStore) {
-				return createWorkflow_MultipleConditionsInvalidSectionRefs(t, formID)
-			},
-			expectedErr: true,
 		},
 	}
 

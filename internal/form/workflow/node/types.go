@@ -32,7 +32,6 @@ const (
 // ConditionRule represents a condition rule for condition nodes
 type ConditionRule struct {
 	Source         ConditionSource `json:"source"`
-	NodeID         string          `json:"nodeId"`
 	Question       string          `json:"question"`
 	ChoiceOptionID string          `json:"choiceOptionId,omitempty"` // For choice source
 	Pattern        string          `json:"pattern"`

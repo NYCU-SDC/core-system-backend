@@ -135,8 +135,6 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 	sectionID := uuid.New()
 	conditionID := uuid.New()
 	endID := uuid.New()
-	referenceNodeID := uuid.New()
-
 	workflowJSON, err := json.Marshal([]map[string]interface{}{
 		{
 			"id":    startID.String(),
@@ -157,14 +155,13 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 			"nextTrue":  endID.String(),
 			"nextFalse": endID.String(),
 			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  referenceNodeID.String(),
-				"question":     "answer",
-				"pattern": "yes",
+				"source":   "choice",
+				"question": "answer",
+				"pattern":  "yes",
 			},
 		},
 		{
-			"id":    referenceNodeID.String(),
+			"id":    uuid.New().String(),
 			"type":  "section",
 			"label": "Reference Section",
 			"next":  conditionID.String(),
@@ -224,10 +221,9 @@ func createWorkflow_InvalidNextTrueRef(t *testing.T) []byte {
 			"nextTrue":  nonExistentID.String(),
 			"nextFalse": endID.String(),
 			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  sectionID.String(),
-				"question":     uuid.New().String(),
-				"pattern": "yes",
+				"source":   "choice",
+				"question": uuid.New().String(),
+				"pattern":  "yes",
 			},
 		},
 		{
@@ -267,10 +263,9 @@ func createWorkflow_InvalidNextFalseRef(t *testing.T) []byte {
 			"nextTrue":  endID.String(),
 			"nextFalse": nonExistentID.String(),
 			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  sectionID.String(),
-				"question":     uuid.New().String(),
-				"pattern": "yes",
+				"source":   "choice",
+				"question": uuid.New().String(),
+				"pattern":  "yes",
 			},
 		},
 		{
@@ -310,10 +305,9 @@ func createWorkflow_InvalidConditionRefs(t *testing.T) []byte {
 			"nextTrue":  nonExistentID1.String(),
 			"nextFalse": nonExistentID2.String(),
 			"conditionRule": map[string]interface{}{
-				"source":  "non-choice",
-				"nodeId":  sectionID.String(),
-				"question":     uuid.New().String(),
-				"pattern": "^no$",
+				"source":   "non-choice",
+				"question": uuid.New().String(),
+				"pattern":  "^no$",
 			},
 		},
 		{
@@ -356,10 +350,9 @@ func createWorkflow_ConditionRule(t *testing.T, questionID string) []byte {
 			"nextTrue":  endID.String(),
 			"nextFalse": endID.String(),
 			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  sectionID.String(),
-				"question":     questionID,
-				"pattern": "yes",
+				"source":   "choice",
+				"question": questionID,
+				"pattern":  "yes",
 			},
 		},
 		{
@@ -398,10 +391,9 @@ func createWorkflow_ConditionRuleSourceWithQuestionID(t *testing.T, source strin
 			"nextTrue":  endID.String(),
 			"nextFalse": endID.String(),
 			"conditionRule": map[string]interface{}{
-				"source":  source,
-				"nodeId":  sectionID.String(),
-				"question":     questionID,
-				"pattern": "yes",
+				"source":   source,
+				"question": questionID,
+				"pattern":  "yes",
 			},
 		},
 		{
@@ -631,114 +623,6 @@ func createWorkflow_ConditionRuleWithEmptyStore(t *testing.T, questionID string)
 	return createWorkflow_ConditionRule(t, questionID), emptyQuestionStore()
 }
 
-// createWorkflow_ConditionRefsSectionAfter returns a workflow where condition references a section
-// that comes after it in traversal (start -> condition -> section -> end). Invalid for draft validation.
-func createWorkflow_ConditionRefsSectionAfter(t *testing.T, formID uuid.UUID) ([]byte, workflow.QuestionStore) {
-	t.Helper()
-	startID := uuid.New()
-	conditionID := uuid.New()
-	sectionID := uuid.New()
-	endID := uuid.New()
-	questionID := uuid.New()
-
-	nodes := []map[string]interface{}{
-		{"id": startID.String(), "type": "start", "label": "Start", "next": conditionID.String()},
-		{
-			"id":        conditionID.String(),
-			"type":      "condition",
-			"label":     "Condition",
-			"nextTrue":  sectionID.String(),
-			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  sectionID.String(),
-				"question":     questionID.String(),
-				"pattern": "yes",
-			},
-		},
-		{"id": sectionID.String(), "type": "section", "label": "Section", "next": endID.String()},
-		{"id": endID.String(), "type": "end", "label": "End"},
-	}
-	store := &mockQuestionStore{
-		questions: map[uuid.UUID]question.Answerable{
-			questionID: createMockAnswerable(t, formID, question.QuestionTypeSingleChoice),
-		},
-	}
-	return createWorkflowJSON(t, nodes), store
-}
-
-// createWorkflow_ConditionRefsSectionBefore returns a workflow where condition references a section
-// that comes before it (start -> section -> condition -> end). Valid for draft validation.
-func createWorkflow_ConditionRefsSectionBefore(t *testing.T, formID uuid.UUID) ([]byte, workflow.QuestionStore) {
-	t.Helper()
-	startID := uuid.New()
-	sectionID := uuid.New()
-	conditionID := uuid.New()
-	endID := uuid.New()
-	questionID := uuid.New()
-
-	nodes := []map[string]interface{}{
-		{"id": startID.String(), "type": "start", "label": "Start", "next": sectionID.String()},
-		{"id": sectionID.String(), "type": "section", "label": "Section", "next": conditionID.String()},
-		{
-			"id":        conditionID.String(),
-			"type":      "condition",
-			"label":     "Condition",
-			"nextTrue":  endID.String(),
-			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  sectionID.String(),
-				"question":     questionID.String(),
-				"pattern": "yes",
-			},
-		},
-		{"id": endID.String(), "type": "end", "label": "End"},
-	}
-	store := &mockQuestionStore{
-		questions: map[uuid.UUID]question.Answerable{
-			questionID: createMockAnswerable(t, formID, question.QuestionTypeSingleChoice),
-		},
-	}
-	return createWorkflowJSON(t, nodes), store
-}
-
-// createWorkflow_ConditionRefsSelf returns a workflow where condition's conditionRule.nodeId
-// references the condition node itself. Invalid for draft validation.
-func createWorkflow_ConditionRefsSelf(t *testing.T, formID uuid.UUID) ([]byte, workflow.QuestionStore) {
-	t.Helper()
-	startID := uuid.New()
-	sectionID := uuid.New()
-	conditionID := uuid.New()
-	endID := uuid.New()
-	questionID := uuid.New()
-
-	nodes := []map[string]interface{}{
-		{"id": startID.String(), "type": "start", "label": "Start", "next": sectionID.String()},
-		{"id": sectionID.String(), "type": "section", "label": "Section", "next": conditionID.String()},
-		{
-			"id":        conditionID.String(),
-			"type":      "condition",
-			"label":     "Condition",
-			"nextTrue":  endID.String(),
-			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  conditionID.String(),
-				"question":     questionID.String(),
-				"pattern": "yes",
-			},
-		},
-		{"id": endID.String(), "type": "end", "label": "End"},
-	}
-	store := &mockQuestionStore{
-		questions: map[uuid.UUID]question.Answerable{
-			questionID: createMockAnswerable(t, formID, question.QuestionTypeSingleChoice),
-		},
-	}
-	return createWorkflowJSON(t, nodes), store
-}
-
 // createWorkflow_ConditionNoRule returns a workflow with a condition node without conditionRule
 // (start -> condition -> end). Valid in draft mode.
 func createWorkflow_ConditionNoRule(t *testing.T) ([]byte, workflow.QuestionStore) {
@@ -759,56 +643,4 @@ func createWorkflow_ConditionNoRule(t *testing.T) ([]byte, workflow.QuestionStor
 		{"id": endID.String(), "type": "end", "label": "End"},
 	}
 	return createWorkflowJSON(t, nodes), nil
-}
-
-// createWorkflow_MultipleConditionsInvalidSectionRefs returns a workflow with two conditions
-// that both reference sections appearing after them in traversal. Invalid for draft validation.
-func createWorkflow_MultipleConditionsInvalidSectionRefs(t *testing.T, formID uuid.UUID) ([]byte, workflow.QuestionStore) {
-	t.Helper()
-	startID := uuid.New()
-	condition1ID := uuid.New()
-	condition2ID := uuid.New()
-	section1ID := uuid.New()
-	section2ID := uuid.New()
-	endID := uuid.New()
-	questionID := uuid.New()
-
-	nodes := []map[string]interface{}{
-		{"id": startID.String(), "type": "start", "label": "Start", "next": condition1ID.String()},
-		{
-			"id":        condition1ID.String(),
-			"type":      "condition",
-			"label":     "Condition 1",
-			"nextTrue":  section1ID.String(),
-			"nextFalse": condition2ID.String(),
-			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  section1ID.String(),
-				"question":     questionID.String(),
-				"pattern": "yes",
-			},
-		},
-		{
-			"id":        condition2ID.String(),
-			"type":      "condition",
-			"label":     "Condition 2",
-			"nextTrue":  section2ID.String(),
-			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
-				"source":  "choice",
-				"nodeId":  section2ID.String(),
-				"question":     questionID.String(),
-				"pattern": "no",
-			},
-		},
-		{"id": section1ID.String(), "type": "section", "label": "Section 1", "next": endID.String()},
-		{"id": section2ID.String(), "type": "section", "label": "Section 2", "next": endID.String()},
-		{"id": endID.String(), "type": "end", "label": "End"},
-	}
-	store := &mockQuestionStore{
-		questions: map[uuid.UUID]question.Answerable{
-			questionID: createMockAnswerable(t, formID, question.QuestionTypeSingleChoice),
-		},
-	}
-	return createWorkflowJSON(t, nodes), store
 }
