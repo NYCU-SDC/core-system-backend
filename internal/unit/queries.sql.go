@@ -55,6 +55,32 @@ func (q *Queries) AddMember(ctx context.Context, arg AddMemberParams) (AddMember
 	return i, err
 }
 
+const addUnitMemberWithRole = `-- name: AddUnitMemberWithRole :one
+INSERT INTO unit_members (
+    unit_id,
+    member_id,
+    role
+)
+VALUES ($1, $2, $3)
+    ON CONFLICT (unit_id, member_id)
+DO UPDATE SET
+    role = EXCLUDED.role
+RETURNING unit_id, member_id, role
+`
+
+type AddUnitMemberWithRoleParams struct {
+	UnitID   uuid.UUID
+	MemberID uuid.UUID
+	Role     UnitRole
+}
+
+func (q *Queries) AddUnitMemberWithRole(ctx context.Context, arg AddUnitMemberWithRoleParams) (UnitMember, error) {
+	row := q.db.QueryRow(ctx, addUnitMemberWithRole, arg.UnitID, arg.MemberID, arg.Role)
+	var i UnitMember
+	err := row.Scan(&i.UnitID, &i.MemberID, &i.Role)
+	return i, err
+}
+
 const countMembers = `-- name: CountMembers :one
 SELECT COUNT(*)
 FROM unit_members

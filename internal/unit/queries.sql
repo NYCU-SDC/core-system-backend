@@ -117,3 +117,15 @@ FROM unit_members
 WHERE unit_id = $1
   AND role = 'admin'
     FOR UPDATE;
+
+-- name: AddUnitMemberWithRole :one
+INSERT INTO unit_members (
+    unit_id,
+    member_id,
+    role
+)
+VALUES ($1, $2, $3)
+    ON CONFLICT (unit_id, member_id)
+DO UPDATE SET
+    role = EXCLUDED.role
+RETURNING unit_id, member_id, role;

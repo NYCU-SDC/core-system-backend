@@ -3,6 +3,8 @@ package user
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/file"
+	//"NYCU-SDC/core-system-backend/internal/unit"
+
 	"context"
 	"errors"
 	"fmt"
@@ -208,6 +210,22 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 					zap.String("user_id", newUser.ID.String()),
 					zap.Error(err))
 			}
+		}
+	}
+
+	defaultOrgID := uuid.MustParse("cfc4e7f4-629f-420e-a79d-a58849cfd236")
+	defaultOrgRole, ok := DefaultOrgRole(email)
+
+	if ok {
+		/*_, err := s.unitService.AddMemberWithRole(
+			traceCtx,
+			defaultOrgID,
+			newUser.ID,
+			unit.UnitRole(defaultOrgRole[0]),
+		)*/
+
+		if err != nil {
+			logger.Warn("failed to apply default org role", zap.Error(err))
 		}
 	}
 

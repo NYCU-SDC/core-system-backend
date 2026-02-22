@@ -1,20 +1,22 @@
 package user
 
-import "strings"
+import (
+	"strings"
+)
 
 type roleStore struct {
-	global map[string][]string
-	org    map[string][]string
+	global map[string][]string // multi-role
+	org    map[string]string   // single-role
 }
 
 var store roleStore
 
-func InitDefaultGlobalRole(m map[string]string) {
-	store.global = buildStore(m)
+func InitDefaultGlobalRole(cfg string) {
+	store.global = parseMulti(cfg)
 }
 
-func InitDefaultOrgRole(m map[string]string) {
-	store.org = buildStore(m)
+func InitDefaultOrgRole(cfg string) {
+	store.org = parseSingle(cfg)
 }
 
 func DefaultGlobalRoles(email string) []string {
@@ -24,25 +26,61 @@ func DefaultGlobalRoles(email string) []string {
 	return clone(store.global[normalize(email)])
 }
 
-func DefaultOrgRoles(email string) []string {
+func DefaultOrgRole(email string) (string, bool) {
 	if store.org == nil {
-		return nil
+		return "", false
 	}
-	return clone(store.org[normalize(email)])
+
+	role, ok := store.org[normalize(email)]
+	return role, ok
 }
 
-func buildStore(cfg map[string]string) map[string][]string {
-	result := make(map[string][]string, len(cfg))
+func parseMulti(cfg string) map[string][]string {
+	result := make(map[string][]string)
 
-	for email, role := range cfg {
-		e := normalize(email)
-		r := normalize(role)
+	lines := strings.Split(cfg, "\n")
 
-		if e == "" || r == "" {
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		result[e] = append(result[e], r)
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		email := normalize(parts[0])
+		role := normalize(parts[1])
+
+		result[email] = append(result[email], role)
+	}
+
+	return result
+}
+
+func parseSingle(cfg string) map[string]string {
+	result := make(map[string]string)
+
+	lines := strings.Split(cfg, "\n")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		email := normalize(parts[0])
+		role := normalize(parts[1])
+
+		// overwrite if duplicated (last wins)
+		result[email] = role
 	}
 
 	return result
