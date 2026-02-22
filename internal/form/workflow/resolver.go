@@ -149,10 +149,9 @@ func (s *Service) evaluateCondition(conditionNode map[string]interface{}, answer
 	}
 
 	var conditionRule struct {
-		Source  string `json:"source"`  // "choice" or "nonChoice"
-		NodeID  string `json:"nodeId"`  // Referenced section node ID (unused in resolver)
-		Key     string `json:"key"`     // Question ID
-		Pattern string `json:"pattern"` // Regex pattern
+		Source   string `json:"source"`   // "CHOICE" or "NONCHOICE"
+		Question string `json:"question"` // Question ID
+		Pattern  string `json:"pattern"`  // Regex pattern
 	}
 
 	if err := json.Unmarshal(conditionRuleBytes, &conditionRule); err != nil {
@@ -160,14 +159,14 @@ func (s *Service) evaluateCondition(conditionNode map[string]interface{}, answer
 	}
 
 	// Get the answer for this question
-	answerValue, answerExists := answerMap[conditionRule.Key]
+	answerValue, answerExists := answerMap[conditionRule.Question]
 	if !answerExists {
 		// Answer doesn't exist, cannot evaluate
 		return "", false, nil
 	}
 
 	// Get the answerable for this question
-	answerable, answerableExists := answerableMap[conditionRule.Key]
+	answerable, answerableExists := answerableMap[conditionRule.Question]
 	if !answerableExists {
 		// Question doesn't exist, cannot evaluate
 		return "", false, nil
@@ -176,7 +175,7 @@ func (s *Service) evaluateCondition(conditionNode map[string]interface{}, answer
 	// Use MatchesPattern from the Answerable interface
 	conditionResult, err := answerable.MatchesPattern(answerValue, conditionRule.Pattern)
 	if err != nil {
-		return "", false, fmt.Errorf("failed to match pattern for question %s: %w", conditionRule.Key, err)
+		return "", false, fmt.Errorf("failed to match pattern for question %s: %w", conditionRule.Question, err)
 	}
 
 	// Return the appropriate next node based on condition result

@@ -156,6 +156,17 @@ func TestWorkflow_FromAPIFormat(t *testing.T) {
 				{"id":"4","type":"end","label":"End"}
 			]`,
 		},
+		{
+			name: "preserve conditionRule (source accepted case-insensitive in validation)",
+			input: `[
+				{"id":"1","type":"start","label":"Start"},
+				{"id":"2","type":"section","label":"Section"},
+				{"id":"3","type":"condition","label":"Cond","conditionRule":{"source":"CHOICE","question":"125ff21a-d828-4a55-b58d-9d60c409eba7","pattern":"^opt$"},"nextTrue":"4","nextFalse":"5"},
+				{"id":"4","type":"section","label":"A"},
+				{"id":"5","type":"end","label":"End"}
+			]`,
+			expected: "", // structure checked below
+		},
 	}
 
 	for _, tc := range testCases {
@@ -165,12 +176,33 @@ func TestWorkflow_FromAPIFormat(t *testing.T) {
 				t.Fatalf("workflowFromAPIFormat() error = %v", err)
 			}
 
-			// Unmarshal both to compare structure
 			var resultNodes, expectedNodes []map[string]interface{}
 			err = json.Unmarshal(result, &resultNodes)
 			if err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
+
+			if tc.expected == "" {
+				// conditionRule preserved as-is (validation accepts source case-insensitive)
+				var nodes []map[string]interface{}
+				if err := json.Unmarshal(result, &nodes); err != nil {
+					t.Fatalf("unmarshal result: %v", err)
+				}
+				for _, n := range nodes {
+					rule, _ := n["conditionRule"].(map[string]interface{})
+					if rule == nil {
+						continue
+					}
+					if q, _ := rule["question"].(string); q != "125ff21a-d828-4a55-b58d-9d60c409eba7" {
+						t.Errorf("conditionRule.question = %q, want question ID", q)
+					}
+					if s, _ := rule["source"].(string); s != "CHOICE" {
+						t.Errorf("conditionRule.source = %q, want preserved \"CHOICE\"", s)
+					}
+				}
+				return
+			}
+
 			err = json.Unmarshal([]byte(tc.expected), &expectedNodes)
 			if err != nil {
 				t.Fatalf("failed to unmarshal expected: %v", err)

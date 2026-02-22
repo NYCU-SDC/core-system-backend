@@ -156,12 +156,13 @@ func (v workflowValidator) Validate(ctx context.Context, formID uuid.UUID, workf
 			validationErrors = append(validationErrors, fmt.Errorf("graph references validation failed: %w", err))
 		}
 
-		// Validate that condition nodes don't reference sections that come after them
-		err = validateConditionSectionOrder(nodes)
-		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("condition section order validation failed: %w", err))
+		// Validate that condition nodes reference sections visited before them (section = question's section, resolved from question ID)
+		if questionStore != nil {
+			err = validateConditionSectionOrder(ctx, formID, nodes, questionStore)
+			if err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("condition section order validation failed: %w", err))
+			}
 		}
-
 		if questionStore != nil {
 			for _, n := range nodes {
 				nodeType, _ := n["type"].(string)
@@ -505,11 +506,14 @@ func validateReference(nodes []map[string]interface{}, nodeMap map[string]map[st
 }
 
 // validateConditionSectionOrder checks that condition nodes reference sections
-// that are visited before the condition in the workflow traversal.
-// If a condition references a section that comes after it in the graph,
-// the condition will always evaluate to false (section not yet visited).
-// Returns error if any condition references a section that comes after it.
-func validateConditionSectionOrder(nodes []map[string]interface{}) error {
+// that are visited before the condition in the workflow traversal. The referenced
+// section is derived from conditionRule.question: the question's section ID (which
+// matches the workflow section node ID) must be visited before the condition.
+// Returns error if any condition's question section comes after the condition in traversal.
+func validateConditionSectionOrder(ctx context.Context, formID uuid.UUID, nodes []map[string]interface{}, questionStore QuestionStore) error {
+	if questionStore == nil {
+		return nil
+	}
 	// Find the start node
 	var startNodeID string
 	for _, n := range nodes {
@@ -521,7 +525,6 @@ func validateConditionSectionOrder(nodes []map[string]interface{}) error {
 	}
 
 	if startNodeID == "" {
-		// No start node found, skip this validation (other validations will catch this)
 		return nil
 	}
 
@@ -554,7 +557,15 @@ func validateConditionSectionOrder(nodes []map[string]interface{}) error {
 		graph[nodeID] = nextNodes
 	}
 
-	// Collect all condition nodes with their conditionRule.nodeId
+	// Build set of workflow node IDs (section node IDs = form section IDs)
+	nodeIDSet := make(map[string]bool)
+	for _, n := range nodes {
+		if id, ok := n["id"].(string); ok && id != "" {
+			nodeIDSet[id] = true
+		}
+	}
+
+	// Collect condition nodes with their referenced section ID (from question's section)
 	type conditionInfo struct {
 		conditionNodeID  string
 		referencedNodeID string
@@ -573,20 +584,37 @@ func validateConditionSectionOrder(nodes []map[string]interface{}) error {
 			continue
 		}
 
-		// Parse conditionRule to get nodeId
 		ruleMap, ok := rawRule.(map[string]interface{})
 		if !ok {
 			continue
 		}
 
-		referencedNodeID, ok := ruleMap["nodeId"].(string)
-		if !ok || referencedNodeID == "" {
+		questionStr, _ := ruleMap["question"].(string)
+		if questionStr == "" {
+			continue
+		}
+
+		questionID, err := uuid.Parse(questionStr)
+		if err != nil {
+			continue
+		}
+
+		answerable, err := questionStore.GetByID(ctx, questionID)
+		if err != nil {
+			continue
+		}
+		if answerable.FormID() != formID {
+			continue
+		}
+
+		sectionID := answerable.Question().SectionID.String()
+		if !nodeIDSet[sectionID] {
 			continue
 		}
 
 		conditionsToCheck = append(conditionsToCheck, conditionInfo{
 			conditionNodeID:  nodeID,
-			referencedNodeID: referencedNodeID,
+			referencedNodeID: sectionID,
 		})
 	}
 
@@ -595,7 +623,6 @@ func validateConditionSectionOrder(nodes []map[string]interface{}) error {
 	}
 
 	// BFS traversal to determine visit order
-	// Track when each node is first visited (order number)
 	visitOrder := make(map[string]int)
 	queue := []string{startNodeID}
 	order := 0
@@ -629,7 +656,7 @@ func validateConditionSectionOrder(nodes []map[string]interface{}) error {
 		// If referenced node is not visited or comes after the condition
 		if !refVisited || refOrder >= condOrder {
 			orderErrors = append(orderErrors, fmt.Errorf(
-				"condition node '%s' references section '%s' in conditionRule.nodeId that has not been visited yet; condition will always evaluate to false",
+				"condition node '%s' references section '%s' (question's section) that has not been visited yet; condition will always evaluate to false",
 				cond.conditionNodeID, cond.referencedNodeID))
 		}
 	}
@@ -646,8 +673,7 @@ func mapToConditionRule(mapRule map[string]interface{}) node.ConditionRule {
 	var rule node.ConditionRule
 	source, _ := mapRule["source"].(string)
 	rule.Source = node.ConditionSource(source)
-	rule.NodeID, _ = mapRule["nodeId"].(string)
-	rule.Key, _ = mapRule["key"].(string)
+	rule.Question, _ = mapRule["question"].(string)
 	rule.ChoiceOptionID, _ = mapRule["choiceOptionId"].(string)
 	rule.Pattern, _ = mapRule["pattern"].(string)
 	return rule
@@ -671,36 +697,37 @@ func validateDraftConditionQuestion(
 	rule := mapToConditionRule(ruleMap)
 
 	// Only validate question existence and type compatibility in draft mode.
-	if rule.Key == "" {
-		return fmt.Errorf("condition node '%s' conditionRule.key cannot be empty", nodeID)
+	// Empty question is allowed in draft (e.g. after section delete we null out the reference).
+	if rule.Question == "" {
+		return nil
 	}
 
-	questionID, err := uuid.Parse(rule.Key)
+	questionID, err := uuid.Parse(rule.Question)
 	if err != nil {
-		return fmt.Errorf("condition node '%s' conditionRule.key '%s' is not a valid UUID", nodeID, rule.Key)
+		return fmt.Errorf("condition node '%s' conditionRule.question '%s' is not a valid UUID", nodeID, rule.Question)
 	}
 
 	answerable, err := questionStore.GetByID(ctx, questionID)
 	if err != nil {
-		return fmt.Errorf("condition node '%s' references non-existent question '%s' in conditionRule.key", nodeID, rule.Key)
+		return fmt.Errorf("condition node '%s' references non-existent question '%s' in conditionRule.question", nodeID, rule.Question)
 	}
 
 	q := answerable.Question()
 
 	// Validate question belongs to the form
 	if answerable.FormID() != formID {
-		return fmt.Errorf("condition node '%s' references question '%s' that belongs to a different form", nodeID, rule.Key)
+		return fmt.Errorf("condition node '%s' references question '%s' that belongs to a different form", nodeID, rule.Question)
 	}
 
-	// Validate question type matches condition source (same rules as strict mode).
+	// Validate question type matches condition source (source normalized to uppercase in mapToConditionRule).
 	switch rule.Source {
 	case node.ConditionSourceChoice:
 		if !question.ContainsType(question.ChoiceTypes, q.Type) {
-			return fmt.Errorf("condition node '%s' with source 'choice' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.ChoiceTypes), rule.Key, q.Type)
+			return fmt.Errorf("condition node '%s' with source 'CHOICE' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.ChoiceTypes), rule.Question, q.Type)
 		}
 	case node.ConditionSourceNonChoice:
 		if !question.ContainsType(question.NonChoiceTypes, q.Type) {
-			return fmt.Errorf("condition node '%s' with source 'nonChoice' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.NonChoiceTypes), rule.Key, q.Type)
+			return fmt.Errorf("condition node '%s' with source 'NONCHOICE' requires question type %s, but question '%s' has type '%s'", nodeID, question.FormatAllowedTypes(question.NonChoiceTypes), rule.Question, q.Type)
 		}
 	}
 	return nil
