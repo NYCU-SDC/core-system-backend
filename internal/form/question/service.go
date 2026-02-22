@@ -23,6 +23,7 @@ type Querier interface {
 	UpdateOrder(ctx context.Context, params UpdateOrderParams) (UpdateOrderRow, error)
 	DeleteAndReorder(ctx context.Context, arg DeleteAndReorderParams) error
 	SectionExists(ctx context.Context, id uuid.UUID) (bool, error)
+	ListOrderBySectionID(ctx context.Context, sectionID uuid.UUID) ([]ListOrderBySectionIDRow, error)
 	ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
@@ -97,11 +98,49 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, e
 		return nil, internal.ErrSectionNotFound
 	}
 
-	row, err := s.queries.Create(ctx, input)
+	orders, err := s.queries.ListOrderBySectionID(ctx, input.SectionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list question orders")
+		span.RecordError(err)
+		return nil, err
+	}
+	count := len(orders)
+
+	// Clamp requested order to [1, count+1]
+	effectiveOrder := input.Order
+	if effectiveOrder < 1 {
+		effectiveOrder = 1
+	}
+	if effectiveOrder > int32(count+1) {
+		effectiveOrder = int32(count + 1)
+	}
+
+	createInput := input
+	createInput.Order = effectiveOrder
+
+	// Insert in the middle: create at end then use UpdateOrder to place correctly
+	if effectiveOrder <= int32(count) {
+		createInput.Order = int32(count + 1)
+	}
+	row, err := s.queries.Create(ctx, createInput)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create question")
 		span.RecordError(err)
 		return nil, err
+	}
+
+	if effectiveOrder <= int32(count) {
+		orderRow, err := s.queries.UpdateOrder(ctx, UpdateOrderParams{
+			SectionID: input.SectionID,
+			ID:        row.ID,
+			Order:     effectiveOrder,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "update question order")
+			span.RecordError(err)
+			return nil, err
+		}
+		return NewAnswerable(orderRow.ToQuestion(), orderRow.FormID)
 	}
 
 	return NewAnswerable(row.ToQuestion(), row.FormID)

@@ -167,6 +167,38 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	return i, err
 }
 
+const listOrderBySectionID = `-- name: ListOrderBySectionID :many
+SELECT id, "order"
+FROM questions
+WHERE section_id = $1
+ORDER BY "order" ASC
+`
+
+type ListOrderBySectionIDRow struct {
+	ID    uuid.UUID
+	Order int32
+}
+
+func (q *Queries) ListOrderBySectionID(ctx context.Context, sectionID uuid.UUID) ([]ListOrderBySectionIDRow, error) {
+	rows, err := q.db.Query(ctx, listOrderBySectionID, sectionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrderBySectionIDRow
+	for rows.Next() {
+		var i ListOrderBySectionIDRow
+		if err := rows.Scan(&i.ID, &i.Order); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSectionsByFormID = `-- name: ListSectionsByFormID :many
 SELECT id, form_id, title, description, created_at, updated_at
 FROM sections

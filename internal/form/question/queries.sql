@@ -97,6 +97,12 @@ FROM deleted_row
 WHERE q.section_id = deleted_row.section_id
   AND "order" > deleted_row.old_order;
 
+-- name: ListOrderBySectionID :many
+SELECT id, "order"
+FROM questions
+WHERE section_id = $1
+ORDER BY "order" ASC;
+
 -- name: SectionExists :one
 SELECT EXISTS(SELECT 1 FROM sections WHERE id = $1);
 
