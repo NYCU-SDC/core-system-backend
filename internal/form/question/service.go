@@ -166,7 +166,29 @@ func (s *Service) UpdateOrder(ctx context.Context, input UpdateOrderParams) (Ans
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	row, err := s.queries.UpdateOrder(ctx, input)
+	orders, err := s.queries.ListOrderBySectionID(ctx, input.SectionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list question orders")
+		span.RecordError(err)
+		return nil, err
+	}
+	count := len(orders)
+
+	// Clamp requested order to [1, count] so we never store order > n
+	effectiveOrder := input.Order
+	if effectiveOrder < 1 {
+		effectiveOrder = 1
+	}
+	if effectiveOrder > int32(count) {
+		effectiveOrder = int32(count)
+	}
+	params := UpdateOrderParams{
+		SectionID: input.SectionID,
+		ID:        input.ID,
+		Order:     effectiveOrder,
+	}
+
+	row, err := s.queries.UpdateOrder(ctx, params)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update order for the questions")
 		span.RecordError(err)
