@@ -697,8 +697,9 @@ func validateDraftConditionQuestion(
 	rule := mapToConditionRule(ruleMap)
 
 	// Only validate question existence and type compatibility in draft mode.
+	// Empty question is allowed in draft (e.g. after section delete we null out the reference).
 	if rule.Question == "" {
-		return fmt.Errorf("condition node '%s' conditionRule.question cannot be empty", nodeID)
+		return nil
 	}
 
 	questionID, err := uuid.Parse(rule.Question)

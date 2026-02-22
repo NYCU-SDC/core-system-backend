@@ -281,6 +281,12 @@ deleted_section AS (
       AND EXISTS (SELECT 1 FROM node_to_delete WHERE node_type = 'section')
     RETURNING id
 ),
+deleted_section_question_ids AS (
+    SELECT q.id::text AS question_id
+    FROM questions q
+    WHERE q.section_id = (SELECT node_id::uuid FROM node_to_delete LIMIT 1)
+      AND EXISTS (SELECT 1 FROM node_to_delete WHERE node_type = 'section')
+),
 remaining_nodes AS (
     SELECT node
     FROM latest_workflow AS lw,
@@ -315,11 +321,16 @@ cleaned_node_fields AS (
     SELECT 
         node_id,
         field_key,
-        field_value
+        CASE
+            WHEN field_key = 'conditionRule'
+                 AND EXISTS (SELECT 1 FROM deleted_section_question_ids d WHERE d.question_id = (node_fields_expanded.field_value->>'question'))
+            THEN jsonb_set(node_fields_expanded.field_value, '{question}', 'null'::jsonb)
+            ELSE node_fields_expanded.field_value
+        END AS field_value
     FROM node_fields_expanded
     WHERE NOT (
         -- Remove (omit) reference fields that point to the deleted node
-        field_key IN ('next', 'nextTrue', 'nextFalse') 
+        field_key IN ('next', 'nextTrue', 'nextFalse')
         AND jsonb_typeof(field_value) = 'string'
         AND trim(both '"' from field_value::text) = (SELECT deleted_id FROM deleted_node_id)
     )
@@ -367,10 +378,12 @@ type DeleteNodeParams struct {
 // Convert deleted node ID to text format for JSONB comparison
 // Extract information about the node to be deleted
 // Delete associated section if the node is a section type
+// Question IDs that belonged to the deleted section (for nulling conditionRule.question in condition nodes)
 // Get all nodes except the one being deleted
 // Expand each node into individual key-value pairs
 // --------|------------|------------
-// Clean each field: remove reference fields that point to the deleted node (omit them entirely)
+// Clean each field: remove reference fields that point to the deleted node (omit them entirely).
+// For condition nodes, null out conditionRule.question when it references a question from the deleted section.
 // Rebuild nodes from cleaned fields
 // Rebuild the workflow array from cleaned nodes
 // Update draft workflow version in place

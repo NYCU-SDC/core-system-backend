@@ -122,6 +122,13 @@ deleted_section AS (
       AND EXISTS (SELECT 1 FROM node_to_delete WHERE node_type = 'section')
     RETURNING id
 ),
+-- Question IDs that belonged to the deleted section (for nulling conditionRule.question in condition nodes)
+deleted_section_question_ids AS (
+    SELECT q.id::text AS question_id
+    FROM questions q
+    WHERE q.section_id = (SELECT node_id::uuid FROM node_to_delete LIMIT 1)
+      AND EXISTS (SELECT 1 FROM node_to_delete WHERE node_type = 'section')
+),
 -- Get all nodes except the one being deleted
 remaining_nodes AS (
     SELECT node
@@ -155,16 +162,22 @@ node_fields_expanded AS (
     FROM remaining_nodes,
     LATERAL jsonb_each(COALESCE(node, '{}'::jsonb)) AS node_fields(field_key, field_value)
 ),
--- Clean each field: remove reference fields that point to the deleted node (omit them entirely)
+-- Clean each field: remove reference fields that point to the deleted node (omit them entirely).
+-- For condition nodes, null out conditionRule.question when it references a question from the deleted section.
 cleaned_node_fields AS (
     SELECT 
         node_id,
         field_key,
-        field_value
+        CASE
+            WHEN field_key = 'conditionRule'
+                 AND EXISTS (SELECT 1 FROM deleted_section_question_ids d WHERE d.question_id = (node_fields_expanded.field_value->>'question'))
+            THEN jsonb_set(node_fields_expanded.field_value, '{question}', 'null'::jsonb)
+            ELSE node_fields_expanded.field_value
+        END AS field_value
     FROM node_fields_expanded
     WHERE NOT (
         -- Remove (omit) reference fields that point to the deleted node
-        field_key IN ('next', 'nextTrue', 'nextFalse') 
+        field_key IN ('next', 'nextTrue', 'nextFalse')
         AND jsonb_typeof(field_value) = 'string'
         AND trim(both '"' from field_value::text) = (SELECT deleted_id FROM deleted_node_id)
     )
