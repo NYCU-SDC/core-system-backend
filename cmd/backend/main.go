@@ -146,10 +146,10 @@ func main() {
 	// ============================================
 
 	fileService := file.NewService(logger, dbPool)
-	userService := user.NewService(logger, dbPool, fileService)
-	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	tenantService := tenant.NewService(logger, dbPool)
 	unitService := unit.NewService(logger, dbPool, tenantService)
+	userService := user.NewService(logger, dbPool, fileService, unitService)
+	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
 	questionService := question.NewService(logger, dbPool)
 	answerService := answer.NewService(logger, dbPool, questionService, fileService)

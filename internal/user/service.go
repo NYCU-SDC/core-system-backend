@@ -3,7 +3,6 @@ package user
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/file"
-	//"NYCU-SDC/core-system-backend/internal/unit"
 
 	"context"
 	"errors"
@@ -55,6 +54,7 @@ type Service struct {
 	queries      Querier
 	tracer       trace.Tracer
 	fileOperator FileOperator
+	orgWriter    OrgMemberWriter
 }
 
 type Profile struct {
@@ -65,12 +65,22 @@ type Profile struct {
 	Emails    []string
 }
 
-func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator) *Service {
+type OrgMemberWriter interface {
+	AddMemberWithRole(
+		ctx context.Context,
+		unitID uuid.UUID,
+		memberID uuid.UUID,
+		role string,
+	) error
+}
+
+func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter) *Service {
 	return &Service{
 		logger:       logger,
 		queries:      New(db),
 		tracer:       otel.Tracer("user/service"),
 		fileOperator: fileOperator,
+		orgWriter:    orgWriter,
 	}
 }
 
@@ -216,16 +226,17 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	defaultOrgID := uuid.MustParse("cfc4e7f4-629f-420e-a79d-a58849cfd236")
 	defaultOrgRole, ok := DefaultOrgRole(email)
 
-	if ok {
-		/*_, err := s.unitService.AddMemberWithRole(
+	if ok && s.orgWriter != nil {
+		err := s.orgWriter.AddMemberWithRole(
 			traceCtx,
 			defaultOrgID,
 			newUser.ID,
-			unit.UnitRole(defaultOrgRole[0]),
-		)*/
+			defaultOrgRole,
+		)
 
 		if err != nil {
-			logger.Warn("failed to apply default org role", zap.Error(err))
+			logger.Warn("failed to apply default org role",
+				zap.Error(err))
 		}
 	}
 
