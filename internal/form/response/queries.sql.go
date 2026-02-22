@@ -48,16 +48,27 @@ func (q *Queries) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 const exists = `-- name: Exists :one
+SELECT EXISTS(SELECT 1 FROM form_responses WHERE id = $1)
+`
+
+func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, exists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const existsByFormIDAndSubmittedBy = `-- name: ExistsByFormIDAndSubmittedBy :one
 SELECT EXISTS(SELECT 1 FROM form_responses WHERE form_id = $1 AND submitted_by = $2)
 `
 
-type ExistsParams struct {
+type ExistsByFormIDAndSubmittedByParams struct {
 	FormID      uuid.UUID
 	SubmittedBy uuid.UUID
 }
 
-func (q *Queries) Exists(ctx context.Context, arg ExistsParams) (bool, error) {
-	row := q.db.QueryRow(ctx, exists, arg.FormID, arg.SubmittedBy)
+func (q *Queries) ExistsByFormIDAndSubmittedBy(ctx context.Context, arg ExistsByFormIDAndSubmittedByParams) (bool, error) {
+	row := q.db.QueryRow(ctx, existsByFormIDAndSubmittedBy, arg.FormID, arg.SubmittedBy)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -65,11 +76,16 @@ func (q *Queries) Exists(ctx context.Context, arg ExistsParams) (bool, error) {
 
 const get = `-- name: Get :one
 SELECT id, form_id, submitted_by, submitted_at, progress, created_at, updated_at FROM form_responses
-WHERE id = $1
+WHERE id = $1 AND form_id = $2
 `
 
-func (q *Queries) Get(ctx context.Context, id uuid.UUID) (FormResponse, error) {
-	row := q.db.QueryRow(ctx, get, id)
+type GetParams struct {
+	ID     uuid.UUID
+	FormID uuid.UUID
+}
+
+func (q *Queries) Get(ctx context.Context, arg GetParams) (FormResponse, error) {
+	row := q.db.QueryRow(ctx, get, arg.ID, arg.FormID)
 	var i FormResponse
 	err := row.Scan(
 		&i.ID,

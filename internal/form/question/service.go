@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"NYCU-SDC/core-system-backend/internal"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -27,6 +28,11 @@ type Querier interface {
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	ListTypesByIDs(ctx context.Context, ids []uuid.UUID) ([]ListTypesByIDsRow, error)
 	UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error)
+}
+
+// FormStore is used to check form existence for operations that require it (e.g. list sections by form ID).
+type FormStore interface {
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type Answerable interface {
@@ -61,16 +67,18 @@ type SectionWithAnswerableList struct {
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger    *zap.Logger
+	queries   Querier
+	formStore FormStore
+	tracer    trace.Tracer
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, formStore FormStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("question/service"),
+		logger:    logger,
+		queries:   New(db),
+		formStore: formStore,
+		tracer:    otel.Tracer("question/service"),
 	}
 }
 
@@ -171,6 +179,16 @@ func (s *Service) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 	ctx, span := s.tracer.Start(ctx, "ListSectionsWithAnswersByFormID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
+
+	exists, err := s.formStore.Exists(ctx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		return nil, internal.ErrFormNotFound
+	}
 
 	list, err := s.queries.ListSectionsWithAnswersByFormID(ctx, formID)
 	if err != nil {

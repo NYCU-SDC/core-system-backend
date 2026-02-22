@@ -175,6 +175,17 @@ func (q *Queries) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const exists = `-- name: Exists :one
+SELECT EXISTS(SELECT 1 FROM forms WHERE id = $1)
+`
+
+func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, exists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getByID = `-- name: GetByID :one
 SELECT 
     f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
