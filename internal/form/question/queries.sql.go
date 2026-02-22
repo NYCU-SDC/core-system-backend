@@ -356,6 +356,22 @@ func (q *Queries) SectionExists(ctx context.Context, id uuid.UUID) (bool, error)
 	return exists, err
 }
 
+const shiftOrdersForInsert = `-- name: ShiftOrdersForInsert :exec
+UPDATE questions
+SET "order" = "order" + 1, updated_at = now()
+WHERE section_id = $1 AND "order" >= $2
+`
+
+type ShiftOrdersForInsertParams struct {
+	SectionID uuid.UUID
+	Order     int32
+}
+
+func (q *Queries) ShiftOrdersForInsert(ctx context.Context, arg ShiftOrdersForInsertParams) error {
+	_, err := q.db.Exec(ctx, shiftOrdersForInsert, arg.SectionID, arg.Order)
+	return err
+}
+
 const update = `-- name: Update :one
 WITH updated AS (
     UPDATE questions

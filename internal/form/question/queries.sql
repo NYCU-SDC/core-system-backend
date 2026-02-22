@@ -103,6 +103,11 @@ FROM questions
 WHERE section_id = $1
 ORDER BY "order" ASC;
 
+-- name: ShiftOrdersForInsert :exec
+UPDATE questions
+SET "order" = "order" + 1, updated_at = now()
+WHERE section_id = $1 AND "order" >= $2;
+
 -- name: SectionExists :one
 SELECT EXISTS(SELECT 1 FROM sections WHERE id = $1);
 

@@ -24,6 +24,7 @@ type Querier interface {
 	DeleteAndReorder(ctx context.Context, arg DeleteAndReorderParams) error
 	SectionExists(ctx context.Context, id uuid.UUID) (bool, error)
 	ListOrderBySectionID(ctx context.Context, sectionID uuid.UUID) ([]ListOrderBySectionIDRow, error)
+	ShiftOrdersForInsert(ctx context.Context, arg ShiftOrdersForInsertParams) error
 	ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
@@ -115,34 +116,27 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, e
 		effectiveOrder = int32(count + 1)
 	}
 
+	// Insert in the middle: shift existing questions at position >= effectiveOrder, then insert at effectiveOrder
+	if effectiveOrder <= int32(count) {
+		err = s.queries.ShiftOrdersForInsert(ctx, ShiftOrdersForInsertParams{
+			SectionID: input.SectionID,
+			Order:     effectiveOrder,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "shift question orders for insert")
+			span.RecordError(err)
+			return nil, err
+		}
+	}
+
 	createInput := input
 	createInput.Order = effectiveOrder
-
-	// Insert in the middle: create at end then use UpdateOrder to place correctly
-	if effectiveOrder <= int32(count) {
-		createInput.Order = int32(count + 1)
-	}
 	row, err := s.queries.Create(ctx, createInput)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create question")
 		span.RecordError(err)
 		return nil, err
 	}
-
-	if effectiveOrder <= int32(count) {
-		orderRow, err := s.queries.UpdateOrder(ctx, UpdateOrderParams{
-			SectionID: input.SectionID,
-			ID:        row.ID,
-			Order:     effectiveOrder,
-		})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "update question order")
-			span.RecordError(err)
-			return nil, err
-		}
-		return NewAnswerable(orderRow.ToQuestion(), orderRow.FormID)
-	}
-
 	return NewAnswerable(row.ToQuestion(), row.FormID)
 }
 
