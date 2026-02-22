@@ -55,9 +55,9 @@ allow_onboarding_list:
 # default global user role
 # Format:
 #   <email>: <role>
-default_global_roles:
+default_global_roles: |
 
 # default org role
 # Format:
 #   <email>: <role>
-default_org_roles:
+default_org_roles: |
