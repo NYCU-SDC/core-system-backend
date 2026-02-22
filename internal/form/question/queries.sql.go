@@ -167,6 +167,38 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	return i, err
 }
 
+const listOrderBySectionID = `-- name: ListOrderBySectionID :many
+SELECT id, "order"
+FROM questions
+WHERE section_id = $1
+ORDER BY "order" ASC
+`
+
+type ListOrderBySectionIDRow struct {
+	ID    uuid.UUID
+	Order int32
+}
+
+func (q *Queries) ListOrderBySectionID(ctx context.Context, sectionID uuid.UUID) ([]ListOrderBySectionIDRow, error) {
+	rows, err := q.db.Query(ctx, listOrderBySectionID, sectionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrderBySectionIDRow
+	for rows.Next() {
+		var i ListOrderBySectionIDRow
+		if err := rows.Scan(&i.ID, &i.Order); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSectionsByFormID = `-- name: ListSectionsByFormID :many
 SELECT id, form_id, title, description, created_at, updated_at
 FROM sections
@@ -322,6 +354,22 @@ func (q *Queries) SectionExists(ctx context.Context, id uuid.UUID) (bool, error)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const shiftOrdersForInsert = `-- name: ShiftOrdersForInsert :exec
+UPDATE questions
+SET "order" = "order" + 1, updated_at = now()
+WHERE section_id = $1 AND "order" >= $2
+`
+
+type ShiftOrdersForInsertParams struct {
+	SectionID uuid.UUID
+	Order     int32
+}
+
+func (q *Queries) ShiftOrdersForInsert(ctx context.Context, arg ShiftOrdersForInsertParams) error {
+	_, err := q.db.Exec(ctx, shiftOrdersForInsert, arg.SectionID, arg.Order)
+	return err
 }
 
 const update = `-- name: Update :one

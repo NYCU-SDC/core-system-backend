@@ -196,8 +196,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 
 type Store interface {
 	Create(ctx context.Context, input CreateParams) (Answerable, error)
-	Update(ctx context.Context, input UpdateParams) (Answerable, error)
-	UpdateOrder(ctx context.Context, input UpdateOrderParams) (Answerable, error)
+	Update(ctx context.Context, input UpdateParams, order int32) (Answerable, error)
 	DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error)
 }
@@ -325,24 +324,10 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		SourceID:    pgtype.UUID{Bytes: req.SourceID, Valid: req.SourceID != uuid.Nil},
 	}
 
-	updatedQuestion, err := h.store.Update(traceCtx, request)
+	updatedQuestion, err := h.store.Update(traceCtx, request, req.Order)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if updatedQuestion.Question().Order != req.Order {
-		orderRequest := UpdateOrderParams{
-			ID:        id,
-			SectionID: sectionID,
-			Order:     req.Order,
-		}
-
-		updatedQuestion, err = h.store.UpdateOrder(traceCtx, orderRequest)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
 	}
 
 	response, err := ToResponse(updatedQuestion)

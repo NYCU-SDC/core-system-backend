@@ -86,6 +86,16 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	formExists, err := s.formStore.Exists(traceCtx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return FormResponse{}, err
+	}
+	if !formExists {
+		return FormResponse{}, internal.ErrFormNotFound
+	}
+
 	// Check if user already has a response for this form
 	exists, err := s.queries.ExistsByFormIDAndSubmittedBy(traceCtx, ExistsByFormIDAndSubmittedByParams{
 		FormID:      formID,
@@ -356,6 +366,9 @@ func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, er
 
 	formID, err := s.queries.GetFormIDByID(traceCtx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, internal.ErrResponseNotFound
+		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
 		span.RecordError(err)
 		return uuid.Nil, err

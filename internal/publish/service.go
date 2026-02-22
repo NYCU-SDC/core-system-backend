@@ -111,7 +111,7 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, editor uuid
 	// check form existence and status
 	targetForm, err := s.store.GetByID(ctx, formID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, internal.ErrFormNotFound) {
 			span.RecordError(internal.ErrFormNotFound)
 			return "", internal.ErrFormNotFound
 		}

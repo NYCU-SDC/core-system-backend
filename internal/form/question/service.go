@@ -23,6 +23,8 @@ type Querier interface {
 	UpdateOrder(ctx context.Context, params UpdateOrderParams) (UpdateOrderRow, error)
 	DeleteAndReorder(ctx context.Context, arg DeleteAndReorderParams) error
 	SectionExists(ctx context.Context, id uuid.UUID) (bool, error)
+	ListOrderBySectionID(ctx context.Context, sectionID uuid.UUID) ([]ListOrderBySectionIDRow, error)
+	ShiftOrdersForInsert(ctx context.Context, arg ShiftOrdersForInsertParams) error
 	ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
@@ -97,17 +99,49 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, e
 		return nil, internal.ErrSectionNotFound
 	}
 
-	row, err := s.queries.Create(ctx, input)
+	orders, err := s.queries.ListOrderBySectionID(ctx, input.SectionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list question orders")
+		span.RecordError(err)
+		return nil, err
+	}
+	count := len(orders)
+
+	// Clamp requested order to [1, count+1]
+	effectiveOrder := input.Order
+	if effectiveOrder < 1 {
+		effectiveOrder = 1
+	}
+	if effectiveOrder > int32(count+1) {
+		effectiveOrder = int32(count + 1)
+	}
+
+	// Insert in the middle: shift existing questions at position >= effectiveOrder, then insert at effectiveOrder
+	if effectiveOrder <= int32(count) {
+		err = s.queries.ShiftOrdersForInsert(ctx, ShiftOrdersForInsertParams{
+			SectionID: input.SectionID,
+			Order:     effectiveOrder,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "shift question orders for insert")
+			span.RecordError(err)
+			return nil, err
+		}
+	}
+
+	createInput := input
+	createInput.Order = effectiveOrder
+	row, err := s.queries.Create(ctx, createInput)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create question")
 		span.RecordError(err)
 		return nil, err
 	}
-
 	return NewAnswerable(row.ToQuestion(), row.FormID)
 }
 
-func (s *Service) Update(ctx context.Context, input UpdateParams) (Answerable, error) {
+// Update updates question fields and, if order differs from the current order, updates order (clamped to [1, count]).
+func (s *Service) Update(ctx context.Context, input UpdateParams, order int32) (Answerable, error) {
 	ctx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -119,22 +153,40 @@ func (s *Service) Update(ctx context.Context, input UpdateParams) (Answerable, e
 		return nil, err
 	}
 
-	return NewAnswerable(row.ToQuestion(), row.FormID)
-}
+	if row.Order == order {
+		answerable, err := NewAnswerable(row.ToQuestion(), row.FormID)
+		if err != nil {
+			return nil, err
+		}
+		return answerable, nil
+	}
 
-func (s *Service) UpdateOrder(ctx context.Context, input UpdateOrderParams) (Answerable, error) {
-	ctx, span := s.tracer.Start(ctx, "UpdateOrder")
-	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	orders, err := s.queries.ListOrderBySectionID(ctx, input.SectionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list question orders")
+		span.RecordError(err)
+		return nil, err
+	}
 
-	row, err := s.queries.UpdateOrder(ctx, input)
+	count := len(orders)
+	effectiveOrder := order
+	if effectiveOrder < 1 {
+		effectiveOrder = 1
+	} else if effectiveOrder > int32(count) {
+		effectiveOrder = int32(count)
+	}
+
+	orderRow, err := s.queries.UpdateOrder(ctx, UpdateOrderParams{
+		SectionID: input.SectionID,
+		ID:        input.ID,
+		Order:     effectiveOrder,
+	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update order for the questions")
 		span.RecordError(err)
 		return nil, err
 	}
-
-	return NewAnswerable(row.ToQuestion(), row.FormID)
+	return NewAnswerable(orderRow.ToQuestion(), orderRow.FormID)
 }
 
 func (s *Service) DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error {
