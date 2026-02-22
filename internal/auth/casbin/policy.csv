@@ -13,7 +13,6 @@ p, admin, *, /api/orgs/:slug/units, GET, allow
 p, member, *, /api/orgs/:slug/units, GET, allow
 p, admin, *, /api/orgs/:slug/unit-ids, GET, allow
 p, member, *, /api/orgs/:slug/unit-ids, GET, allow
-# p, admin, *, /api/orgs/relations, POST, allow
 
 # Group5: Organization Membership
 p, admin, *, /api/orgs/:slug/members, GET, allow
