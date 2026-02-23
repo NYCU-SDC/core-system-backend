@@ -729,23 +729,6 @@ func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) (
 		}
 	}
 
-	if questionType == "detailed_multiple_choice" {
-		hasDescription := false
-		for _, choice := range choices {
-			if strings.TrimSpace(choice.Description) != "" {
-				hasDescription = true
-				break
-			}
-		}
-		if !hasDescription {
-			return nil, ErrMetadataValidate{
-				QuestionID: questionType,
-				RawData:    []byte(fmt.Sprintf("%v", choiceOptions)),
-				Message:    "detailed multiple choice requires at least one choice with description",
-			}
-		}
-	}
-
 	metadata := map[string]any{
 		"choice": choices,
 	}
