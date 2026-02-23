@@ -102,6 +102,9 @@ var (
 	ErrResponseAlreadyExists  = errors.New("user already has a response for this form")
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 
+	// Answer / Workflow: cannot answer questions in a section skipped by workflow
+	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
+
 	// Workflow Errors
 	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
 	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
@@ -263,6 +266,8 @@ func ErrorHandler(err error) problem.Problem {
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
+	case errors.Is(err, ErrAnswerSectionSkipped):
+		return problem.NewValidateProblem("cannot answer questions in a section that is skipped by the form workflow")
 
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowValidationFailed):

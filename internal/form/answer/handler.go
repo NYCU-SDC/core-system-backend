@@ -59,8 +59,14 @@ type UploadFilesResponse struct {
 
 type Store interface {
 	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error)
+	List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []question.Answerable, map[string]question.Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
 	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
+}
+
+// WorkflowResolver resolves which sections are active for a form response based on workflow and current answers.
+type WorkflowResolver interface {
+	ResolveSections(ctx context.Context, formID uuid.UUID, answers []Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error)
 }
 
 type QuestionGetter interface {
@@ -94,6 +100,7 @@ type Handler struct {
 	store             Store
 	questionStore     QuestionGetter
 	responseStore     ResponseStore
+	workflowResolver  WorkflowResolver
 	jwtIssuer         JWTIssuer
 	oauthProvider     map[string]OAuthProvider
 	baseURL           string
@@ -108,6 +115,7 @@ func NewHandler(
 	store Store,
 	questionStore QuestionGetter,
 	responseStore ResponseStore,
+	workflowResolver WorkflowResolver,
 	jwtIssuer JWTIssuer,
 	googleClientID, googleClientSecret string,
 	githubClientID, githubClientSecret string,
@@ -132,6 +140,7 @@ func NewHandler(
 		store:             store,
 		questionStore:     questionStore,
 		responseStore:     responseStore,
+		workflowResolver:  workflowResolver,
 		jwtIssuer:         jwtIssuer,
 		oauthProvider:     providers,
 		baseURL:           baseURL,
@@ -226,6 +235,40 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
+	}
+
+	// Get all answers and answerables, so we can resolve active sections from workflow so we reject answers for skipped sections
+	currentAnswers, _, answerableMap, err := h.store.List(traceCtx, formID, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Resolve active sections from workflow so we reject answers for skipped sections
+	sectionIDs, err := h.workflowResolver.ResolveSections(traceCtx, formID, currentAnswers, answerableMap)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err), logger)
+		return
+	}
+
+	sectionActiveMap := make(map[string]bool)
+	for _, sid := range sectionIDs {
+		sectionActiveMap[sid.String()] = true
+	}
+
+	// Check if the question is in a skipped section
+	for _, answerRequest := range req.Answers {
+		answerable, ok := answerableMap[answerRequest.QuestionID]
+		if !ok {
+			continue // question not in form; will be rejected later by Upsert
+		}
+
+		sectionIDStr := answerable.Question().SectionID.String()
+		if !sectionActiveMap[sectionIDStr] {
+			logger.Warn("attempted to answer question in skipped section", zap.String("questionID", answerRequest.QuestionID), zap.String("sectionID", sectionIDStr))
+			h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
+			return
+		}
 	}
 
 	// Collect all question IDs first for a single batch type lookup
