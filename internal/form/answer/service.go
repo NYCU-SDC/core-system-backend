@@ -92,7 +92,7 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	}
 
 	// Resolve dynamic choices for Ranking questions. In the read path there is
-	// no request batch, so pass an empty slice – the resolver will fall back to
+	// no request batch, so pass an empty slice, the resolver will fall back to
 	// DB lookups using the stored answers for the source questions.
 	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, nil)
 	if err != nil {
