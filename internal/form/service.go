@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"NYCU-SDC/core-system-backend/internal"
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5"
 
@@ -257,6 +258,10 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 
 	currentForm, err := s.queries.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(internal.ErrFormNotFound)
+			return GetByIDRow{}, internal.ErrFormNotFound
+		}
 		err = databaseutil.WrapDBError(err, logger, "get form by id")
 		span.RecordError(err)
 		return GetByIDRow{}, err

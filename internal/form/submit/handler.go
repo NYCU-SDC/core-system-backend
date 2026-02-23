@@ -84,7 +84,10 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 
 	newResponse, errs := h.operator.Submit(traceCtx, responseID, answerParams)
 	if errs != nil {
-		// Convert errors to strings and join them for better error handling
+		if len(errs) == 1 {
+			h.problemWriter.WriteError(traceCtx, w, errs[0], logger)
+			return
+		}
 		errorStrings := make([]string, len(errs))
 		for i, err := range errs {
 			errorStrings[i] = err.Error()
