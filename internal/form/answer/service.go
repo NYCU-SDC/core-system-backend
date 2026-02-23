@@ -321,7 +321,7 @@ func (s Service) resolveRankingChoices(
 
 		sourceQIDStr := sourceID.UUID.String()
 
-		// --- Try the request batch first (Solution B) ---
+		// --- Try the request batch first ---
 		if rawVal, found := requestAnswerMap[sourceQIDStr]; found {
 			sourceAnswerable, found := answerableMap[sourceQIDStr]
 			if !found {
