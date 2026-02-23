@@ -383,7 +383,8 @@ func (s Service) resolveRankingChoices(
 // DetailedMultipleChoiceAnswer and converts its entries to []question.Choice.
 func extractChoicesFromStoredDetailedMultiAnswer(rawValue []byte) ([]question.Choice, error) {
 	var answer shared.DetailedMultipleChoiceAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
 		return nil, fmt.Errorf("invalid detailed_multiple_choice answer in storage: %w", err)
 	}
 
