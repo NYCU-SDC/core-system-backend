@@ -94,7 +94,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 		// runtime from the source question's stored answer. Include them in the
 		// response so the frontend can render the ranking options.
 		if ranking, ok := answerable.(Ranking); ok {
-			response.Choices = ranking.Rank
+			response.Choices = &ranking.Rank
 		}
 		return response, nil
 	}
