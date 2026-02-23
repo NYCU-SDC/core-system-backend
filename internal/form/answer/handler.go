@@ -237,26 +237,32 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve active sections from workflow so we reject answers for skipped sections
+	// Get all answers and answerables, so we can resolve active sections from workflow so we reject answers for skipped sections
 	currentAnswers, _, answerableMap, err := h.store.List(traceCtx, formID, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
+
+	// Resolve active sections from workflow so we reject answers for skipped sections
 	sectionIDs, err := h.workflowResolver.ResolveSections(traceCtx, formID, currentAnswers, answerableMap)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err), logger)
 		return
 	}
+
 	sectionActiveMap := make(map[string]bool)
 	for _, sid := range sectionIDs {
 		sectionActiveMap[sid.String()] = true
 	}
+
+	// Check if the question is in a skipped section
 	for _, answerRequest := range req.Answers {
 		answerable, ok := answerableMap[answerRequest.QuestionID]
 		if !ok {
 			continue // question not in form; will be rejected later by Upsert
 		}
+
 		sectionIDStr := answerable.Question().SectionID.String()
 		if !sectionActiveMap[sectionIDStr] {
 			logger.Warn("attempted to answer question in skipped section", zap.String("questionID", answerRequest.QuestionID), zap.String("sectionID", sectionIDStr))
