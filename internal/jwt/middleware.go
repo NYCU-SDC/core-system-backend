@@ -124,6 +124,13 @@ func (m *Middleware) OptionalAuthMiddleware(handler http.HandlerFunc) http.Handl
 
 		// Add authenticated user to request context
 		ctxWithUser := context.WithValue(traceCtx, internal.UserContextKey, &authenticatedUser)
+		ctxWithUser = context.WithValue(ctxWithUser, "user_id", authenticatedUser.ID.String())
+		if authenticatedUser.Username.Valid {
+			ctxWithUser = context.WithValue(ctxWithUser, "username", authenticatedUser.Username.String)
+		}
+		if authenticatedUser.Name.Valid {
+			ctxWithUser = context.WithValue(ctxWithUser, "name", authenticatedUser.Name.String)
+		}
 
 		// Call the actual handler with authenticated context
 		handler(w, r.WithContext(ctxWithUser))
