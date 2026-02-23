@@ -22,6 +22,8 @@ github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERo
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/NYCU-SDC/summer v1.0.0 h1:OUIcMOoLkFpardkx8lTYNCzvqLKBi3K395cBdWgTbSs=
 github.com/NYCU-SDC/summer v1.0.0/go.mod h1:ZICv9DkXIFXu8hCeZ9Iu/MdYPbOisYN37Sx+uzHpjmY=
+github.com/NYCU-SDC/summer v1.0.1-0.20260223122644-53bd4b1781f1 h1:HxVSUP01f+riDUQYgNb4oXUVHCo8hIB6rKdqQ4bQt38=
+github.com/NYCU-SDC/summer v1.0.1-0.20260223122644-53bd4b1781f1/go.mod h1:ZICv9DkXIFXu8hCeZ9Iu/MdYPbOisYN37Sx+uzHpjmY=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5 h1:TngWCqHvy9oXAN6lEVMRuU21PR1EtLVZJmdB18Gu3Rw=
 github.com/Nvveen/Gotty v0.0.0-20120604004816-cd527374f1e5/go.mod h1:lmUJ/7eu/Q8D7ML55dXQrVaamCz2vxCfdQBasLZfHKk=
 github.com/bmatcuk/doublestar/v4 v4.6.1 h1:FH9SifrbvJhnlQpztAx++wlkk70QBf0iBWDwNy7PA4I=
