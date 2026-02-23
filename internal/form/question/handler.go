@@ -39,7 +39,7 @@ type Response struct {
 	Type         string            `json:"type"`
 	Title        string            `json:"title"`
 	Description  string            `json:"description"`
-	Choices      []Choice          `json:"choices,omitempty"`
+	Choices      *[]Choice         `json:"choices,omitempty"`
 	Scale        *ScaleOption      `json:"scale,omitempty"`
 	UploadFile   *UploadFileOption `json:"uploadFile,omitempty"`
 	Date         *DateOption       `json:"date,omitempty"`
@@ -109,7 +109,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 				Message:    err.Error(),
 			}
 		}
-		response.Choices = choices
+		response.Choices = &choices
 	case QuestionTypeLinearScale:
 		scale, err := ExtractLinearScale(q.Metadata)
 		if err != nil {

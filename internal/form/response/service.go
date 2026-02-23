@@ -250,7 +250,7 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 
 	// First, add active sections in the order returned by workflow resolver
 	for _, sectionID := range sectionIDs {
-		swq, exists := sectionMap[sectionID.String()]
+		sectionWithAnswerableList, exists := sectionMap[sectionID.String()]
 		if !exists {
 			// This shouldn't happen - workflow returned a section ID that doesn't exist
 			logger.DPanic("Section from workflow not found in section list", zap.String("sectionID", sectionID.String()))
@@ -264,7 +264,7 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 		var sectionAnswers []answer.Answer
 		var sectionAnswerables []question.Answerable
 
-		for _, ans := range swq.AnswerableList {
+		for _, ans := range sectionWithAnswerableList.AnswerableList {
 			questionID := ans.Question().ID.String()
 
 			// Use the resolved answerable if available; fall back to the raw one.
@@ -276,16 +276,16 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 			}
 
 			// Add answer if it exists for this question
-			if ansData, hasAnswer := answerPayloadMap[questionID]; hasAnswer {
-				sectionAnswers = append(sectionAnswers, ansData.Answer)
+			if answerData, hasAnswer := answerPayloadMap[questionID]; hasAnswer {
+				sectionAnswers = append(sectionAnswers, answerData.Answer)
 			}
 		}
 
 		// Calculate section progress based on answers and required questions
-		progress := calculateSectionProgress(swq.AnswerableList, answerPayloadMap)
+		progress := calculateSectionProgress(sectionWithAnswerableList.AnswerableList, answerPayloadMap)
 
 		result = append(result, SectionWithAnswerableAndAnswer{
-			Section:         swq.Section,
+			Section:         sectionWithAnswerableList.Section,
 			SectionProgress: progress,
 			Answerable:      sectionAnswerables,
 			Answer:          sectionAnswers,
