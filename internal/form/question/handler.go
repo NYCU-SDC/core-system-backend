@@ -90,6 +90,12 @@ func ToResponse(answerable Answerable) (Response, error) {
 	}
 	if q.SourceID.Valid {
 		response.SourceID = q.SourceID.String()
+		// For Ranking with a sourceID, the available choices are resolved at
+		// runtime from the source question's stored answer. Include them in the
+		// response so the frontend can render the ranking options.
+		if ranking, ok := answerable.(Ranking); ok {
+			response.Choices = ranking.Rank
+		}
 		return response, nil
 	}
 

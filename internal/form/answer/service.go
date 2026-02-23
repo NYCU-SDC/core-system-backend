@@ -91,6 +91,14 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 		return nil, nil, nil, fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
 	}
 
+	// Resolve dynamic choices for Ranking questions. In the read path there is
+	// no request batch, so pass an empty slice – the resolver will fall back to
+	// DB lookups using the stored answers for the source questions.
+	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, nil)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to resolve ranking choices: %w", err)
+	}
+
 	transformedAnswers := make([]Answer, 0, len(answers))
 	answerableList := make([]question.Answerable, 0, len(answers))
 	for _, answer := range answers {
@@ -166,6 +174,13 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
+	if err != nil {
+		return nil, nil, []error{err}
+	}
+
+	// Resolve dynamic choices for Ranking questions whose options come from a
+	// source DetailedMultiChoice question's stored answer.
+	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, answers)
 	if err != nil {
 		return nil, nil, []error{err}
 	}
@@ -267,8 +282,123 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	return transformedAnswers, answerableList, nil
 }
 
-// UploadFiles uploads files for an upload_file question and upserts the answer.
-// It validates that the question exists, belongs to the form, and is of type upload_file.
+// resolveRankingChoices populates the Rank field of every Ranking answerable
+// whose SourceID points to a DetailedMultiChoice question.
+//
+// Resolution order:
+//  1. Look for the source question's answer in the current request batch.
+//     The batch value is a JSON []string of selected choice IDs; filter the
+//     source question's Choices accordingly.
+//  2. If not found in the batch, query the database for the response's stored
+//     answer of the source question and decode it as a
+//     shared.DetailedMultipleChoiceAnswer.
+//
+// If the source answer is absent in both places the Ranking's Rank stays nil,
+// which means Validate will pass for an empty submission but reject any
+// submitted choice IDs (they cannot be validated against an empty list).
+func (s Service) resolveRankingChoices(
+	ctx context.Context,
+	responseID uuid.UUID,
+	answerableMap map[string]question.Answerable,
+	requestAnswers []shared.AnswerParam,
+) (map[string]question.Answerable, error) {
+	// Build a quick lookup for answers included in this request batch.
+	requestAnswerMap := make(map[string]json.RawMessage, len(requestAnswers))
+	for _, ans := range requestAnswers {
+		requestAnswerMap[ans.QuestionID] = ans.Value
+	}
+
+	for qID, answerable := range answerableMap {
+		ranking, ok := answerable.(question.Ranking)
+		if !ok {
+			continue
+		}
+
+		sourceID := ranking.SourceID()
+		if !sourceID.Valid {
+			continue
+		}
+
+		sourceQIDStr := sourceID.UUID.String()
+
+		// --- Try the request batch first (Solution B) ---
+		if rawVal, found := requestAnswerMap[sourceQIDStr]; found {
+			sourceAnswerable, found := answerableMap[sourceQIDStr]
+			if !found {
+				return nil, fmt.Errorf("source question %s for ranking question %s not found in form", sourceQIDStr, qID)
+			}
+
+			dmc, ok := sourceAnswerable.(question.DetailedMultiChoice)
+			if !ok {
+				return nil, fmt.Errorf("source question %s for ranking question %s is not a detailed_multiple_choice question", sourceQIDStr, qID)
+			}
+
+			// Request format is []string of selected choice IDs.
+			var selectedIDs []string
+			if err := json.Unmarshal(rawVal, &selectedIDs); err != nil {
+				return nil, fmt.Errorf("failed to parse source answer for ranking question %s: %w", qID, err)
+			}
+
+			selectedSet := make(map[string]bool, len(selectedIDs))
+			for _, id := range selectedIDs {
+				selectedSet[id] = true
+			}
+
+			choices := make([]question.Choice, 0, len(selectedIDs))
+			for _, c := range dmc.Choices {
+				if selectedSet[c.ID.String()] {
+					choices = append(choices, c)
+				}
+			}
+
+			answerableMap[qID] = ranking.WithSourceChoices(choices)
+			continue
+		}
+
+		// --- Fall back to the stored DB answer ---
+		stored, err := s.queries.GetByResponseIDAndQuestionID(ctx, GetByResponseIDAndQuestionIDParams{
+			ResponseID: responseID,
+			QuestionID: sourceID.UUID,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Source question not yet answered – leave Rank empty.
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get source answer for ranking question %s: %w", qID, err)
+		}
+
+		choices, err := extractChoicesFromStoredDetailedMultiAnswer(stored.Value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract choices from stored source answer for ranking question %s: %w", qID, err)
+		}
+
+		answerableMap[qID] = ranking.WithSourceChoices(choices)
+	}
+
+	return answerableMap, nil
+}
+
+// extractChoicesFromStoredDetailedMultiAnswer decodes a storage-format
+// DetailedMultipleChoiceAnswer and converts its entries to []question.Choice.
+func extractChoicesFromStoredDetailedMultiAnswer(rawValue []byte) ([]question.Choice, error) {
+	var answer shared.DetailedMultipleChoiceAnswer
+	if err := json.Unmarshal(rawValue, &answer); err != nil {
+		return nil, fmt.Errorf("invalid detailed_multiple_choice answer in storage: %w", err)
+	}
+
+	choices := make([]question.Choice, len(answer.Choices))
+	for i, c := range answer.Choices {
+		choices[i] = question.Choice{
+			ID:          c.ChoiceID,
+			Name:        c.Snapshot.Name,
+			Description: c.Snapshot.Description,
+		}
+	}
+	return choices, nil
+}
+
+// UploadFiles uploads files for an upload_file question and upserts the answer.// It validates that the question exists, belongs to the form, and is of type upload_file.
 // Files are saved via fileService, and the resulting file IDs are stored as the answer.
 //
 // Eventual consistency for orphan file cleanup:
