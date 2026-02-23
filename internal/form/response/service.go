@@ -191,7 +191,9 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 		return FormResponse{}, nil, err
 	}
 
-	// Get all answers for this response
+	// Get all answers for this response.
+	// answerableMap contains Ranking questions that have already had their
+	// dynamic choices resolved (via resolveRankingChoices inside List).
 	answerPayload, answerable, answerableMap, err := s.answerStore.List(traceCtx, response.FormID, response.ID)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "answer", "response_id", response.ID.String(), logger, "list answers by response id")
@@ -255,15 +257,23 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 			continue
 		}
 
-		// Collect all answerables and corresponding answers for this section
+		// Collect all answerables and corresponding answers for this section.
+		// Prefer the resolved answerable from answerableMap (which has dynamic
+		// choices injected for Ranking questions) over the raw version from the
+		// section store.
 		var sectionAnswers []answer.Answer
 		var sectionAnswerables []question.Answerable
 
 		for _, ans := range swq.AnswerableList {
 			questionID := ans.Question().ID.String()
 
-			// Add all answerables (questions) in this section
-			sectionAnswerables = append(sectionAnswerables, ans)
+			// Use the resolved answerable if available; fall back to the raw one.
+			resolved, hasResolved := answerableMap[questionID]
+			if hasResolved {
+				sectionAnswerables = append(sectionAnswerables, resolved)
+			} else {
+				sectionAnswerables = append(sectionAnswerables, ans)
+			}
 
 			// Add answer if it exists for this question
 			if ansData, hasAnswer := answerPayloadMap[questionID]; hasAnswer {
@@ -287,15 +297,21 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	for _, swq := range sectionWithQuestion {
 		sectionIDStr := swq.Section.ID.String()
 		if !sectionActiveMap[sectionIDStr] {
-			// Collect all answerables and corresponding answers for this skipped section
+			// Collect all answerables and corresponding answers for this skipped section.
+			// Same resolved-answerable preference as for active sections above.
 			var sectionAnswers []answer.Answer
 			var sectionAnswerables []question.Answerable
 
 			for _, ans := range swq.AnswerableList {
 				questionID := ans.Question().ID.String()
 
-				// Add all answerables (questions) in this section
-				sectionAnswerables = append(sectionAnswerables, ans)
+				// Use the resolved answerable if available; fall back to the raw one.
+				resolved, hasResolved := answerableMap[questionID]
+				if hasResolved {
+					sectionAnswerables = append(sectionAnswerables, resolved)
+				} else {
+					sectionAnswerables = append(sectionAnswerables, ans)
+				}
 
 				// Preserve existing answers even though section is skipped
 				if ansData, hasAnswer := answerPayloadMap[questionID]; hasAnswer {
