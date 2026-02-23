@@ -308,7 +308,7 @@ func (s Service) resolveRankingChoices(
 		requestAnswerMap[ans.QuestionID] = ans.Value
 	}
 
-	for qID, answerable := range answerableMap {
+	for questionID, answerable := range answerableMap {
 		ranking, ok := answerable.(question.Ranking)
 		if !ok {
 			continue
@@ -325,18 +325,18 @@ func (s Service) resolveRankingChoices(
 		if rawVal, found := requestAnswerMap[sourceQIDStr]; found {
 			sourceAnswerable, found := answerableMap[sourceQIDStr]
 			if !found {
-				return nil, fmt.Errorf("source question %s for ranking question %s not found in form", sourceQIDStr, qID)
+				return nil, fmt.Errorf("source question %s for ranking question %s not found in form", sourceQIDStr, questionID)
 			}
 
 			dmc, ok := sourceAnswerable.(question.DetailedMultiChoice)
 			if !ok {
-				return nil, fmt.Errorf("source question %s for ranking question %s is not a detailed_multiple_choice question", sourceQIDStr, qID)
+				return nil, fmt.Errorf("source question %s for ranking question %s is not a detailed_multiple_choice question", sourceQIDStr, questionID)
 			}
 
 			// Request format is []string of selected choice IDs.
 			var selectedIDs []string
 			if err := json.Unmarshal(rawVal, &selectedIDs); err != nil {
-				return nil, fmt.Errorf("failed to parse source answer for ranking question %s: %w", qID, err)
+				return nil, fmt.Errorf("failed to parse source answer for ranking question %s: %w", questionID, err)
 			}
 
 			selectedSet := make(map[string]bool, len(selectedIDs))
@@ -351,29 +351,31 @@ func (s Service) resolveRankingChoices(
 				}
 			}
 
-			answerableMap[qID] = ranking.WithSourceChoices(choices)
+			answerableMap[questionID] = ranking.WithSourceChoices(choices)
 			continue
 		}
 
-		// --- Fall back to the stored DB answer ---
+		// Fall back to the stored DB answer
 		stored, err := s.queries.GetByResponseIDAndQuestionID(ctx, GetByResponseIDAndQuestionIDParams{
 			ResponseID: responseID,
 			QuestionID: sourceID.UUID,
 		})
 		if errors.Is(err, pgx.ErrNoRows) {
-			// Source question not yet answered – leave Rank empty.
+			// Source question has no stored answer, return empty choices so that validation will fail for any submitted choice IDs
+			choices := make([]question.Choice, 0)
+			answerableMap[questionID] = ranking.WithSourceChoices(choices)
 			continue
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to get source answer for ranking question %s: %w", qID, err)
+			return nil, fmt.Errorf("failed to get source answer for ranking question %s: %w", questionID, err)
 		}
 
 		choices, err := extractChoicesFromStoredDetailedMultiAnswer(stored.Value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract choices from stored source answer for ranking question %s: %w", qID, err)
+			return nil, fmt.Errorf("failed to extract choices from stored source answer for ranking question %s: %w", questionID, err)
 		}
 
-		answerableMap[qID] = ranking.WithSourceChoices(choices)
+		answerableMap[questionID] = ranking.WithSourceChoices(choices)
 	}
 
 	return answerableMap, nil
