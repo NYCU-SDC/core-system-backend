@@ -39,7 +39,7 @@ type Response struct {
 	Type         string            `json:"type"`
 	Title        string            `json:"title"`
 	Description  string            `json:"description"`
-	Choices      []Choice          `json:"choices,omitempty"`
+	Choices      *[]Choice         `json:"choices,omitempty"`
 	Scale        *ScaleOption      `json:"scale,omitempty"`
 	UploadFile   *UploadFileOption `json:"uploadFile,omitempty"`
 	Date         *DateOption       `json:"date,omitempty"`
@@ -90,6 +90,12 @@ func ToResponse(answerable Answerable) (Response, error) {
 	}
 	if q.SourceID.Valid {
 		response.SourceID = q.SourceID.String()
+		// For Ranking with a sourceID, the available choices are resolved at
+		// runtime from the source question's stored answer. Include them in the
+		// response so the frontend can render the ranking options.
+		if ranking, ok := answerable.(Ranking); ok {
+			response.Choices = &ranking.Rank
+		}
 		return response, nil
 	}
 
@@ -103,7 +109,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 				Message:    err.Error(),
 			}
 		}
-		response.Choices = choices
+		response.Choices = &choices
 	case QuestionTypeLinearScale:
 		scale, err := ExtractLinearScale(q.Metadata)
 		if err != nil {
