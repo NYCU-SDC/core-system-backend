@@ -560,7 +560,8 @@ func validateConditionSectionOrder(ctx context.Context, formID uuid.UUID, nodes 
 	// Build set of workflow node IDs (section node IDs = form section IDs)
 	nodeIDSet := make(map[string]bool)
 	for _, n := range nodes {
-		if id, ok := n["id"].(string); ok && id != "" {
+		id, ok := n["id"].(string)
+		if ok && id != "" {
 			nodeIDSet[id] = true
 		}
 	}
