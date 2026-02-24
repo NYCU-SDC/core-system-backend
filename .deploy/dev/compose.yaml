@@ -24,6 +24,8 @@ services:
       GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID}
       GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET}
       ALLOW_ORIGINS: "*"
+      DEFAULT_GLOBAL_ROLES: ${DEFAULT_GLOBAL_ROLES}
+      DEFAULT_ORG_ROLES: ${DEFAULT_ORG_ROLES}
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
