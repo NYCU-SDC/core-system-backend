@@ -110,6 +110,21 @@ LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.id = $1;
 
+-- name: GetByIDs :many
+SELECT
+    f.*,
+    u.name as unit_name,
+    o.name as org_name,
+    usr.name as last_editor_name,
+    usr.username as last_editor_username,
+    usr.avatar_url as last_editor_avatar_url,
+    usr.emails as last_editor_email
+FROM forms f
+LEFT JOIN units u ON f.unit_id = u.id
+LEFT JOIN units o ON u.org_id = o.id
+LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+WHERE f.id = ANY($1::uuid[]);
+
 -- name: Exists :one
 SELECT EXISTS(SELECT 1 FROM forms WHERE id = $1);
 
@@ -126,7 +141,9 @@ FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
-WHERE (f.status <> 'archived' OR sqlc.narg(include_archived)::boolean IS TRUE)
+WHERE (sqlc.narg(status)::status IS NULL OR f.status = sqlc.narg(status)::status)
+AND (sqlc.narg(visibility)::visibility IS NULL OR f.visibility = sqlc.narg(visibility)::visibility)
+AND (sqlc.narg(deadline_after)::timestamptz IS NULL OR f.deadline >= sqlc.narg(deadline_after)::timestamptz)
 ORDER BY f.updated_at DESC;
 
 -- name: ListByUnit :many
