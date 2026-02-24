@@ -1,0 +1,52 @@
+name: core-system-stage
+
+services:
+  backend:
+    image: nycusdc/core-system-backend:prod
+    container_name: core-system-backend-stage
+    networks:
+      - core_system_prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DEV: "false"
+      ENV: "prod"
+      HOST: "0.0.0.0"
+      BASE_URL: "https://core-system.sdc.nycu.club"
+      DATABASE_URL: postgres://postgres:password@postgres:5432/core_system?sslmode=disable
+      MIGRATION_SOURCE: file:///app/migrations
+      OTEL_COLLECTOR_URL: 10.1.252.100:4317
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${GOOGLE_OAUTH_CLIENT_SECRET}
+      NYCU_OAUTH_CLIENT_ID: ${NYCU_OAUTH_CLIENT_ID}
+      NYCU_OAUTH_CLIENT_SECRET: ${NYCU_OAUTH_CLIENT_SECRET}
+      GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID}
+      GITHUB_OAUTH_CLIENT_SECRET: ${GITHUB_OAUTH_CLIENT_SECRET}
+      ALLOW_ORIGINS: "*"
+    labels:
+      - "vector.enable=true"
+
+  postgres:
+    image: postgres:18
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: core_system
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - core_system_prod
+
+volumes:
+  pg_data:
+    driver: local
+
+networks:
+  core_system_prod:
