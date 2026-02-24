@@ -39,7 +39,7 @@ type Response struct {
 	Type         string            `json:"type"`
 	Title        string            `json:"title"`
 	Description  string            `json:"description"`
-	Choices      []Choice          `json:"choices,omitempty"`
+	Choices      *[]Choice         `json:"choices,omitempty"`
 	Scale        *ScaleOption      `json:"scale,omitempty"`
 	UploadFile   *UploadFileOption `json:"uploadFile,omitempty"`
 	Date         *DateOption       `json:"date,omitempty"`
@@ -90,6 +90,12 @@ func ToResponse(answerable Answerable) (Response, error) {
 	}
 	if q.SourceID.Valid {
 		response.SourceID = q.SourceID.String()
+		// For Ranking with a sourceID, the available choices are resolved at
+		// runtime from the source question's stored answer. Include them in the
+		// response so the frontend can render the ranking options.
+		if ranking, ok := answerable.(Ranking); ok {
+			response.Choices = &ranking.Rank
+		}
 		return response, nil
 	}
 
@@ -103,7 +109,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 				Message:    err.Error(),
 			}
 		}
-		response.Choices = choices
+		response.Choices = &choices
 	case QuestionTypeLinearScale:
 		scale, err := ExtractLinearScale(q.Metadata)
 		if err != nil {
@@ -196,8 +202,7 @@ func ToResponse(answerable Answerable) (Response, error) {
 
 type Store interface {
 	Create(ctx context.Context, input CreateParams) (Answerable, error)
-	Update(ctx context.Context, input UpdateParams) (Answerable, error)
-	UpdateOrder(ctx context.Context, input UpdateOrderParams) (Answerable, error)
+	Update(ctx context.Context, input UpdateParams, order int32) (Answerable, error)
 	DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error)
 }
@@ -325,24 +330,10 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		SourceID:    pgtype.UUID{Bytes: req.SourceID, Valid: req.SourceID != uuid.Nil},
 	}
 
-	updatedQuestion, err := h.store.Update(traceCtx, request)
+	updatedQuestion, err := h.store.Update(traceCtx, request, req.Order)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if updatedQuestion.Question().Order != req.Order {
-		orderRequest := UpdateOrderParams{
-			ID:        id,
-			SectionID: sectionID,
-			Order:     req.Order,
-		}
-
-		updatedQuestion, err = h.store.UpdateOrder(traceCtx, orderRequest)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
 	}
 
 	response, err := ToResponse(updatedQuestion)

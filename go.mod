@@ -5,7 +5,7 @@ go 1.24.2
 toolchain go1.24.3
 
 require (
-	github.com/NYCU-SDC/summer v1.0.0
+	github.com/NYCU-SDC/summer v1.0.1-0.20260223122644-53bd4b1781f1
 	github.com/brianvoe/gofakeit/v7 v7.7.3
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/go-playground/validator/v10 v10.26.0

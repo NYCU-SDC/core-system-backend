@@ -471,6 +471,7 @@ type Ranking struct {
 	question Question
 	formID   uuid.UUID
 	Rank     []Choice
+	sourceID uuid.NullUUID
 }
 
 func (r Ranking) Question() Question {
@@ -523,7 +524,25 @@ func NewRanking(q Question, formID uuid.UUID) (Ranking, error) {
 		question: q,
 		formID:   formID,
 		Rank:     choices,
+		sourceID: uuid.NullUUID{
+			Valid: q.SourceID.Valid,
+			UUID:  q.SourceID.Bytes,
+		},
 	}, nil
+}
+
+// SourceID returns the source question ID if this Ranking's choices are
+// dynamically derived from another question's answer.
+func (r Ranking) SourceID() uuid.NullUUID {
+	return r.sourceID
+}
+
+// WithSourceChoices returns a new Ranking with the given choices injected as
+// the available rank options. Used at answer-submission time when the choices
+// are resolved from the source question's stored answer.
+func (r Ranking) WithSourceChoices(choices []Choice) Ranking {
+	r.Rank = choices
+	return r
 }
 
 func (r Ranking) DecodeRequest(rawValue json.RawMessage) (any, error) {
@@ -729,23 +748,6 @@ func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) (
 		}
 	}
 
-	if questionType == "detailed_multiple_choice" {
-		hasDescription := false
-		for _, choice := range choices {
-			if strings.TrimSpace(choice.Description) != "" {
-				hasDescription = true
-				break
-			}
-		}
-		if !hasDescription {
-			return nil, ErrMetadataValidate{
-				QuestionID: questionType,
-				RawData:    []byte(fmt.Sprintf("%v", choiceOptions)),
-				Message:    "detailed multiple choice requires at least one choice with description",
-			}
-		}
-	}
-
 	metadata := map[string]any{
 		"choice": choices,
 	}
@@ -777,7 +779,7 @@ func validateAndExtractChoices(q Question, allowSourceWithNil bool) ([]Choice, e
 	metadata := q.Metadata
 
 	// Allow empty metadata for questions with SourceID
-	if allowSourceWithNil && q.SourceID.Valid && metadata == nil {
+	if allowSourceWithNil && q.SourceID.Valid {
 		return []Choice{}, nil
 	}
 

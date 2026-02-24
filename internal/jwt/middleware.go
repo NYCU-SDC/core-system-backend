@@ -76,6 +76,13 @@ func (m *Middleware) AuthenticateMiddleware(handler http.HandlerFunc) http.Handl
 
 		// Add authenticated user to request context
 		ctxWithUser := context.WithValue(traceCtx, internal.UserContextKey, &authenticatedUser)
+		ctxWithUser = context.WithValue(ctxWithUser, "user_id", authenticatedUser.ID.String()) //nolint:staticcheck
+		if authenticatedUser.Username.Valid {
+			ctxWithUser = context.WithValue(ctxWithUser, "username", authenticatedUser.Username.String) //nolint:staticcheck
+		}
+		if authenticatedUser.Name.Valid {
+			ctxWithUser = context.WithValue(ctxWithUser, "name", authenticatedUser.Name.String) //nolint:staticcheck
+		}
 
 		// Call the actual handler with authenticated context
 		handler(w, r.WithContext(ctxWithUser))
@@ -124,6 +131,13 @@ func (m *Middleware) OptionalAuthMiddleware(handler http.HandlerFunc) http.Handl
 
 		// Add authenticated user to request context
 		ctxWithUser := context.WithValue(traceCtx, internal.UserContextKey, &authenticatedUser)
+		ctxWithUser = context.WithValue(ctxWithUser, "user_id", authenticatedUser.ID.String()) //nolint:staticcheck
+		if authenticatedUser.Username.Valid {
+			ctxWithUser = context.WithValue(ctxWithUser, "username", authenticatedUser.Username.String) //nolint:staticcheck
+		}
+		if authenticatedUser.Name.Valid {
+			ctxWithUser = context.WithValue(ctxWithUser, "name", authenticatedUser.Name.String) //nolint:staticcheck
+		}
 
 		// Call the actual handler with authenticated context
 		handler(w, r.WithContext(ctxWithUser))
