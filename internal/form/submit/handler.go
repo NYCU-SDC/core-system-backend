@@ -1,9 +1,11 @@
 package submit
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
+	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"errors"
 	"net/http"
@@ -36,20 +38,27 @@ type Operator interface {
 	Submit(ctx context.Context, responseID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
 }
 
+// ResponseStore is the minimal interface needed to verify response ownership before submission.
+type ResponseStore interface {
+	GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+}
+
 type Handler struct {
 	logger        *zap.Logger
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 	operator      Operator
+	responseStore ResponseStore
 	tracer        trace.Tracer
 }
 
-func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, operator Operator) *Handler {
+func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, operator Operator, responseStore ResponseStore) *Handler {
 	return &Handler{
 		logger:        logger,
 		validator:     validator,
 		problemWriter: problemWriter,
 		operator:      operator,
+		responseStore: responseStore,
 		tracer:        otel.Tracer("response/handler"),
 	}
 }
@@ -64,6 +73,22 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Ownership check
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
+		return
+	}
+	submittedBy, err := h.responseStore.GetSubmittedBy(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if submittedBy != currentUser.ID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
 		return
 	}
 
