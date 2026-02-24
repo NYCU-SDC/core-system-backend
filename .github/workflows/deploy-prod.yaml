@@ -1,0 +1,79 @@
+name: Deploy to Production
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  Deploy-Prod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger n8n Deploy Webhook
+        run: |
+          curl --location --fail-with-body --request POST 'https://webhook.sdc.nycu.club/webhook/deploy' \
+            --header 'Content-Type: application/json' \
+            --header "x-deploy-token: ${{ secrets.N8N_DEPLOY_TOKEN }}" \
+            --data-raw '{
+            "source": {
+              "title": "Core System",
+              "repo": "${{ github.repository }}",
+              "branch": "${{ github.head_ref || github.ref_name }}",
+              "commit": "${{ github.sha }}"
+            },
+            "method": "deploy",
+            "metadata": {
+              "environment": "prod",
+              "component": "backend ${{ github.ref_name }}",
+            },
+            "setup": {
+              "inject_secret": {
+                "enable": true,
+                "project": "core-system",
+                "environment": "prod",
+                "secrets": [
+                  {
+                    "path": "/google-oauth",
+                    "secret_name": "CLIENT_ID",
+                    "env_name": "GOOGLE_OAUTH_CLIENT_ID"
+                  },
+                  {
+                    "path": "/google-oauth",
+                    "secret_name": "CLIENT_SECRET",
+                    "env_name": "GOOGLE_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/nycu-oauth",
+                    "secret_name": "CLIENT_ID",
+                    "env_name": "NYCU_OAUTH_CLIENT_ID"
+                  },
+                  {
+                    "path": "/nycu-oauth",
+                    "secret_name": "CLIENT_SECRET",
+                    "env_name": "NYCU_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/github-oauth",
+                    "secret_name": "CLIENT_ID",
+                    "env_name": "GITHUB_OAUTH_CLIENT_ID"
+                  },
+                  {
+                    "path": "/github-oauth",
+                    "secret_name": "CLIENT_SECRET",
+                    "env_name": "GITHUB_OAUTH_CLIENT_SECRET"
+                  }
+                ]
+              }
+            },
+            "post": {
+              "notify_discord": {
+                "enable": true,
+                "channel": "core-system-activity"
+              },
+              "setup_domain": {
+                "enable": true,
+                "title": "Endpoint",
+                "name": "core-system.sdc.nycu.club",
+                "value": "default-eng-deploy:internal"
+              }
+            }
+          }'
