@@ -23,7 +23,7 @@ jobs:
             "method": "deploy",
             "metadata": {
               "environment": "prod",
-              "component": "backend ${{ github.ref_name }}",
+              "component": "backend ${{ github.ref_name }}"
             },
             "setup": {
               "inject_secret": {
