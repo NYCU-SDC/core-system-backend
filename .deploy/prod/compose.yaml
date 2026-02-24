@@ -2,19 +2,18 @@ name: core-system-stage
 
 services:
   backend:
-    image: nycusdc/core-system-backend:stage
+    image: nycusdc/core-system-backend:$VERSION
     container_name: core-system-backend-stage
     networks:
-      - core_system_stage
-      - traefik
+      - core_system_prod
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DEV: "false"
-      ENV: "stage"
+      ENV: "prod"
       HOST: "0.0.0.0"
-      BASE_URL: "https://stage.core-system.sdc.nycu.club"
+      BASE_URL: "https://core-system.sdc.nycu.club"
       DATABASE_URL: postgres://postgres:password@postgres:5432/core_system?sslmode=disable
       MIGRATION_SOURCE: file:///app/migrations
       OTEL_COLLECTOR_URL: 10.1.252.100:4317
@@ -27,11 +26,6 @@ services:
       ALLOW_ORIGINS: "*"
     labels:
       - "vector.enable=true"
-      - "traefik.enable=true"
-      - "traefik.http.routers.core-system-backend-stage.rule=Host(`stage.core-system.sdc.nycu.club`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.core-system-backend-stage.entrypoints=websecure"
-      - "traefik.http.routers.core-system-backend-stage.tls=true"
-      - "traefik.http.routers.core-system-backend-stage.tls.certresolver=cloudflare"
 
   postgres:
     image: postgres:18
@@ -48,13 +42,11 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     networks:
-      - core_system_stage
+      - core_system_prod
 
 volumes:
   pg_data:
     driver: local
 
 networks:
-  core_system_stage:
-  traefik:
-    external: true
+  core_system_prod:
