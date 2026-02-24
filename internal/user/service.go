@@ -173,6 +173,8 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		finalRoles = []string{"user"}
 	}
 
+	logger.Info("Final roles for new user", zap.Strings("roles", finalRoles))
+
 	// Create user first with a placeholder avatar
 	placeholderAvatar := resolveAvatarUrl(name, "")
 	newUser, err := s.queries.Create(traceCtx, CreateParams{
@@ -187,7 +189,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		return uuid.UUID{}, err
 	}
 
-	logger.Debug("Created new user", zap.String("user_id", newUser.ID.String()), zap.String("username", newUser.Username.String))
+	logger.Info("Created new user", zap.String("user_id", newUser.ID.String()), zap.String("username", newUser.Username.String))
 
 	// Create auth entry
 	_, err = s.queries.CreateAuth(traceCtx, CreateAuthParams{
@@ -201,7 +203,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		return uuid.UUID{}, err
 	}
 
-	logger.Debug("Created auth entry", zap.String("user_id", newUser.ID.String()), zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
+	logger.Info("Created auth entry", zap.String("user_id", newUser.ID.String()), zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
 
 	// Try to download and save avatar if provided
 	if avatarUrl != "" && s.fileOperator != nil {
