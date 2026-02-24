@@ -29,7 +29,7 @@ import (
 // Payload represents a text-based answer (for most question types)
 type Payload struct {
 	QuestionID   string          `json:"questionId" validate:"required,uuid"`
-	QuestionType string          `json:"questionType" validate:"required"`
+	QuestionType string          `json:"questionType"`
 	Value        json.RawMessage `json:"value" validate:"required"`
 }
 
