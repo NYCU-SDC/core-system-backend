@@ -1,8 +1,11 @@
 name: Deploy to Production
 
 on:
-  release:
-    types: [published]
+#  release:
+#    types: [published]
+  push:
+    branches:
+      - ci/add-production-workflow
 
 jobs:
   Deploy-Prod:
@@ -68,12 +71,6 @@ jobs:
               "notify_discord": {
                 "enable": true,
                 "channel": "core-system-activity"
-              },
-              "setup_domain": {
-                "enable": true,
-                "title": "Endpoint",
-                "name": "core-system.sdc.nycu.club",
-                "value": "default-eng-deploy:internal"
               }
             }
           }'
