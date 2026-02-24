@@ -223,6 +223,16 @@ jobs:
                 "environment": "stage",
                 "secrets": [
                   {
+                    "path": "/",
+                    "secret_name": "DEFAULT_GLOBAL_ROLES",
+                    "env_name": "DEFAULT_GLOBAL_ROLES"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "DEFAULT_ORG_ROLES",
+                    "env_name": "DEFAULT_ORG_ROLES"
+                  },
+                  {
                     "path": "/google-oauth",
                     "secret_name": "CLIENT_ID",
                     "env_name": "GOOGLE_OAUTH_CLIENT_ID"
