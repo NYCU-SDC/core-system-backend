@@ -50,13 +50,15 @@ type ProfileResponse struct {
 
 // MeResponse represents the response format for /user/me endpoint
 type MeResponse struct {
-	ID          string   `json:"id"`
-	Username    string   `json:"username"`
-	Name        string   `json:"name"`
-	AvatarUrl   string   `json:"avatarUrl"`
-	Role        string   `json:"role"`
-	Emails      []string `json:"emails"`
-	IsOnboarded bool     `json:"isOnboarded"`
+	ID        string   `json:"id"`
+	Username  string   `json:"username"`
+	Name      string   `json:"name"`
+	AvatarUrl string   `json:"avatarUrl"`
+	Role      string   `json:"role"`
+	Emails    []string `json:"emails"`
+
+	// Todo: This field is currently always false, but we keep it here for future use when we want to enforce onboarding for invited users
+	RequireOnboarding bool `json:"require_onboarding"`
 }
 
 // OnboardingRequest represents the request format for /user/onboarding endpoint
@@ -115,13 +117,13 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MeResponse{
-		ID:          currentUser.ID.String(),
-		Username:    currentUser.Username.String,
-		Name:        currentUser.Name.String,
-		AvatarUrl:   currentUser.AvatarUrl.String,
-		Role:        roleStr,
-		Emails:      emails,
-		IsOnboarded: currentUser.IsOnboarded,
+		ID:                currentUser.ID.String(),
+		Username:          currentUser.Username.String,
+		Name:              currentUser.Name.String,
+		AvatarUrl:         currentUser.AvatarUrl.String,
+		Role:              roleStr,
+		Emails:            emails,
+		RequireOnboarding: false,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -167,13 +169,13 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MeResponse{
-		ID:          newUser.ID.String(),
-		Username:    newUser.Username.String,
-		Name:        newUser.Name.String,
-		AvatarUrl:   newUser.AvatarUrl.String,
-		Role:        roleStr,
-		Emails:      emails,
-		IsOnboarded: newUser.IsOnboarded,
+		ID:                newUser.ID.String(),
+		Username:          newUser.Username.String,
+		Name:              newUser.Name.String,
+		AvatarUrl:         newUser.AvatarUrl.String,
+		Role:              roleStr,
+		Emails:            emails,
+		RequireOnboarding: false,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
