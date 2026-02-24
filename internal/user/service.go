@@ -209,9 +209,10 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		if backendAvatarURL != "" {
 			// Update user with backend avatar URL
 			_, err = s.queries.Update(traceCtx, UpdateParams{
-				ID:        newUser.ID,
-				Name:      newUser.Name,
-				Username:  newUser.Username,
+				ID:   newUser.ID,
+				Name: newUser.Name,
+				// Todo: Disable username update for now, need to implement invalidation for username
+				//Username:  newUser.Username,
 				AvatarUrl: pgtype.Text{String: backendAvatarURL, Valid: true},
 			})
 			if err != nil {
