@@ -38,15 +38,15 @@ func DefaultOrgRole(email string) (string, bool) {
 func parseMulti(cfg string) map[string][]string {
 	result := make(map[string][]string)
 
-	lines := strings.Split(cfg, "\n")
+	entries := strings.Split(cfg, ",")
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
 			continue
 		}
 
-		parts := strings.SplitN(line, ":", 2)
+		parts := strings.SplitN(entry, ":", 2)
 		if len(parts) != 2 {
 			continue
 		}
@@ -63,15 +63,15 @@ func parseMulti(cfg string) map[string][]string {
 func parseSingle(cfg string) map[string]string {
 	result := make(map[string]string)
 
-	lines := strings.Split(cfg, "\n")
+	entries := strings.Split(cfg, ",")
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
 			continue
 		}
 
-		parts := strings.SplitN(line, ":", 2)
+		parts := strings.SplitN(entry, ":", 2)
 		if len(parts) != 2 {
 			continue
 		}

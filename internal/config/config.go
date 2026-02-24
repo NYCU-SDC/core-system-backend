@@ -232,6 +232,8 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 			ClientSecret: os.Getenv("NYCU_OAUTH_CLIENT_SECRET"),
 		},
 		AllowOnboardingList: os.Getenv("ALLOW_ONBOARDING_LIST"),
+		DefaultGlobalRoles:  os.Getenv("DEFAULT_GLOBAL_ROLES"),
+		DefaultOrgRoles:     os.Getenv("DEFAULT_ORG_ROLES"),
 		CasbinModelPath:     os.Getenv("CASBIN_MODEL_PATH"),
 		CasbinPolicyPath:    os.Getenv("CASBIN_POLICY_PATH"),
 	}
