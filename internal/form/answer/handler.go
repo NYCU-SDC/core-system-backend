@@ -301,8 +301,8 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		sectionIDStr := answerable.Question().SectionID.String()
 		if !sectionActiveMap[sectionIDStr] {
 			logger.Warn("attempted to answer question in skipped section", zap.String("questionID", answerRequest.QuestionID), zap.String("sectionID", sectionIDStr))
-			h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
-			return
+			//h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
+			//return
 		}
 	}
 
