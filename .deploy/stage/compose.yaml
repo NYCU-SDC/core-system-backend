@@ -11,7 +11,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DEV: "true"
+      DEV: "false"
       ENV: "stage"
       HOST: "0.0.0.0"
       BASE_URL: "https://stage.core-system.sdc.nycu.club"
