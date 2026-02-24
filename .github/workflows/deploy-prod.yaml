@@ -21,7 +21,7 @@ jobs:
               "title": "Core System",
               "repo": "${{ github.repository }}",
               "branch": "${{ github.head_ref || github.ref_name }}",
-              "commit": "${{ github.sha }}"
+              "commit": "f2e17df5be25fc6388c0aa9285197c9b0e854bd5"
             },
             "method": "deploy",
             "metadata": {
