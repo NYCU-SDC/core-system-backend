@@ -222,7 +222,9 @@ func main() {
 	}))
 
 	// Internal Debug route
-	mux.Handle("POST /api/auth/login/internal", basicMiddleware.HandlerFunc(authHandler.InternalAPITokenLogin))
+	if cfg.Dev {
+		mux.Handle("POST /api/auth/login/internal", basicMiddleware.HandlerFunc(authHandler.InternalAPITokenLogin))
+	}
 
 	// ============================================
 	// Basic Authentication routes
