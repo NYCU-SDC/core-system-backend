@@ -178,8 +178,8 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	// Create user first with a placeholder avatar
 	placeholderAvatar := resolveAvatarUrl(name, "")
 	newUser, err := s.queries.Create(traceCtx, CreateParams{
-		Name:      pgtype.Text{String: name, Valid: name != ""},
-		Username:  pgtype.Text{String: username, Valid: username != ""},
+		Name: pgtype.Text{String: name, Valid: name != ""},
+		//Username:  pgtype.Text{String: username, Valid: username != ""},
 		AvatarUrl: pgtype.Text{String: placeholderAvatar, Valid: true},
 		Role:      finalRoles,
 	})
