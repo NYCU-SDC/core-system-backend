@@ -2,7 +2,7 @@ name: core-system-stage
 
 services:
   backend:
-    image: nycusdc/core-system-backend:prod
+    image: nycusdc/core-system-backend:$VERSION
     container_name: core-system-backend-stage
     networks:
       - core_system_prod
