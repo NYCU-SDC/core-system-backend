@@ -42,7 +42,7 @@ type Store interface {
 }
 
 type formSubmitStore interface {
-	ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]form.UserForm, error)
+	ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form.UserForm, error)
 }
 
 type tenantStore interface {
@@ -840,18 +840,7 @@ func (h *Handler) ListFormsOfCurrentUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	organizations, err := h.store.ListOrganizationsOfUser(traceCtx, currentUser.ID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get all organizations of user: %w", err), logger)
-		return
-	}
-
-	unitIDs := make([]uuid.UUID, 0)
-	for _, org := range organizations {
-		unitIDs = append(unitIDs, org.Unit.ID)
-	}
-
-	userForms, err := h.formSubmitStore.ListFormsOfUser(traceCtx, unitIDs, currentUser.ID)
+	userForms, err := h.formSubmitStore.ListFormsOfUser(traceCtx, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get forms of user: %w", err), logger)
 		return

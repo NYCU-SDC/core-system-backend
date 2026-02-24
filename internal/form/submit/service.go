@@ -10,12 +10,11 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
-	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -31,7 +30,8 @@ type QuestionStore interface {
 
 type FormStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (form.GetByIDRow, error)
-	ListByUnit(ctx context.Context, arg form.ListByUnitParams) ([]form.ListByUnitRow, error)
+	List(ctx context.Context, status form.Status, visibility form.Visibility, excludeExpired bool) ([]form.ListRow, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]form.GetByIDsRow, error)
 }
 
 type FormResponseStore interface {
@@ -133,17 +133,19 @@ func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []sh
 	return formResponse, nil
 }
 
-func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]form.UserForm, error) {
+func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form.UserForm, error) {
 	ctx, span := s.tracer.Start(ctx, "ListFormsOfUser")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
+	// Collect all responses of the user to determine form statuses
 	responses, err := s.responseStore.ListBySubmittedBy(ctx, userID)
 	if err != nil {
 		span.RecordError(err)
 		return []form.UserForm{}, err
 	}
 
+	// Map form ID to user form status for quick lookup
 	formStatusMap := make(map[uuid.UUID]form.UserFormStatus)
 	for _, currentResponse := range responses {
 		status := form.UserFormStatusInProgress
@@ -153,19 +155,40 @@ func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, user
 		formStatusMap[currentResponse.FormID] = status
 	}
 
-	allForms := make(map[uuid.UUID]form.ListByUnitRow)
-	for _, unitID := range unitIDs {
-		forms, err := s.formStore.ListByUnit(ctx, form.ListByUnitParams{
-			UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
-		})
+	allForms := make(map[uuid.UUID]form.ListRow)
+	forms, err := s.formStore.List(ctx, form.StatusPublished, form.VisibilityPublic, true)
+	if err != nil {
+		logger.Error("failed to list forms", zap.Error(err))
+		return []form.UserForm{}, err
+	}
+	for _, f := range forms {
+		allForms[f.ID] = f
+	}
+
+	// Collect completed form IDs that are not in allForms (expired or archived)
+	var missingCompletedIDs []uuid.UUID
+	for formID, status := range formStatusMap {
+		if status == form.UserFormStatusCompleted {
+			if _, exists := allForms[formID]; !exists {
+				missingCompletedIDs = append(missingCompletedIDs, formID)
+			}
+		}
+	}
+
+	// Fetch missing completed forms and add them to allForms
+	if len(missingCompletedIDs) > 0 {
+		completedForms, err := s.formStore.GetByIDs(ctx, missingCompletedIDs)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "list forms by unit")
-			span.RecordError(err)
+			logger.Error("failed to get completed forms by ids", zap.Error(err))
 			return []form.UserForm{}, err
 		}
-
-		for _, currentForm := range forms {
-			allForms[currentForm.ID] = currentForm
+		for _, f := range completedForms {
+			allForms[f.ID] = form.ListRow{
+				ID:       f.ID,
+				Title:    f.Title,
+				Deadline: f.Deadline,
+				Status:   f.Status,
+			}
 		}
 	}
 
@@ -184,7 +207,34 @@ func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, user
 		})
 	}
 
-	slices.SortFunc(userForms, func(a, b form.UserForm) int {
+	now := time.Now()
+	slices.SortFunc(userForms, compareUserForms(now))
+
+	return userForms, nil
+}
+
+// compareUserForms returns a comparison function for sorting []form.UserForm,
+// intended for use with slices.SortFunc.
+//
+// Sort order (ascending priority):
+//  1. Non-expired forms come before expired-completed forms.
+//     A form is considered "expired-completed" when its status is Completed AND
+//     its deadline has already passed relative to now. This ensures forms the user
+//     has submitted past their deadline are shown last.
+//  2. Within the same expiry group, forms with a deadline come before forms without
+//     one (no-deadline forms shown last).
+//  3. Among forms that both have deadlines, earlier deadline first.
+//  4. Ties broken alphabetically by title (ascending).
+func compareUserForms(now time.Time) func(a, b form.UserForm) int {
+	return func(a, b form.UserForm) int {
+		aExpiredCompleted := a.Status == form.UserFormStatusCompleted && a.Deadline.Valid && a.Deadline.Time.Before(now)
+		bExpiredCompleted := b.Status == form.UserFormStatusCompleted && b.Deadline.Valid && b.Deadline.Time.Before(now)
+		if aExpiredCompleted != bExpiredCompleted {
+			if aExpiredCompleted {
+				return 1
+			}
+			return -1
+		}
 
 		if a.Deadline.Valid != b.Deadline.Valid {
 			if a.Deadline.Valid {
@@ -207,7 +257,5 @@ func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, user
 		}
 
 		return 0
-	})
-
-	return userForms, nil
+	}
 }

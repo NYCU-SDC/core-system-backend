@@ -3,8 +3,10 @@ package form
 import (
 	"context"
 	"errors"
+	"time"
 
 	"NYCU-SDC/core-system-backend/internal"
+
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5"
 
@@ -22,7 +24,8 @@ type Querier interface {
 	Patch(ctx context.Context, params PatchParams) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
-	List(ctx context.Context, includeArchived pgtype.Bool) ([]ListRow, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error)
+	List(ctx context.Context, arg ListParams) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
@@ -270,7 +273,22 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	return currentForm, nil
 }
 
-// FormExists reports whether a form with the given ID exists (so response package can use *form.Service as FormStore without form importing response).
+func (s *Service) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error) {
+	ctx, span := s.tracer.Start(ctx, "GetFormsByIDs")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	forms, err := s.queries.GetByIDs(ctx, ids)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get forms by ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return forms, nil
+}
+
+// Exists reports whether a form with the given ID exists (so response package can use *form.Service as FormStore without form importing response).
 func (s *Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 	ctx, span := s.tracer.Start(ctx, "FormExists")
 	defer span.End()
@@ -286,12 +304,24 @@ func (s *Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 	return exists, nil
 }
 
-func (s *Service) List(ctx context.Context) ([]ListRow, error) {
+// List returns all forms matching the given filters.
+// Pass an empty string for status or visibility to skip that filter.
+// Set excludeExpired to true to exclude forms whose deadline has already passed (i.e. deadline >= now()).
+func (s *Service) List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error) {
 	ctx, span := s.tracer.Start(ctx, "ListForms")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	forms, err := s.queries.List(ctx, pgtype.Bool{Valid: false})
+	params := ListParams{
+		Status:     NullStatus{Status: status, Valid: status != ""},
+		Visibility: NullVisibility{Visibility: visibility, Valid: visibility != ""},
+	}
+
+	if excludeExpired {
+		params.DeadlineAfter = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	}
+
+	forms, err := s.queries.List(ctx, params)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms")
 		span.RecordError(err)
