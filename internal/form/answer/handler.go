@@ -77,6 +77,9 @@ type QuestionGetter interface {
 type ResponseStore interface {
 	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	// GetSubmittedBy returns the user ID who submitted the response with the given ID.
+	// Used for ownership checks without creating an import cycle with the response package.
+	GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
 // OAuthProvider is the interface needed to initiate and complete an OAuth flow.
@@ -172,6 +175,22 @@ func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ownership check
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
+		return
+	}
+	submittedBy, err := h.responseStore.GetSubmittedBy(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if submittedBy != currentUser.ID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
+		return
+	}
+
 	// Get formID from responseID
 	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
 	if err != nil {
@@ -217,6 +236,22 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Ownership check
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
+		return
+	}
+	submittedBy, err := h.responseStore.GetSubmittedBy(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if submittedBy != currentUser.ID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
 		return
 	}
 
@@ -363,10 +398,19 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 
 	redirectURL := r.URL.Query().Get("r")
 
-	// Validate that the response exists
-	_, err = h.responseStore.GetFormIDByID(traceCtx, responseID)
+	// Ownership check
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
+		return
+	}
+	submittedBy, err := h.responseStore.GetSubmittedBy(traceCtx, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if submittedBy != currentUser.ID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
 		return
 	}
 
@@ -563,6 +607,22 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Ownership check
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
+		return
+	}
+	uploadSubmittedBy, err := h.responseStore.GetSubmittedBy(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if uploadSubmittedBy != currentUser.ID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
 		return
 	}
 

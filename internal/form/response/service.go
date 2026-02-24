@@ -393,6 +393,66 @@ func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, er
 	return formID, nil
 }
 
+// GetSubmittedBy returns the user ID who submitted the response with the given ID.
+// This is used by the answer handler for ownership checks without creating an import cycle.
+func (s Service) GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetSubmittedBy")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formID, err := s.queries.GetFormIDByID(traceCtx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, internal.ErrResponseNotFound
+		}
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	response, err := s.queries.Get(traceCtx, GetParams{ID: id, FormID: formID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, internal.ErrResponseNotFound
+		}
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get response by id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return response.SubmittedBy, nil
+}
+
+// GetByID retrieves a form response by its ID alone (without requiring the formID).
+// This is a lightweight lookup used for ownership checks.
+func (s Service) GetByID(ctx context.Context, id uuid.UUID) (FormResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formID, err := s.queries.GetFormIDByID(traceCtx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return FormResponse{}, internal.ErrResponseNotFound
+		}
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get form id by response id")
+		span.RecordError(err)
+		return FormResponse{}, err
+	}
+
+	response, err := s.queries.Get(traceCtx, GetParams{ID: id, FormID: formID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return FormResponse{}, internal.ErrResponseNotFound
+		}
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "get response by id")
+		span.RecordError(err)
+		return FormResponse{}, err
+	}
+
+	return response, nil
+}
+
 // Exists returns whether a response with the given id exists.
 func (s Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Exists")

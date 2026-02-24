@@ -82,6 +82,7 @@ type CreateResponse struct {
 type Store interface {
 	Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
+	ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error)
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
 }
@@ -110,7 +111,7 @@ func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter
 	}
 }
 
-// List lists all responses for a form
+// List lists responses for a form submitted by the current user
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "List")
 	defer span.End()
@@ -123,7 +124,15 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	responses, err := h.store.ListByFormID(traceCtx, formID)
+	// Get authenticated user
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	// Only return the responses submitted by the current user
+	userResponses, err := h.store.ListBySubmittedBy(traceCtx, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -131,15 +140,18 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	listResponse := ListResponse{
 		FormID:        formID.String(),
-		ResponseJSONs: make([]Response, len(responses)),
+		ResponseJSONs: make([]Response, 0),
 	}
-	for i, currentResponse := range responses {
-		listResponse.ResponseJSONs[i] = Response{
+	for _, currentResponse := range userResponses {
+		if currentResponse.FormID != formID {
+			continue
+		}
+		listResponse.ResponseJSONs = append(listResponse.ResponseJSONs, Response{
 			ID:          currentResponse.ID.String(),
 			SubmittedBy: currentResponse.SubmittedBy.String(),
 			CreatedAt:   currentResponse.CreatedAt.Time,
 			UpdatedAt:   currentResponse.UpdatedAt.Time,
-		}
+		})
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, listResponse)
@@ -167,6 +179,13 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get authenticated user
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
 	// Get response with sections and answers from store
 	formResponse, sections, err := h.store.Get(traceCtx, responseID, formID)
 	if err != nil {
@@ -177,6 +196,12 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	// Verify formID matches
 	if formResponse.FormID != formID {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseFormIDMismatch, logger)
+		return
+	}
+
+	// Verify the response belongs to the current user
+	if formResponse.SubmittedBy != currentUser.ID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
 		return
 	}
 

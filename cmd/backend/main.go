@@ -171,7 +171,7 @@ func main() {
 	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService, workflowService, jwtService, cfg.GoogleOauth.ClientID, cfg.GoogleOauth.ClientSecret, cfg.GitHubOauth.ClientID, cfg.GitHubOauth.ClientSecret, cfg.BaseURL, cfg.OauthProxyBaseURL)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, submitService, tenantService, userService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
-	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService)
+	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService, responseService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
@@ -355,7 +355,7 @@ func main() {
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(answerHandler.GetQuestionResponse))
 	mux.Handle("PATCH /api/responses/{responseId}/answers", authMiddleware.HandlerFunc(answerHandler.UpdateFormResponse))
 	mux.Handle("POST /api/responses/{responseId}/questions/{questionId}/files", authMiddleware.HandlerFunc(answerHandler.UploadQuestionFiles))
-	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", basicMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
+	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", authMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
 	mux.Handle("GET /api/oauth/questions/{provider}/callback", basicMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
 
 	// Workflow Management
