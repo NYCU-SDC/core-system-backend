@@ -637,9 +637,9 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fileHeaders := r.MultipartForm.File["file"]
+	fileHeaders := r.MultipartForm.File["files"]
 	if len(fileHeaders) == 0 {
-		err := handlerutil.NewValidationError("file", nil, "no files provided in the \"file\" field")
+		err := handlerutil.NewValidationError("files", nil, "no files provided in the \"files\" field")
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
