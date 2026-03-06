@@ -30,4 +30,3 @@ if [ "$enable_error_handling" == "true" ]; then
 else
     docker compose up -d --wait
 fi
-
