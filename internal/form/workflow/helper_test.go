@@ -95,6 +95,10 @@ func (m *mockQuestionStore) ListByFormID(ctx context.Context, formID uuid.UUID) 
 	return result, nil
 }
 
+func (m *mockQuestionStore) ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error) {
+	return nil, nil
+}
+
 // createTestService creates a workflow.Service with mocked dependencies
 func createTestService(t *testing.T, logger *zap.Logger, tracer trace.Tracer, mockQuerier *mockQuerier, mockValidator *mockValidator, questionStore workflow.QuestionStore) *workflow.Service {
 	t.Helper()
