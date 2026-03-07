@@ -67,12 +67,13 @@ func TestService_Activate(t *testing.T) {
 			workflowJSON := tc.params.workflowJSON
 			mockValidator.On("Activate", mock.Anything, formID, workflowJSON, mock.Anything).Return(nil).Once()
 
+			activatedID := uuid.New()
 			mockQuerier.On("Activate", mock.Anything, workflow.ActivateParams{
 				FormID:     formID,
 				LastEditor: userID,
 				Workflow:   workflowJSON,
 			}).Return(workflow.ActivateRow{
-				ID:         uuid.New(),
+				ID:         activatedID,
 				FormID:     formID,
 				LastEditor: userID,
 				IsActive:   true,
@@ -144,7 +145,7 @@ func TestService_Update(t *testing.T) {
 
 			workflowJSON := tc.params.workflowJSON
 			versionID := uuid.New()
-			expectedRow := workflow.UpdateRow{
+			updateRow := workflow.UpdateRow{
 				ID:         versionID,
 				FormID:     formID,
 				LastEditor: userID,
@@ -152,7 +153,7 @@ func TestService_Update(t *testing.T) {
 				Workflow:   workflowJSON,
 			}
 
-			currentWorkflowRow := workflow.GetRow{
+			currentWorkflowRow := workflow.WorkflowVersion{
 				ID:         versionID,
 				FormID:     formID,
 				LastEditor: userID,
@@ -165,7 +166,7 @@ func TestService_Update(t *testing.T) {
 				FormID:     formID,
 				LastEditor: userID,
 				Workflow:   workflowJSON,
-			}).Return(expectedRow, nil).Once()
+			}).Return(updateRow, nil).Once()
 
 			result, err := service.Update(ctx, formID, workflowJSON, userID)
 
@@ -174,7 +175,8 @@ func TestService_Update(t *testing.T) {
 				mockQuerier.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 			} else {
 				require.NoError(t, err, "unexpected error: %v", err)
-				require.Equal(t, expectedRow, result)
+				expectedVersion := workflow.WorkflowVersion(updateRow)
+				require.Equal(t, expectedVersion, result)
 				// When updating a draft, returned row ID must match current workflow version ID.
 				require.Equal(t, currentWorkflowRow.ID, result.ID, "Service.Update should preserve draft version ID")
 				// Node IDs, question IDs, and condition rules in the workflow must remain unchanged.
@@ -396,7 +398,7 @@ func TestService_Get(t *testing.T) {
 			name:   "successful get",
 			formID: uuid.New(),
 			setupMock: func(mq *mockQuerier, formID uuid.UUID) {
-				expectedRow := workflow.GetRow{
+				expectedRow := workflow.WorkflowVersion{
 					ID:         uuid.New(),
 					FormID:     formID,
 					LastEditor: uuid.New(),
@@ -426,7 +428,7 @@ func TestService_Get(t *testing.T) {
 
 			if tc.expectErr {
 				require.Error(t, err)
-				require.Equal(t, workflow.GetRow{}, result)
+				require.Equal(t, workflow.WorkflowVersion{}, result)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, result.ID)

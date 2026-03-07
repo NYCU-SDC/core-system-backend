@@ -17,7 +17,7 @@ import (
 )
 
 type Querier interface {
-	Get(ctx context.Context, formID uuid.UUID) (GetRow, error)
+	Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, error)
 	Update(ctx context.Context, arg UpdateParams) (UpdateRow, error)
 	CreateNode(ctx context.Context, arg CreateNodeParams) (CreateNodeRow, error)
 	DeleteNode(ctx context.Context, arg DeleteNodeParams) ([]byte, error)
@@ -62,7 +62,7 @@ func NewServiceForTesting(logger *zap.Logger, tracer trace.Tracer, queries Queri
 }
 
 // Get retrieves the latest workflow version for a form
-func (s *Service) Get(ctx context.Context, formID uuid.UUID) (GetRow, error) {
+func (s *Service) Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, error) {
 	methodName := "Get"
 	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
@@ -72,7 +72,7 @@ func (s *Service) Get(ctx context.Context, formID uuid.UUID) (GetRow, error) {
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "get workflow by form id")
 		span.RecordError(err)
-		return GetRow{}, err
+		return WorkflowVersion{}, err
 	}
 
 	return workflow, nil
@@ -100,26 +100,13 @@ func (s *Service) EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, 
 	return EnrichWorkflowLabels(ctx, apiWorkflow, formID, sectionTitles, s.questionStore)
 }
 
-// getRowToUpdateRow converts a GetRow to UpdateRow (same field set).
-func getRowToUpdateRow(r GetRow) UpdateRow {
-	return UpdateRow{
-		Workflow:   r.Workflow,
-		ID:         r.ID,
-		FormID:     r.FormID,
-		LastEditor: r.LastEditor,
-		IsActive:   r.IsActive,
-		CreatedAt:  r.CreatedAt,
-		UpdatedAt:  r.UpdatedAt,
-	}
-}
-
 // Update updates a workflow version conditionally:
 //   - If latest workflow is active and incoming workflow is structurally equal
 //     (same nodes, edges, condition rules; labels ignored): returns current version
 //     without creating a new one.
 //   - If latest workflow is active and structure differs: creates a new workflow version.
 //   - If latest workflow is draft: updates the existing workflow version.
-func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte, userID uuid.UUID) (UpdateRow, error) {
+func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte, userID uuid.UUID) (WorkflowVersion, error) {
 	methodName := "Update"
 	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
@@ -135,7 +122,7 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 		// Wrap validation error to return 400 instead of 500
 		err = fmt.Errorf("%w: %w", internal.ErrWorkflowValidationFailed, err)
 		span.RecordError(err)
-		return UpdateRow{}, err
+		return WorkflowVersion{}, err
 	}
 
 	// Get current workflow to validate node IDs haven't changed
@@ -145,7 +132,7 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 		if !errors.Is(err, pgx.ErrNoRows) {
 			err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "get current workflow")
 			span.RecordError(err)
-			return UpdateRow{}, err
+			return WorkflowVersion{}, err
 		}
 		// First update scenario: no existing workflow to compare against
 	}
@@ -160,7 +147,7 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 	if err := s.validator.ValidateUpdateNodeIDs(ctx, currentWorkflowBytes, workflow); err != nil {
 		err = fmt.Errorf("%w: %w", internal.ErrWorkflowValidationFailed, err)
 		span.RecordError(err)
-		return UpdateRow{}, err
+		return WorkflowVersion{}, err
 	}
 
 	// When latest version is active, avoid creating a new version if only
@@ -171,11 +158,11 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 			logger.Warn("workflow structural comparison failed", zap.Error(cmpErr))
 			// Fall through to normal update
 		} else if equal {
-			return getRowToUpdateRow(currentWorkflow), nil
+			return currentWorkflow, nil
 		}
 	}
 
-	updated, err := s.queries.Update(ctx, UpdateParams{
+	row, err := s.queries.Update(ctx, UpdateParams{
 		FormID:     formID,
 		LastEditor: userID,
 		Workflow:   workflow,
@@ -183,10 +170,10 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "update workflow")
 		span.RecordError(err)
-		return UpdateRow{}, err
+		return WorkflowVersion{}, err
 	}
 
-	return updated, nil
+	return WorkflowVersion(row), nil
 }
 
 func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, userID uuid.UUID) (CreateNodeRow, error) {
@@ -255,7 +242,7 @@ func (s *Service) DeleteNode(ctx context.Context, formID uuid.UUID, nodeID uuid.
 	return deleted, nil
 }
 
-func (s *Service) Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (ActivateRow, error) {
+func (s *Service) Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (WorkflowVersion, error) {
 	methodName := "Activate"
 	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
@@ -267,10 +254,10 @@ func (s *Service) Activate(ctx context.Context, formID uuid.UUID, userID uuid.UU
 		// Wrap validation error to return 400 instead of 500
 		err = fmt.Errorf("%w: %w", internal.ErrWorkflowValidationFailed, err)
 		span.RecordError(err)
-		return ActivateRow{}, err
+		return WorkflowVersion{}, err
 	}
 
-	activatedVersion, err := s.queries.Activate(ctx, ActivateParams{
+	row, err := s.queries.Activate(ctx, ActivateParams{
 		FormID:     formID,
 		LastEditor: userID,
 		Workflow:   workflow,
@@ -278,10 +265,10 @@ func (s *Service) Activate(ctx context.Context, formID uuid.UUID, userID uuid.UU
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "activate workflow")
 		span.RecordError(err)
-		return ActivateRow{}, err
+		return WorkflowVersion{}, err
 	}
 
-	return activatedVersion, nil
+	return WorkflowVersion(row), nil
 }
 
 // GetValidationInfo checks if a workflow can be activated and returns detailed validation errors.

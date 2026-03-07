@@ -21,11 +21,11 @@ import (
 )
 
 type Store interface {
-	Get(ctx context.Context, formID uuid.UUID) (GetRow, error)
-	Update(ctx context.Context, formID uuid.UUID, workflow []byte, userID uuid.UUID) (UpdateRow, error)
+	Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, error)
+	Update(ctx context.Context, formID uuid.UUID, workflow []byte, userID uuid.UUID) (WorkflowVersion, error)
 	CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, userID uuid.UUID) (CreateNodeRow, error)
 	DeleteNode(ctx context.Context, formID uuid.UUID, nodeID uuid.UUID, userID uuid.UUID) ([]byte, error)
-	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (ActivateRow, error)
+	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (WorkflowVersion, error)
 	GetValidationInfo(ctx context.Context, formID uuid.UUID, workflow []byte) ([]ValidationInfo, error)
 	EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, apiWorkflow []byte) ([]byte, error)
 }

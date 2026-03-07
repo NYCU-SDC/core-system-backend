@@ -23,9 +23,9 @@ type mockQuerier struct {
 	mock.Mock
 }
 
-func (m *mockQuerier) Get(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error) {
+func (m *mockQuerier) Get(ctx context.Context, formID uuid.UUID) (workflow.WorkflowVersion, error) {
 	args := m.Called(ctx, formID)
-	return args.Get(0).(workflow.GetRow), args.Error(1)
+	return args.Get(0).(workflow.WorkflowVersion), args.Error(1)
 }
 
 func (m *mockQuerier) Update(ctx context.Context, arg workflow.UpdateParams) (workflow.UpdateRow, error) {
