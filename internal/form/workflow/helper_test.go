@@ -3,6 +3,7 @@ package workflow_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal"
@@ -366,6 +367,18 @@ func createWorkflow_ConditionRule(t *testing.T, questionID string) []byte {
 // createWorkflow_ConditionRuleSourceWithQuestionID returns a workflow with condition rule with given source and questionID
 func createWorkflow_ConditionRuleSourceWithQuestionID(t *testing.T, source string, questionID string) []byte {
 	t.Helper()
+	return createWorkflow_ConditionRuleWithPatternAndSource(t, questionID, "yes", source)
+}
+
+// createWorkflow_ConditionRuleWithPattern returns a workflow with condition rule source=choice and the given pattern.
+func createWorkflow_ConditionRuleWithPattern(t *testing.T, questionID string, pattern string) []byte {
+	t.Helper()
+	return createWorkflow_ConditionRuleWithPatternAndSource(t, questionID, pattern, "choice")
+}
+
+// createWorkflow_ConditionRuleWithPatternAndSource returns a workflow with condition rule with given source and pattern.
+func createWorkflow_ConditionRuleWithPatternAndSource(t *testing.T, questionID string, pattern string, source string) []byte {
+	t.Helper()
 	startID := uuid.New()
 	conditionID := uuid.New()
 	endID := uuid.New()
@@ -393,7 +406,7 @@ func createWorkflow_ConditionRuleSourceWithQuestionID(t *testing.T, source strin
 			"conditionRule": map[string]interface{}{
 				"source":   source,
 				"question": questionID,
-				"pattern":  "yes",
+				"pattern":  pattern,
 			},
 		},
 		{
@@ -402,6 +415,29 @@ func createWorkflow_ConditionRuleSourceWithQuestionID(t *testing.T, source strin
 			"label": "End",
 		},
 	})
+}
+
+// createMockAnswerableWithChoiceIDs creates a choice-type question.Answerable with the given choice option IDs (for pattern validation tests).
+func createMockAnswerableWithChoiceIDs(t *testing.T, formID uuid.UUID, questionType question.QuestionType, choiceIDs []uuid.UUID) question.Answerable {
+	t.Helper()
+	require.True(t, question.ContainsType(question.ChoiceTypes, questionType), "questionType must be a choice type")
+	choices := make([]question.Choice, len(choiceIDs))
+	for i, id := range choiceIDs {
+		choices[i] = question.Choice{ID: id, Name: fmt.Sprintf("Option %d", i+1), Description: ""}
+	}
+	metadata, err := json.Marshal(map[string]any{"choice": choices})
+	require.NoError(t, err)
+	q := question.Question{
+		ID:       uuid.New(),
+		Required: false,
+		Type:     questionType,
+		Title:    pgtype.Text{String: "Test Question", Valid: true},
+		Order:    1,
+		Metadata: metadata,
+	}
+	answerable, err := question.NewAnswerable(q, formID)
+	require.NoError(t, err)
+	return answerable
 }
 
 // createMockAnswerable creates a question.Answerable for testing
