@@ -68,7 +68,7 @@ func (n *ConditionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap 
 	}
 
 	// Validate conditionRule fields
-	err = n.validateConditionRule(ctx, formID, nodeID, conditionRule, nodeMap, questionStore)
+	err = n.validateConditionRule(ctx, formID, nodeID, conditionRule, questionStore)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (n *ConditionNode) validateFieldNames(nodeID string) error {
 	return nil
 }
 
-func (n *ConditionNode) validateConditionRule(ctx context.Context, formID uuid.UUID, nodeID string, rule ConditionRule, nodeMap map[string]map[string]interface{}, questionStore QuestionStore) error {
+func (n *ConditionNode) validateConditionRule(ctx context.Context, formID uuid.UUID, nodeID string, rule ConditionRule, questionStore QuestionStore) error {
 	// Normalize source to uppercase for comparison (API may send "choice" or "CHOICE")
 	rule.Source = ConditionSource(strings.ToUpper(string(rule.Source)))
 	if rule.Source != ConditionSourceChoice && rule.Source != ConditionSourceNonChoice {
