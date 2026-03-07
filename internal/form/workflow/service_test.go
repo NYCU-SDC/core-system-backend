@@ -194,13 +194,17 @@ func extractNodeIDs(t *testing.T, workflowJSON []byte) []string {
 	t.Helper()
 	var nodes []map[string]interface{}
 	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+
+	// Extract node IDs from nodes
 	var ids []string
 	for _, n := range nodes {
 		id, ok := n["id"].(string)
-		if ok && id != "" {
-			ids = append(ids, id)
+		if !ok || id == "" {
+			continue
 		}
+		ids = append(ids, id)
 	}
+
 	sort.Strings(ids)
 	return ids
 }
@@ -210,16 +214,22 @@ func extractQuestionIDs(t *testing.T, workflowJSON []byte) []string {
 	t.Helper()
 	var nodes []map[string]interface{}
 	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+
+	// Extract question IDs from condition rules
 	var ids []string
 	for _, n := range nodes {
-		cr, _ := n["conditionRule"].(map[string]interface{})
-		if cr == nil {
+		// Extract condition rule from node
+		cr, ok := n["conditionRule"].(map[string]interface{})
+		if !ok || cr == nil {
 			continue
 		}
+
+		// Extract question ID from condition rule
 		q, ok := cr["question"].(string)
-		if ok && q != "" {
-			ids = append(ids, q)
+		if !ok || q == "" {
+			continue
 		}
+		ids = append(ids, q)
 	}
 	sort.Strings(ids)
 	return ids
@@ -238,16 +248,24 @@ func extractConditionRules(t *testing.T, workflowJSON []byte) []conditionRuleEnt
 	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
 	var out []conditionRuleEntry
 	for _, n := range nodes {
-		nodeID, _ := n["id"].(string)
-		cr, _ := n["conditionRule"].(map[string]interface{})
-		if cr == nil {
+		nodeID, ok := n["id"].(string)
+		if !ok || nodeID == "" {
 			continue
 		}
+
+		// Extract condition rule from node
+		cr, ok := n["conditionRule"].(map[string]interface{})
+		if !ok || cr == nil {
+			continue
+		}
+
 		// Clone so we don't mutate the original
 		rule := make(map[string]interface{}, len(cr))
 		for questionID, pattern := range cr {
 			rule[questionID] = pattern
 		}
+
+		// Add condition rule to output
 		out = append(out, conditionRuleEntry{
 			NodeID: nodeID,
 			Rule:   rule,
