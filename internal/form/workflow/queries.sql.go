@@ -125,17 +125,23 @@ activated AS (
 unchanged AS (
     -- Return the current active workflow when activation is skipped
     -- (request_workflow == current_active AND latest is active)
-    SELECT wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    SELECT wv.id
     FROM workflow_versions AS wv
     WHERE wv.id IN (SELECT id FROM current_active WHERE id IS NOT NULL)
       AND EXISTS (
-        SELECT 1 FROM should_activate AS sa 
+        SELECT 1 FROM should_activate AS sa
         WHERE sa.can_activate = false
       )
+),
+result_row AS (
+    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM activated
+    UNION ALL
+    SELECT wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    FROM workflow_versions AS wv
+    WHERE wv.id IN (SELECT id FROM unchanged)
 )
-SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM activated
-UNION ALL
-SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM unchanged
+SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM result_row
+LIMIT 1
 `
 
 type ActivateParams struct {
@@ -154,7 +160,8 @@ type ActivateRow struct {
 	UpdatedAt  pgtype.Timestamptz
 }
 
-// Return the activated version or unchanged version
+// Return the full row from CTEs (inserted/updated rows are not visible to a later
+// SELECT from the same table in the same statement).
 func (q *Queries) Activate(ctx context.Context, arg ActivateParams) (ActivateRow, error) {
 	row := q.db.QueryRow(ctx, activate, arg.FormID, arg.Workflow, arg.LastEditor)
 	var i ActivateRow
@@ -397,32 +404,21 @@ func (q *Queries) DeleteNode(ctx context.Context, arg DeleteNodeParams) ([]byte,
 }
 
 const get = `-- name: Get :one
-SELECT workflow, id, form_id, last_editor, is_active, created_at, updated_at
-FROM workflow_versions
+SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM workflow_versions
 WHERE form_id = $1
 ORDER BY updated_at DESC
 LIMIT 1
 `
 
-type GetRow struct {
-	Workflow   []byte
-	ID         uuid.UUID
-	FormID     uuid.UUID
-	LastEditor uuid.UUID
-	IsActive   bool
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
-}
-
-func (q *Queries) Get(ctx context.Context, formID uuid.UUID) (GetRow, error) {
+func (q *Queries) Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, error) {
 	row := q.db.QueryRow(ctx, get, formID)
-	var i GetRow
+	var i WorkflowVersion
 	err := row.Scan(
-		&i.Workflow,
 		&i.ID,
 		&i.FormID,
 		&i.LastEditor,
 		&i.IsActive,
+		&i.Workflow,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -442,20 +438,24 @@ updated AS (
     UPDATE workflow_versions AS wv
     SET workflow = $3, last_editor = $2, updated_at = now()
     FROM latest_workflow AS lw
-    WHERE wv.id = lw.id 
+    WHERE wv.id = lw.id
       AND lw.is_active = false
-    RETURNING wv.workflow, wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.created_at, wv.updated_at
+    RETURNING wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
 ),
 created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
     SELECT $1, $2, $3
     FROM latest_workflow AS lw
     WHERE lw.is_active = true
-    RETURNING workflow, id, form_id, last_editor, is_active, created_at, updated_at
+    RETURNING id, form_id, last_editor, is_active, workflow, created_at, updated_at
+),
+result_row AS (
+    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM updated
+    UNION ALL
+    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM created
 )
-SELECT workflow, id, form_id, last_editor, is_active, created_at, updated_at FROM updated
-UNION ALL
-SELECT workflow, id, form_id, last_editor, is_active, created_at, updated_at FROM created
+SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM result_row
+LIMIT 1
 `
 
 type UpdateParams struct {
@@ -465,24 +465,26 @@ type UpdateParams struct {
 }
 
 type UpdateRow struct {
-	Workflow   []byte
 	ID         uuid.UUID
 	FormID     uuid.UUID
 	LastEditor uuid.UUID
 	IsActive   bool
+	Workflow   []byte
 	CreatedAt  pgtype.Timestamptz
 	UpdatedAt  pgtype.Timestamptz
 }
 
+// Return the full row from CTEs (inserted/updated rows are not visible to a later
+// SELECT from the same table in the same statement).
 func (q *Queries) Update(ctx context.Context, arg UpdateParams) (UpdateRow, error) {
 	row := q.db.QueryRow(ctx, update, arg.FormID, arg.LastEditor, arg.Workflow)
 	var i UpdateRow
 	err := row.Scan(
-		&i.Workflow,
 		&i.ID,
 		&i.FormID,
 		&i.LastEditor,
 		&i.IsActive,
+		&i.Workflow,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

@@ -26,7 +26,7 @@ func TestWorkflowService_Update(t *testing.T) {
 		name        string
 		params      Params
 		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context
-		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.UpdateRow, err error)
+		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error)
 		expectedErr bool
 	}
 
@@ -46,7 +46,7 @@ func TestWorkflowService_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.UpdateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error")
 				require.NotEqual(t, uuid.Nil, result.ID, "workflow version ID should be set")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -87,7 +87,7 @@ func TestWorkflowService_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.UpdateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error")
 				require.False(t, result.IsActive, "updated workflow should remain draft")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -129,7 +129,7 @@ func TestWorkflowService_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.UpdateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error")
 				require.False(t, result.IsActive, "new workflow version should be draft")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -188,7 +188,7 @@ func TestWorkflowService_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.UpdateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error")
 				require.False(t, result.IsActive, "workflow should remain draft")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -216,7 +216,7 @@ func TestWorkflowService_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.UpdateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.Error(t, err, "should return error for non-existent form ID")
 				require.NotEmpty(t, err.Error(), "error message should not be empty")
 			},
@@ -236,7 +236,7 @@ func TestWorkflowService_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.UpdateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.Error(t, err, "should return error for invalid JSON workflow")
 				require.NotEmpty(t, err.Error(), "error message should not be empty")
 			},
@@ -256,7 +256,7 @@ func TestWorkflowService_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.UpdateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				if err != nil {
 					require.NotEmpty(t, err.Error(), "error message should not be empty")
 				}
@@ -285,14 +285,17 @@ func TestWorkflowService_Update(t *testing.T) {
 			}
 
 			queries := workflow.New(db)
-			result, err := queries.Update(ctx, workflow.UpdateParams{
+			row, err := queries.Update(ctx, workflow.UpdateParams{
 				FormID:     params.formID,
 				LastEditor: params.userID,
 				Workflow:   params.workflowJSON,
 			})
-
 			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 
+			var result workflow.WorkflowVersion
+			if err == nil {
+				result = workflow.WorkflowVersion(row)
+			}
 			if tc.validate != nil {
 				tc.validate(t, params, db, result, err)
 			}

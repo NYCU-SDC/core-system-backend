@@ -61,7 +61,7 @@ func TestService_ResolveSections_Simple(t *testing.T) {
 	mockQuerier := new(mockQuerier)
 	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
 
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
+	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.WorkflowVersion{
 		ID:       uuid.New(),
 		FormID:   formID,
 		Workflow: workflowJSON,
@@ -146,7 +146,7 @@ func TestService_ResolveSections_WithCondition_ChoiceTrue(t *testing.T) {
 	mockQuerier := new(mockQuerier)
 	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
 
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
+	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.WorkflowVersion{
 		ID:       uuid.New(),
 		FormID:   formID,
 		Workflow: workflowJSON,
@@ -253,7 +253,7 @@ func TestService_ResolveSections_MultipleChoice_AnyMatch(t *testing.T) {
 	mockQuerier := new(mockQuerier)
 	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
 
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
+	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.WorkflowVersion{
 		ID:       uuid.New(),
 		FormID:   formID,
 		Workflow: workflowJSON,
@@ -319,7 +319,7 @@ func TestService_ResolveSections_EmptyWorkflow(t *testing.T) {
 	mockQuerier := new(mockQuerier)
 	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
 
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
+	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.WorkflowVersion{
 		ID:       uuid.New(),
 		FormID:   formID,
 		Workflow: workflowJSON,

@@ -27,7 +27,7 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 		name        string
 		params      Params
 		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context
-		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.ActivateRow, err error)
+		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error)
 		expectedErr bool
 	}
 
@@ -44,7 +44,7 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 				params.workflowJSON = workflowJSON
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.ActivateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error for valid workflow")
 				require.NotEqual(t, uuid.Nil, result.ID, "workflow version ID should be set")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
