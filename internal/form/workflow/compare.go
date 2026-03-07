@@ -78,19 +78,10 @@ func buildNodeStructureMap(nodes []map[string]interface{}) map[string]nodeStruct
 			continue
 		}
 
-		next, ok := node["next"].(string)
-		if !ok {
-			continue
-		}
-
-		nextTrue, ok := node["nextTrue"].(string)
-		if !ok {
-			continue
-		}
-		nextFalse, ok := node["nextFalse"].(string)
-		if !ok {
-			continue
-		}
+		// Edge fields are optional; use empty string when absent.
+		next, _ := node["next"].(string)
+		nextTrue, _ := node["nextTrue"].(string)
+		nextFalse, _ := node["nextFalse"].(string)
 
 		rule := conditionRuleStructure{}
 		cr, ok := node["conditionRule"].(map[string]interface{})
