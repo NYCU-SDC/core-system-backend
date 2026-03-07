@@ -42,6 +42,12 @@ func TestService_Activate(t *testing.T) {
 				workflowJSON: createWorkflow_ComplexValid(t),
 			},
 		},
+		{
+			name: "activation preserves node IDs and question IDs",
+			params: Params{
+				workflowJSON: createWorkflow_ConditionRule(t, uuid.New().String()),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -58,28 +64,32 @@ func TestService_Activate(t *testing.T) {
 			mockValidator := new(mockValidator)
 			service := createTestService(t, logger, tracer, mockQuerier, mockValidator, nil)
 
-			mockValidator.On("Activate", mock.Anything, formID, tc.params.workflowJSON, mock.Anything).Return(nil).Once()
+			workflowJSON := tc.params.workflowJSON
+			mockValidator.On("Activate", mock.Anything, formID, workflowJSON, mock.Anything).Return(nil).Once()
 
 			mockQuerier.On("Activate", mock.Anything, workflow.ActivateParams{
 				FormID:     formID,
 				LastEditor: userID,
-				Workflow:   tc.params.workflowJSON,
+				Workflow:   workflowJSON,
 			}).Return(workflow.ActivateRow{
 				ID:         uuid.New(),
 				FormID:     formID,
 				LastEditor: userID,
 				IsActive:   true,
-				Workflow:   tc.params.workflowJSON,
+				Workflow:   workflowJSON,
 			}, nil).Once()
 
-			result, err := service.Activate(ctx, formID, userID, tc.params.workflowJSON)
+			result, err := service.Activate(ctx, formID, userID, workflowJSON)
 
 			require.NoError(t, err, "unexpected error: %v", err)
 			require.NotNilf(t, result.ID, "result.ID is nil")
 			require.Equal(t, formID, result.FormID, "formID mismatch")
 			require.Equal(t, userID, result.LastEditor, "userID mismatch")
 			require.True(t, result.IsActive, "result.IsActive is false")
-			require.Equal(t, tc.params.workflowJSON, result.Workflow, "workflow mismatch")
+			require.Equal(t, workflowJSON, result.Workflow, "workflow mismatch")
+			// Node IDs and question IDs in the workflow must remain unchanged after activation.
+			require.Equal(t, extractNodeIDs(t, workflowJSON), extractNodeIDs(t, result.Workflow), "node IDs must remain unchanged after activate")
+			require.Equal(t, extractQuestionIDs(t, workflowJSON), extractQuestionIDs(t, result.Workflow), "question IDs in condition rules must remain unchanged after activate")
 
 			mockValidator.AssertExpectations(t)
 			mockQuerier.AssertExpectations(t)
