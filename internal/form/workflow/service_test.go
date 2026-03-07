@@ -2,8 +2,10 @@ package workflow_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
@@ -106,6 +108,13 @@ func TestService_Update(t *testing.T) {
 			},
 			expectErr: false,
 		},
+		{
+			name: "draft update preserves version ID and workflow IDs",
+			params: Params{
+				workflowJSON: createWorkflow_ConditionRule(t, uuid.New().String()),
+			},
+			expectErr: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -123,14 +132,17 @@ func TestService_Update(t *testing.T) {
 			service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, realValidator, nil)
 
 			workflowJSON := tc.params.workflowJSON
+			versionID := uuid.New()
 			expectedRow := workflow.UpdateRow{
+				ID:         versionID,
 				FormID:     formID,
 				LastEditor: userID,
+				IsActive:   false,
 				Workflow:   workflowJSON,
 			}
 
 			currentWorkflowRow := workflow.GetRow{
-				ID:         uuid.New(),
+				ID:         versionID,
 				FormID:     formID,
 				LastEditor: userID,
 				IsActive:   false,
@@ -152,10 +164,51 @@ func TestService_Update(t *testing.T) {
 			} else {
 				require.NoError(t, err, "unexpected error: %v", err)
 				require.Equal(t, expectedRow, result)
+				// When updating a draft, returned row ID must match current workflow version ID.
+				require.Equal(t, currentWorkflowRow.ID, result.ID, "Service.Update should preserve draft version ID")
+				// Node IDs and question IDs in the workflow must remain unchanged.
+				require.Equal(t, extractNodeIDs(t, workflowJSON), extractNodeIDs(t, result.Workflow), "node IDs must remain unchanged after update")
+				require.Equal(t, extractQuestionIDs(t, workflowJSON), extractQuestionIDs(t, result.Workflow), "question IDs in condition rules must remain unchanged after update")
 				mockQuerier.AssertExpectations(t)
 			}
 		})
 	}
+}
+
+// extractNodeIDs returns sorted node IDs from workflow JSON (for comparison in tests).
+func extractNodeIDs(t *testing.T, workflowJSON []byte) []string {
+	t.Helper()
+	var nodes []map[string]interface{}
+	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+	var ids []string
+	for _, n := range nodes {
+		id, ok := n["id"].(string)
+		if ok && id != "" {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// extractQuestionIDs returns sorted question IDs from condition rules in workflow JSON.
+func extractQuestionIDs(t *testing.T, workflowJSON []byte) []string {
+	t.Helper()
+	var nodes []map[string]interface{}
+	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+	var ids []string
+	for _, n := range nodes {
+		cr, _ := n["conditionRule"].(map[string]interface{})
+		if cr == nil {
+			continue
+		}
+		q, ok := cr["question"].(string)
+		if ok && q != "" {
+			ids = append(ids, q)
+		}
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 func TestService_CreateNode(t *testing.T) {
