@@ -72,10 +72,26 @@ func buildNodeStructureMap(nodes []map[string]interface{}) map[string]nodeStruct
 		if id == "" {
 			continue
 		}
-		typ, _ := node["type"].(string)
-		next, _ := node["next"].(string)
-		nextTrue, _ := node["nextTrue"].(string)
-		nextFalse, _ := node["nextFalse"].(string)
+
+		typ, ok := node["type"].(string)
+		if !ok {
+			continue
+		}
+
+		next, ok := node["next"].(string)
+		if !ok {
+			continue
+		}
+
+		nextTrue, ok := node["nextTrue"].(string)
+		if !ok {
+			continue
+		}
+		nextFalse, ok := node["nextFalse"].(string)
+		if !ok {
+			continue
+		}
+
 		rule := conditionRuleStructure{}
 		cr, ok := node["conditionRule"].(map[string]interface{})
 		if ok {
@@ -84,6 +100,7 @@ func buildNodeStructureMap(nodes []map[string]interface{}) map[string]nodeStruct
 			rule.Pattern = strVal(cr, "pattern")
 			rule.ChoiceOptionID = strVal(cr, "choiceOptionId")
 		}
+
 		out[id] = nodeStructure{
 			ID:            id,
 			Type:          typ,
@@ -101,7 +118,11 @@ func strVal(m map[string]interface{}, key string) string {
 	if !ok {
 		return ""
 	}
-	s, _ := v.(string)
+
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
 	return s
 }
 
