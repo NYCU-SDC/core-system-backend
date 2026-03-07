@@ -85,17 +85,21 @@ func (s *Service) EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, 
 	if s.questionStore == nil {
 		return apiWorkflow, nil
 	}
+
+	// Get sections from question store
 	sections, err := s.questionStore.ListSections(ctx, formID)
 	if err != nil {
 		return nil, err
 	}
+
+	// Convert sections to map of section IDs to section titles
 	sectionTitles := make(map[string]string, len(sections))
 	for id, sec := range sections {
-		if sec.Title.Valid {
-			sectionTitles[id] = sec.Title.String
-		} else {
+		if !sec.Title.Valid {
 			sectionTitles[id] = ""
+			continue
 		}
+		sectionTitles[id] = sec.Title.String
 	}
 	return EnrichWorkflowLabels(ctx, apiWorkflow, formID, sectionTitles, s.questionStore)
 }
