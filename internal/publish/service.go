@@ -9,10 +9,10 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/internal/inbox"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/google/uuid"
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -33,8 +33,8 @@ type InboxPort interface {
 }
 
 type WorkflowStore interface {
-	Get(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error)
-	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (workflow.ActivateRow, error)
+	Get(ctx context.Context, formID uuid.UUID) (workflow.WorkflowVersion, error)
+	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (workflow.WorkflowVersion, error)
 }
 
 type Selection struct {

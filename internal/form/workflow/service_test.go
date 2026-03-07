@@ -2,8 +2,10 @@ package workflow_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
@@ -40,6 +42,12 @@ func TestService_Activate(t *testing.T) {
 				workflowJSON: createWorkflow_ComplexValid(t),
 			},
 		},
+		{
+			name: "activation preserves node IDs and question IDs",
+			params: Params{
+				workflowJSON: createWorkflow_ConditionRule(t, uuid.New().String()),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -56,28 +64,34 @@ func TestService_Activate(t *testing.T) {
 			mockValidator := new(mockValidator)
 			service := createTestService(t, logger, tracer, mockQuerier, mockValidator, nil)
 
-			mockValidator.On("Activate", mock.Anything, formID, tc.params.workflowJSON, mock.Anything).Return(nil).Once()
+			workflowJSON := tc.params.workflowJSON
+			mockValidator.On("Activate", mock.Anything, formID, workflowJSON, mock.Anything).Return(nil).Once()
 
+			activatedID := uuid.New()
 			mockQuerier.On("Activate", mock.Anything, workflow.ActivateParams{
 				FormID:     formID,
 				LastEditor: userID,
-				Workflow:   tc.params.workflowJSON,
+				Workflow:   workflowJSON,
 			}).Return(workflow.ActivateRow{
-				ID:         uuid.New(),
+				ID:         activatedID,
 				FormID:     formID,
 				LastEditor: userID,
 				IsActive:   true,
-				Workflow:   tc.params.workflowJSON,
+				Workflow:   workflowJSON,
 			}, nil).Once()
 
-			result, err := service.Activate(ctx, formID, userID, tc.params.workflowJSON)
+			result, err := service.Activate(ctx, formID, userID, workflowJSON)
 
 			require.NoError(t, err, "unexpected error: %v", err)
 			require.NotNilf(t, result.ID, "result.ID is nil")
 			require.Equal(t, formID, result.FormID, "formID mismatch")
 			require.Equal(t, userID, result.LastEditor, "userID mismatch")
 			require.True(t, result.IsActive, "result.IsActive is false")
-			require.Equal(t, tc.params.workflowJSON, result.Workflow, "workflow mismatch")
+			require.Equal(t, workflowJSON, result.Workflow, "workflow mismatch")
+			// Node IDs, question IDs, and condition rules in the workflow must remain unchanged after activation.
+			require.Equal(t, extractNodeIDs(t, workflowJSON), extractNodeIDs(t, result.Workflow), "node IDs must remain unchanged after activate")
+			require.Equal(t, extractQuestionIDs(t, workflowJSON), extractQuestionIDs(t, result.Workflow), "question IDs in condition rules must remain unchanged after activate")
+			require.Equal(t, extractConditionRules(t, workflowJSON), extractConditionRules(t, result.Workflow), "condition rules in condition nodes must remain unchanged after activate")
 
 			mockValidator.AssertExpectations(t)
 			mockQuerier.AssertExpectations(t)
@@ -106,6 +120,13 @@ func TestService_Update(t *testing.T) {
 			},
 			expectErr: false,
 		},
+		{
+			name: "draft update preserves version ID and workflow IDs",
+			params: Params{
+				workflowJSON: createWorkflow_ConditionRule(t, uuid.New().String()),
+			},
+			expectErr: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -123,14 +144,17 @@ func TestService_Update(t *testing.T) {
 			service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, realValidator, nil)
 
 			workflowJSON := tc.params.workflowJSON
-			expectedRow := workflow.UpdateRow{
+			versionID := uuid.New()
+			updateRow := workflow.UpdateRow{
+				ID:         versionID,
 				FormID:     formID,
 				LastEditor: userID,
+				IsActive:   false,
 				Workflow:   workflowJSON,
 			}
 
-			currentWorkflowRow := workflow.GetRow{
-				ID:         uuid.New(),
+			currentWorkflowRow := workflow.WorkflowVersion{
+				ID:         versionID,
 				FormID:     formID,
 				LastEditor: userID,
 				IsActive:   false,
@@ -142,7 +166,7 @@ func TestService_Update(t *testing.T) {
 				FormID:     formID,
 				LastEditor: userID,
 				Workflow:   workflowJSON,
-			}).Return(expectedRow, nil).Once()
+			}).Return(updateRow, nil).Once()
 
 			result, err := service.Update(ctx, formID, workflowJSON, userID)
 
@@ -151,11 +175,104 @@ func TestService_Update(t *testing.T) {
 				mockQuerier.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 			} else {
 				require.NoError(t, err, "unexpected error: %v", err)
-				require.Equal(t, expectedRow, result)
+				expectedVersion := workflow.WorkflowVersion(updateRow)
+				require.Equal(t, expectedVersion, result)
+				// When updating a draft, returned row ID must match current workflow version ID.
+				require.Equal(t, currentWorkflowRow.ID, result.ID, "Service.Update should preserve draft version ID")
+				// Node IDs, question IDs, and condition rules in the workflow must remain unchanged.
+				require.Equal(t, extractNodeIDs(t, workflowJSON), extractNodeIDs(t, result.Workflow), "node IDs must remain unchanged after update")
+				require.Equal(t, extractQuestionIDs(t, workflowJSON), extractQuestionIDs(t, result.Workflow), "question IDs in condition rules must remain unchanged after update")
+				require.Equal(t, extractConditionRules(t, workflowJSON), extractConditionRules(t, result.Workflow), "condition rules in condition nodes must remain unchanged after update")
 				mockQuerier.AssertExpectations(t)
 			}
 		})
 	}
+}
+
+// extractNodeIDs returns sorted node IDs from workflow JSON (for comparison in tests).
+func extractNodeIDs(t *testing.T, workflowJSON []byte) []string {
+	t.Helper()
+	var nodes []map[string]interface{}
+	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+
+	// Extract node IDs from nodes
+	var ids []string
+	for _, n := range nodes {
+		id, ok := n["id"].(string)
+		if !ok || id == "" {
+			continue
+		}
+		ids = append(ids, id)
+	}
+
+	sort.Strings(ids)
+	return ids
+}
+
+// extractQuestionIDs returns sorted question IDs from condition rules in workflow JSON.
+func extractQuestionIDs(t *testing.T, workflowJSON []byte) []string {
+	t.Helper()
+	var nodes []map[string]interface{}
+	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+
+	// Extract question IDs from condition rules
+	var ids []string
+	for _, n := range nodes {
+		// Extract condition rule from node
+		cr, ok := n["conditionRule"].(map[string]interface{})
+		if !ok || cr == nil {
+			continue
+		}
+
+		// Extract question ID from condition rule
+		q, ok := cr["question"].(string)
+		if !ok || q == "" {
+			continue
+		}
+		ids = append(ids, q)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// conditionRuleEntry holds a condition node ID and its conditionRule for comparison.
+type conditionRuleEntry struct {
+	NodeID string
+	Rule   map[string]interface{}
+}
+
+// extractConditionRules returns condition rules from workflow JSON, sorted by node ID, for comparison.
+func extractConditionRules(t *testing.T, workflowJSON []byte) []conditionRuleEntry {
+	t.Helper()
+	var nodes []map[string]interface{}
+	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+	var out []conditionRuleEntry
+	for _, n := range nodes {
+		nodeID, ok := n["id"].(string)
+		if !ok || nodeID == "" {
+			continue
+		}
+
+		// Extract condition rule from node
+		cr, ok := n["conditionRule"].(map[string]interface{})
+		if !ok || cr == nil {
+			continue
+		}
+
+		// Clone so we don't mutate the original
+		rule := make(map[string]interface{}, len(cr))
+		for questionID, pattern := range cr {
+			rule[questionID] = pattern
+		}
+
+		// Add condition rule to output
+		out = append(out, conditionRuleEntry{
+			NodeID: nodeID,
+			Rule:   rule,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].NodeID < out[j].NodeID })
+	return out
 }
 
 func TestService_CreateNode(t *testing.T) {
@@ -299,7 +416,7 @@ func TestService_Get(t *testing.T) {
 			name:   "successful get",
 			formID: uuid.New(),
 			setupMock: func(mq *mockQuerier, formID uuid.UUID) {
-				expectedRow := workflow.GetRow{
+				expectedRow := workflow.WorkflowVersion{
 					ID:         uuid.New(),
 					FormID:     formID,
 					LastEditor: uuid.New(),
@@ -329,7 +446,7 @@ func TestService_Get(t *testing.T) {
 
 			if tc.expectErr {
 				require.Error(t, err)
-				require.Equal(t, workflow.GetRow{}, result)
+				require.Equal(t, workflow.WorkflowVersion{}, result)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, result.ID)
