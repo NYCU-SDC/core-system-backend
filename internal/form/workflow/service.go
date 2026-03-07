@@ -39,13 +39,13 @@ type Service struct {
 	questionStore QuestionStore
 }
 
-func NewService(logger *zap.Logger, db DBTX, questionService QuestionStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore) *Service {
 	return &Service{
 		logger:        logger,
 		queries:       New(db),
 		tracer:        otel.Tracer("workflow/service"),
 		validator:     NewValidator(),
-		questionStore: questionService,
+		questionStore: questionStore,
 	}
 }
 
@@ -76,6 +76,28 @@ func (s *Service) Get(ctx context.Context, formID uuid.UUID) (GetRow, error) {
 	}
 
 	return workflow, nil
+}
+
+// EnrichWorkflowResponse returns the given API-format workflow JSON with section and
+// condition labels enriched (section title, condition rule). Uses questionStore.ListSections
+// for section titles; if enrichment fails, returns the original workflow.
+func (s *Service) EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, apiWorkflow []byte) ([]byte, error) {
+	if s.questionStore == nil {
+		return apiWorkflow, nil
+	}
+	sections, err := s.questionStore.ListSections(ctx, formID)
+	if err != nil {
+		return nil, err
+	}
+	sectionTitles := make(map[string]string, len(sections))
+	for id, sec := range sections {
+		if sec.Title.Valid {
+			sectionTitles[id] = sec.Title.String
+		} else {
+			sectionTitles[id] = ""
+		}
+	}
+	return EnrichWorkflowLabels(ctx, apiWorkflow, formID, sectionTitles, s.questionStore)
 }
 
 // getRowToUpdateRow converts a GetRow to UpdateRow (same field set).

@@ -27,6 +27,7 @@ type Store interface {
 	DeleteNode(ctx context.Context, formID uuid.UUID, nodeID uuid.UUID, userID uuid.UUID) ([]byte, error)
 	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (ActivateRow, error)
 	GetValidationInfo(ctx context.Context, formID uuid.UUID, workflow []byte) ([]ValidationInfo, error)
+	EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, apiWorkflow []byte) ([]byte, error)
 }
 
 type Handler struct {
@@ -231,6 +232,11 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	apiWorkflow, err = h.store.EnrichWorkflowResponse(traceCtx, formID, apiWorkflow)
+	if err != nil {
+		logger.Warn("failed to enrich workflow labels", zap.Error(err), zap.String("formId", formID.String()))
+	}
+
 	// Check validation status
 	validationInfos, err := h.store.GetValidationInfo(traceCtx, formID, []byte(row.Workflow))
 	if err != nil {
@@ -322,6 +328,11 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow to API format: %w", err), logger)
 		return
+	}
+
+	apiWorkflow, err = h.store.EnrichWorkflowResponse(traceCtx, formID, apiWorkflow)
+	if err != nil {
+		logger.Warn("failed to enrich workflow labels", zap.Error(err), zap.String("formId", formID.String()))
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, json.RawMessage(apiWorkflow))
