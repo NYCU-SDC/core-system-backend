@@ -1,11 +1,13 @@
 package workflow
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/test/integration"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	workflowbuilder "NYCU-SDC/core-system-backend/test/testdata/dbbuilder/workflow"
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
@@ -296,4 +298,61 @@ func TestWorkflowService_Update(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestWorkflowService_Update_NoNewVersionWhenOnlyLabelsChange verifies that
+// when the latest workflow version is active and the incoming workflow differs
+// only by labels (same structure), Service.Update returns the current version
+// and does not create a new workflow version.
+func TestWorkflowService_Update_NoNewVersionWhenOnlyLabelsChange(t *testing.T) {
+	resourceManager, logger, err := integration.GetOrInitResource()
+	if err != nil {
+		t.Fatalf("failed to get resource manager: %v", err)
+	}
+
+	db, rollback, err := resourceManager.SetupPostgres()
+	if err != nil {
+		t.Fatalf("failed to setup postgres: %v", err)
+	}
+	defer rollback()
+
+	ctx := context.Background()
+	builder := workflowbuilder.New(t, db)
+	data := builder.SetupTestData("update-labels-only-org", "update-labels-only-unit")
+
+	// Create and activate a workflow (start -> end)
+	initialWorkflow, startID, endID := builder.CreateStartEndWorkflow()
+	builder.CreateActiveWorkflow(data.FormRow.ID, data.User, initialWorkflow)
+
+	activeVersionID := builder.GetActiveVersionID(data.FormRow.ID)
+	versionCountBefore := countWorkflowVersions(t, db, data.FormRow.ID)
+	require.Equal(t, 1, versionCountBefore, "should have exactly one workflow version after activate")
+
+	// Same structure as initialWorkflow but different labels only
+	labelOnlyWorkflow, err := json.Marshal([]map[string]interface{}{
+		{"id": startID.String(), "type": "start", "label": "Updated Start Label", "next": endID.String()},
+		{"id": endID.String(), "type": "end", "label": "Updated End Label"},
+	})
+	require.NoError(t, err)
+
+	questionService := question.NewService(logger, db, nil)
+	workflowService := workflow.NewService(logger, db, questionService)
+
+	result, err := workflowService.Update(ctx, data.FormRow.ID, labelOnlyWorkflow, data.User)
+	require.NoError(t, err)
+
+	// Should return the existing active version, not create a new one
+	require.Equal(t, activeVersionID, result.ID, "should return current active version, not create new one")
+	require.True(t, result.IsActive, "returned version should still be active")
+
+	versionCountAfter := countWorkflowVersions(t, db, data.FormRow.ID)
+	require.Equal(t, 1, versionCountAfter, "should not create a new workflow version when only labels differ")
+}
+
+func countWorkflowVersions(t *testing.T, db dbbuilder.DBTX, formID uuid.UUID) int {
+	t.Helper()
+	var count int
+	err := db.QueryRow(context.Background(), "SELECT COUNT(*) FROM workflow_versions WHERE form_id = $1", formID).Scan(&count)
+	require.NoError(t, err)
+	return count
 }

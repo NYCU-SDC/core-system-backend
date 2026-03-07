@@ -78,9 +78,25 @@ func (s *Service) Get(ctx context.Context, formID uuid.UUID) (GetRow, error) {
 	return workflow, nil
 }
 
+// getRowToUpdateRow converts a GetRow to UpdateRow (same field set).
+func getRowToUpdateRow(r GetRow) UpdateRow {
+	return UpdateRow{
+		Workflow:   r.Workflow,
+		ID:         r.ID,
+		FormID:     r.FormID,
+		LastEditor: r.LastEditor,
+		IsActive:   r.IsActive,
+		CreatedAt:  r.CreatedAt,
+		UpdatedAt:  r.UpdatedAt,
+	}
+}
+
 // Update updates a workflow version conditionally:
-// - If latest workflow is active: creates a new workflow version
-// - If latest workflow is draft: updates the existing workflow version
+//   - If latest workflow is active and incoming workflow is structurally equal
+//     (same nodes, edges, condition rules; labels ignored): returns current version
+//     without creating a new one.
+//   - If latest workflow is active and structure differs: creates a new workflow version.
+//   - If latest workflow is draft: updates the existing workflow version.
 func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte, userID uuid.UUID) (UpdateRow, error) {
 	methodName := "Update"
 	ctx, span := s.tracer.Start(ctx, methodName)
@@ -123,6 +139,18 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 		err = fmt.Errorf("%w: %w", internal.ErrWorkflowValidationFailed, err)
 		span.RecordError(err)
 		return UpdateRow{}, err
+	}
+
+	// When latest version is active, avoid creating a new version if only
+	// display fields (e.g. labels) changed—compare structure only.
+	if err == nil && currentWorkflow.IsActive {
+		equal, cmpErr := structurallyEqual(currentWorkflow.Workflow, workflow)
+		if cmpErr != nil {
+			logger.Warn("workflow structural comparison failed", zap.Error(cmpErr))
+			// Fall through to normal update
+		} else if equal {
+			return getRowToUpdateRow(currentWorkflow), nil
+		}
 	}
 
 	updated, err := s.queries.Update(ctx, UpdateParams{
