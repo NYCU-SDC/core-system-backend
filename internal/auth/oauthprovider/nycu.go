@@ -43,13 +43,13 @@ func (n *NYCUConfig) Config() *oauth2.Config {
 	return n.config
 }
 
-func (g *NYCUConfig) ConfigWithCustomRedirectURL(redirectURL string) *oauth2.Config {
+func (n *NYCUConfig) ConfigWithCustomRedirectURL(redirectURL string) *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     g.config.ClientID,
-		ClientSecret: g.config.ClientSecret,
+		ClientID:     n.config.ClientID,
+		ClientSecret: n.config.ClientSecret,
 		RedirectURL:  redirectURL,
-		Scopes:       g.config.Scopes,
-		Endpoint:     g.config.Endpoint,
+		Scopes:       n.config.Scopes,
+		Endpoint:     n.config.Endpoint,
 	}
 }
 
