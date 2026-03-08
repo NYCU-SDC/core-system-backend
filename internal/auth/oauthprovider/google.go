@@ -46,6 +46,16 @@ func (g *GoogleConfig) Config() *oauth2.Config {
 	return g.config
 }
 
+func (g *GoogleConfig) ConfigWithCustomRedirectURL(redirectURL string) *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     g.config.ClientID,
+		ClientSecret: g.config.ClientSecret,
+		RedirectURL:  redirectURL,
+		Scopes:       g.config.Scopes,
+		Endpoint:     g.config.Endpoint,
+	}
+}
+
 func (g *GoogleConfig) Exchange(ctx context.Context, code string) (*oauth2.Token, error) {
 	return g.config.Exchange(ctx, code)
 }

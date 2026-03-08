@@ -43,6 +43,16 @@ func (n *NYCUConfig) Config() *oauth2.Config {
 	return n.config
 }
 
+func (g *NYCUConfig) ConfigWithCustomRedirectURL(redirectURL string) *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     g.config.ClientID,
+		ClientSecret: g.config.ClientSecret,
+		RedirectURL:  redirectURL,
+		Scopes:       g.config.Scopes,
+		Endpoint:     g.config.Endpoint,
+	}
+}
+
 func (n *NYCUConfig) Exchange(ctx context.Context, code string) (*oauth2.Token, error) {
 	return n.config.Exchange(ctx, code)
 }

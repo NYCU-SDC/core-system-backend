@@ -54,6 +54,7 @@ type UserStore interface {
 type OAuthProvider interface {
 	Name() string
 	Config() *oauth2.Config
+	ConfigWithCustomRedirectURL(redirectURL string) *oauth2.Config
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
 	GetUserInfo(ctx context.Context, token *oauth2.Token) (user.User, user.Auth, string, error)
 }
@@ -171,6 +172,13 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseForCallback, providerName)
+	} else {
+		if h.devMode {
+			customBase := r.URL.Query().Get("base")
+			if customBase != "" {
+				callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", strings.TrimRight(customBase, "/"), providerName)
+			}
+		}
 	}
 
 	// Create JWT state for OAuth flow
@@ -181,7 +189,14 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate OAuth authorization URL and redirect
-	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
+	var config *oauth2.Config
+	if h.oauthProxyBaseURL == "" && callbackURL != "" {
+		config = provider.ConfigWithCustomRedirectURL(callbackURL)
+	} else {
+		config = provider.Config()
+	}
+
+	authURL := config.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
