@@ -67,9 +67,9 @@ type claims struct {
 	jwt.RegisteredClaims
 }
 
-// oauthProxyClaims defines contextual information for an OAuth transaction.
+// OauthProxyClaims defines contextual information for an OAuth transaction.
 // It is encoded into the 'state' parameter as a signed JWT to preserve integrity and authenticity.
-type oauthProxyClaims struct {
+type OauthProxyClaims struct {
 	// Service is the logical service requesting authentication (e.g., "core-system", "clustron").
 	Service string
 
@@ -87,7 +87,7 @@ type oauthProxyClaims struct {
 	jwt.RegisteredClaims
 }
 
-// oauthFormClaims extends oauthProxyClaims with form-specific context needed for
+// oauthFormClaims extends OauthProxyClaims with form-specific context needed for
 // OAuth-connected form questions. It carries the response and question IDs so that
 // the callback handler can store the OAuth result as a form answer.
 type oauthFormClaims struct {
@@ -149,7 +149,7 @@ func (s Service) NewState(ctx context.Context, service, environment, callbackURL
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	id := uuid.New()
-	claims := &oauthProxyClaims{
+	claims := &OauthProxyClaims{
 		Service:     service,
 		Environment: environment,
 		CallbackURL: callbackURL,
@@ -235,7 +235,7 @@ func (s Service) Parse(ctx context.Context, tokenString string) (user.User, erro
 }
 
 // ParseState parses the state jwt payload to get redirect URL
-func (s Service) ParseState(ctx context.Context, tokenString string) (string, error) {
+func (s Service) ParseState(ctx context.Context, tokenString string) (*OauthProxyClaims, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ParseState")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -244,41 +244,41 @@ func (s Service) ParseState(ctx context.Context, tokenString string) (string, er
 		return []byte(s.oauthProxySecret), nil
 	}
 
-	tokenClaims := &oauthProxyClaims{}
+	tokenClaims := &OauthProxyClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, tokenClaims, secret)
 	if err != nil {
 		switch {
 		case errors.Is(err, jwt.ErrTokenMalformed):
 			logger.Warn("Failed to parse JWT token due to malformed structure, this is not a JWT token", zap.String("token", tokenString), zap.String("error", err.Error()))
-			return "", err
+			return nil, err
 		case errors.Is(err, jwt.ErrSignatureInvalid):
 			logger.Warn("Failed to parse JWT token due to invalid signature", zap.String("error", err.Error()))
-			return "", err
+			return nil, err
 		case errors.Is(err, jwt.ErrTokenExpired):
 			expiredTime, getErr := token.Claims.GetExpirationTime()
 			if getErr != nil {
 				logger.Error("Failed to parse JWT token due to expired timestamp", zap.String("error", getErr.Error()))
-				return "", err
+				return nil, err
 			}
 			logger.Warn("Failed to parse JWT token due to expired timestamp", zap.String("error", err.Error()), zap.Time("expired_at", expiredTime.Time))
-			return "", err
+			return nil, err
 		case errors.Is(err, jwt.ErrTokenNotValidYet):
 			notBeforeTime, getErr := token.Claims.GetNotBefore()
 			if getErr != nil {
 				logger.Error("Failed to parse JWT token due to not valid yet timestamp", zap.String("error", getErr.Error()))
-				return "", err
+				return nil, err
 			}
 			logger.Warn("Failed to parse JWT token due to not valid yet timestamp", zap.String("error", err.Error()), zap.Time("not_before", notBeforeTime.Time))
-			return "", err
+			return nil, err
 		default:
 			logger.Error("Failed to parse JWT token", zap.Error(err))
-			return "", err
+			return nil, err
 		}
 	}
 
 	logger.Debug("Successfully parsed OAuth proxy state token", zap.String("service", tokenClaims.Service), zap.String("environment", tokenClaims.Environment), zap.String("callback_url", tokenClaims.CallbackURL), zap.String("redirect_url", tokenClaims.RedirectURL))
 
-	return tokenClaims.RedirectURL, nil
+	return tokenClaims, nil
 }
 
 // NewFormState creates a signed JWT to be used as the OAuth state parameter for form-question OAuth flows.
