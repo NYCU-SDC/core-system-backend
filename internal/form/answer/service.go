@@ -489,7 +489,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		_ = f.Close()
 
 		if saveErr != nil {
-			s.logger.Error("failed to save uploaded file", zap.String("fileID", fh.Filename), zap.Error(saveErr))
+			s.logger.Error("failed to save uploaded file", zap.String("filename", fh.Filename), zap.Error(saveErr))
 			span.RecordError(saveErr)
 			deleteFiles(fileIDs)
 			return nil, Answer{}, nil, fmt.Errorf("failed to save file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
