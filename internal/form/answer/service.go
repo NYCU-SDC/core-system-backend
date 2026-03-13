@@ -535,3 +535,140 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 
 	return newEntries, upsertedAnswers[0], answerableList[0], nil
 }
+
+// DeleteUploadedFile deletes a specific uploaded file from an upload_file question answer.
+func (s Service) DeleteUploadedFile(ctx context.Context, formID, responseID, questionID, fileID uuid.UUID) (Answer, Answerable, error) {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteUploadedFile")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	// Get the answerable map to validate question type and membership
+	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
+	if err != nil {
+		logger.Error("failed to get answerable map for form",
+			zap.String("formID", formID.String()),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+		return Answer{}, nil, internal.ErrInternalServerError
+	}
+
+	answerable, found := answerableMap[questionID.String()]
+	if !found {
+		return Answer{}, nil, internal.ErrQuestionNotFound
+	}
+
+	// Validate the question is of upload_file type
+	if answerable.Question().Type != question.QuestionTypeUploadFile {
+		logger.Error("invalid question type for file deletion",
+			zap.String("questionID", questionID.String()),
+			zap.String("expectedType", string(question.QuestionTypeUploadFile)),
+			zap.String("actualType", string(answerable.Question().Type)),
+		)
+		span.RecordError(internal.ErrQuestionTypeMismatch)
+		return Answer{}, nil, internal.ErrQuestionTypeMismatch
+	}
+
+	// Read the existing answer
+	existingAnswer, err := s.queries.GetByResponseIDAndQuestionID(traceCtx, GetByResponseIDAndQuestionIDParams{
+		ResponseID: responseID,
+		QuestionID: questionID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			logger.Warn("upload_file answer not found when deleting file",
+				zap.String("responseID", responseID.String()),
+				zap.String("questionID", questionID.String()),
+				zap.String("fileID", fileID.String()),
+			)
+			return Answer{}, nil, internal.ErrNotFound
+		}
+
+		logger.Error("failed to get existing upload file answer",
+			zap.String("responseID", responseID.String()),
+			zap.String("questionID", questionID.String()),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+		return Answer{}, nil, internal.ErrInternalServerError
+	}
+
+	var existingUploadAnswer shared.UploadFileAnswer
+	err = json.Unmarshal(existingAnswer.Value, &existingUploadAnswer)
+	if err != nil {
+		logger.Error("failed to unmarshal existing upload file answer",
+			zap.String("questionID", questionID.String()),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+		return Answer{}, nil, internal.ErrInternalServerError
+	}
+
+	// Remove the specified file from the answer
+	filteredEntries := make([]shared.UploadFileEntry, 0, len(existingUploadAnswer.Files))
+	foundFile := false
+
+	for _, entry := range existingUploadAnswer.Files {
+		if entry.FileID == fileID {
+			foundFile = true
+			continue
+		}
+		filteredEntries = append(filteredEntries, entry)
+	}
+
+	if !foundFile {
+		logger.Warn("file not found in upload_file answer",
+			zap.String("responseID", responseID.String()),
+			zap.String("questionID", questionID.String()),
+			zap.String("fileID", fileID.String()),
+		)
+		return Answer{}, nil, internal.ErrFileNotFound
+	}
+
+	// Rebuild and upsert the updated answer
+	answerValue, err := json.Marshal(shared.UploadFileAnswer{
+		Files: filteredEntries,
+	})
+	if err != nil {
+		logger.Error("failed to marshal updated upload file answer",
+			zap.String("questionID", questionID.String()),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+		return Answer{}, nil, internal.ErrInternalServerError
+	}
+
+	upsertedAnswers, answerableList, errs := s.Upsert(traceCtx, formID, responseID, []shared.AnswerParam{
+		{
+			QuestionID: questionID.String(),
+			Value:      answerValue,
+		},
+	})
+	if len(errs) > 0 {
+		logger.Error("failed to upsert upload file answer after deleting file",
+			zap.String("questionID", questionID.String()),
+			zap.Error(errs[0]),
+		)
+		span.RecordError(errs[0])
+		return Answer{}, nil, errs[0]
+	}
+
+	// Cleanup of the detached physical file after answer update succeeded.
+	err = s.fileService.Delete(traceCtx, fileID)
+	if err != nil {
+		logger.Warn("failed to delete detached file after answer update",
+			zap.String("fileID", fileID.String()),
+			zap.Error(err),
+		)
+	}
+
+	logger.Info("successfully deleted file from upload_file answer",
+		zap.String("responseID", responseID.String()),
+		zap.String("questionID", questionID.String()),
+		zap.String("fileID", fileID.String()),
+		zap.Int("remainingFileCount", len(filteredEntries)),
+	)
+
+	return upsertedAnswers[0], answerableList[0], nil
+
+}

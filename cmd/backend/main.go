@@ -355,6 +355,7 @@ func main() {
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(answerHandler.GetQuestionResponse))
 	mux.Handle("PATCH /api/responses/{responseId}/answers", authMiddleware.HandlerFunc(answerHandler.UpdateFormResponse))
 	mux.Handle("POST /api/responses/{responseId}/questions/{questionId}/files", authMiddleware.HandlerFunc(answerHandler.UploadQuestionFiles))
+	mux.Handle("DELETE /api/responses/{responseId}/questions/{questionId}/files/{fileId}", authMiddleware.HandlerFunc(answerHandler.DeleteUploadedFile))
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", authMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
 	mux.Handle("GET /api/oauth/questions/{provider}/callback", basicMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
 
