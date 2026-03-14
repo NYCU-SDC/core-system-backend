@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -163,14 +162,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 	// Determine callback URL based on oauth proxy configuration
 	callbackURL := ""
 	if h.oauthProxyBaseURL != "" {
-		baseForCallback := h.baseURL
-		if h.devMode {
-			customBase := r.URL.Query().Get("base")
-			if customBase != "" {
-				baseForCallback = strings.TrimRight(customBase, "/")
-			}
-		}
-		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseForCallback, providerName)
+		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", h.baseURL, providerName)
 	}
 
 	// Create JWT state for OAuth flow
