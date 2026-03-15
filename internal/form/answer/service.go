@@ -12,7 +12,6 @@ import (
 	"io"
 	"mime/multipart"
 
-	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -67,7 +66,7 @@ type Service struct {
 func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileService FileService) *Service {
 	return &Service{
 		logger:        logger,
-		queries:       New(db),
+		queries:       newLoggedQuerier(New(db), logger),
 		tracer:        otel.Tracer("answer/service"),
 		questionStore: questionStore,
 		fileService:   fileService,
@@ -78,17 +77,27 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	traceCtx, span := s.tracer.Start(ctx, "List")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+	bizFlowLogger := withEvent(logger, eventTypeBizFlow)
+
+	bizFlowLogger.Info(
+		"Method List started",
+		zap.String("method.name", "List"),
+		zap.Any("method.params", map[string]string{
+			"form_id":     formID.String(),
+			"response_id": responseID.String(),
+		}),
+	)
 
 	answers, err := s.queries.ListByResponseID(traceCtx, responseID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "list answers")
 		span.RecordError(err)
-		return nil, nil, nil, fmt.Errorf("failed to list answers: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to retrieve answers by response id: %w", err)
 	}
 
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
+		span.RecordError(err)
+		return nil, nil, nil, fmt.Errorf("failed to retrieve answerable map for form %s: %w", formID, err)
 	}
 
 	// Resolve dynamic choices for Ranking questions. In the read path there is
@@ -96,6 +105,7 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	// DB lookups using the stored answers for the source questions.
 	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, nil)
 	if err != nil {
+		span.RecordError(err)
 		return nil, nil, nil, fmt.Errorf("failed to resolve ranking choices: %w", err)
 	}
 
@@ -104,15 +114,22 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	for _, answer := range answers {
 		transformedAnswer, answerable, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
 		if err != nil {
-			logger.Error("failed to transform answer", zap.String("questionID", answer.QuestionID.String()), zap.Error(err))
 			span.RecordError(err)
-			return nil, nil, nil, err
+			return nil, nil, nil, fmt.Errorf("failed to transform answer for question %s: %w", answer.QuestionID, err)
 		}
 		transformedAnswers = append(transformedAnswers, transformedAnswer)
 		answerableList = append(answerableList, answerable)
 	}
 
-	logger.Info("successfully listed answers", zap.Int("count", len(transformedAnswers)), zap.String("responseID", responseID.String()))
+	bizFlowLogger.Info(
+		"Method List completed",
+		zap.String("service.name", "List"),
+		zap.Any("service.result", map[string]any{
+			"response_id": responseID.String(),
+			"answer_cnt":  len(transformedAnswers),
+		}),
+	)
+
 	return transformedAnswers, answerableList, answerableMap, nil
 }
 
@@ -120,29 +137,47 @@ func (s Service) Get(ctx context.Context, formID, responseID, questionID uuid.UU
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+	bizFlowLogger := withEvent(logger, eventTypeBizFlow)
+
+	bizFlowLogger.Info(
+		"Method Get started",
+		zap.String("method.name", "Get"),
+		zap.Any("method.params", map[string]string{
+			"form_id":     formID.String(),
+			"response_id": responseID.String(),
+			"question_id": questionID.String(),
+		}),
+	)
 
 	answer, err := s.queries.GetByResponseIDAndQuestionID(traceCtx, GetByResponseIDAndQuestionIDParams{
 		ResponseID: responseID,
 		QuestionID: questionID,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get answer by response ID and question ID")
 		span.RecordError(err)
-		return Answer{}, nil, fmt.Errorf("failed to get answer for response ID %s and question ID %s: %w", responseID, questionID, err)
+		return Answer{}, nil, fmt.Errorf("failed to retrieve answer by response %s and question %s: %w", responseID, questionID, err)
 	}
 
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
-		return Answer{}, nil, fmt.Errorf("failed to get answerable map for form ID %s: %w", formID, err)
+		span.RecordError(err)
+		return Answer{}, nil, fmt.Errorf("failed to retrieve answerable map for form %s: %w", formID, err)
 	}
 
 	transformedAnswer, answerable, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
 	if err != nil {
 		span.RecordError(err)
-		return Answer{}, nil, err
+		return Answer{}, nil, fmt.Errorf("failed to transform answer for question %s: %w", questionID, err)
 	}
 
-	logger.Info("successfully retrieved answer", zap.String("responseID", responseID.String()), zap.String("questionID", questionID.String()))
+	bizFlowLogger.Info(
+		"Method Get completed",
+		zap.String("service.name", "Get"),
+		zap.Any("service.result", map[string]string{
+			"response_id": responseID.String(),
+			"question_id": transformedAnswer.QuestionID.String(),
+		}),
+	)
 
 	return transformedAnswer, answerable, nil
 }
@@ -172,9 +207,23 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	traceCtx, span := s.tracer.Start(ctx, "Upsert")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+	bizFlowLogger := withEvent(logger, eventTypeBizFlow)
+	bizLogicLogger := withEvent(logger, eventTypeBizLogic)
+	codecLogger := withEvent(logger, eventTypeUtilCodec)
+
+	bizFlowLogger.Info(
+		"Method Upsert started",
+		zap.String("method.name", "Upsert"),
+		zap.Any("method.params", map[string]any{
+			"form_id":      formID.String(),
+			"response_id":  responseID.String(),
+			"answer_count": len(answers),
+		}),
+	)
 
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
+		span.RecordError(err)
 		return nil, nil, []error{err}
 	}
 
@@ -182,6 +231,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	// source DetailedMultiChoice question's stored answer.
 	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, answers)
 	if err != nil {
+		span.RecordError(err)
 		return nil, nil, []error{err}
 	}
 
@@ -191,6 +241,16 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	for _, ans := range answers {
 		answerable, found := answerableMap[ans.QuestionID]
 		if !found {
+			bizLogicLogger.Warn(
+				"Decision made: question_not_found_in_form, action: reject_answer",
+				zap.String("logic.category", "decision_point"),
+				zap.String("logic.reason", "question_not_found_in_form"),
+				zap.String("logic.action", "reject_answer"),
+				zap.Any("logic.context", map[string]string{
+					"form_id":     formID.String(),
+					"question_id": ans.QuestionID,
+				}),
+			)
 			validationErrors = append(validationErrors, fmt.Errorf("question with ID %s not found in form %s", ans.QuestionID, formID))
 			continue
 		}
@@ -200,6 +260,15 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 		// Validate answer value (convert string to json.RawMessage)
 		err := answerable.Validate(ans.Value)
 		if err != nil {
+			bizLogicLogger.Warn(
+				"Decision made: answer_validation_failed, action: reject_answer",
+				zap.String("logic.category", "decision_point"),
+				zap.String("logic.reason", "answer_validation_failed"),
+				zap.String("logic.action", "reject_answer"),
+				zap.Any("logic.context", map[string]string{
+					"question_id": ans.QuestionID,
+				}),
+			)
 			validationErrors = append(validationErrors, fmt.Errorf("validation error for question ID %s: %w", ans.QuestionID, err))
 		}
 
@@ -213,8 +282,16 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	}
 
 	if len(validationErrors) > 0 {
-		logger.Error("validation errors occurred", zap.Error(fmt.Errorf("validation errors occurred")), zap.Any("errors", validationErrors))
-		span.RecordError(fmt.Errorf("validation errors occurred"))
+		bizLogicLogger.Warn(
+			"Decision made: validation_failed, action: reject_upsert",
+			zap.String("logic.category", "decision_point"),
+			zap.String("logic.reason", "validation_failed"),
+			zap.String("logic.action", "reject_upsert"),
+			zap.Any("logic.context", map[string]any{
+				"error_count": len(validationErrors),
+			}),
+		)
+		span.RecordError(internal.ErrValidationFailed)
 		validationErrors = append([]error{internal.ErrValidationFailed}, validationErrors...)
 		return nil, nil, validationErrors
 	}
@@ -229,7 +306,12 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 		questionID, err := uuid.Parse(pair.AnswerParam.QuestionID)
 		if err != nil {
-			logger.Error("invalid question ID format", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
+			codecLogger.Warn(
+				"failed to parse question UUID",
+				zap.String("codec.operation", "uuid_parse"),
+				zap.String("question_id", pair.AnswerParam.QuestionID),
+				zap.Error(err),
+			)
 			span.RecordError(fmt.Errorf("invalid question ID format for question ID %s: %w", pair.AnswerParam.QuestionID, err))
 			return nil, nil, []error{fmt.Errorf("invalid question ID format for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
 		}
@@ -238,14 +320,24 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 		encodedValue, err := pair.Answerable.DecodeRequest(pair.AnswerParam.Value)
 		if err != nil {
-			logger.Error("failed to encode answer value for storage", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
+			codecLogger.Warn(
+				"failed to decode request answer payload",
+				zap.String("codec.operation", "decode_request"),
+				zap.String("question_id", pair.AnswerParam.QuestionID),
+				zap.Error(err),
+			)
 			span.RecordError(fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err))
 			return nil, nil, []error{fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
 		}
 
 		jsonValue, err := json.Marshal(encodedValue)
 		if err != nil {
-			logger.Error("failed to marshal encoded answer value to JSON", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
+			codecLogger.Error(
+				"failed to marshal answer payload for storage",
+				zap.String("codec.operation", "json_marshal"),
+				zap.String("question_id", pair.AnswerParam.QuestionID),
+				zap.Error(err),
+			)
 			span.RecordError(fmt.Errorf("failed to marshal encoded answer value to JSON for question ID %s: %w", pair.AnswerParam.QuestionID, err))
 			return nil, nil, []error{fmt.Errorf("failed to marshal encoded answer value to JSON for question ID %s: %w", pair.AnswerParam.QuestionID, err)}
 		}
@@ -260,7 +352,6 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 		Values:      values,
 	})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "batch upsert answers")
 		span.RecordError(err)
 		return nil, nil, []error{fmt.Errorf("failed to save answers: %w", err)}
 	}
@@ -270,15 +361,22 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	for _, answer := range upsertedAnswers {
 		transformedAnswer, answerable, err := s.transformAnswerForResponse(traceCtx, answer, answerableMap, formID)
 		if err != nil {
-			logger.Error("failed to transform answer", zap.String("questionID", answer.QuestionID.String()), zap.Error(err))
 			span.RecordError(err)
-			return nil, nil, []error{err}
+			return nil, nil, []error{fmt.Errorf("failed to transform answer for question %s: %w", answer.QuestionID, err)}
 		}
 		transformedAnswers = append(transformedAnswers, transformedAnswer)
 		answerableList = append(answerableList, answerable)
 	}
 
-	logger.Info("successfully upserted answers", zap.Int("count", len(upsertedAnswers)))
+	bizFlowLogger.Info(
+		"Method Upsert completed",
+		zap.String("service.name", "Upsert"),
+		zap.Any("service.result", map[string]any{
+			"response_id": responseID.String(),
+			"answer_cnt":  len(upsertedAnswers),
+		}),
+	)
+
 	return transformedAnswers, answerableList, nil
 }
 
@@ -413,23 +511,56 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	traceCtx, span := s.tracer.Start(ctx, "UploadFiles")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
+	bizFlowLogger := withEvent(logger, eventTypeBizFlow)
+	bizLogicLogger := withEvent(logger, eventTypeBizLogic)
+	codecLogger := withEvent(logger, eventTypeUtilCodec)
+
+	bizFlowLogger.Info(
+		"Method UploadFiles started",
+		zap.String("method.name", "UploadFiles"),
+		zap.Any("method.params", map[string]any{
+			"form_id":      formID.String(),
+			"response_id":  responseID.String(),
+			"question_id":  questionID.String(),
+			"upload_count": len(files),
+		}),
+	)
 
 	// Get the answerable map to validate question type and membership
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
-		s.logger.Error("failed to get answerable map for form", zap.String("formID", formID.String()), zap.Error(err))
 		span.RecordError(err)
-		return nil, Answer{}, nil, internal.ErrInternalServerError
+		return nil, Answer{}, nil, fmt.Errorf("failed to retrieve answerable map for form %s: %w", formID, internal.ErrInternalServerError)
 	}
 
 	answerable, found := answerableMap[questionID.String()]
 	if !found {
+		bizLogicLogger.Warn(
+			"Decision made: question_not_found_in_form, action: reject_upload",
+			zap.String("logic.category", "decision_point"),
+			zap.String("logic.reason", "question_not_found_in_form"),
+			zap.String("logic.action", "reject_upload"),
+			zap.Any("logic.context", map[string]string{
+				"form_id":     formID.String(),
+				"question_id": questionID.String(),
+			}),
+		)
 		return nil, Answer{}, nil, internal.ErrQuestionNotFound
 	}
 
 	// Validate the question is of upload_file type
 	if answerable.Question().Type != question.QuestionTypeUploadFile {
-		s.logger.Error("invalid question type", zap.String("questionID", questionID.String()), zap.String("expectedType", string(question.QuestionTypeUploadFile)), zap.String("actualType", string(answerable.Question().Type)))
+		bizLogicLogger.Warn(
+			"Decision made: question_type_mismatch, action: reject_upload",
+			zap.String("logic.category", "decision_point"),
+			zap.String("logic.reason", "question_type_mismatch"),
+			zap.String("logic.action", "reject_upload"),
+			zap.Any("logic.context", map[string]string{
+				"question_id":   questionID.String(),
+				"expected_type": string(question.QuestionTypeUploadFile),
+				"actual_type":   string(answerable.Question().Type),
+			}),
+		)
 		span.RecordError(internal.ErrQuestionTypeMismatch)
 		return nil, Answer{}, nil, internal.ErrQuestionTypeMismatch
 	}
@@ -441,9 +572,8 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		QuestionID: questionID,
 	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		s.logger.Error("failed to get existing answer for answer", zap.String("questionID", questionID.String()), zap.Error(err))
 		span.RecordError(err)
-		return nil, Answer{}, nil, fmt.Errorf("failed to get existing answer for question %s: %w", questionID, internal.ErrInternalServerError)
+		return nil, Answer{}, nil, fmt.Errorf("failed to retrieve existing answer for question %s: %w", questionID, internal.ErrInternalServerError)
 	}
 	if err == nil {
 		// Extract old file IDs from the stored answer for later cleanup
@@ -452,6 +582,13 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 			for _, entry := range existingUploadAnswer.Files {
 				oldFileIDs = append(oldFileIDs, entry.FileID.String())
 			}
+		} else {
+			codecLogger.Warn(
+				"failed to unmarshal existing upload_file answer",
+				zap.String("codec.operation", "json_unmarshal"),
+				zap.String("question_id", questionID.String()),
+				zap.Error(jsonErr),
+			)
 		}
 	}
 
@@ -476,7 +613,6 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	for _, fh := range files {
 		f, err := fh.Open()
 		if err != nil {
-			s.logger.Error("failed to open uploaded file", zap.String("fileID", fh.Filename), zap.Error(err))
 			span.RecordError(err)
 			deleteFiles(fileIDs)
 			return nil, Answer{}, nil, fmt.Errorf("failed to open uploaded file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
@@ -486,7 +622,6 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		_ = f.Close()
 
 		if saveErr != nil {
-			s.logger.Error("failed to save uploaded file", zap.String("fileID", fh.Filename), zap.Error(saveErr))
 			span.RecordError(saveErr)
 			deleteFiles(fileIDs)
 			return nil, Answer{}, nil, fmt.Errorf("failed to save file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
@@ -504,7 +639,12 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	// Build the answer value as a full UploadFileAnswer and upsert
 	answerValue, err := json.Marshal(shared.UploadFileAnswer{Files: entries})
 	if err != nil {
-		s.logger.Error("failed to marshal upload file answer value", zap.String("questionID", questionID.String()), zap.Error(err))
+		codecLogger.Error(
+			"failed to marshal upload_file answer payload",
+			zap.String("codec.operation", "json_marshal"),
+			zap.String("question_id", questionID.String()),
+			zap.Error(err),
+		)
 		span.RecordError(err)
 		deleteFiles(fileIDs)
 		return nil, Answer{}, nil, fmt.Errorf("failed to marshal upload file answer: %w", internal.ErrInternalServerError)
@@ -514,7 +654,6 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		{QuestionID: questionID.String(), Value: answerValue},
 	})
 	if len(errs) > 0 {
-		s.logger.Error("failed to upsert upload file answer", zap.String("questionID", questionID.String()), zap.Error(errs[0]))
 		span.RecordError(errs[0])
 		deleteFiles(fileIDs)
 		return nil, Answer{}, nil, fmt.Errorf("failed to upsert upload file answer: %w", errs[0])
@@ -525,9 +664,13 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		deleteFiles(oldFileIDs)
 	}
 
-	logger.Info("successfully uploaded files and upserted answer",
-		zap.String("questionID", questionID.String()),
-		zap.Int("fileCount", len(fileIDs)),
+	bizFlowLogger.Info(
+		"Method UploadFiles completed",
+		zap.String("service.name", "UploadFiles"),
+		zap.Any("service.result", map[string]any{
+			"question_id": questionID.String(),
+			"file_count":  len(fileIDs),
+		}),
 	)
 
 	return entries, upsertedAnswers[0], answerableList[0], nil
