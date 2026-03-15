@@ -159,6 +159,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Redirect URL after successful login
 	redirectURL := r.URL.Query().Get("r")
 
 	// Determine callback URL based on oauth proxy configuration

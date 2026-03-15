@@ -13,6 +13,9 @@ import (
 
 type NYCUConfig struct {
 	config *oauth2.Config
+
+	clientID     string
+	clientSecret string
 }
 
 type NYCUOauth struct {
@@ -45,11 +48,15 @@ func (n *NYCUConfig) Config() *oauth2.Config {
 
 func (n *NYCUConfig) ConfigWithCustomRedirectURL(redirectURL string) *oauth2.Config {
 	return &oauth2.Config{
-		ClientID:     n.config.ClientID,
-		ClientSecret: n.config.ClientSecret,
+		ClientID:     n.clientID,
+		ClientSecret: n.clientSecret,
 		RedirectURL:  redirectURL,
-		Scopes:       n.config.Scopes,
-		Endpoint:     n.config.Endpoint,
+		Scopes: []string{
+			"openid",
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
+		Endpoint: n.config.Endpoint,
 	}
 }
 
