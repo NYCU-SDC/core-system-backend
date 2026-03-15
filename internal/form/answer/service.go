@@ -418,7 +418,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	if err != nil {
 		s.logger.Error("failed to get answerable map for form", zap.String("formID", formID.String()), zap.Error(err))
 		span.RecordError(err)
-		return nil, Answer{}, nil, internal.ErrInternalServerError
+		return nil, Answer{}, nil, err
 	}
 
 	answerable, found := answerableMap[questionID.String()]
@@ -439,24 +439,26 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		ResponseID: responseID,
 		QuestionID: questionID,
 	})
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		s.logger.Error("failed to get existing answer for answer", zap.String("questionID", questionID.String()), zap.Error(err))
-		span.RecordError(err)
-		return nil, Answer{}, nil, fmt.Errorf("failed to get existing answer for question %s: %w", questionID, internal.ErrInternalServerError)
-	}
-	if err == nil {
-		var existingUploadAnswer shared.UploadFileAnswer
-		if jsonErr := json.Unmarshal(existingAnswer.Value, &existingUploadAnswer); jsonErr != nil {
-			s.logger.Error("failed to unmarshal existing upload file answer",
-				zap.String("questionID", questionID.String()),
-				zap.Error(jsonErr),
-			)
-			span.RecordError(jsonErr)
-			return nil, Answer{}, nil, fmt.Errorf("failed to parse existing upload file answer for question %s: %w", questionID, internal.ErrInternalServerError)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			s.logger.Error("failed to get existing answer for question", zap.String("questionID", questionID.String()), zap.Error(err))
+			span.RecordError(err)
+			return nil, Answer{}, nil, fmt.Errorf("failed to get existing answer for question %s: %w", questionID, internal.ErrQuestionNotFound)
 		}
-
-		existingEntries = existingUploadAnswer.Files
+		return nil, Answer{}, nil, err
 	}
+
+	var existingUploadAnswer shared.UploadFileAnswer
+	if jsonErr := json.Unmarshal(existingAnswer.Value, &existingUploadAnswer); jsonErr != nil {
+		s.logger.Error("failed to unmarshal existing upload file answer",
+			zap.String("questionID", questionID.String()),
+			zap.Error(jsonErr),
+		)
+		span.RecordError(jsonErr)
+		return nil, Answer{}, nil, fmt.Errorf("failed to parse existing upload file answer for question %s: %w", questionID, internal.ErrValidationFailed)
+	}
+
+	existingEntries = existingUploadAnswer.Files
 
 	// deleteFiles is a best-effort helper that logs warnings on failure
 	deleteFiles := func(ids []string) {
@@ -515,7 +517,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		s.logger.Error("failed to marshal upload file answer value", zap.String("questionID", questionID.String()), zap.Error(err))
 		span.RecordError(err)
 		deleteFiles(fileIDs)
-		return nil, Answer{}, nil, fmt.Errorf("failed to marshal upload file answer: %w", internal.ErrInternalServerError)
+		return nil, Answer{}, nil, fmt.Errorf("failed to marshal upload file answer: %w", internal.ErrValidationFailed)
 	}
 
 	upsertedAnswers, answerableList, errs := s.Upsert(traceCtx, formID, responseID, []shared.AnswerParam{
@@ -550,7 +552,7 @@ func (s Service) DeleteUploadedFile(ctx context.Context, formID, responseID, que
 			zap.Error(err),
 		)
 		span.RecordError(err)
-		return Answer{}, nil, internal.ErrInternalServerError
+		return Answer{}, nil, err
 	}
 
 	answerable, found := answerableMap[questionID.String()]
@@ -590,7 +592,7 @@ func (s Service) DeleteUploadedFile(ctx context.Context, formID, responseID, que
 			zap.Error(err),
 		)
 		span.RecordError(err)
-		return Answer{}, nil, internal.ErrInternalServerError
+		return Answer{}, nil, err
 	}
 
 	var existingUploadAnswer shared.UploadFileAnswer
@@ -601,7 +603,7 @@ func (s Service) DeleteUploadedFile(ctx context.Context, formID, responseID, que
 			zap.Error(err),
 		)
 		span.RecordError(err)
-		return Answer{}, nil, internal.ErrInternalServerError
+		return Answer{}, nil, internal.ErrValidationFailed
 	}
 
 	// Remove the specified file from the answer
@@ -635,7 +637,7 @@ func (s Service) DeleteUploadedFile(ctx context.Context, formID, responseID, que
 			zap.Error(err),
 		)
 		span.RecordError(err)
-		return Answer{}, nil, internal.ErrInternalServerError
+		return Answer{}, nil, err
 	}
 
 	upsertedAnswers, answerableList, errs := s.Upsert(traceCtx, formID, responseID, []shared.AnswerParam{
@@ -670,5 +672,4 @@ func (s Service) DeleteUploadedFile(ctx context.Context, formID, responseID, que
 	)
 
 	return upsertedAnswers[0], answerableList[0], nil
-
 }
