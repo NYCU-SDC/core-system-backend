@@ -304,6 +304,39 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 			},
 			expectedErr: false,
 		},
+		{
+			name: "condition rule with source=choice and pattern referencing non-existent choice option",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				// Pattern contains a UUID that is not one of the question's choice option IDs
+				nonExistentChoiceID := uuid.New()
+				pattern := "^" + nonExistentChoiceID.String() + "$"
+				return createWorkflow_ConditionRuleWithPattern(t, questionID, pattern),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerable(t, formID, question.QuestionTypeSingleChoice),
+						},
+					}
+			},
+			expectedErr: true,
+		},
+		{
+			name: "condition rule with source=choice and pattern referencing valid choice option",
+			setup: func() ([]byte, workflow.QuestionStore) {
+				questionID := uuid.New().String()
+				questionUUID := mustParseUUID(t, questionID)
+				choiceID := uuid.New()
+				pattern := "^" + choiceID.String() + "$"
+				return createWorkflow_ConditionRuleWithPattern(t, questionID, pattern),
+					&mockQuestionStore{
+						questions: map[uuid.UUID]question.Answerable{
+							questionUUID: createMockAnswerableWithChoiceIDs(t, formID, question.QuestionTypeSingleChoice, []uuid.UUID{choiceID}),
+						},
+					}
+			},
+			expectedErr: false,
+		},
 	}
 
 	validator := workflow.NewValidator()

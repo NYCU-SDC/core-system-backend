@@ -8,9 +8,11 @@ import (
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	workflowbuilder "NYCU-SDC/core-system-backend/test/testdata/dbbuilder/workflow"
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +27,7 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 		name        string
 		params      Params
 		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context
-		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.ActivateRow, err error)
+		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error)
 		expectedErr bool
 	}
 
@@ -42,7 +44,7 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 				params.workflowJSON = workflowJSON
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.ActivateRow, err error) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error for valid workflow")
 				require.NotEqual(t, uuid.Nil, result.ID, "workflow version ID should be set")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -300,6 +302,51 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 				params.formID = data.FormRow.ID
 				params.userID = data.User
 				params.workflowJSON = builder.CreateConditionNodeInvalidRegex()
+				return context.Background()
+			},
+			expectedErr: true,
+		},
+		{
+			name:   "condition node pattern references non-existent choice option",
+			params: Params{},
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
+				builder := workflowbuilder.New(t, db)
+				data := builder.SetupTestData("validate-condition-bad-choice-org", "validate-condition-bad-choice-unit")
+				params.formID = data.FormRow.ID
+				params.userID = data.User
+
+				sectionID := uuid.New()
+				builder.CreateSectionRecord(sectionID, data.FormRow.ID, "Section")
+
+				choiceID1 := uuid.New()
+				choiceID2 := uuid.New()
+				metadata, err := json.Marshal(map[string]any{
+					"choice": []map[string]any{
+						{"id": choiceID1.String(), "name": "Option 1", "description": ""},
+						{"id": choiceID2.String(), "name": "Option 2", "description": ""},
+					},
+				})
+				require.NoError(t, err)
+
+				questionQueries := question.New(db)
+				createRow, err := questionQueries.Create(context.Background(), question.CreateParams{
+					SectionID:   sectionID,
+					Required:    false,
+					Type:        question.QuestionTypeSingleChoice,
+					Title:       pgtype.Text{String: "Q", Valid: true},
+					Description: pgtype.Text{},
+					Metadata:    metadata,
+					Order:       1,
+					SourceID:    pgtype.UUID{},
+				})
+				require.NoError(t, err)
+				questionID := createRow.ID
+
+				// Pattern contains a UUID that is not one of the question's choice option IDs
+				nonExistentChoiceID := uuid.New()
+				pattern := "^" + nonExistentChoiceID.String() + "$"
+
+				params.workflowJSON = builder.CreateConditionNodeWithQuestionAndPattern(questionID.String(), pattern)
 				return context.Background()
 			},
 			expectedErr: true,
