@@ -35,6 +35,9 @@ func NewNYCUConfig(clientID, clientSecret, redirectURL string) *NYCUConfig {
 				TokenURL: "https://id.nycu.edu.tw/o/token/",
 			},
 		},
+
+		clientID:     clientID,
+		clientSecret: clientSecret,
 	}
 }
 

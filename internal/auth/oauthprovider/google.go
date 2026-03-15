@@ -38,6 +38,9 @@ func NewGoogleConfig(clientID, clientSecret, redirectURL string) *GoogleConfig {
 			},
 			Endpoint: google.Endpoint,
 		},
+
+		clientID:     clientID,
+		clientSecret: clientSecret,
 	}
 }
 
