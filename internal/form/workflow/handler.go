@@ -238,7 +238,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check validation status
-	validationInfos, err := h.store.GetValidationInfo(traceCtx, formID, []byte(row.Workflow))
+	validationInfos, err := h.store.GetValidationInfo(traceCtx, formID, apiWorkflow)
 	if err != nil {
 		// Log the error but don't fail the request - return empty info array
 		logger.Warn("failed to validate workflow activation", zap.Error(err), zap.String("formId", formID.String()))
