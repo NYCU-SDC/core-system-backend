@@ -338,7 +338,7 @@ func main() {
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.Create))
 	// --- (Update response is not allowed)
-	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, sectionResolver)).HandlerFunc(responseHandler.Delete))
+	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(responseHandler.Delete))
 
 	// Response Operations
 	mux.Handle("POST /api/responses/{responseId}/submit", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))
@@ -354,9 +354,9 @@ func main() {
 	// Workflow Management
 	// ----------------------
 	mux.Handle("GET /api/forms/{formId}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetHandler))
-	mux.Handle("POST /api/forms/{formId}/workflow/nodes", authMiddleware.Append(unitRole.Require(auth.RoleMember, sectionResolver)).HandlerFunc(workflowHandler.CreateNodeHandler))
-	mux.Handle("PUT /api/forms/{formId}/workflow", authMiddleware.Append(unitRole.Require(auth.RoleMember, sectionResolver)).HandlerFunc(workflowHandler.UpdateHandler))
-	mux.Handle("DELETE /api/forms/{formId}/workflow/nodes/{nodeId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, sectionResolver)).HandlerFunc(workflowHandler.DeleteNodeHandler))
+	mux.Handle("POST /api/forms/{formId}/workflow/nodes", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(workflowHandler.CreateNodeHandler))
+	mux.Handle("PUT /api/forms/{formId}/workflow", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(workflowHandler.UpdateHandler))
+	mux.Handle("DELETE /api/forms/{formId}/workflow/nodes/{nodeId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(workflowHandler.DeleteNodeHandler))
 
 	// ============================================
 	// File routes
