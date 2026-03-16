@@ -89,7 +89,7 @@ func (s *Service) EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, 
 	// Get sections from question store
 	sections, err := s.questionStore.ListSections(ctx, formID)
 	if err != nil {
-		return nil, err
+		return apiWorkflow, err
 	}
 
 	// Convert sections to map of section IDs to section titles
@@ -101,7 +101,12 @@ func (s *Service) EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, 
 		}
 		sectionTitles[id] = sec.Title.String
 	}
-	return EnrichWorkflowLabels(ctx, apiWorkflow, formID, sectionTitles, s.questionStore)
+
+	enriched, err := EnrichWorkflowLabels(ctx, apiWorkflow, formID, sectionTitles, s.questionStore)
+	if err != nil {
+		return apiWorkflow, err
+	}
+	return enriched, nil
 }
 
 // Update updates a workflow version conditionally:
