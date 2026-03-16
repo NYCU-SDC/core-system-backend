@@ -35,7 +35,7 @@ func EnrichWorkflowLabels(
 	var nodes []map[string]interface{}
 	err := json.Unmarshal(workflowJSON, &nodes)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
+		return workflowJSON, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
 	}
 
 	for i := range nodes {
@@ -59,7 +59,11 @@ func EnrichWorkflowLabels(
 		// START and END: leave label unchanged
 	}
 
-	return json.Marshal(nodes)
+	enriched, err := json.Marshal(nodes)
+	if err != nil {
+		return workflowJSON, fmt.Errorf("%w: %w", internal.ErrMarshalWorkflow, err)
+	}
+	return enriched, nil
 }
 
 func conditionLabelFromRule(ctx context.Context, node map[string]interface{}, questionStore QuestionStore) string {
