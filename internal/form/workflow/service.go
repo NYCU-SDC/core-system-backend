@@ -102,7 +102,7 @@ func (s *Service) EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, 
 		sectionTitles[id] = sec.Title.String
 	}
 
-	enriched, err := EnrichWorkflowLabels(ctx, apiWorkflow, formID, sectionTitles, s.questionStore)
+	enriched, err := enrichWorkflowLabels(ctx, apiWorkflow, formID, sectionTitles, s.questionStore)
 	if err != nil {
 		return apiWorkflow, err
 	}

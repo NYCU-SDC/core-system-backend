@@ -124,7 +124,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			workflow, sectionTitles, questionStore := tc.setup(t)
 
-			enriched, err := EnrichWorkflowLabels(ctx, workflow, formID, sectionTitles, questionStore)
+			enriched, err := enrichWorkflowLabels(ctx, workflow, formID, sectionTitles, questionStore)
 			require.NoError(t, err)
 
 			if tc.expectUnchanged {

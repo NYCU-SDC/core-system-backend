@@ -15,13 +15,13 @@ type SectionTitleProvider interface {
 	SectionTitlesByFormID(ctx context.Context, formID uuid.UUID) (map[string]string, error)
 }
 
-// EnrichWorkflowLabels updates workflow JSON so that section node labels
+// enrichWorkflowLabels updates workflow JSON so that section node labels
 // reflect the current section title and condition node labels reflect the
 // condition rule (e.g. "When [question title] matches [pattern]").
 // Workflow is expected in API format (type uppercase). Returns enriched JSON.
 // If sectionTitles or questionStore is nil, section or condition enrichment
 // is skipped respectively; if both are nil, the workflow is returned unchanged.
-func EnrichWorkflowLabels(
+func enrichWorkflowLabels(
 	ctx context.Context,
 	workflowJSON []byte,
 	formID uuid.UUID,
