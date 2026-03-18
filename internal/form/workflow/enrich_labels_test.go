@@ -41,19 +41,19 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 				workflow := marshalWorkflow(t, []map[string]interface{}{
 					{
 						"id":    startID,
-						"type":  string(NodeTypeStart),
+						"type":  nodeTypeToUppercase(NodeTypeStart),
 						"label": "Start",
 						"next":  sectionID,
 					},
 					{
 						"id":    sectionID,
-						"type":  string(NodeTypeSection),
+						"type":  nodeTypeToUppercase(NodeTypeSection),
 						"label": "Old Section Label",
 						"next":  conditionID,
 					},
 					{
 						"id":        conditionID,
-						"type":      string(NodeTypeCondition),
+						"type":      nodeTypeToUppercase(NodeTypeCondition),
 						"label":     "Old Condition Label",
 						"nextTrue":  endID,
 						"nextFalse": endID,
@@ -65,7 +65,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 					},
 					{
 						"id":    endID,
-						"type":  string(NodeTypeEnd),
+						"type":  nodeTypeToUppercase(NodeTypeEnd),
 						"label": "End",
 					},
 				})
@@ -93,7 +93,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 				t.Helper()
 				workflow := marshalWorkflow(t, []map[string]interface{}{{
 					"id":    startIDNilDeps,
-					"type":  string(NodeTypeStart),
+					"type":  nodeTypeToUppercase(NodeTypeStart),
 					"label": "Start",
 				}})
 				return workflow, nil, nil
@@ -108,7 +108,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 				workflow := marshalWorkflow(t, []map[string]interface{}{
 					{
 						"id":    sectionIDMissing,
-						"type":  string(NodeTypeSection),
+						"type":  nodeTypeToUppercase(NodeTypeSection),
 						"label": "Original",
 						"next":  endIDMissing,
 					},

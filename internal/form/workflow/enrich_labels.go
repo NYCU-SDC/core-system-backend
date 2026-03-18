@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -42,7 +43,7 @@ func enrichWorkflowLabels(
 		typ, _ := nodes[i]["type"].(string)
 		nodeID, _ := nodes[i]["id"].(string)
 
-		switch typ {
+		switch strings.ToLower(typ) {
 		case string(NodeTypeSection):
 			if sectionTitles != nil {
 				title, ok := sectionTitles[nodeID]
