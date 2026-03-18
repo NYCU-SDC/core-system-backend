@@ -17,6 +17,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/inbox"
 	"NYCU-SDC/core-system-backend/internal/jwt"
 	"NYCU-SDC/core-system-backend/internal/publish"
+	"NYCU-SDC/core-system-backend/internal/setup"
 	"NYCU-SDC/core-system-backend/internal/tenant"
 	"NYCU-SDC/core-system-backend/internal/unit"
 
@@ -135,7 +136,7 @@ func main() {
 
 	validator := internal.NewValidator()
 	problemWriter := internal.NewProblemWriter()
-	user.InitAllowedList(cfg.AllowOnboardingList)
+	setup.NewService(logger, dbPool, "setup.yaml")
 
 	// Init Default Role
 	user.InitDefaultGlobalRole(cfg.DefaultGlobalRoles)

@@ -47,6 +47,7 @@ type Config struct {
 
 	CasbinModelPath  string `yaml:"casbin_model_path"  envconfig:"CASBIN_MODEL_PATH"`
 	CasbinPolicyPath string `yaml:"casbin_policy_path" envconfig:"CASBIN_POLICY_PATH"`
+	SetupPath        string `yaml:"setup_path" envconfig:"SETUP_PATH"`
 
 	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
@@ -150,6 +151,7 @@ func Load() (Config, *LogBuffer) {
 		DefaultOrgRoles:           "",
 		CasbinModelPath:           "internal/auth/casbin/model.conf",
 		CasbinPolicyPath:          "internal/auth/casbin/policy.csv",
+		SetupPath:                 "setup.yaml",
 	}
 
 	var err error
@@ -236,6 +238,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		DefaultOrgRoles:     os.Getenv("DEFAULT_ORG_ROLES"),
 		CasbinModelPath:     os.Getenv("CASBIN_MODEL_PATH"),
 		CasbinPolicyPath:    os.Getenv("CASBIN_POLICY_PATH"),
+		SetupPath:           os.Getenv("SETUP_PATH"),
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -262,6 +265,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.AllowOnboardingList, "allow_onboarding_list", "", "Allowed list of emails for onboarding")
 	flag.StringVar(&flagConfig.CasbinModelPath, "casbin_model_path", "", "casbin model path")
 	flag.StringVar(&flagConfig.CasbinPolicyPath, "casbin_policy_path", "", "casbin policy path")
+	flag.StringVar(&flagConfig.SetupPath, "setup_path", "", "Setup path")
 
 	flag.Parse()
 

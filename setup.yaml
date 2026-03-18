@@ -1,0 +1,12 @@
+organizations:
+  - name: "NYCU Software Development Club"
+    slug: "sdc"
+    description: "NYCU Club"
+users:
+  - email: "1p41p4jejo@gmail.com"
+    global_role:
+      - admin
+    org_member:
+      - slug: "sdc"
+        org_role: member
+    allowed_onboarding: true
