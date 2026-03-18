@@ -10,12 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// SectionTitleProvider returns section IDs to titles for a form.
-// Used to enrich section node labels with current section titles.
-type SectionTitleProvider interface {
-	SectionTitlesByFormID(ctx context.Context, formID uuid.UUID) (map[string]string, error)
-}
-
 // EnrichWorkflowResponse returns the given API-format workflow JSON with section and
 // condition labels enriched (section title, condition rule). Uses questionStore.ListSections
 // for section titles; if enrichment fails, returns the original workflow.
