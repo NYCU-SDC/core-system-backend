@@ -136,7 +136,10 @@ func main() {
 
 	validator := internal.NewValidator()
 	problemWriter := internal.NewProblemWriter()
-	setup.NewService(logger, dbPool, "setup.yaml")
+	_, err = setup.NewService(logger, dbPool, "setup.yaml")
+	if err != nil {
+		logger.Fatal("Failed to setup", zap.Error(err))
+	}
 
 	// Init Default Role
 	user.InitDefaultGlobalRole(cfg.DefaultGlobalRoles)
