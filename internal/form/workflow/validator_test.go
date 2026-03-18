@@ -1,4 +1,4 @@
-package workflow_test
+package workflow
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal/form/question"
-	"NYCU-SDC/core-system-backend/internal/form/workflow"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -40,7 +39,7 @@ func TestActivate_InvalidNodeReferences(t *testing.T) {
 		},
 	}
 
-	validator := workflow.NewValidator()
+	validator := NewValidator()
 	ctx := context.Background()
 	formID := uuid.New()
 
@@ -64,14 +63,14 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 
 	type testCase struct {
 		name        string
-		setup       func() ([]byte, workflow.QuestionStore)
+		setup       func() ([]byte, QuestionStore)
 		expectedErr bool
 	}
 
 	testCases := []testCase{
 		{
 			name: "condition rule with non-existent question ID",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				return createWorkflow_ConditionRule(t, questionID),
 					&mockQuestionStore{questions: make(map[uuid.UUID]question.Answerable)}
@@ -80,7 +79,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "condition rule with question from different form",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRule(t, questionID),
@@ -94,7 +93,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "condition rule with source=choice but question type is short_text",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
@@ -108,7 +107,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "condition rule with source=nonChoice but question type is single_choice",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -122,7 +121,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=choice and single_choice question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
@@ -136,7 +135,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=choice and multiple_choice question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
@@ -150,7 +149,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=nonChoice and short_text question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -164,7 +163,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=nonChoice and long_text question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -178,7 +177,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=nonChoice and date question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -193,7 +192,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		// Choice types: dropdown, detailed_multiple_choice, ranking
 		{
 			name: "valid condition rule with source=choice and dropdown question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
@@ -207,7 +206,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=choice and detailed_multiple_choice question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
@@ -221,7 +220,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=choice and ranking question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "choice", questionID),
@@ -236,7 +235,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		// NonChoice types: hyperlink, upload_file, oauth_connect, linear_scale, rating
 		{
 			name: "valid condition rule with source=nonChoice and hyperlink question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -250,7 +249,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=nonChoice and upload_file question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -264,7 +263,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=nonChoice and oauth_connect question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -278,7 +277,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=nonChoice and linear_scale question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -292,7 +291,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "valid condition rule with source=nonChoice and rating question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				return createWorkflow_ConditionRuleSourceWithQuestionID(t, "nonChoice", questionID),
@@ -306,7 +305,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "condition rule with source=choice and pattern referencing non-existent choice option",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				// Pattern contains a UUID that is not one of the question's choice option IDs
@@ -323,7 +322,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 		{
 			name: "condition rule with source=choice and pattern referencing valid choice option",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				questionID := uuid.New().String()
 				questionUUID := mustParseUUID(t, questionID)
 				choiceID := uuid.New()
@@ -339,7 +338,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 		},
 	}
 
-	validator := workflow.NewValidator()
+	validator := NewValidator()
 	ctx := context.Background()
 
 	for _, tc := range testCases {
@@ -362,7 +361,7 @@ func TestActivate_ConditionRuleValidation(t *testing.T) {
 func TestValidateUpdateNodeIDs(t *testing.T) {
 	t.Parallel()
 
-	validator := workflow.NewValidator()
+	validator := NewValidator()
 	ctx := context.Background()
 
 	type testCase struct {
@@ -491,7 +490,7 @@ func TestValidate(t *testing.T) {
 
 	type testCase struct {
 		name        string
-		setup       func() ([]byte, workflow.QuestionStore)
+		setup       func() ([]byte, QuestionStore)
 		expectedErr bool
 	}
 
@@ -500,39 +499,39 @@ func TestValidate(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:        "valid workflow",
-			setup:       func() ([]byte, workflow.QuestionStore) { return createWorkflow_ValidWithEmptyStore(t) },
+			setup:       func() ([]byte, QuestionStore) { return createWorkflow_ValidWithEmptyStore(t) },
 			expectedErr: false,
 		},
 		{
 			name:        "invalid workflow - missing start node",
-			setup:       func() ([]byte, workflow.QuestionStore) { return createWorkflow_MissingStartNode(t) },
+			setup:       func() ([]byte, QuestionStore) { return createWorkflow_MissingStartNode(t) },
 			expectedErr: true,
 		},
 		{
 			name:        "invalid workflow - duplicate node IDs",
-			setup:       func() ([]byte, workflow.QuestionStore) { return createWorkflow_DuplicateNodeIDs(t) },
+			setup:       func() ([]byte, QuestionStore) { return createWorkflow_DuplicateNodeIDs(t) },
 			expectedErr: true,
 		},
 		{
 			name:        "unreachable node",
-			setup:       func() ([]byte, workflow.QuestionStore) { return createWorkflow_UnreachableNode(t) },
+			setup:       func() ([]byte, QuestionStore) { return createWorkflow_UnreachableNode(t) },
 			expectedErr: false,
 		},
 		{
 			name:        "invalid workflow - invalid node reference",
-			setup:       func() ([]byte, workflow.QuestionStore) { return createWorkflow_InvalidNextRefWithStore(t) },
+			setup:       func() ([]byte, QuestionStore) { return createWorkflow_InvalidNextRefWithStore(t) },
 			expectedErr: true,
 		},
 		{
 			name: "invalid workflow - condition rule with non-existent question",
-			setup: func() ([]byte, workflow.QuestionStore) {
+			setup: func() ([]byte, QuestionStore) {
 				return createWorkflow_ConditionRuleWithEmptyStore(t, uuid.New().String())
 			},
 			expectedErr: true,
 		},
 	}
 
-	validator := workflow.NewValidator()
+	validator := NewValidator()
 	ctx := context.Background()
 
 	for _, tc := range testCases {
@@ -560,19 +559,19 @@ func TestValidateDraft_ConditionSectionOrder(t *testing.T) {
 
 	type testCase struct {
 		name        string
-		setup       func(t *testing.T) ([]byte, workflow.QuestionStore)
+		setup       func(t *testing.T) ([]byte, QuestionStore)
 		expectedErr bool
 	}
 
 	testCases := []testCase{
 		{
 			name:        "valid - condition without conditionRule",
-			setup:       func(t *testing.T) ([]byte, workflow.QuestionStore) { return createWorkflow_ConditionNoRule(t) },
+			setup:       func(t *testing.T) ([]byte, QuestionStore) { return createWorkflow_ConditionNoRule(t) },
 			expectedErr: false,
 		},
 	}
 
-	validator := workflow.NewValidator()
+	validator := NewValidator()
 	ctx := context.Background()
 
 	for _, tc := range testCases {
