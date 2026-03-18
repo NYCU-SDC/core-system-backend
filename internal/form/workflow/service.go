@@ -78,37 +78,6 @@ func (s *Service) Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, e
 	return workflow, nil
 }
 
-// EnrichWorkflowResponse returns the given API-format workflow JSON with section and
-// condition labels enriched (section title, condition rule). Uses questionStore.ListSections
-// for section titles; if enrichment fails, returns the original workflow.
-func (s *Service) EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, apiWorkflow []byte) ([]byte, error) {
-	if s.questionStore == nil {
-		return apiWorkflow, nil
-	}
-
-	// Get sections from question store
-	sections, err := s.questionStore.ListSections(ctx, formID)
-	if err != nil {
-		return apiWorkflow, err
-	}
-
-	// Convert sections to map of section IDs to section titles
-	sectionTitles := make(map[string]string, len(sections))
-	for id, sec := range sections {
-		if !sec.Title.Valid {
-			sectionTitles[id] = ""
-			continue
-		}
-		sectionTitles[id] = sec.Title.String
-	}
-
-	enriched, err := enrichWorkflowLabels(ctx, apiWorkflow, formID, sectionTitles, s.questionStore)
-	if err != nil {
-		return apiWorkflow, err
-	}
-	return enriched, nil
-}
-
 // Update updates a workflow version conditionally:
 //   - If latest workflow is active and incoming workflow is structurally equal
 //     (same nodes, edges, condition rules; labels ignored): returns current version

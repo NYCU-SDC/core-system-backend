@@ -16,25 +16,36 @@ type SectionTitleProvider interface {
 	SectionTitlesByFormID(ctx context.Context, formID uuid.UUID) (map[string]string, error)
 }
 
-// enrichWorkflowLabels updates workflow JSON so that section node labels
-// reflect the current section title and condition node labels reflect the
-// condition rule (e.g. "When [question title] matches [pattern]").
-// Workflow is expected in API format (type uppercase). Returns enriched JSON.
-// If sectionTitles or questionStore is nil, section or condition enrichment
-// is skipped respectively; if both are nil, the workflow is returned unchanged.
-func enrichWorkflowLabels(
+// EnrichWorkflowResponse returns the given API-format workflow JSON with section and
+// condition labels enriched (section title, condition rule). Uses questionStore.ListSections
+// for section titles; if enrichment fails, returns the original workflow.
+func (s *Service) EnrichWorkflowResponse(
 	ctx context.Context,
-	workflowJSON []byte,
 	formID uuid.UUID,
-	sectionTitles map[string]string,
-	questionStore QuestionStore,
+	workflowJSON []byte,
 ) ([]byte, error) {
-	if sectionTitles == nil && questionStore == nil {
+	if s.questionStore == nil {
 		return workflowJSON, nil
 	}
 
+	// Get sections from question store
+	sections, err := s.questionStore.ListSections(ctx, formID)
+	if err != nil {
+		return workflowJSON, err
+	}
+
+	// Convert sections to map of section IDs to section titles
+	sectionTitles := make(map[string]string, len(sections))
+	for id, sec := range sections {
+		if !sec.Title.Valid {
+			sectionTitles[id] = ""
+			continue
+		}
+		sectionTitles[id] = sec.Title.String
+	}
+
 	var nodes []map[string]interface{}
-	err := json.Unmarshal(workflowJSON, &nodes)
+	err = json.Unmarshal(workflowJSON, &nodes)
 	if err != nil {
 		return workflowJSON, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
 	}
@@ -45,17 +56,13 @@ func enrichWorkflowLabels(
 
 		switch strings.ToLower(typ) {
 		case string(NodeTypeSection):
-			if sectionTitles != nil {
-				title, ok := sectionTitles[nodeID]
-				if ok && title != "" {
-					nodes[i]["label"] = title
-				}
+			title, ok := sectionTitles[nodeID]
+			if ok && title != "" {
+				nodes[i]["label"] = title
 			}
 		case string(NodeTypeCondition):
-			if questionStore != nil {
-				label := conditionLabelFromRule(ctx, nodes[i], questionStore)
-				nodes[i]["label"] = label
-			}
+			label := conditionLabelFromRule(ctx, nodes[i], s.questionStore)
+			nodes[i]["label"] = label
 		}
 		// START and END: leave label unchanged
 	}
