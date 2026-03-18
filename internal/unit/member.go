@@ -201,3 +201,31 @@ func (role UnitRole) IsValidMemberRole() bool {
 		return false
 	}
 }
+
+func (s *Service) AddMemberWithRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, role string) error {
+	traceCtx, span := s.tracer.Start(ctx, "AddMemberWithRole")
+	defer span.End()
+
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	unitRole := UnitRole(role)
+	if !unitRole.IsValidMemberRole() {
+		return fmt.Errorf("invalid unit role: %s", role)
+	}
+
+	_, err := s.queries.AddUnitMemberWithRole(
+		traceCtx,
+		AddUnitMemberWithRoleParams{
+			UnitID:   unitID,
+			MemberID: memberID,
+			Role:     unitRole,
+		},
+	)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "add unit member role")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
+}

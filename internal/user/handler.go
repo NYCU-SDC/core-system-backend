@@ -2,7 +2,6 @@ package user
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
-	"context"
 	"net/http"
 	"strings"
 
@@ -15,12 +14,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
-
-// GetFromContext extracts the authenticated user from request context
-func GetFromContext(ctx context.Context) (*User, bool) {
-	userData, ok := ctx.Value(internal.UserContextKey).(*User)
-	return userData, ok 																																																																																																																																																							
-}
 
 func ConvertEmailsToSlice(emails interface{}) []string {
 	if emails == nil {
@@ -63,6 +56,9 @@ type MeResponse struct {
 	AvatarUrl string   `json:"avatarUrl"`
 	Role      string   `json:"role"`
 	Emails    []string `json:"emails"`
+
+	// Todo: This field is currently always false, but we keep it here for future use when we want to enforce onboarding for invited users
+	RequireOnboarding bool `json:"require_onboarding"`
 }
 
 // OnboardingRequest represents the request format for /user/onboarding endpoint
@@ -121,12 +117,13 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MeResponse{
-		ID:        currentUser.ID.String(),
-		Username:  currentUser.Username.String,
-		Name:      currentUser.Name.String,
-		AvatarUrl: currentUser.AvatarUrl.String,
-		Role:      roleStr,
-		Emails:    emails,
+		ID:                currentUser.ID.String(),
+		Username:          currentUser.Username.String,
+		Name:              currentUser.Name.String,
+		AvatarUrl:         currentUser.AvatarUrl.String,
+		Role:              roleStr,
+		Emails:            emails,
+		RequireOnboarding: false,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -144,7 +141,7 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get authenticated userfrom context
+	// Get authenticated user from context
 	currentUser, ok := GetFromContext(traceCtx)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
@@ -172,12 +169,13 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MeResponse{
-		ID:        newUser.ID.String(),
-		Username:  newUser.Username.String,
-		Name:      newUser.Name.String,
-		AvatarUrl: newUser.AvatarUrl.String,
-		Role:      roleStr,
-		Emails:    emails,
+		ID:                newUser.ID.String(),
+		Username:          newUser.Username.String,
+		Name:              newUser.Name.String,
+		AvatarUrl:         newUser.AvatarUrl.String,
+		Role:              roleStr,
+		Emails:            emails,
+		RequireOnboarding: false,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)

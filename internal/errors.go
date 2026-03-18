@@ -3,9 +3,28 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/NYCU-SDC/summer/pkg/problem"
+	"github.com/google/uuid"
 )
+
+type ErrResponseNotComplete struct {
+	NotCompleteSections []struct {
+		Title    string
+		ID       uuid.UUID
+		Progress string
+	}
+}
+
+func (s ErrResponseNotComplete) Error() string {
+	sectionIDs := make([]string, len(s.NotCompleteSections))
+	for i, section := range s.NotCompleteSections {
+		sectionIDs[i] = fmt.Sprintf("Title: %s, ID: %s, Progress: %s", section.Title, section.ID.String(), section.Progress)
+	}
+
+	return "response is not complete, not complete sections: " + strings.Join(sectionIDs, "; ")
+}
 
 var (
 	// Auth Errors
@@ -65,32 +84,51 @@ var (
 	ErrSearchTooLong              = errors.New("search string exceeds maximum length")
 
 	// Form Errors
-	ErrFormNotFound            = errors.New("form not found")
-	ErrFormNotDraft            = fmt.Errorf("form is not in draft status")
-	ErrFormDeadlinePassed      = errors.New("form deadline has passed")
-	ErrCoverImageTooLarge      = errors.New("cover image exceeds maximum size")
-	ErrCoverImageInvalidFormat = errors.New("cover image format is invalid")
+	ErrFormNotFound       = errors.New("form not found")
+	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
+	ErrFormDeadlinePassed = errors.New("form deadline has passed")
 
 	// Question Errors
 	ErrQuestionNotFound           = errors.New("question not found")
+	ErrSectionNotFound            = errors.New("section not found")
 	ErrQuestionRequired           = errors.New("question is required but not answered")
+	ErrQuestionTypeMismatch       = errors.New("question type does not match the expected type")
 	ErrValidationFailed           = errors.New("validation failed")
 	ErrInvalidSourceIDWithChoices = errors.New("cannot specify both source_id and choices")
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
 
 	// Response Errors
-	ErrResponseNotFound      = errors.New("response not found")
-	ErrResponseAlreadyExists = errors.New("user already has a response for this form")
+	ErrResponseNotFound       = errors.New("response not found")
+	ErrResponseAlreadyExists  = errors.New("user already has a response for this form")
+	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
+	ErrResponseNotOwned       = errors.New("response does not belong to the current user")
+
+	// Answer / Workflow: cannot answer questions in a section skipped by workflow
+	//ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
 
 	// Workflow Errors
-	ErrWorkflowValidationFailed = errors.New("workflow validation failed")
-	ErrWorkflowNotActive        = errors.New("workflow is not active")
-	ErrUnmarshalWorkflow        = errors.New("failed to unmarshal workflow")
-	ErrMarshalWorkflow          = errors.New("failed to marshal workflow")
-	ErrUnmarshalAPIWorkflow     = errors.New("failed to unmarshal API workflow")
-	ErrUnmarshalDBWorkflow      = errors.New("failed to unmarshal database workflow")
-	ErrWorkflowNodeNotFound     = errors.New("node not found in current workflow")
-	ErrMarshalMergedWorkflow    = errors.New("failed to marshal merged workflow")
+	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
+	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
+	ErrWorkflowNotActive             = errors.New("workflow is not active")
+	ErrUnmarshalWorkflow             = errors.New("failed to unmarshal workflow")
+	ErrMarshalWorkflow               = errors.New("failed to marshal workflow")
+	ErrUnmarshalAPIWorkflow          = errors.New("failed to unmarshal API workflow")
+	ErrUnmarshalDBWorkflow           = errors.New("failed to unmarshal database workflow")
+	ErrWorkflowNodeNotFound          = errors.New("node not found in current workflow")
+	ErrMarshalMergedWorkflow         = errors.New("failed to marshal merged workflow")
+
+	// File Errors
+	ErrFileNotFound       = errors.New("file not found")
+	ErrFileTooLarge       = errors.New("file exceeds maximum size")
+	ErrInvalidFileID      = errors.New("invalid file ID")
+	ErrInvalidMultipart   = errors.New("failed to parse multipart form")
+	ErrFailedToSaveFile   = errors.New("failed to save file")
+	ErrFailedToDeleteFile = errors.New("failed to delete file")
+	ErrInvalidLimit       = errors.New("invalid limit parameter")
+	ErrInvalidOffset      = errors.New("invalid offset parameter")
+	ErrInvalidFileType    = errors.New("file type is not allowed")
+	ErrCoverImageTooLarge = errors.New("cover image exceeds maximum size")
+	ErrInvalidImageFormat = errors.New("image format is invalid")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -185,8 +223,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("form is not in draft status")
 	case errors.Is(err, ErrCoverImageTooLarge):
 		return problem.NewValidateProblem("cover image exceeds maximum size (max 2MB)")
-	case errors.Is(err, ErrCoverImageInvalidFormat):
-		return problem.NewValidateProblem("cover image must be a WebP file")
+	case errors.Is(err, ErrInvalidImageFormat):
+		return problem.NewValidateProblem("image format is invalid")
 
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):
@@ -205,8 +243,12 @@ func ErrorHandler(err error) problem.Problem {
 	// Question Errors
 	case errors.Is(err, ErrQuestionNotFound):
 		return problem.NewNotFoundProblem("question not found")
+	case errors.Is(err, ErrSectionNotFound):
+		return problem.NewNotFoundProblem("section not found")
 	case errors.Is(err, ErrQuestionRequired):
 		return problem.NewValidateProblem("question is required but not answered")
+	case errors.Is(err, ErrQuestionTypeMismatch):
+		return problem.NewValidateProblem("question type does not match the expected type")
 	case errors.Is(err, ErrInvalidSourceIDWithChoices):
 		return problem.NewBadRequestProblem("cannot specify both source_id and choices")
 	case errors.Is(err, ErrInvalidSourceIDForType):
@@ -217,14 +259,24 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewNotFoundProblem("response not found")
 	case errors.Is(err, ErrResponseAlreadyExists):
 		return problem.NewValidateProblem("user already has a response for this form")
+	case errors.Is(err, ErrResponseNotOwned):
+		return problem.NewForbiddenProblem("response does not belong to the current user")
+
+	// Submit Errors
+	case errors.Is(err, ErrResponseNotComplete{}):
+		return problem.NewValidateProblem(err.Error())
 
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
+	//case errors.Is(err, ErrAnswerSectionSkipped):
+	//	return problem.NewValidateProblem("cannot answer questions in a section that is skipped by the form workflow")
 
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
+	case errors.Is(err, ErrWorkflowResolveSectionsFailed):
+		return problem.NewValidateProblem("failed to resolve workflow sections")
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
 	case errors.Is(err, ErrUnmarshalWorkflow):
@@ -239,6 +291,26 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("node not found in current workflow, please create it first using CreateNode API")
 	case errors.Is(err, ErrMarshalMergedWorkflow):
 		return problem.NewInternalServerProblem("failed to marshal merged workflow")
+
+	// File Errors
+	case errors.Is(err, ErrFileNotFound):
+		return problem.NewNotFoundProblem("file not found")
+	case errors.Is(err, ErrFileTooLarge):
+		return problem.NewValidateProblem("file exceeds maximum size (max 100MB)")
+	case errors.Is(err, ErrInvalidFileID):
+		return problem.NewBadRequestProblem("invalid file ID")
+	case errors.Is(err, ErrInvalidMultipart):
+		return problem.NewBadRequestProblem("failed to parse multipart form")
+	case errors.Is(err, ErrFailedToSaveFile):
+		return problem.NewInternalServerProblem("failed to save file")
+	case errors.Is(err, ErrFailedToDeleteFile):
+		return problem.NewInternalServerProblem("failed to delete file")
+	case errors.Is(err, ErrInvalidLimit):
+		return problem.NewBadRequestProblem("invalid limit parameter")
+	case errors.Is(err, ErrInvalidOffset):
+		return problem.NewBadRequestProblem("invalid offset parameter")
+	case errors.Is(err, ErrInvalidFileType):
+		return problem.NewValidateProblem("file type is not allowed")
 	}
 	return problem.Problem{}
 }

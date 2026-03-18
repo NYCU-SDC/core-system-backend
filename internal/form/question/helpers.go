@@ -1,5 +1,9 @@
 package question
 
+import (
+	"regexp"
+)
+
 // ToQuestion converts GetByIDRow to Question
 func (r GetByIDRow) ToQuestion() Question {
 	return Question{
@@ -66,4 +70,15 @@ func (r UpdateOrderRow) ToQuestion() Question {
 		CreatedAt:   r.CreatedAt,
 		UpdatedAt:   r.UpdatedAt,
 	}
+}
+
+// matchPattern checks if a value matches the given regex pattern.
+// If the pattern is invalid, it returns (false, err).
+func matchPattern(value string, pattern string) (bool, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return false, err
+	}
+
+	return re.MatchString(value), nil
 }

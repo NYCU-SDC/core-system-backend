@@ -175,8 +175,8 @@ func (b Builder) CreateActiveWorkflow(formID uuid.UUID, userID uuid.UUID, workfl
 // CreateSectionRecord creates a section record in the database
 func (b Builder) CreateSectionRecord(sectionID uuid.UUID, formID uuid.UUID, title string) {
 	_, err := b.db.Exec(context.Background(),
-		"INSERT INTO sections (id, form_id, title, progress) VALUES ($1, $2, $3, $4)",
-		sectionID, formID, title, "draft")
+		"INSERT INTO sections (id, form_id, title) VALUES ($1, $2, $3)",
+		sectionID, formID, title)
 	require.NoError(b.t, err)
 }
 
@@ -383,8 +383,8 @@ func (b Builder) CreateWorkflowMissingLabel() []byte {
 	endID := uuid.New()
 	workflowJSON, err := json.Marshal([]map[string]interface{}{
 		{
-			"id":    startID.String(),
-			"type":  "start",
+			"id":   startID.String(),
+			"type": "start",
 			// Missing "label" field
 			"next": endID.String(),
 		},
@@ -562,9 +562,9 @@ func (b Builder) CreateConditionNodeMissingNextTrue() []byte {
 			"next":  conditionID.String(),
 		},
 		{
-			"id":        conditionID.String(),
-			"type":      "condition",
-			"label":     "Condition",
+			"id":    conditionID.String(),
+			"type":  "condition",
+			"label": "Condition",
 			// Missing "nextTrue" field
 			"nextFalse": endID.String(),
 			"conditionRule": map[string]interface{}{

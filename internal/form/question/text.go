@@ -1,8 +1,12 @@
 package question
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/url"
 	"strings"
+
+	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
 )
@@ -10,6 +14,13 @@ import (
 type ShortText struct {
 	question Question
 	formID   uuid.UUID
+}
+
+func NewShortText(q Question, formID uuid.UUID) ShortText {
+	return ShortText{
+		question: q,
+		formID:   formID,
+	}
 }
 
 func (s ShortText) Question() Question {
@@ -20,7 +31,13 @@ func (s ShortText) FormID() uuid.UUID {
 	return s.formID
 }
 
-func (s ShortText) Validate(value string) error {
+func (s ShortText) Validate(rawValue json.RawMessage) error {
+	var value string
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
+		return fmt.Errorf("invalid short text value format: %w", err)
+	}
+
 	if len(value) > 100 {
 		return ErrInvalidAnswerLength{
 			Expected: 100,
@@ -31,16 +48,78 @@ func (s ShortText) Validate(value string) error {
 	return nil
 }
 
-func NewShortText(q Question, formID uuid.UUID) ShortText {
-	return ShortText{
-		question: q,
-		formID:   formID,
+func (s ShortText) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	var value string
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid short text value format: %w", err)
 	}
+
+	return shared.ShortTextAnswer{Value: value}, nil
+}
+
+func (s ShortText) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.ShortTextAnswer
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
+		return nil, fmt.Errorf("invalid short text answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (s ShortText) EncodeRequest(answer any) (json.RawMessage, error) {
+	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+	}
+
+	// API expects a plain string value
+	return json.Marshal(shortTextAnswer.Value)
+}
+
+func (s ShortText) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+	}
+
+	return shortTextAnswer.Value, nil
+}
+
+func (s ShortText) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := s.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode short text answer: %w", err)
+	}
+
+	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+	}
+
+	match, err := matchPattern(shortTextAnswer.Value, pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for short text answer: %w", err)
+	}
+	return match, nil
 }
 
 type LongText struct {
 	question Question
 	formID   uuid.UUID
+}
+
+func NewLongText(q Question, formID uuid.UUID) LongText {
+	return LongText{
+		question: q,
+		formID:   formID,
+	}
 }
 
 func (l LongText) Question() Question {
@@ -51,7 +130,13 @@ func (l LongText) FormID() uuid.UUID {
 	return l.formID
 }
 
-func (l LongText) Validate(value string) error {
+func (l LongText) Validate(rawValue json.RawMessage) error {
+	var value string
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
+		return fmt.Errorf("invalid long text value format: %w", err)
+	}
+
 	if len(value) > 1000 {
 		return ErrInvalidAnswerLength{
 			Expected: 1000,
@@ -62,16 +147,83 @@ func (l LongText) Validate(value string) error {
 	return nil
 }
 
-func NewLongText(q Question, formID uuid.UUID) LongText {
-	return LongText{
-		question: q,
-		formID:   formID,
+func (l LongText) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	var value string
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid long text value format: %w", err)
 	}
+
+	return shared.LongTextAnswer{Value: value}, nil
+}
+
+func (l LongText) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.LongTextAnswer
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
+		return nil, fmt.Errorf("invalid long text answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (l LongText) EncodeRequest(answer any) (json.RawMessage, error) {
+	longTextAnswer, ok := answer.(shared.LongTextAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+	}
+
+	// API expects a plain string value
+	return json.Marshal(longTextAnswer.Value)
+}
+
+func (l LongText) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := l.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	longTextAnswer, ok := answer.(shared.LongTextAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+	}
+
+	value := longTextAnswer.Value
+	// Limit to 100 characters
+	if len(value) > 100 {
+		return value[:100] + "...", nil
+	}
+	return value, nil
+}
+
+func (l LongText) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := l.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode long text answer: %w", err)
+	}
+
+	longTextAnswer, ok := answer.(shared.LongTextAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+	}
+
+	match, err := matchPattern(longTextAnswer.Value, pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for long text answer: %w", err)
+	}
+	return match, nil
 }
 
 type Hyperlink struct {
 	question Question
 	formID   uuid.UUID
+}
+
+func NewHyperlink(q Question, formID uuid.UUID) Hyperlink {
+	return Hyperlink{
+		question: q,
+		formID:   formID,
+	}
 }
 
 func (h Hyperlink) Question() Question {
@@ -82,7 +234,13 @@ func (h Hyperlink) FormID() uuid.UUID {
 	return h.formID
 }
 
-func (h Hyperlink) Validate(value string) error {
+func (h Hyperlink) Validate(rawValue json.RawMessage) error {
+	var value string
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
+		return fmt.Errorf("invalid hyperlink value format: %w", err)
+	}
+
 	if len(value) > 100 {
 		return ErrInvalidAnswerLength{
 			Expected: 100,
@@ -97,11 +255,66 @@ func (h Hyperlink) Validate(value string) error {
 	return nil
 }
 
-func NewHyperlink(q Question, formID uuid.UUID) Hyperlink {
-	return Hyperlink{
-		question: q,
-		formID:   formID,
+func (h Hyperlink) DecodeRequest(rawValue json.RawMessage) (any, error) {
+	var value string
+	err := json.Unmarshal(rawValue, &value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid hyperlink value format: %w", err)
 	}
+
+	return shared.HyperlinkAnswer{Value: value}, nil
+}
+
+func (h Hyperlink) DecodeStorage(rawValue json.RawMessage) (any, error) {
+	var answer shared.HyperlinkAnswer
+	err := json.Unmarshal(rawValue, &answer)
+	if err != nil {
+		return nil, fmt.Errorf("invalid hyperlink answer in storage: %w", err)
+	}
+
+	return answer, nil
+}
+
+func (h Hyperlink) EncodeRequest(answer any) (json.RawMessage, error) {
+	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
+	if !ok {
+		return nil, fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+	}
+
+	// API expects a plain string value
+	return json.Marshal(hyperlinkAnswer.Value)
+}
+
+func (h Hyperlink) DisplayValue(rawValue json.RawMessage) (string, error) {
+	answer, err := h.DecodeStorage(rawValue)
+	if err != nil {
+		return "", err
+	}
+
+	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
+	if !ok {
+		return "", fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+	}
+
+	return hyperlinkAnswer.Value, nil
+}
+
+func (h Hyperlink) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
+	answer, err := h.DecodeStorage(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode hyperlink answer: %w", err)
+	}
+
+	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
+	if !ok {
+		return false, fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+	}
+
+	match, err := matchPattern(hyperlinkAnswer.Value, pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for hyperlink answer: %w", err)
+	}
+	return match, nil
 }
 
 // validateURL checks if the value is a valid URL

@@ -168,7 +168,8 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 	}
 
 	// Validate created workflow (relaxed draft validation)
-	if err := s.validator.Validate(ctx, formID, createdRow.Workflow, s.questionStore); err != nil {
+	err = s.validator.Validate(ctx, formID, createdRow.Workflow, s.questionStore)
+	if err != nil {
 		err = fmt.Errorf("%w: %w", internal.ErrWorkflowValidationFailed, err)
 		span.RecordError(err)
 		return CreateNodeRow{}, err

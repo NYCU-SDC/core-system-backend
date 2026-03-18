@@ -2,6 +2,7 @@ package submit
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"NYCU-SDC/core-system-backend/internal/user"
@@ -22,30 +23,24 @@ import (
 )
 
 type Request struct {
-	Answers []AnswerRequest `json:"answers" validate:"required,dive"`
-}
-
-type AnswerRequest struct {
-	QuestionID string `json:"questionId" validate:"required,uuid"`
-	Value      string `json:"value" validate:"required"`
-}
-
-func (a AnswerRequest) ToAnswerParam() shared.AnswerParam {
-	return shared.AnswerParam{
-		QuestionID: a.QuestionID,
-		Value:      a.Value,
-	}
+	Answers []answer.Payload `json:"answers" validate:"required,dive"`
 }
 
 type Response struct {
-	ID        string    `json:"id" validate:"required,uuid"`
-	FormID    string    `json:"formId" validate:"required,uuid"`
-	CreatedAt time.Time `json:"createdAt" validate:"required,datetime"`
-	UpdatedAt time.Time `json:"updatedAt" validate:"required,datetime"`
+	ID        string    `json:"id"`
+	FormID    string    `json:"formId"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Progress  string    `json:"progress"`
 }
 
 type Operator interface {
-	Submit(ctx context.Context, formID uuid.UUID, userID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
+	Submit(ctx context.Context, responseID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
+}
+
+// ResponseStore is the minimal interface needed to verify response ownership before submission.
+type ResponseStore interface {
+	GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
 type Handler struct {
@@ -53,15 +48,17 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 	operator      Operator
+	responseStore ResponseStore
 	tracer        trace.Tracer
 }
 
-func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, operator Operator) *Handler {
+func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, operator Operator, responseStore ResponseStore) *Handler {
 	return &Handler{
 		logger:        logger,
 		validator:     validator,
 		problemWriter: problemWriter,
 		operator:      operator,
+		responseStore: responseStore,
 		tracer:        otel.Tracer("response/handler"),
 	}
 }
@@ -72,10 +69,26 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIDStr := r.PathValue("formId")
-	formID, err := internal.ParseUUID(formIDStr)
+	responseIDStr := r.PathValue("responseId")
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Ownership check
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
+		return
+	}
+	submittedBy, err := h.responseStore.GetSubmittedBy(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	if submittedBy != currentUser.ID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
 		return
 	}
 
@@ -86,20 +99,20 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentUser, ok := user.GetFromContext(traceCtx)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
-		return
+	answerParams := make([]shared.AnswerParam, 0, len(request.Answers))
+	for _, answerRequest := range request.Answers {
+		answerParams = append(answerParams, shared.AnswerParam{
+			QuestionID: answerRequest.QuestionID,
+			Value:      answerRequest.Value,
+		})
 	}
 
-	answerParams := make([]shared.AnswerParam, len(request.Answers))
-	for i, answer := range request.Answers {
-		answerParams[i] = answer.ToAnswerParam()
-	}
-
-	newResponse, errs := h.operator.Submit(traceCtx, formID, currentUser.ID, answerParams)
+	newResponse, errs := h.operator.Submit(traceCtx, responseID, answerParams)
 	if errs != nil {
-		// Convert errors to strings and join them for better error handling
+		if len(errs) == 1 {
+			h.problemWriter.WriteError(traceCtx, w, errs[0], logger)
+			return
+		}
 		errorStrings := make([]string, len(errs))
 		for i, err := range errs {
 			errorStrings[i] = err.Error()
@@ -114,6 +127,7 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		FormID:    newResponse.FormID.String(),
 		CreatedAt: newResponse.CreatedAt.Time,
 		UpdatedAt: newResponse.UpdatedAt.Time,
+		Progress:  strings.ToUpper(string(newResponse.Progress)),
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, submitResponse)

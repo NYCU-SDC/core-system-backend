@@ -53,32 +53,12 @@ func NewHandler(
 	}
 }
 
-func (h *Handler) PreviewForm(w http.ResponseWriter, r *http.Request) {
-	ctx, span := h.tracer.Start(r.Context(), "PreviewForm")
-	defer span.End()
-	logger := logutil.WithContext(ctx, h.logger)
-
-	var req Request
-	if err := handlerutil.ParseAndValidateRequestBody(ctx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(ctx, w, err, logger)
-		return
-	}
-
-	list, err := h.service.GetRecipients(ctx, Selection(req))
-	if err != nil {
-		h.problemWriter.WriteError(ctx, w, err, logger)
-		return
-	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, PreviewResponse{Recipients: list})
-}
-
 func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 	ctx, span := h.tracer.Start(r.Context(), "PublishForm")
 	defer span.End()
 	logger := logutil.WithContext(ctx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	formID, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(ctx, w, err, logger)

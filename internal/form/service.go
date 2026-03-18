@@ -1,10 +1,11 @@
 package form
 
 import (
-	"NYCU-SDC/core-system-backend/internal/form/response"
 	"context"
 	"errors"
-	"slices"
+	"time"
+
+	"NYCU-SDC/core-system-backend/internal"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5"
@@ -20,18 +21,18 @@ import (
 
 type Querier interface {
 	Create(ctx context.Context, params CreateParams) (CreateRow, error)
-	Update(ctx context.Context, params UpdateParams) (UpdateRow, error)
+	Patch(ctx context.Context, params PatchParams) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
-	List(ctx context.Context, includeArchived pgtype.Bool) ([]ListRow, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error)
+	List(ctx context.Context, arg ListParams) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
-}
-
-type ResponseStore interface {
-	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]response.FormResponse, error)
+	GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
+	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type UserFormStatus string
@@ -65,18 +66,16 @@ type formFields struct {
 }
 
 type Service struct {
-	logger        *zap.Logger
-	queries       Querier
-	tracer        trace.Tracer
-	responseStore ResponseStore
+	logger  *zap.Logger
+	queries Querier
+	tracer  trace.Tracer
 }
 
-func NewService(logger *zap.Logger, db DBTX, responseStore ResponseStore) *Service {
+func NewService(logger *zap.Logger, db DBTX) *Service {
 	return &Service{
-		logger:        logger,
-		queries:       New(db),
-		tracer:        otel.Tracer("forms/service"),
-		responseStore: responseStore,
+		logger:  logger,
+		queries: New(db),
+		tracer:  otel.Tracer("forms/service"),
 	}
 }
 
@@ -172,36 +171,74 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	return newForm, nil
 }
 
-func (s *Service) Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (UpdateRow, error) {
-	ctx, span := s.tracer.Start(ctx, "Update")
+func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error) {
+	ctx, span := s.tracer.Start(ctx, "Patch")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	fields := buildFormFieldsFromRequest(request)
-
-	updatedForm, err := s.queries.Update(ctx, UpdateParams{
-		ID:                     id,
-		Title:                  fields.title,
-		Description:            fields.description,
-		PreviewMessage:         fields.previewMessage,
-		LastEditor:             userID,
-		Deadline:               fields.deadline,
-		PublishTime:            fields.publishTime,
-		MessageAfterSubmission: fields.messageAfterSubmission,
-		GoogleSheetUrl:         fields.googleSheetURL,
-		Visibility:             fields.visibility,
-		DressingColor:          fields.dressingColor,
-		DressingHeaderFont:     fields.dressingHeaderFont,
-		DressingQuestionFont:   fields.dressingQuestionFont,
-		DressingTextFont:       fields.dressingTextFont,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "update form")
-		span.RecordError(err)
-		return UpdateRow{}, err
+	params := PatchParams{
+		ID:         id,
+		LastEditor: userID,
 	}
 
-	return updatedForm, nil
+	if request.Title != nil {
+		params.Title = pgtype.Text{String: *request.Title, Valid: true}
+	}
+
+	if request.Description != nil {
+		params.Description = pgtype.Text{String: *request.Description, Valid: true}
+	}
+
+	if request.PreviewMessage != nil {
+		params.PreviewMessage = pgtype.Text{String: *request.PreviewMessage, Valid: true}
+	}
+
+	if request.Deadline != nil {
+		params.Deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
+	}
+
+	if request.PublishTime != nil {
+		params.PublishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
+	}
+
+	if request.MessageAfterSubmission != nil {
+		params.MessageAfterSubmission = pgtype.Text{String: *request.MessageAfterSubmission, Valid: true}
+	}
+
+	if request.GoogleSheetUrl != nil {
+		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetUrl, Valid: true}
+	}
+
+	if request.Visibility != nil {
+		params.Visibility = NullVisibility{
+			Visibility: visibilityFromAPIFormat(*request.Visibility),
+			Valid:      true,
+		}
+	}
+
+	if request.Dressing != nil {
+		if request.Dressing.Color != "" {
+			params.DressingColor = pgtype.Text{String: request.Dressing.Color, Valid: true}
+		}
+		if request.Dressing.HeaderFont != "" {
+			params.DressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: true}
+		}
+		if request.Dressing.QuestionFont != "" {
+			params.DressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: true}
+		}
+		if request.Dressing.TextFont != "" {
+			params.DressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: true}
+		}
+	}
+
+	patchedForm, err := s.queries.Patch(ctx, params)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "patch form")
+		span.RecordError(err)
+		return PatchRow{}, err
+	}
+
+	return patchedForm, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
@@ -226,6 +263,10 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 
 	currentForm, err := s.queries.GetByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(internal.ErrFormNotFound)
+			return GetByIDRow{}, internal.ErrFormNotFound
+		}
 		err = databaseutil.WrapDBError(err, logger, "get form by id")
 		span.RecordError(err)
 		return GetByIDRow{}, err
@@ -234,12 +275,55 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	return currentForm, nil
 }
 
-func (s *Service) List(ctx context.Context) ([]ListRow, error) {
+func (s *Service) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error) {
+	ctx, span := s.tracer.Start(ctx, "GetFormsByIDs")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	forms, err := s.queries.GetByIDs(ctx, ids)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get forms by ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return forms, nil
+}
+
+// Exists reports whether a form with the given ID exists (so response package can use *form.Service as FormStore without form importing response).
+func (s *Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+	ctx, span := s.tracer.Start(ctx, "FormExists")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	exists, err := s.queries.Exists(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return false, err
+	}
+
+	return exists, nil
+}
+
+// List returns all forms matching the given filters.
+// Pass an empty string for status or visibility to skip that filter.
+// Set excludeExpired to true to exclude forms whose deadline has already passed (i.e. deadline >= now()).
+func (s *Service) List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error) {
 	ctx, span := s.tracer.Start(ctx, "ListForms")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	forms, err := s.queries.List(ctx, pgtype.Bool{Valid: false})
+	params := ListParams{
+		Status:     NullStatus{Status: status, Valid: status != ""},
+		Visibility: NullVisibility{Visibility: visibility, Valid: visibility != ""},
+	}
+
+	if excludeExpired {
+		params.DeadlineAfter = pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	}
+
+	forms, err := s.queries.List(ctx, params)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms")
 		span.RecordError(err)
@@ -249,14 +333,12 @@ func (s *Service) List(ctx context.Context) ([]ListRow, error) {
 	return forms, nil
 }
 
-func (s *Service) ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUnitRow, error) {
+func (s *Service) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error) {
 	ctx, span := s.tracer.Start(ctx, "ListByUnit")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
-		UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
-	})
+	forms, err := s.queries.ListByUnit(ctx, arg)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list forms by unit")
 		span.RecordError(err)
@@ -283,85 +365,6 @@ func (s *Service) SetStatus(ctx context.Context, id uuid.UUID, status Status, us
 	}
 
 	return updated, nil
-}
-
-func (s *Service) ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]UserForm, error) {
-	ctx, span := s.tracer.Start(ctx, "ListFormsOfUser")
-	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
-
-	responses, err := s.responseStore.ListBySubmittedBy(ctx, userID)
-	if err != nil {
-		span.RecordError(err)
-		return []UserForm{}, err
-	}
-
-	formStatusMap := make(map[uuid.UUID]UserFormStatus)
-	for _, response := range responses {
-		status := UserFormStatusInProgress
-		if response.SubmittedAt.Valid {
-			status = UserFormStatusCompleted
-		}
-		formStatusMap[response.FormID] = status
-	}
-
-	allForms := make(map[uuid.UUID]ListByUnitRow)
-	for _, unitID := range unitIDs {
-		forms, err := s.queries.ListByUnit(ctx, ListByUnitParams{
-			UnitID: pgtype.UUID{Bytes: unitID, Valid: true},
-		})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "list forms by unit")
-			span.RecordError(err)
-			return []UserForm{}, err
-		}
-
-		for _, form := range forms {
-			allForms[form.ID] = form
-		}
-	}
-
-	userForms := make([]UserForm, 0, len(allForms))
-	for formID, form := range allForms {
-		status, exists := formStatusMap[formID]
-		if !exists {
-			status = UserFormStatusNotStarted
-		}
-
-		userForms = append(userForms, UserForm{
-			FormID:   formID,
-			Title:    form.Title,
-			Deadline: form.Deadline,
-			Status:   status,
-		})
-	}
-
-	slices.SortFunc(userForms, func(a, b UserForm) int {
-
-		if a.Deadline.Valid != b.Deadline.Valid {
-			if a.Deadline.Valid {
-				return -1
-			}
-			return 1
-		}
-
-		if a.Deadline.Valid {
-			if n := a.Deadline.Time.Compare(b.Deadline.Time); n != 0 {
-				return n
-			}
-		}
-
-		if a.Title < b.Title {
-			return -1
-		}
-		if a.Title > b.Title {
-			return 1
-		}
-
-		return 0
-	})
-
-	return userForms, nil
 }
 
 func (s *Service) UploadCoverImage(ctx context.Context, formID uuid.UUID, imageData []byte, coverImageURL string) error {
@@ -402,4 +405,48 @@ func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, erro
 	}
 
 	return imageData, nil
+}
+
+func (s *Service) GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	ctx, span := s.tracer.Start(ctx, "GetUnitIDByFormID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	unitID, err := s.queries.GetUnitIDByFormID(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get unit id by form id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	if !unitID.Valid {
+		err := errors.New("unit id is null")
+		logger.Error("invalid unit id", zap.Error(err))
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return unitID.Bytes, nil
+}
+
+func (s *Service) GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	ctx, span := s.tracer.Start(ctx, "GetUnitIDBySectionID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	unitID, err := s.queries.GetUnitIDBySectionID(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get unit id by section id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	if !unitID.Valid {
+		err := errors.New("unit id is null")
+		logger.Error("invalid unit id", zap.Error(err))
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return unitID.Bytes, nil
 }

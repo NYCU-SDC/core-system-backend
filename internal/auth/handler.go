@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
@@ -30,8 +31,10 @@ const (
 type JWTIssuer interface {
 	New(ctx context.Context, user user.User) (string, error)
 	NewState(ctx context.Context, service, environment, callbackURL, redirectURL string) (string, error)
+	NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string) (string, error)
 	Parse(ctx context.Context, tokenString string) (user.User, error)
-	ParseState(ctx context.Context, tokenString string) (string, error)
+	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
+	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
 }
@@ -44,21 +47,22 @@ type JWTStore interface {
 type UserStore interface {
 	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
 	GetByID(ctx context.Context, id uuid.UUID) (user.UsersWithEmail, error)
-	FindOrCreate(ctx context.Context, name, username, avatarUrl string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error)
+	FindOrCreate(ctx context.Context, name, username, avatarUrl string, email string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error)
 	CreateEmail(ctx context.Context, userID uuid.UUID, email string) error
 }
 
 type OAuthProvider interface {
 	Name() string
 	Config() *oauth2.Config
+	ConfigWithCustomRedirectURL(redirectURL string) *oauth2.Config
 	Exchange(ctx context.Context, code string) (*oauth2.Token, error)
 	GetUserInfo(ctx context.Context, token *oauth2.Token) (user.User, user.Auth, string, error)
 }
 
 type callBackInfo struct {
-	code       string
-	oauthError string
-	redirectTo string
+	code        string
+	oauthError  string
+	proxyClaims *jwt.OauthProxyClaims
 }
 
 type Handler struct {
@@ -101,11 +105,11 @@ func NewHandler(
 	nycuOauthConfig oauthprovider.NYCUOauth,
 ) *Handler {
 	getCallbackURL := func(provider string) string {
-	if oauthProxyBaseURL != "" {
-		return fmt.Sprintf("%s/api/auth/%s/callback", oauthProxyBaseURL, provider)
+		if oauthProxyBaseURL != "" {
+			return fmt.Sprintf("%s/api/auth/%s/callback", oauthProxyBaseURL, provider)
+		}
+		return fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseURL, provider)
 	}
-    return fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseURL, provider)
-}
 	googleOauthCallbackURL := getCallbackURL("google")
 	nycuOauthCallbackURL := getCallbackURL("nycu")
 
@@ -155,12 +159,27 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Redirect URL after successful login
 	redirectURL := r.URL.Query().Get("r")
 
 	// Determine callback URL based on oauth proxy configuration
 	callbackURL := ""
 	if h.oauthProxyBaseURL != "" {
-		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", h.baseURL, providerName)
+		baseForCallback := h.baseURL
+		if h.devMode {
+			customBase := r.URL.Query().Get("base")
+			if customBase != "" {
+				baseForCallback = strings.TrimRight(customBase, "/")
+			}
+		}
+		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseForCallback, providerName)
+	} else {
+		if h.devMode {
+			customBase := r.URL.Query().Get("base")
+			if customBase != "" {
+				callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", strings.TrimRight(customBase, "/"), providerName)
+			}
+		}
 	}
 
 	// Create JWT state for OAuth flow
@@ -171,7 +190,14 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate OAuth authorization URL and redirect
-	authURL := provider.Config().AuthCodeURL(state, oauth2.AccessTypeOffline)
+	var config *oauth2.Config
+	if h.oauthProxyBaseURL == "" && callbackURL != "" {
+		config = provider.ConfigWithCustomRedirectURL(callbackURL)
+	} else {
+		config = provider.Config()
+	}
+
+	authURL := config.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
@@ -195,7 +221,8 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := callbackInfo.code
-	redirectTo := callbackInfo.redirectTo
+	redirectTo := callbackInfo.proxyClaims.RedirectURL
+	callbackURL := callbackInfo.proxyClaims.CallbackURL
 	oauthError := callbackInfo.oauthError
 
 	if oauthError != "" {
@@ -203,10 +230,20 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := provider.Exchange(traceCtx, code)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
-		return
+	var token *oauth2.Token
+	if callbackURL != "" {
+		config := provider.ConfigWithCustomRedirectURL(callbackURL)
+		token, err = config.Exchange(traceCtx, code)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+			return
+		}
+	} else {
+		token, err = provider.Exchange(traceCtx, code)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+			return
+		}
 	}
 
 	userInfo, auth, email, err := provider.GetUserInfo(traceCtx, token)
@@ -215,7 +252,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := h.userStore.FindOrCreate(traceCtx, userInfo.Name.String, userInfo.Username.String, userInfo.AvatarUrl.String, userInfo.Role, providerName, auth.ProviderID)
+	userID, err := h.userStore.FindOrCreate(traceCtx, userInfo.Name.String, userInfo.Username.String, userInfo.AvatarUrl.String, email, userInfo.Role, providerName, auth.ProviderID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -296,15 +333,15 @@ func (h *Handler) getCallBackInfo(ctx context.Context, url *url.URL) (callBackIn
 	state := url.Query().Get("state")
 	oauthError := url.Query().Get("error")
 
-	redirectURL, err := h.jwtIssuer.ParseState(ctx, state)
+	oauthProxyClaims, err := h.jwtIssuer.ParseState(ctx, state)
 	if err != nil {
 		return callBackInfo{}, err
 	}
 
 	return callBackInfo{
-		code:       code,
-		oauthError: oauthError,
-		redirectTo: redirectURL,
+		code:        code,
+		oauthError:  oauthError,
+		proxyClaims: oauthProxyClaims,
 	}, nil
 }
 
@@ -313,26 +350,36 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	baseURL, err := url.Parse(h.baseURL)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
+		return
+	}
+	domain := baseURL.Host
+
 	// Inactivate the current refresh token from cookie
 	refreshTokenCookie, err := r.Cookie(RefreshTokenCookieName)
 	if err != nil {
 		logger.Error("Failed to get refresh token cookie during logout", zap.Error(err))
+		h.clearAccessAndRefreshCookies(w, domain)
 		return
 	}
 
 	refreshTokenID, err := uuid.Parse(refreshTokenCookie.Value)
 	if err != nil {
 		logger.Error("Invalid refresh token format during logout", zap.Error(err))
+		h.clearAccessAndRefreshCookies(w, domain)
 		return
 	}
 
 	err = h.jwtStore.InactivateRefreshToken(traceCtx, refreshTokenID)
 	if err != nil {
 		logger.Warn("Failed to inactivate refresh token during logout", zap.Error(err))
+		h.clearAccessAndRefreshCookies(w, domain)
 		return
 	}
 
-	h.clearAccessAndRefreshCookies(w)
+	h.clearAccessAndRefreshCookies(w, domain)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, map[string]string{"message": "Successfully logged out"})
 }
@@ -437,8 +484,11 @@ func (h *Handler) InternalAPITokenLogin(w http.ResponseWriter, r *http.Request) 
 // setAccessAndRefreshCookies sets the access/refresh cookies with HTTP-only and secure flags
 func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, accessTokenID, refreshTokenID string) {
 	var sameSite http.SameSite
+	secure := true
 	if h.devMode {
-		sameSite = http.SameSiteNoneMode
+		sameSite = http.SameSiteLaxMode
+		domain = ""
+		secure = false
 	} else {
 		sameSite = http.SameSiteStrictMode
 	}
@@ -447,7 +497,7 @@ func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, acce
 		Name:     AccessTokenCookieName,
 		Value:    accessTokenID,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: sameSite,
 		Path:     "/",
 		MaxAge:   int(h.accessTokenExpiration.Seconds()),
@@ -458,34 +508,45 @@ func (h *Handler) setAccessAndRefreshCookies(w http.ResponseWriter, domain, acce
 		Name:     RefreshTokenCookieName,
 		Value:    refreshTokenID,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   secure,
 		SameSite: sameSite,
-		Path:     "/api/auth/refresh",
+		Path:     "/",
 		MaxAge:   int(h.refreshTokenExpiration.Seconds()),
 		Domain:   domain,
 	})
 }
 
 // clearAccessAndRefreshCookies sets the access/refresh cookies to empty values and negative MaxAge
-// negative means the cookies will be deleted, zero means the cookies will expire at the end of the session
-func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter) {
+func (h *Handler) clearAccessAndRefreshCookies(w http.ResponseWriter, domain string) {
+	var sameSite http.SameSite
+	secure := true
+	if h.devMode {
+		sameSite = http.SameSiteLaxMode
+		domain = ""
+		secure = false
+	} else {
+		sameSite = http.SameSiteStrictMode
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     AccessTokenCookieName,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+		SameSite: sameSite,
+		Domain:   domain,
 	})
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     RefreshTokenCookieName,
 		Value:    "",
-		Path:     "/api/auth/refresh",
+		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   secure,
+		SameSite: sameSite,
+		Domain:   domain,
 	})
 }

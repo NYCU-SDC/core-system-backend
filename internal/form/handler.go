@@ -2,7 +2,9 @@ package form
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/file"
 	"NYCU-SDC/core-system-backend/internal/form/font"
+	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -29,14 +32,27 @@ type DressingRequest struct {
 
 type Request struct {
 	Title                  string           `json:"title" validate:"required"`
-	Description            string           `json:"description" validate:"required"`
+	Description            string           `json:"description"`
 	PreviewMessage         string           `json:"previewMessage"`
 	Deadline               *time.Time       `json:"deadline"`
 	PublishTime            *time.Time       `json:"publishTime"`
-	MessageAfterSubmission string           `json:"messageAfterSubmission" validate:"required"`
+	MessageAfterSubmission string           `json:"messageAfterSubmission"`
 	GoogleSheetUrl         string           `json:"googleSheetUrl"`
 	Visibility             string           `json:"visibility" validate:"required,oneof=PUBLIC PRIVATE"`
 	CoverImageUrl          string           `json:"coverImageUrl"`
+	Dressing               *DressingRequest `json:"dressing"`
+}
+
+type PatchRequest struct {
+	Title                  *string          `json:"title" validate:"omitempty"`
+	Description            *string          `json:"description" validate:"omitempty"`
+	PreviewMessage         *string          `json:"previewMessage"`
+	Deadline               *time.Time       `json:"deadline"`
+	PublishTime            *time.Time       `json:"publishTime"`
+	MessageAfterSubmission *string          `json:"messageAfterSubmission" validate:"omitempty"`
+	GoogleSheetUrl         *string          `json:"googleSheetUrl"`
+	Visibility             *string          `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
+	CoverImageUrl          *string          `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
 }
 
@@ -61,6 +77,18 @@ type Response struct {
 
 type CoverUploadResponse struct {
 	ImageURL string `json:"imageUrl"`
+}
+
+type SectionRequest struct {
+	Title       string  `json:"title" validate:"required"`
+	Description *string `json:"description"`
+}
+
+type SectionResponse struct {
+	ID          string `json:"id"`
+	FormID      string `json:"formId"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
 // statusToUppercase converts database status format (lowercase) to API format (uppercase).
@@ -140,11 +168,11 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 
 type Store interface {
 	Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error)
-	Update(ctx context.Context, id uuid.UUID, request Request, userID uuid.UUID) (UpdateRow, error)
+	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
-	List(ctx context.Context) ([]ListRow, error)
-	ListByUnit(ctx context.Context, unitID uuid.UUID) ([]ListByUnitRow, error)
+	List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error)
+	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
 	UploadCoverImage(ctx context.Context, id uuid.UUID, data []byte, coverImageURL string) error
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
@@ -154,6 +182,11 @@ type tenantStore interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 }
 
+type questionStore interface {
+	UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (question.Section, error)
+	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+}
+
 type Handler struct {
 	logger *zap.Logger
 	tracer trace.Tracer
@@ -161,8 +194,15 @@ type Handler struct {
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 
-	store       Store
-	tenantStore tenantStore
+	store         Store
+	tenantStore   tenantStore
+	questionStore questionStore
+	fileService   FileService
+}
+
+type FileService interface {
+	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
+	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
 }
 
 func NewHandler(
@@ -171,6 +211,8 @@ func NewHandler(
 	problemWriter *problem.HttpWriter,
 	store Store,
 	tenantStore tenantStore,
+	questionStore questionStore,
+	fileService FileService,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -179,22 +221,24 @@ func NewHandler(
 		problemWriter: problemWriter,
 		store:         store,
 		tenantStore:   tenantStore,
+		questionStore: questionStore,
+		fileService:   fileService,
 	}
 }
 
-func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UpdateHandler")
+func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "PatchHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	var req Request
+	var req PatchRequest
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -206,7 +250,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.Update(traceCtx, id, req, currentUser.ID)
+	currentForm, err := h.store.Patch(traceCtx, id, req, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -250,7 +294,7 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -271,7 +315,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -322,7 +366,7 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	forms, err := h.store.List(traceCtx)
+	forms, err := h.store.List(traceCtx, "", "", false)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -444,7 +488,9 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	forms, err := h.store.ListByUnit(traceCtx, orgID)
+	forms, err := h.store.ListByUnit(traceCtx, ListByUnitParams{
+		UnitID: pgtype.UUID{Bytes: orgID, Valid: true},
+	})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -488,8 +534,8 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := handlerutil.ParseUUID(idStr)
+	idStr := r.PathValue("formId")
+	formID, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -500,46 +546,45 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 
 	if err := r.ParseMultipartForm(maxBytes); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMultipart, logger)
 		return
 	}
 
-	file, _, err := r.FormFile("coverImage")
+	fileData, header, err := r.FormFile("coverImage")
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMultipart, logger)
 		return
 	}
 	defer func() {
-		if err := file.Close(); err != nil {
+		if err := fileData.Close(); err != nil {
 			logutil.WithContext(traceCtx, logger).Warn(
 				"failed to close cover image file",
-				zap.String("form_id", id.String()),
+				zap.String("form_id", formID.String()),
 				zap.Error(err),
 			)
 		}
 	}()
 
-	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBytes+1))
+	// Save to file service with WebP validation (system upload, no user attribution)
+	savedFile, err := h.fileService.SaveFile(
+		traceCtx,
+		fileData,
+		header.Filename,
+		"image/webp",
+		nil, // system upload
+		file.WithWebP(),
+		file.WithMaxSize(maxBytes),
+	)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to read cover image: %w", err), logger)
-		return
-	}
-	if int64(len(imageBytes)) > maxBytes {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageTooLarge, logger)
-		return
-	}
-
-	// WebP validation
-	if len(imageBytes) < 12 ||
-		string(imageBytes[0:4]) != "RIFF" ||
-		string(imageBytes[8:12]) != "WEBP" {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrCoverImageInvalidFormat, logger)
+		logger.Error("Failed to save cover image", zap.Error(err))
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		span.RecordError(err)
 		return
 	}
 
-	coverImageURL := fmt.Sprintf("/api/forms/%s/cover", id.String())
-
-	if err := h.store.UploadCoverImage(traceCtx, id, imageBytes, coverImageURL); err != nil {
+	// Update form's cover_image_url
+	coverImageURL := fmt.Sprintf("/api/forms/%s/cover", formID.String())
+	if err := h.store.UploadCoverImage(traceCtx, formID, savedFile.Data, coverImageURL); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -552,7 +597,7 @@ func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -578,7 +623,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
+	idStr := r.PathValue("formId")
 	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -649,4 +694,50 @@ func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, fonts)
+}
+
+func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateSectionHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formIDStr := r.PathValue("formId")
+	formID, err := handlerutil.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	sectionIDStr := r.PathValue("sectionId")
+	sectionID, err := handlerutil.ParseUUID(sectionIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req SectionRequest
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	description := ""
+	if req.Description != nil {
+		description = *req.Description
+	}
+
+	section, err := h.questionStore.UpdateSection(traceCtx, sectionID, formID, req.Title, description)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := SectionResponse{
+		ID:          section.ID.String(),
+		FormID:      section.FormID.String(),
+		Title:       section.Title.String,
+		Description: section.Description.String,
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }

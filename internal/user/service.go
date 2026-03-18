@@ -2,10 +2,15 @@ package user
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/file"
+
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
+	"strings"
+
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
@@ -14,6 +19,16 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
+
+// GetFromContext extracts the authenticated user from request context
+func GetFromContext(ctx context.Context) (*User, bool) {
+	userData, ok := ctx.Value(internal.UserContextKey).(*User)
+	return userData, ok
+}
+
+func (u User) GetID() uuid.UUID {
+	return u.ID
+}
 
 type Querier interface {
 	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
@@ -27,10 +42,19 @@ type Querier interface {
 	CreateEmail(ctx context.Context, arg CreateEmailParams) error
 }
 
+// FileOperator defines the interface for file operations needed by user service
+// Following Go best practice: interfaces are defined by the consumer, not the provider
+type FileOperator interface {
+	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
+	DownloadFromURL(ctx context.Context, url string, filename string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
+}
+
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger       *zap.Logger
+	queries      Querier
+	tracer       trace.Tracer
+	fileOperator FileOperator
+	orgWriter    OrgMemberWriter
 }
 
 type Profile struct {
@@ -41,11 +65,22 @@ type Profile struct {
 	Emails    []string
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+type OrgMemberWriter interface {
+	AddMemberWithRole(
+		ctx context.Context,
+		unitID uuid.UUID,
+		memberID uuid.UUID,
+		role string,
+	) error
+}
+
+func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("user/service"),
+		logger:       logger,
+		queries:      New(db),
+		tracer:       otel.Tracer("user/service"),
+		fileOperator: fileOperator,
+		orgWriter:    orgWriter,
 	}
 }
 
@@ -84,7 +119,7 @@ func resolveAvatarUrl(name, avatarUrl string) string {
 	return avatarUrl
 }
 
-func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
+func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, email string, role []string, oauthProvider, oauthProviderID string) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "FindOrCreate")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -110,35 +145,43 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 			return uuid.UUID{}, err
 		}
 
-		avatarUrl = resolveAvatarUrl(name, avatarUrl)
-		_, err = s.queries.Update(traceCtx, UpdateParams{
-			ID:        existingUserID,
-			Name:      pgtype.Text{String: name, Valid: name != ""},
-			Username:  pgtype.Text{String: username, Valid: username != ""},
-			AvatarUrl: pgtype.Text{String: avatarUrl, Valid: avatarUrl != ""},
-		})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "update existing user")
-			span.RecordError(err)
-			return uuid.UUID{}, err
-		}
-
 		logger.Debug("Updated existing user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID), zap.String("user_id", existingUserID.String()))
 		return existingUserID, nil
 	}
 
 	// User doesn't exist, create new user
-	logger.Debug("User not found, creating new user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
-	avatarUrl = resolveAvatarUrl(name, avatarUrl)
-	if len(role) == 0 {
-		role = []string{"user"}
+	logger.Info("User not found, creating new user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
+
+	defaultRoles := DefaultGlobalRoles(email)
+
+	roleSet := map[string]struct{}{}
+
+	for _, r := range role {
+		roleSet[r] = struct{}{}
 	}
 
+	for _, r := range defaultRoles {
+		roleSet[r] = struct{}{}
+	}
+
+	var finalRoles []string
+	for r := range roleSet {
+		finalRoles = append(finalRoles, r)
+	}
+
+	if len(finalRoles) == 0 {
+		finalRoles = []string{"user"}
+	}
+
+	logger.Info("Final roles for new user", zap.Strings("roles", finalRoles))
+
+	// Create user first with a placeholder avatar
+	placeholderAvatar := resolveAvatarUrl(name, "")
 	newUser, err := s.queries.Create(traceCtx, CreateParams{
-		Name:      pgtype.Text{String: name, Valid: name != ""},
-		Username:  pgtype.Text{String: username, Valid: username != ""},
-		AvatarUrl: pgtype.Text{String: avatarUrl, Valid: avatarUrl != ""},
-		Role:      role,
+		Name: pgtype.Text{String: name, Valid: name != ""},
+		//Username:  pgtype.Text{String: username, Valid: username != ""},
+		AvatarUrl: pgtype.Text{String: placeholderAvatar, Valid: true},
+		Role:      finalRoles,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create user")
@@ -146,7 +189,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		return uuid.UUID{}, err
 	}
 
-	logger.Debug("Created new user", zap.String("user_id", newUser.ID.String()), zap.String("username", newUser.Username.String))
+	logger.Info("Created new user", zap.String("user_id", newUser.ID.String()), zap.String("username", newUser.Username.String))
 
 	// Create auth entry
 	_, err = s.queries.CreateAuth(traceCtx, CreateAuthParams{
@@ -160,8 +203,91 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		return uuid.UUID{}, err
 	}
 
-	logger.Debug("Created auth entry", zap.String("user_id", newUser.ID.String()), zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
-	return newUser.ID, err
+	logger.Info("Created auth entry", zap.String("user_id", newUser.ID.String()), zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
+
+	// Try to download and save avatar if provided
+	if avatarUrl != "" && s.fileOperator != nil {
+		backendAvatarURL := s.downloadAndSaveAvatar(traceCtx, avatarUrl, newUser.ID)
+		if backendAvatarURL != "" {
+			// Update user with backend avatar URL
+			_, err = s.queries.Update(traceCtx, UpdateParams{
+				ID:   newUser.ID,
+				Name: newUser.Name,
+				// Todo: Disable username update for now, need to implement invalidation for username
+				//Username:  newUser.Username,
+				AvatarUrl: pgtype.Text{String: backendAvatarURL, Valid: true},
+			})
+			if err != nil {
+				// Log warning but don't fail the user creation
+				logger.Warn("Failed to update user avatar URL after download",
+					zap.String("user_id", newUser.ID.String()),
+					zap.Error(err))
+			}
+		}
+	}
+
+	defaultOrgID := uuid.MustParse("cfc4e7f4-629f-420e-a79d-a58849cfd236")
+	defaultOrgRole, ok := DefaultOrgRole(email)
+
+	if ok && s.orgWriter != nil {
+		err := s.orgWriter.AddMemberWithRole(
+			traceCtx,
+			defaultOrgID,
+			newUser.ID,
+			defaultOrgRole,
+		)
+
+		if err != nil {
+			logger.Warn("failed to apply default org role",
+				zap.Error(err))
+		}
+	}
+
+	return newUser.ID, nil
+}
+
+// downloadAndSaveAvatar downloads an avatar from a URL and saves it to the file service
+// Returns the backend URL for the saved avatar, or empty string if failed
+func (s *Service) downloadAndSaveAvatar(ctx context.Context, avatarURL string, userID uuid.UUID) string {
+	logger := logutil.WithContext(ctx, s.logger)
+
+	// Skip if no avatar URL
+	if avatarURL == "" {
+		return ""
+	}
+
+	// Skip if already a backend URL
+	if strings.HasPrefix(avatarURL, "/api/files/") {
+		return avatarURL
+	}
+
+	// Generate filename for avatar
+	filename := fmt.Sprintf("avatar-%s", userID.String())
+
+	// Build validation options for avatar images
+	const maxAvatarSize = 5 * 1024 * 1024 // 5MB
+	validationOpts := []file.ValidatorOption{
+		file.WithMaxSize(maxAvatarSize),
+		file.WithImageFormats(), // Accept JPEG, PNG, or WebP
+	}
+
+	// Use file service to download and save avatar
+	savedFile, err := s.fileOperator.DownloadFromURL(ctx, avatarURL, filename, &userID, validationOpts...)
+	if err != nil {
+		logger.Warn("Failed to download and save avatar",
+			zap.String("url", avatarURL),
+			zap.Error(err))
+		return ""
+	}
+
+	// Return backend URL
+	backendURL := fmt.Sprintf("/api/files/%s", savedFile.ID.String())
+	logger.Info("Successfully downloaded and saved avatar",
+		zap.String("original_url", avatarURL),
+		zap.String("backend_url", backendURL),
+		zap.String("user_id", userID.String()))
+
+	return backendURL
 }
 
 func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email string) error {
@@ -227,7 +353,7 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 		return User{}, internal.ErrDatabaseError
 	}
 	isAllowed := false
-	for _, userEmail := range userEmails{
+	for _, userEmail := range userEmails {
 		if IsAllowed(userEmail) {
 			isAllowed = true
 			break

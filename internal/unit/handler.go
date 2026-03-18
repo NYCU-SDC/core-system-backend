@@ -41,10 +41,8 @@ type Store interface {
 	UpdateUnitMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, newRole UnitRole) error
 }
 
-type formStore interface {
-	Create(ctx context.Context, req form.Request, unitID uuid.UUID, userID uuid.UUID) (form.CreateRow, error)
-	ListByUnit(context.Context, uuid.UUID) ([]form.ListByUnitRow, error)
-	ListFormsOfUser(ctx context.Context, unitIDs []uuid.UUID, userID uuid.UUID) ([]form.UserForm, error)
+type formSubmitStore interface {
+	ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form.UserForm, error)
 }
 
 type tenantStore interface {
@@ -58,14 +56,14 @@ type userStore interface {
 	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
 }
 type Handler struct {
-	logger        *zap.Logger
-	tracer        trace.Tracer
-	validator     *validator.Validate
-	problemWriter *problem.HttpWriter
-	store         Store
-	formStore     formStore
-	tenantStore   tenantStore
-	userStore     userStore
+	logger          *zap.Logger
+	tracer          trace.Tracer
+	validator       *validator.Validate
+	problemWriter   *problem.HttpWriter
+	store           Store
+	formSubmitStore formSubmitStore
+	tenantStore     tenantStore
+	userStore       userStore
 }
 
 func NewHandler(
@@ -73,19 +71,19 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	store Store,
-	formStore formStore,
+	formSubmitStore formSubmitStore,
 	tenantStore tenantStore,
 	userStore userStore,
 ) *Handler {
 	return &Handler{
-		logger:        logger,
-		validator:     validator,
-		problemWriter: problemWriter,
-		store:         store,
-		formStore:     formStore,
-		tenantStore:   tenantStore,
-		userStore:     userStore,
-		tracer:        otel.Tracer("unit/handler"),
+		logger:          logger,
+		validator:       validator,
+		problemWriter:   problemWriter,
+		store:           store,
+		formSubmitStore: formSubmitStore,
+		tenantStore:     tenantStore,
+		userStore:       userStore,
+		tracer:          otel.Tracer("unit/handler"),
 	}
 }
 
@@ -291,9 +289,8 @@ func (h *Handler) GetUnitByID(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -384,13 +381,14 @@ func (h *Handler) UpdateUnit(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req Request
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
 		return
 	}
 
-	idStr := r.PathValue("id")
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -477,8 +475,8 @@ func (h *Handler) DeleteUnit(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -559,8 +557,8 @@ func (h *Handler) ListUnitSubUnits(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -610,8 +608,8 @@ func (h *Handler) ListUnitSubUnitIDs(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := internal.ParseUUID(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -675,8 +673,8 @@ func (h *Handler) AddUnitMember(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid unit ID: %w", err), logger)
 		return
@@ -739,8 +737,8 @@ func (h *Handler) ListUnitMembers(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid unit ID: %w", err), logger)
 		return
@@ -803,8 +801,8 @@ func (h *Handler) RemoveUnitMember(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
+	idStr := r.PathValue("unitId")
+	id, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid unit ID: %w", err), logger)
 		return
@@ -842,18 +840,7 @@ func (h *Handler) ListFormsOfCurrentUser(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	organizations, err := h.store.ListOrganizationsOfUser(traceCtx, currentUser.ID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get all organizations of user: %w", err), logger)
-		return
-	}
-
-	unitIDs := make([]uuid.UUID, 0)
-	for _, org := range organizations {
-		unitIDs = append(unitIDs, org.Unit.ID)
-	}
-
-	userForms, err := h.formStore.ListFormsOfUser(traceCtx, unitIDs, currentUser.ID)
+	userForms, err := h.formSubmitStore.ListFormsOfUser(traceCtx, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get forms of user: %w", err), logger)
 		return
@@ -883,13 +870,8 @@ func (h *Handler) UpdateUnitMemberRole(w http.ResponseWriter, r *http.Request) {
 
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	idStr := r.PathValue("id")
-	if idStr == "" {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrMissingUnitID, logger)
-		return
-	}
-
-	unitID, err := uuid.Parse(idStr)
+	idStr := r.PathValue("unitId")
+	unitID, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidUnitID, logger)
 		return

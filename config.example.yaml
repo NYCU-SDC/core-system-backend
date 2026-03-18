@@ -43,6 +43,21 @@ google_oauth:
 nycu_oauth:
   client_id: "your-nycu-oauth-client-id"
   client_secret: "your-nycu-oauth-client-secret"
-  
+
+# GitHub OAuth credentials
+github_oauth:
+  client_id: "your-github-oauth-client-id"
+  client_secret: "your-github-oauth-client-secret"
+
 # Allowed list of emails for onboarding, use comma to separate multiple emails
 allow_onboarding_list:
+
+# default global user role
+# Format:
+#   <email>:<role>,
+default_global_roles: |
+
+# default org role
+# Format:
+#   <email>:<role>,
+default_org_roles: |

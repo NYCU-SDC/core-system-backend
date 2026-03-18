@@ -15,6 +15,9 @@ import (
 
 type GoogleConfig struct {
 	config *oauth2.Config
+
+	clientID     string
+	clientSecret string
 }
 
 type GoogleOauth struct {
@@ -35,6 +38,9 @@ func NewGoogleConfig(clientID, clientSecret, redirectURL string) *GoogleConfig {
 			},
 			Endpoint: google.Endpoint,
 		},
+
+		clientID:     clientID,
+		clientSecret: clientSecret,
 	}
 }
 
@@ -44,6 +50,20 @@ func (g *GoogleConfig) Name() string {
 
 func (g *GoogleConfig) Config() *oauth2.Config {
 	return g.config
+}
+
+func (g *GoogleConfig) ConfigWithCustomRedirectURL(redirectURL string) *oauth2.Config {
+	return &oauth2.Config{
+		ClientID:     g.clientID,
+		ClientSecret: g.clientSecret,
+		RedirectURL:  redirectURL,
+		Scopes: []string{
+			"openid",
+			"https://www.googleapis.com/auth/userinfo.email",
+			"https://www.googleapis.com/auth/userinfo.profile",
+		},
+		Endpoint: g.config.Endpoint,
+	}
 }
 
 func (g *GoogleConfig) Exchange(ctx context.Context, code string) (*oauth2.Token, error) {

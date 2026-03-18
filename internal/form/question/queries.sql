@@ -97,12 +97,30 @@ FROM deleted_row
 WHERE q.section_id = deleted_row.section_id
   AND "order" > deleted_row.old_order;
 
--- name: ListByFormID :many
+-- name: ListOrderBySectionID :many
+SELECT id, "order"
+FROM questions
+WHERE section_id = $1
+ORDER BY "order" ASC;
+
+-- name: ShiftOrdersForInsert :exec
+UPDATE questions
+SET "order" = "order" + 1, updated_at = now()
+WHERE section_id = $1 AND "order" >= $2;
+
+-- name: SectionExists :one
+SELECT EXISTS(SELECT 1 FROM sections WHERE id = $1);
+
+-- name: ListSectionsByFormID :many
+SELECT *
+FROM sections
+WHERE form_id = $1;
+
+-- name: ListSectionsWithAnswersByFormID :many
 SELECT
     s.id as section_id,
     s.form_id,
     s.title,
-    s.progress,
     s.description,
     s.created_at,
     s.updated_at,
@@ -123,6 +141,11 @@ ORDER BY
     s.id ASC,
     q."order" ASC;
 
+-- name: ListTypesByIDs :many
+SELECT id, type
+FROM questions
+WHERE id = ANY($1::uuid[]);
+
 -- name: GetByID :one
 SELECT 
     q.id,
@@ -140,3 +163,9 @@ SELECT
 FROM questions q
 JOIN sections s ON q.section_id = s.id
 WHERE q.id = $1;
+
+-- name: UpdateSection :one
+UPDATE sections
+SET title = $2, description = $3, updated_at = now()
+WHERE id = $1 AND form_id = $4
+RETURNING *;
