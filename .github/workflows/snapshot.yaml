@@ -228,11 +228,6 @@ jobs:
           repository: ${{ github.repository_owner }}/core-system-api
           path: core-system-api
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
       - name: Prepare reports dir
         run: mkdir -p reports
 
@@ -240,7 +235,7 @@ jobs:
         id: httpyac-tests
         uses: NYCU-SDC/httpyac-action@CORE-236-parse-and-publish-httpyac-result
         with:
-          scenarios-path: './scenarios/user-journey'
+          scenarios-path: './core-system-api/scenarios/user-journey'
           output-dir: './reports'
           httpyac-version: 'latest'
           env: |
