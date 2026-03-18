@@ -227,6 +227,7 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/core-system-api
           path: core-system-api
+          ref: ORE-236-parse-and-publish-httpyac-result
 
       - name: Prepare reports dir
         run: mkdir -p reports
