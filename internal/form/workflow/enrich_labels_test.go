@@ -12,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/zap"
 )
 
 var errQuestionNotFound = errors.New("question not found")
@@ -30,13 +32,13 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 
 	testCases := []struct {
 		name            string
-		setup           func(t *testing.T) (workflow []byte, sectionTitles map[string]string, questionStore QuestionStore)
+		setup           func(t *testing.T) (workflow []byte, questionStore QuestionStore)
 		expectUnchanged bool
 		expectedLabels  map[string]string
 	}{
 		{
 			name: "section and condition labels enriched",
-			setup: func(t *testing.T) ([]byte, map[string]string, QuestionStore) {
+			setup: func(t *testing.T) ([]byte, QuestionStore) {
 				t.Helper()
 				workflow := marshalWorkflow(t, []map[string]interface{}{
 					{
@@ -75,11 +77,11 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 					questions: map[string]question.Answerable{
 						questionID.String(): answerable,
 					},
+					sections: map[string]question.Section{
+						sectionID: {Title: pgtype.Text{String: "My Section Title", Valid: true}},
+					},
 				}
-				sectionTitles := map[string]string{
-					sectionID: "My Section Title",
-				}
-				return workflow, sectionTitles, store
+				return workflow, store
 			},
 			expectUnchanged: false,
 			expectedLabels: map[string]string{
@@ -89,21 +91,21 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 		},
 		{
 			name: "nil deps leaves workflow unchanged",
-			setup: func(t *testing.T) ([]byte, map[string]string, QuestionStore) {
+			setup: func(t *testing.T) ([]byte, QuestionStore) {
 				t.Helper()
 				workflow := marshalWorkflow(t, []map[string]interface{}{{
 					"id":    startIDNilDeps,
 					"type":  nodeTypeToUppercase(NodeTypeStart),
 					"label": "Start",
 				}})
-				return workflow, nil, nil
+				return workflow, nil
 			},
 			expectUnchanged: true,
 			expectedLabels:  nil,
 		},
 		{
 			name: "section missing from map keeps original label",
-			setup: func(t *testing.T) ([]byte, map[string]string, QuestionStore) {
+			setup: func(t *testing.T) ([]byte, QuestionStore) {
 				t.Helper()
 				workflow := marshalWorkflow(t, []map[string]interface{}{
 					{
@@ -113,7 +115,10 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 						"next":  endIDMissing,
 					},
 				})
-				return workflow, map[string]string{}, nil
+				store := &mockQuestionStoreForEnrich{
+					sections: map[string]question.Section{},
+				}
+				return workflow, store
 			},
 			expectUnchanged: false,
 			expectedLabels:  map[string]string{sectionIDMissing: "Original"},
@@ -122,9 +127,14 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			workflow, sectionTitles, questionStore := tc.setup(t)
 
-			enriched, err := enrichWorkflowLabels(ctx, workflow, formID, sectionTitles, questionStore)
+			tracer := noop.NewTracerProvider().Tracer("test")
+			logger := zap.NewNop()
+			mockQuerier := new(mockQuerier)
+			mockValidator := new(mockValidator)
+			workflow, questionStore := tc.setup(t)
+			service := createTestService(t, logger, tracer, mockQuerier, mockValidator, questionStore)
+			enriched, err := service.EnrichWorkflowResponse(ctx, formID, workflow)
 			require.NoError(t, err)
 
 			if tc.expectUnchanged {
@@ -199,6 +209,7 @@ func assertNodeLabels(t *testing.T, byID map[string]map[string]interface{}, expe
 // mockQuestionStoreForEnrich implements QuestionStore for enrichment tests.
 type mockQuestionStoreForEnrich struct {
 	questions map[string]question.Answerable
+	sections  map[string]question.Section
 }
 
 func (m *mockQuestionStoreForEnrich) GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error) {
@@ -209,5 +220,5 @@ func (m *mockQuestionStoreForEnrich) GetByID(ctx context.Context, id uuid.UUID) 
 }
 
 func (m *mockQuestionStoreForEnrich) ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error) {
-	return nil, nil
+	return m.sections, nil
 }
