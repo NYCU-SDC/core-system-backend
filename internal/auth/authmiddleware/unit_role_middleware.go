@@ -66,11 +66,8 @@ func (m *UnitRoleMiddleware) Require(
 
 			unitID, err := resolver.ResolveUnitID(traceCtx, r)
 			if err != nil {
-				logger.Warn("resolve unit id failed",
-					zap.Error(err),
-				)
-
-				m.problemWriter.WriteError(traceCtx, w, internal.ErrValidationFailed, logger)
+				logger.Warn("resolve unit id failed", zap.Error(err))
+				m.problemWriter.WriteError(traceCtx, w, err, logger)
 				return
 			}
 

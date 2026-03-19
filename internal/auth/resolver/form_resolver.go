@@ -1,8 +1,8 @@
 package resolver
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -25,12 +25,12 @@ func NewFormResolver(service FormService) *FormResolver {
 func (r *FormResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	formIDStr := req.PathValue("formId")
 	if formIDStr == "" {
-		return uuid.Nil, errors.New("formId not provided")
+		return uuid.Nil, internal.ErrMissingFormID
 	}
 
 	formID, err := uuid.Parse(formIDStr)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, internal.ErrInvalidFormID
 	}
 
 	unitID, err := r.service.GetUnitIDByFormID(ctx, formID)

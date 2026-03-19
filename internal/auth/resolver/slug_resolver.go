@@ -1,8 +1,8 @@
 package resolver
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -25,7 +25,7 @@ func NewSlugResolver(service TenantService) *SlugResolver {
 func (r *SlugResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	slug := req.PathValue("slug")
 	if slug == "" {
-		return uuid.Nil, errors.New("slug not provided")
+		return uuid.Nil, internal.ErrMissingSlug
 	}
 
 	exist, orgID, err := r.service.GetSlugStatus(ctx, slug)
@@ -34,7 +34,7 @@ func (r *SlugResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uu
 	}
 
 	if !exist {
-		return uuid.Nil, errors.New("org slug not found")
+		return uuid.Nil, internal.ErrOrgSlugNotFound
 	}
 
 	return orgID, nil

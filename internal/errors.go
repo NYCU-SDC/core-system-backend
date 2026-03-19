@@ -40,6 +40,13 @@ var (
 	ErrForbiddenError       = errors.New("forbidden error")
 	ErrNotFound             = errors.New("not found")
 
+	// Resolver Error
+	ErrMissingSlug      = errors.New("slug not provided")
+	ErrMissingSectionID = errors.New("missing section id")
+	ErrInvalidSectionID = errors.New("invalid section id")
+	ErrMissingFormID    = errors.New("missing form id")
+	ErrInvalidFormID    = errors.New("invalid form id")
+	
 	// JWT Authentication Errors
 	ErrMissingAuthHeader       = errors.New("missing access token")
 	ErrInvalidAuthHeaderFormat = errors.New("invalid access token")
@@ -155,6 +162,16 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewForbiddenProblem("forbidden error")
 	case errors.Is(err, ErrNotFound):
 		return problem.NewNotFoundProblem("not found")
+	case errors.Is(err, ErrMissingSlug):
+		return problem.NewBadRequestProblem("slug is required")
+	case errors.Is(err, ErrMissingSectionID):
+		return problem.NewBadRequestProblem("section id is required")
+	case errors.Is(err, ErrInvalidSectionID):
+		return problem.NewBadRequestProblem("invalid section id")
+	case errors.Is(err, ErrMissingFormID):
+		return problem.NewBadRequestProblem("form id is required")
+	case errors.Is(err, ErrInvalidFormID):
+		return problem.NewBadRequestProblem("invalid form id")
 	// JWT Authentication Errors
 	case errors.Is(err, ErrMissingAuthHeader):
 		return problem.NewUnauthorizedProblem("missing access token")

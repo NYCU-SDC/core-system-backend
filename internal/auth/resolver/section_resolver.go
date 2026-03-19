@@ -1,8 +1,8 @@
 package resolver
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -25,12 +25,12 @@ func NewSectionResolver(service SectionService) *SectionResolver {
 func (r *SectionResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	sectionIDStr := req.PathValue("sectionId")
 	if sectionIDStr == "" {
-		return uuid.Nil, errors.New("sectionId not provided")
+		return uuid.Nil, internal.ErrMissingSectionID
 	}
 
 	sectionID, err := uuid.Parse(sectionIDStr)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, internal.ErrInvalidSectionID
 	}
 
 	unitID, err := r.service.GetUnitIDBySectionID(ctx, sectionID)
