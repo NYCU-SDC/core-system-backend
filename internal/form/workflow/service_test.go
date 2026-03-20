@@ -359,7 +359,9 @@ func TestService_CreateNode(t *testing.T) {
 
 			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
 
-			payload := NodePayload{X: 0, Y: 0}
+			x := 0
+			y := 0
+			payload := NodePayload{X: &x, Y: &y}
 
 			// Only set up mock if node type is valid (service will call querier)
 			// Note: CreateNode calls the querier BEFORE validation, so we need to set up the mock
@@ -377,8 +379,8 @@ func TestService_CreateNode(t *testing.T) {
 					FormID:     formID,
 					LastEditor: userID,
 					Type:       tc.params.nodeType,
-					PayloadX:   int32(payload.X),
-					PayloadY:   int32(payload.Y),
+					PayloadX:   int32(*payload.X),
+					PayloadY:   int32(*payload.Y),
 				}).Return(expectedRow, nil).Once()
 			}
 
