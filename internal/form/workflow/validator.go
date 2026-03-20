@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow/node"
 
@@ -206,7 +208,9 @@ func formatValidationErrors(validationErrors []error) error {
 // parseWorkflow parses workflow JSON into nodes. Call once at entry point and pass nodes to helpers.
 func parseWorkflow(workflow []byte) ([]map[string]interface{}, error) {
 	var nodes []map[string]interface{}
-	err := json.Unmarshal(workflow, &nodes)
+	dec := json.NewDecoder(bytes.NewReader(workflow))
+	dec.UseNumber()
+	err := dec.Decode(&nodes)
 	if err != nil {
 		return nil, fmt.Errorf("invalid JSON format: %w", err)
 	}
@@ -283,6 +287,99 @@ func validateNodeID(node map[string]interface{}, index int) (string, error) {
 	return id, nil
 }
 
+// parseInt32Value parses a `json.Number` into an int32 with strict rules:
+// - accepts integer-form only (rejects "1.0" / "1e0" even if integral)
+// - enforces int32 bounds
+func parseInt32Value(v interface{}) (int, bool) {
+	n, ok := v.(json.Number)
+	if !ok {
+		return 0, false
+	}
+
+	// Reject decimals and scientific notation even if they represent integral values.
+	// Example: "1.0", "1e0".
+	s := n.String()
+	if strings.ContainsAny(s, ".eE") {
+		return 0, false
+	}
+
+	i64, err := n.Int64()
+	if err != nil {
+		return 0, false
+	}
+
+	const minInt32 = int64(-2147483648)
+	const maxInt32 = int64(2147483647)
+	if i64 < minInt32 || i64 > maxInt32 {
+		return 0, false
+	}
+
+	return int(i64), true
+}
+
+func payloadCoordValidationErrors(
+	payloadObj map[string]interface{},
+	coordKey string,
+	nodeType string,
+	nodeID string,
+	missingMsg string,
+	invalidMsg string,
+) []error {
+	var payloadErrs []error
+	val, present := payloadObj[coordKey]
+	if !present {
+		payloadErrs = append(payloadErrs, fmt.Errorf(
+			"%w: %s '%s' has invalid payload: %s",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+			missingMsg,
+		))
+	}
+
+	if _, ok := parseInt32Value(val); !ok {
+		payloadErrs = append(payloadErrs, fmt.Errorf(
+			"%w: %s '%s' has invalid payload: %s",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+			invalidMsg,
+		))
+	}
+	return payloadErrs
+}
+
+// validateRequiredPayloadField validates that node.payload is required and:
+// - is a JSON object (unmarshals to map[string]interface{})
+func validateRequiredPayloadField(node map[string]interface{}, nodeType string, nodeID string) error {
+	payload, ok := node["payload"]
+	if !ok {
+		return fmt.Errorf("%w: %s '%s' is missing required payload field", internal.ErrWorkflowNodePayloadInvalid, nodeType, nodeID)
+	}
+
+	// Payload must not be null.
+	if payload == nil {
+		return fmt.Errorf("%w: %s '%s' has invalid payload: payload must be an object", internal.ErrWorkflowNodePayloadInvalid, nodeType, nodeID)
+	}
+
+	// Accept JSON objects only. Arrays, strings, numbers, booleans are rejected.
+	payloadObj, isObj := payload.(map[string]interface{})
+	if !isObj {
+		return fmt.Errorf("%w: %s '%s' has invalid payload: payload must be a JSON object", internal.ErrWorkflowNodePayloadInvalid, nodeType, nodeID)
+	}
+
+	var payloadErrs []error
+
+	payloadErrs = payloadCoordValidationErrors(payloadObj, "x", nodeType, nodeID, "missing payload.x", "payload.x must be an int32")
+	payloadErrs = payloadCoordValidationErrors(payloadObj, "y", nodeType, nodeID, "missing payload.y", "payload.y must be an int32")
+
+	if len(payloadErrs) > 0 {
+		return errors.Join(payloadErrs...)
+	}
+
+	return nil
+}
+
 // validateNodes validates all nodes in the workflow and returns:
 // - nodeMap: map of node ID to node
 // - startNodeCount: number of start nodes found
@@ -299,8 +396,18 @@ func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]int
 	var validationErrors []error
 
 	for i, nodeData := range nodes {
+		// Validate payload first so payload errors are collected even if other
+		// required-field checks fail and would trigger an early continue.
+		nodeTypeForPayload, _ := nodeData["type"].(string)
+		nodeIDForPayload, _ := nodeData["id"].(string)
+		err := validateRequiredPayloadField(nodeData, nodeTypeForPayload, nodeIDForPayload)
+		if err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+
 		// Validate required fields (id, type, label)
-		if err := validateRequiredFields(nodeData, i); err != nil {
+		err = validateRequiredFields(nodeData, i)
+		if err != nil {
 			validationErrors = append(validationErrors, err)
 			continue // Skip this node but continue validating others
 		}
