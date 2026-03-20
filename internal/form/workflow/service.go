@@ -154,7 +154,7 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 	return WorkflowVersion(row), nil
 }
 
-func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, userID uuid.UUID) (CreateNodeRow, error) {
+func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, payloadX int, payloadY int, userID uuid.UUID) (CreateNodeRow, error) {
 	methodName := "CreateNode"
 	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
@@ -175,6 +175,8 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		FormID:     formID,
 		LastEditor: userID,
 		Type:       nodeType,
+		PayloadX:   int32(payloadX),
+		PayloadY:   int32(payloadY),
 	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "create node")
