@@ -86,6 +86,7 @@ func (n *ConditionNode) validateFieldNames(nodeID string) error {
 		"nextTrue":      true,
 		"nextFalse":     true,
 		"conditionRule": true,
+		"payload":       true,
 	}
 
 	var invalidFields []string
