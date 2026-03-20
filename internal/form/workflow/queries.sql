@@ -62,7 +62,10 @@ new_node AS (
         'id', node_id.id,
         'label', 'New ' || initcap(@type::text),
         'type', @type::node_type,
-        'payload', '{}'::jsonb
+        'payload', jsonb_build_object(
+            'x', COALESCE(@payload_x::int, 0),
+            'y', COALESCE(@payload_y::int, 0)
+        )
     ) AS node
     FROM node_id
 ),
