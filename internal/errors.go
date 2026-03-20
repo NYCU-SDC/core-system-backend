@@ -123,6 +123,7 @@ var (
 	ErrUnmarshalDBWorkflow           = errors.New("failed to unmarshal database workflow")
 	ErrWorkflowNodeNotFound          = errors.New("node not found in current workflow")
 	ErrMarshalMergedWorkflow         = errors.New("failed to marshal merged workflow")
+	ErrWorkflowNodePayloadInvalid    = errors.New("invalid workflow node payload")
 
 	// File Errors
 	ErrFileNotFound       = errors.New("file not found")
@@ -306,6 +307,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewInternalServerProblem("failed to unmarshal database workflow")
 	case errors.Is(err, ErrWorkflowNodeNotFound):
 		return problem.NewValidateProblem("node not found in current workflow, please create it first using CreateNode API")
+	case errors.Is(err, ErrWorkflowNodePayloadInvalid):
+		return problem.NewValidateProblem("invalid workflow node payload")
 	case errors.Is(err, ErrMarshalMergedWorkflow):
 		return problem.NewInternalServerProblem("failed to marshal merged workflow")
 
