@@ -31,6 +31,13 @@ type Validator interface {
 	ValidateUpdateNodeIDs(ctx context.Context, currentWorkflow []byte, newWorkflow []byte) error
 }
 
+// nodePayload is the canonical shape for workflow node payloads.
+// It is shared by the validator and other workflow code.
+type NodePayload struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
 type Service struct {
 	logger        *zap.Logger
 	queries       Querier
@@ -154,7 +161,7 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 	return WorkflowVersion(row), nil
 }
 
-func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, payloadX int, payloadY int, userID uuid.UUID) (CreateNodeRow, error) {
+func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, payload NodePayload, userID uuid.UUID) (CreateNodeRow, error) {
 	methodName := "CreateNode"
 	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
@@ -175,8 +182,8 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		FormID:     formID,
 		LastEditor: userID,
 		Type:       nodeType,
-		PayloadX:   int32(payloadX),
-		PayloadY:   int32(payloadY),
+		PayloadX:   int32(payload.X),
+		PayloadY:   int32(payload.Y),
 	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "create node")

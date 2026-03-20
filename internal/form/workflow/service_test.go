@@ -359,6 +359,8 @@ func TestService_CreateNode(t *testing.T) {
 
 			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
 
+			payload := NodePayload{X: 0, Y: 0}
+
 			// Only set up mock if node type is valid (service will call querier)
 			// Note: CreateNode calls the querier BEFORE validation, so we need to set up the mock
 			// for all valid node types, even when validation will fail
@@ -375,10 +377,12 @@ func TestService_CreateNode(t *testing.T) {
 					FormID:     formID,
 					LastEditor: userID,
 					Type:       tc.params.nodeType,
+					PayloadX:   int32(payload.X),
+					PayloadY:   int32(payload.Y),
 				}).Return(expectedRow, nil).Once()
 			}
 
-			result, err := service.CreateNode(ctx, formID, tc.params.nodeType, userID)
+			result, err := service.CreateNode(ctx, formID, tc.params.nodeType, payload, userID)
 
 			if tc.expectErr {
 				require.Error(t, err, "expected error but got nil")
