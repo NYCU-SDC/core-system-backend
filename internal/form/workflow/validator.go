@@ -350,16 +350,9 @@ func payloadCoordValidationErrors(
 }
 
 // validatePayloadField validates node.payload.
-//
-// When requirePresence is true, node.payload must be present and a JSON object.
-// When requirePresence is false, node.payload is optional; if it's missing, this
-// returns nil.
-func validatePayloadField(node map[string]interface{}, nodeType string, nodeID string, requirePresence bool) error {
+func validatePayloadField(node map[string]interface{}, nodeType string, nodeID string) error {
 	payload, ok := node["payload"]
 	if !ok {
-		if !requirePresence {
-			return nil
-		}
 		return fmt.Errorf(
 			"%w: %s '%s' is missing required payload field",
 			internal.ErrWorkflowNodePayloadInvalid,
@@ -395,7 +388,8 @@ func validatePayloadField(node map[string]interface{}, nodeType string, nodeID s
 // - endNodeCount: number of end nodes found
 // - errors: all validation errors collected
 // When isActivate is true, this performs full node-specific validation (used by Activate).
-// When false, it performs a relaxed validation suitable for draft Update.
+// When false, it skips node.Validatable checks that depend on activation-specific rules,
+// but `payload` presence is still required for draft Update.
 func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]interface{}, questionStore QuestionStore, isActivate bool) (map[string]map[string]interface{}, int, int, []error) {
 	nodeMap := make(map[string]map[string]interface{})
 	nodeIDs := make(map[string]bool)
@@ -409,7 +403,7 @@ func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]int
 		// required-field checks fail and would trigger an early continue.
 		nodeTypeForPayload, _ := nodeData["type"].(string)
 		nodeIDForPayload, _ := nodeData["id"].(string)
-		err := validatePayloadField(nodeData, nodeTypeForPayload, nodeIDForPayload, isActivate)
+		err := validatePayloadField(nodeData, nodeTypeForPayload, nodeIDForPayload)
 		if err != nil {
 			validationErrors = append(validationErrors, err)
 		}

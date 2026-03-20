@@ -635,7 +635,7 @@ func TestValidate(t *testing.T) {
 			setup: func() ([]byte, QuestionStore) {
 				return createWorkflow_SimpleValid_WithoutNodePayload(t), nil
 			},
-			expectedErr: false,
+			expectedErr: true,
 		},
 	}
 
