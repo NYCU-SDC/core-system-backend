@@ -27,6 +27,12 @@ func createTestChoices() []Choice {
 			Name:        "Option C",
 			Description: "",
 		},
+		{
+			ID:          uuid.MustParse("44444444-4444-4444-4444-444444444444"),
+			Name:        "Option D",
+			Description: "",
+			IsOther:     true,
+		},
 	}
 }
 
@@ -45,12 +51,14 @@ func TestSingleChoice_DecodeRequest(t *testing.T) {
 	testCases := []struct {
 		name          string
 		rawValue      string
+		otherText     string
 		expectedError bool
 		validate      func(t *testing.T, result any)
 	}{
 		{
 			name:          "Should decode valid single choice",
 			rawValue:      `["11111111-1111-1111-1111-111111111111"]`,
+			otherText:     "",
 			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.SingleChoiceAnswer)
@@ -71,33 +79,68 @@ func TestSingleChoice_DecodeRequest(t *testing.T) {
 		{
 			name:          "Should return error for empty array",
 			rawValue:      `[]`,
+			otherText:     "",
 			expectedError: true,
 		},
 		{
 			name:          "Should return error for multiple selections",
 			rawValue:      `["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
+			otherText:     "",
 			expectedError: true,
 		},
 		{
 			name:          "Should return error for invalid choice ID",
 			rawValue:      `["99999999-9999-9999-9999-999999999999"]`,
+			otherText:     "",
 			expectedError: true,
 		},
 		{
 			name:          "Should return error for malformed UUID",
 			rawValue:      `["not-a-uuid"]`,
+			otherText:     "",
 			expectedError: true,
 		},
 		{
 			name:          "Should return error for invalid JSON format",
 			rawValue:      `"single-string"`,
+			otherText:     "",
 			expectedError: true,
+		},
+		{
+			name:          "Should carry OtherText into snapshot when isOther choice selected",
+			rawValue:      `["44444444-4444-4444-4444-444444444444"]`,
+			otherText:     "some other text",
+			expectedError: false,
+			validate: func(t *testing.T, result any) {
+				answer, ok := result.(shared.SingleChoiceAnswer)
+				if !ok {
+					t.Fatalf("Expected shared.SingleChoiceAnswer, got %T", result)
+				}
+				if answer.Snapshot.OtherText != "some other text" {
+					t.Errorf("Expected OtherText 'some other text', got %q", answer.Snapshot.OtherText)
+				}
+			},
+		},
+		{
+			name:          "Should leave OtherText empty when non-other choice selected",
+			rawValue:      `["11111111-1111-1111-1111-111111111111"]`,
+			otherText:     "invalid other text",
+			expectedError: false,
+			validate: func(t *testing.T, result any) {
+				answer, ok := result.(shared.SingleChoiceAnswer)
+				if !ok {
+					t.Fatalf("Expected shared.SingleChoiceAnswer, got %T", result)
+				}
+				if answer.Snapshot.OtherText != "" {
+					t.Errorf("Expected empty OtherText, got %q", answer.Snapshot.OtherText)
+				}
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := sc.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := sc.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue), OtherText: tc.otherText})
 
 			if tc.expectedError {
 				if err == nil {
@@ -250,12 +293,14 @@ func TestMultiChoice_DecodeRequest(t *testing.T) {
 	testCases := []struct {
 		name          string
 		rawValue      string
+		otherText     string
 		expectedError bool
 		validate      func(t *testing.T, result any)
 	}{
 		{
 			name:          "Should decode multiple choices",
 			rawValue:      `["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
+			otherText:     "",
 			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.MultipleChoiceAnswer)
@@ -279,6 +324,7 @@ func TestMultiChoice_DecodeRequest(t *testing.T) {
 		{
 			name:          "Should decode single choice",
 			rawValue:      `["11111111-1111-1111-1111-111111111111"]`,
+			otherText:     "",
 			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.MultipleChoiceAnswer)
@@ -293,18 +339,38 @@ func TestMultiChoice_DecodeRequest(t *testing.T) {
 		{
 			name:          "Should return error for empty array",
 			rawValue:      `[]`,
+			otherText:     "",
 			expectedError: true,
 		},
 		{
 			name:          "Should return error for invalid choice ID",
 			rawValue:      `["99999999-9999-9999-9999-999999999999"]`,
+			otherText:     "",
 			expectedError: true,
+		},
+		{
+			name:          "Should carry OtherText into snapshots for multi choice",
+			rawValue:      `["44444444-4444-4444-4444-444444444444"]`,
+			otherText:     "some other text",
+			expectedError: false,
+			validate: func(t *testing.T, result any) {
+				answer, ok := result.(shared.MultipleChoiceAnswer)
+				if !ok {
+					t.Fatalf("Expected shared.MultipleChoiceAnswer, got %T", result)
+				}
+				if len(answer.Choices) != 1 {
+					t.Fatalf("Expected 1 choice, got %d", len(answer.Choices))
+				}
+				if answer.Choices[0].Snapshot.OtherText != "some other text" {
+					t.Errorf("Expected OtherText 'some other text', got %q", answer.Choices[0].Snapshot.OtherText)
+				}
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := mc.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := mc.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue), OtherText: tc.otherText})
 
 			if tc.expectedError {
 				if err == nil {
@@ -419,12 +485,14 @@ func TestRanking_DecodeRequest(t *testing.T) {
 	testCases := []struct {
 		name          string
 		rawValue      string
+		otherText     string
 		expectedError bool
 		validate      func(t *testing.T, result any)
 	}{
 		{
 			name:          "Should decode ranking with correct order",
 			rawValue:      `["33333333-3333-3333-3333-333333333333", "11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"]`,
+			otherText:     "",
 			expectedError: false,
 			validate: func(t *testing.T, result any) {
 				answer, ok := result.(shared.RankingAnswer)
@@ -453,18 +521,38 @@ func TestRanking_DecodeRequest(t *testing.T) {
 		{
 			name:          "Should return error for empty array",
 			rawValue:      `[]`,
+			otherText:     "",
 			expectedError: true,
 		},
 		{
 			name:          "Should return error for invalid choice ID",
 			rawValue:      `["99999999-9999-9999-9999-999999999999"]`,
+			otherText:     "",
 			expectedError: true,
+		},
+		{
+			name:          "Should carry OtherText into ranked choice snapshots",
+			rawValue:      `["44444444-4444-4444-4444-444444444444"]`,
+			otherText:     "i love sdc",
+			expectedError: false,
+			validate: func(t *testing.T, result any) {
+				answer, ok := result.(shared.RankingAnswer)
+				if !ok {
+					t.Fatalf("Expected shared.RankingAnswer, got %T", result)
+				}
+				if len(answer.RankedChoices) != 1 {
+					t.Fatalf("Expected 1 ranked choice, got %d", len(answer.RankedChoices))
+				}
+				if answer.RankedChoices[0].Snapshot.OtherText != "i love sdc" {
+					t.Errorf("Expected OtherText 'ranking other', got %q", answer.RankedChoices[0].Snapshot.OtherText)
+				}
+			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := ranking.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := ranking.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue), OtherText: tc.otherText})
 
 			if tc.expectedError {
 				if err == nil {

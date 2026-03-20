@@ -12,14 +12,16 @@ import (
 )
 
 type ChoiceOption struct {
-	Name        string `json:"name" validate:"required"`
+	Name        string `json:"name" validate:"required_if=IsOther false"`
 	Description string `json:"description"`
+	IsOther     bool   `json:"isOther,omitempty"`
 }
 
 type Choice struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
+	IsOther     bool      `json:"isOther"`
 }
 
 type SingleChoice struct {
@@ -77,9 +79,9 @@ func NewSingleChoice(q Question, formID uuid.UUID) (SingleChoice, error) {
 	}, nil
 }
 
-func (s SingleChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (s SingleChoice) DecodeRequest(param shared.AnswerParam) (any, error) {
 	// API sends string[] with single element for single choice
-	_, selectedChoices, err := decodeMultipleChoiceIDs(rawValue, s.Choices, s.question.ID.String(), 1)
+	_, selectedChoices, err := decodeMultipleChoiceIDs(param.Value, s.Choices, s.question.ID.String(), 1)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +91,16 @@ func (s SingleChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
 	}
 
 	selectedChoice := selectedChoices[0]
+	otherText := ""
+	if selectedChoice.IsOther {
+		otherText = param.OtherText
+	}
 	return shared.SingleChoiceAnswer{
 		ChoiceID: selectedChoice.ID,
 		Snapshot: shared.ChoiceSnapshot{
 			Name:        selectedChoice.Name,
 			Description: selectedChoice.Description,
+			OtherText:   otherText,
 		},
 	}, nil
 }
@@ -130,6 +137,9 @@ func (s SingleChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 		return "", fmt.Errorf("expected shared.SingleChoiceAnswer, got %T", answer)
 	}
 
+	if singleChoiceAnswer.Snapshot.OtherText != "" {
+		return singleChoiceAnswer.Snapshot.OtherText, nil
+	}
 	return singleChoiceAnswer.Snapshot.Name, nil
 }
 
@@ -210,9 +220,9 @@ func NewMultiChoice(q Question, formID uuid.UUID) (MultiChoice, error) {
 	}, nil
 }
 
-func (m MultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (m MultiChoice) DecodeRequest(param shared.AnswerParam) (any, error) {
 	// API sends string[] for multiple choice
-	_, selectedChoices, err := decodeMultipleChoiceIDs(rawValue, m.Choices, m.question.ID.String(), 1)
+	_, selectedChoices, err := decodeMultipleChoiceIDs(param.Value, m.Choices, m.question.ID.String(), 1)
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +236,10 @@ func (m MultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
 	}
 
 	for _, selectedChoice := range selectedChoices {
+		otherText := ""
+		if selectedChoice.IsOther {
+			otherText = param.OtherText
+		}
 		answer.Choices = append(answer.Choices, struct {
 			ChoiceID uuid.UUID             `json:"choiceId"`
 			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
@@ -234,6 +248,7 @@ func (m MultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
 			Snapshot: shared.ChoiceSnapshot{
 				Name:        selectedChoice.Name,
 				Description: selectedChoice.Description,
+				OtherText:   otherText,
 			},
 		})
 	}
@@ -282,7 +297,11 @@ func (m MultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 
 	names := make([]string, len(multiChoiceAnswer.Choices))
 	for i, choice := range multiChoiceAnswer.Choices {
-		names[i] = choice.Snapshot.Name
+		if choice.Snapshot.OtherText != "" {
+			names[i] = choice.Snapshot.OtherText
+		} else {
+			names[i] = choice.Snapshot.Name
+		}
 	}
 	return strings.Join(names, ", "), nil
 }
@@ -370,9 +389,9 @@ func NewDetailedMultiChoice(q Question, formID uuid.UUID) (DetailedMultiChoice, 
 	}, nil
 }
 
-func (m DetailedMultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (m DetailedMultiChoice) DecodeRequest(param shared.AnswerParam) (any, error) {
 	// API sends string[] for detailed multiple choice
-	_, selectedChoices, err := decodeMultipleChoiceIDs(rawValue, m.Choices, m.question.ID.String(), 1)
+	_, selectedChoices, err := decodeMultipleChoiceIDs(param.Value, m.Choices, m.question.ID.String(), 1)
 	if err != nil {
 		return nil, err
 	}
@@ -386,6 +405,10 @@ func (m DetailedMultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error
 	}
 
 	for _, selectedChoice := range selectedChoices {
+		otherText := ""
+		if selectedChoice.IsOther {
+			otherText = param.OtherText
+		}
 		answer.Choices = append(answer.Choices, struct {
 			ChoiceID uuid.UUID             `json:"choiceId"`
 			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
@@ -394,6 +417,7 @@ func (m DetailedMultiChoice) DecodeRequest(rawValue json.RawMessage) (any, error
 			Snapshot: shared.ChoiceSnapshot{
 				Name:        selectedChoice.Name,
 				Description: selectedChoice.Description,
+				OtherText:   otherText,
 			},
 		})
 	}
@@ -442,7 +466,11 @@ func (m DetailedMultiChoice) DisplayValue(rawValue json.RawMessage) (string, err
 
 	names := make([]string, len(detailedMultiChoiceAnswer.Choices))
 	for i, choice := range detailedMultiChoiceAnswer.Choices {
-		names[i] = choice.Snapshot.Name
+		if choice.Snapshot.OtherText != "" {
+			names[i] = choice.Snapshot.OtherText
+		} else {
+			names[i] = choice.Snapshot.Name
+		}
 	}
 	return strings.Join(names, ", "), nil
 }
@@ -545,10 +573,10 @@ func (r Ranking) WithSourceChoices(choices []Choice) Ranking {
 	return r
 }
 
-func (r Ranking) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (r Ranking) DecodeRequest(param shared.AnswerParam) (any, error) {
 	// API sends string[] for ranking (ordered by rank)
 	var choiceIDs []string
-	err := json.Unmarshal(rawValue, &choiceIDs)
+	err := json.Unmarshal(param.Value, &choiceIDs)
 	if err != nil {
 		return nil, fmt.Errorf("invalid ranking value format: %w", err)
 	}
@@ -588,6 +616,10 @@ func (r Ranking) DecodeRequest(rawValue json.RawMessage) (any, error) {
 			}
 		}
 
+		otherText := ""
+		if selectedChoice.IsOther {
+			otherText = param.OtherText
+		}
 		answer.RankedChoices = append(answer.RankedChoices, struct {
 			ChoiceID uuid.UUID             `json:"choiceId"`
 			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
@@ -597,6 +629,7 @@ func (r Ranking) DecodeRequest(rawValue json.RawMessage) (any, error) {
 			Snapshot: shared.ChoiceSnapshot{
 				Name:        selectedChoice.Name,
 				Description: selectedChoice.Description,
+				OtherText:   otherText,
 			},
 			Rank: rank + 1, // 1-based ranking
 		})
@@ -677,8 +710,13 @@ func (r Ranking) DisplayValue(rawValue json.RawMessage) (string, error) {
 
 	sorted := make([]sortedChoice, len(rankingAnswer.RankedChoices))
 	for i, choice := range rankingAnswer.RankedChoices {
+		name := choice.Snapshot.Name
+		if choice.Snapshot.OtherText != "" {
+			name = choice.Snapshot.OtherText
+		}
+
 		sorted[i] = sortedChoice{
-			name: choice.Snapshot.Name,
+			name: name,
 			rank: choice.Rank,
 		}
 	}
@@ -733,18 +771,24 @@ func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) (
 	// Generate choices with UUIDs
 	choices := make([]Choice, len(choiceOptions))
 	for i, option := range choiceOptions {
-		name := strings.TrimSpace(option.Name)
-		if name == "" {
-			return nil, ErrMetadataValidate{
-				QuestionID: questionType,
-				RawData:    []byte(fmt.Sprintf("%v", choiceOptions)),
-				Message:    "choice name cannot be empty",
+		var name string
+
+		// For "other" choice, only store empty value for name
+		if !option.IsOther {
+			name = strings.TrimSpace(option.Name)
+			if name == "" {
+				return nil, ErrMetadataValidate{
+					QuestionID: questionType,
+					RawData:    []byte(fmt.Sprintf("%v", choiceOptions)),
+					Message:    "choice name cannot be empty",
+				}
 			}
 		}
 		choices[i] = Choice{
 			ID:          uuid.New(),
 			Name:        name,
 			Description: strings.TrimSpace(option.Description),
+			IsOther:     option.IsOther,
 		}
 	}
 
@@ -813,11 +857,11 @@ func validateAndExtractChoices(q Question, allowSourceWithNil bool) ([]Choice, e
 			}
 		}
 
-		if strings.TrimSpace(choice.Name) == "" {
+		if !choice.IsOther && strings.TrimSpace(choice.Name) == "" {
 			return nil, ErrMetadataBroken{
 				QuestionID: q.ID.String(),
 				RawData:    metadata,
-				Message:    "choice name cannot be empty",
+				Message:    "non-other choice name cannot be empty",
 			}
 		}
 	}
