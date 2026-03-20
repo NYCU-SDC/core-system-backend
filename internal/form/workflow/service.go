@@ -181,6 +181,14 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		return CreateNodeRow{}, err
 	}
 
+	// Payload coordinates are required by workflow node creation.
+	// We must validate before dereferencing pointers to avoid panics.
+	if payload.X == nil || payload.Y == nil {
+		err := fmt.Errorf("%w: payload.x and payload.y are required", internal.ErrWorkflowNodePayloadInvalid)
+		span.RecordError(err)
+		return CreateNodeRow{}, err
+	}
+
 	createdRow, err := s.queries.CreateNode(ctx, CreateNodeParams{
 		FormID:     formID,
 		LastEditor: userID,
