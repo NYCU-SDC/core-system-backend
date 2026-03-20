@@ -47,12 +47,14 @@ workflow_created AS (
                 'id', start_node_id,
                 'label', '開始表單',
                 'type', 'start',
-                'next', end_node_id
+                'next', end_node_id,
+                'payload', jsonb_build_object('x', 0, 'y', 0)
             ),
             jsonb_build_object(
                 'id', end_node_id,
                 'label', '確認/送出',
-                'type', 'end'
+                'type', 'end',
+                'payload', jsonb_build_object('x', 0, 'y', 1)
             )
         )
     FROM created, LATERAL (
