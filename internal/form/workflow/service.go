@@ -34,8 +34,11 @@ type Validator interface {
 // nodePayload is the canonical shape for workflow node payloads.
 // It is shared by the validator and other workflow code.
 type NodePayload struct {
-	X int `json:"x"`
-	Y int `json:"y"`
+	// Use pointers so `validate:"required"` can distinguish between:
+	// - field missing/null => nil pointer (invalid)
+	// - valid value 0 => non-nil pointer with value 0 (valid)
+	X *int `json:"x" validate:"required,int32"`
+	Y *int `json:"y" validate:"required,int32"`
 }
 
 type Service struct {
@@ -182,8 +185,8 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		FormID:     formID,
 		LastEditor: userID,
 		Type:       nodeType,
-		PayloadX:   int32(payload.X),
-		PayloadY:   int32(payload.Y),
+		PayloadX:   int32(*payload.X),
+		PayloadY:   int32(*payload.Y),
 	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "create node")
