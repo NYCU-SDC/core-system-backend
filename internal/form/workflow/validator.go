@@ -349,12 +349,23 @@ func payloadCoordValidationErrors(
 	return payloadErrs
 }
 
-// validateRequiredPayloadField validates that node.payload is required and:
-// - is a JSON object (unmarshals to map[string]interface{})
-func validateRequiredPayloadField(node map[string]interface{}, nodeType string, nodeID string) error {
+// validatePayloadField validates node.payload.
+//
+// When requirePresence is true, node.payload must be present and a JSON object.
+// When requirePresence is false, node.payload is optional; if it's missing, this
+// returns nil.
+func validatePayloadField(node map[string]interface{}, nodeType string, nodeID string, requirePresence bool) error {
 	payload, ok := node["payload"]
 	if !ok {
-		return fmt.Errorf("%w: %s '%s' is missing required payload field", internal.ErrWorkflowNodePayloadInvalid, nodeType, nodeID)
+		if !requirePresence {
+			return nil
+		}
+		return fmt.Errorf(
+			"%w: %s '%s' is missing required payload field",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+		)
 	}
 
 	// Payload must not be null.
@@ -398,7 +409,7 @@ func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]int
 		// required-field checks fail and would trigger an early continue.
 		nodeTypeForPayload, _ := nodeData["type"].(string)
 		nodeIDForPayload, _ := nodeData["id"].(string)
-		err := validateRequiredPayloadField(nodeData, nodeTypeForPayload, nodeIDForPayload)
+		err := validatePayloadField(nodeData, nodeTypeForPayload, nodeIDForPayload, isActivate)
 		if err != nil {
 			validationErrors = append(validationErrors, err)
 		}
