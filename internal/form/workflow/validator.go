@@ -368,10 +368,8 @@ func validateRequiredPayloadField(node map[string]interface{}, nodeType string, 
 		return fmt.Errorf("%w: %s '%s' has invalid payload: payload must be a JSON object", internal.ErrWorkflowNodePayloadInvalid, nodeType, nodeID)
 	}
 
-	var payloadErrs []error
-
-	payloadErrs = payloadCoordValidationErrors(payloadObj, "x", nodeType, nodeID, "missing payload.x", "payload.x must be an int32")
-	payloadErrs = payloadCoordValidationErrors(payloadObj, "y", nodeType, nodeID, "missing payload.y", "payload.y must be an int32")
+	payloadErrs := payloadCoordValidationErrors(payloadObj, "x", nodeType, nodeID, "missing payload.x", "payload.x must be an int32")
+	payloadErrs = append(payloadErrs, payloadCoordValidationErrors(payloadObj, "y", nodeType, nodeID, "missing payload.y", "payload.y must be an int32")...)
 
 	if len(payloadErrs) > 0 {
 		return errors.Join(payloadErrs...)
