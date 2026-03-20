@@ -200,7 +200,8 @@ new_node AS (
     SELECT jsonb_build_object(
         'id', node_id.id,
         'label', 'New ' || initcap($3::text),
-        'type', $3::node_type
+        'type', $3::node_type,
+        'payload', '{}'::jsonb
     ) AS node
     FROM node_id
 ),
