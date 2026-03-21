@@ -481,7 +481,7 @@ func (s *Service) GetMemberRole(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", internal.ErrPermissionDenied
+			return "", internal.ErrNotFound
 		}
 
 		err = databaseutil.WrapDBError(err, logger, "get member role")

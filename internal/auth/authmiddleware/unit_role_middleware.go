@@ -6,6 +6,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/unit"
 	"context"
 	"net/http"
+	"errors"
 
 	"NYCU-SDC/core-system-backend/internal/user"
 
@@ -73,12 +74,23 @@ func (m *UnitRoleMiddleware) Require(
 
 			dbRole, err := m.service.GetMemberRole(traceCtx, unitID, u.ID)
 			if err != nil {
-				logger.Warn("permission denied (not unit member)",
+				if errors.Is(err, internal.ErrNotFound) {
+					logger.Warn("permission denied (not unit member)",
+						zap.String("user_id", u.ID.String()),
+						zap.String("unit_id", unitID.String()),
+					)
+
+					m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
+					return
+				}
+
+				logger.Error("failed to get member role",
 					zap.String("user_id", u.ID.String()),
 					zap.String("unit_id", unitID.String()),
+					zap.Error(err),
 				)
 
-				m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
+				m.problemWriter.WriteError(traceCtx, w, err, logger)
 				return
 			}
 
