@@ -362,6 +362,20 @@ func TestService_CreateNode(t *testing.T) {
 			},
 		},
 		{
+			name: "payload coordinates out of int32 range",
+			params: Params{
+				workflowJSON:  createWorkflow_SimpleValid(t),
+				nodeType:      NodeTypeSection,
+				questionStore: nil,
+			},
+			payload: payloadXY(2147483648, 0),
+			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+				require.Error(t, err, "expected error but got nil")
+				require.Equal(t, CreateNodeRow{}, result)
+				mq.AssertNotCalled(t, "CreateNode")
+			},
+		},
+		{
 			name: "valid workflow - simple section creation",
 			params: Params{
 				workflowJSON:  createWorkflow_SimpleValid(t),
