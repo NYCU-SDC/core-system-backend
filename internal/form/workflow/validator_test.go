@@ -8,6 +8,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/question"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
 
@@ -134,6 +135,58 @@ func TestActivate(t *testing.T) {
 			require.NoError(t, err, "expected validation to pass")
 		})
 	}
+}
+
+// TestValidateConditionSectionOrder_ConditionBranchTraversalWithMissingSiblingBranch tests that Validate detects when a condition
+// references a section that comes after it in the graph traversal.
+func TestValidateConditionSectionOrder_ConditionBranchTraversalWithMissingSiblingBranch(t *testing.T) {
+	t.Parallel()
+
+	formID := uuid.New()
+	startID := uuid.New()
+	conditionAID := uuid.New()
+	conditionBID := uuid.New()
+	sectionID := uuid.New()
+	endID := uuid.New()
+	questionID := uuid.New()
+
+	answerable, err := question.NewAnswerable(question.Question{
+		ID:        questionID,
+		SectionID: sectionID,
+		Required:  false,
+		Type:      question.QuestionTypeShortText,
+		Title:     pgtype.Text{String: "Q1", Valid: true},
+		Metadata:  []byte("{}"),
+		Order:     1,
+	}, formID)
+	require.NoError(t, err)
+
+	store := &mockQuestionStore{
+		questions: map[uuid.UUID]question.Answerable{
+			questionID: answerable,
+		},
+	}
+
+	nodes := []map[string]interface{}{
+		{"id": startID.String(), "type": "start", "label": "Start", "next": conditionAID.String()},
+		{"id": conditionAID.String(), "type": "condition", "label": "Condition A", "nextTrue": conditionBID.String()},
+		{
+			"id":        conditionBID.String(),
+			"type":      "condition",
+			"label":     "Condition B",
+			"nextTrue":  endID.String(),
+			"nextFalse": endID.String(),
+			"conditionRule": map[string]interface{}{
+				"question": questionID.String(),
+			},
+		},
+		{"id": sectionID.String(), "type": "section", "label": "Section"},
+		{"id": endID.String(), "type": "end", "label": "End"},
+	}
+
+	err = validateConditionSectionOrder(context.Background(), formID, nodes, store)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), conditionBID.String())
 }
 
 // TestActivate_ConditionRuleValidation tests strict condition rule validation
