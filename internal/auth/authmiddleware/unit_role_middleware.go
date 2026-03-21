@@ -5,8 +5,8 @@ import (
 	"NYCU-SDC/core-system-backend/internal/auth"
 	"NYCU-SDC/core-system-backend/internal/unit"
 	"context"
-	"net/http"
 	"errors"
+	"net/http"
 
 	"NYCU-SDC/core-system-backend/internal/user"
 
@@ -51,74 +51,83 @@ func (m *UnitRoleMiddleware) Require(
 	required auth.Role,
 	resolver Resolver,
 ) func(http.HandlerFunc) http.HandlerFunc {
+
 	return func(next http.HandlerFunc) http.HandlerFunc {
-
 		return func(w http.ResponseWriter, r *http.Request) {
-
-			traceCtx, span := m.tracer.Start(r.Context(), "UnitRoleMiddleware")
-			defer span.End()
-			logger := logutil.WithContext(traceCtx, m.logger)
-
-			u, ok := user.GetFromContext(traceCtx)
-			if !ok {
-				m.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
-				return
-			}
-
-			unitID, err := resolver.ResolveUnitID(traceCtx, r)
-			if err != nil {
-				logger.Warn("resolve unit id failed", zap.Error(err))
-				m.problemWriter.WriteError(traceCtx, w, err, logger)
-				return
-			}
-
-			dbRole, err := m.service.GetMemberRole(traceCtx, unitID, u.ID)
-			if err != nil {
-				if errors.Is(err, internal.ErrNotFound) {
-					logger.Warn("permission denied (not unit member)",
-						zap.String("user_id", u.ID.String()),
-						zap.String("unit_id", unitID.String()),
-					)
-
-					m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
-					return
-				}
-
-				logger.Error("failed to get member role",
-					zap.String("user_id", u.ID.String()),
-					zap.String("unit_id", unitID.String()),
-					zap.Error(err),
-				)
-
-				m.problemWriter.WriteError(traceCtx, w, err, logger)
-				return
-			}
-
-			role, ok := auth.ParseRole(string(dbRole))
-			if !ok {
-				logger.Warn("invalid role in database",
-					zap.String("user_id", u.ID.String()),
-					zap.String("unit_id", unitID.String()),
-					zap.String("db_role", string(dbRole)),
-				)
-
-				m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
-				return
-			}
-
-			if !role.Allow(required) {
-				logger.Warn("permission denied",
-					zap.String("user_id", u.ID.String()),
-					zap.String("unit_id", unitID.String()),
-					zap.String("required_role", required.String()),
-					zap.String("user_role", role.String()),
-				)
-
-				m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
-				return
-			}
-
-			next(w, r)
+			m.checkRole(required, resolver, next, w, r)
 		}
 	}
+}
+
+func (m *UnitRoleMiddleware) checkRole(
+	required auth.Role,
+	resolver Resolver,
+	next http.HandlerFunc,
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	traceCtx, span := m.tracer.Start(r.Context(), "UnitRoleMiddleware")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, m.logger)
+
+	u, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		m.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
+		return
+	}
+
+	unitID, err := resolver.ResolveUnitID(traceCtx, r)
+	if err != nil {
+		logger.Warn("resolve unit id failed", zap.Error(err))
+		m.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	dbRole, err := m.service.GetMemberRole(traceCtx, unitID, u.ID)
+	if err != nil {
+		if errors.Is(err, internal.ErrNotFound) {
+			logger.Warn("permission denied (not unit member)",
+				zap.String("user_id", u.ID.String()),
+				zap.String("unit_id", unitID.String()),
+			)
+
+			m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
+			return
+		}
+
+		logger.Error("failed to get member role",
+			zap.String("user_id", u.ID.String()),
+			zap.String("unit_id", unitID.String()),
+			zap.Error(err),
+		)
+
+		m.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	role, ok := auth.ParseRole(string(dbRole))
+	if !ok {
+		logger.Warn("invalid role in database",
+			zap.String("user_id", u.ID.String()),
+			zap.String("unit_id", unitID.String()),
+			zap.String("db_role", string(dbRole)),
+		)
+
+		m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
+		return
+	}
+
+	if !role.Allow(required) {
+		logger.Warn("permission denied",
+			zap.String("user_id", u.ID.String()),
+			zap.String("unit_id", unitID.String()),
+			zap.String("required_role", required.String()),
+			zap.String("user_role", role.String()),
+		)
+
+		m.problemWriter.WriteError(traceCtx, w, internal.ErrPermissionDenied, logger)
+		return
+	}
+
+	next(w, r)
 }
