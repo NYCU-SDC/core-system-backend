@@ -287,36 +287,6 @@ func validateNodeID(node map[string]interface{}, index int) (string, error) {
 	return id, nil
 }
 
-// parseInt32Value parses a `json.Number` into an int32 with strict rules:
-// - accepts integer-form only (rejects "1.0" / "1e0" even if integral)
-// - enforces int32 bounds
-func parseInt32Value(v interface{}) (int, bool) {
-	n, ok := v.(json.Number)
-	if !ok {
-		return 0, false
-	}
-
-	// Reject decimals and scientific notation even if they represent integral values.
-	// Example: "1.0", "1e0".
-	s := n.String()
-	if strings.ContainsAny(s, ".eE") {
-		return 0, false
-	}
-
-	i64, err := n.Int64()
-	if err != nil {
-		return 0, false
-	}
-
-	const minInt32 = int64(-2147483648)
-	const maxInt32 = int64(2147483647)
-	if i64 < minInt32 || i64 > maxInt32 {
-		return 0, false
-	}
-
-	return int(i64), true
-}
-
 func payloadCoordValidationErrors(
 	payloadObj map[string]interface{},
 	coordKey string,
@@ -337,7 +307,32 @@ func payloadCoordValidationErrors(
 		))
 	}
 
-	if _, ok := parseInt32Value(val); !ok {
+	n, ok := val.(json.Number)
+	if !ok {
+		payloadErrs = append(payloadErrs, fmt.Errorf(
+			"%w: %s '%s' has invalid payload: %s",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+			invalidMsg,
+		))
+		return payloadErrs
+	}
+
+	s := n.String()
+	if strings.ContainsAny(s, ".eE") {
+		payloadErrs = append(payloadErrs, fmt.Errorf(
+			"%w: %s '%s' has invalid payload: %s",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+			invalidMsg,
+		))
+		return payloadErrs
+	}
+
+	i64, err := n.Int64()
+	if err != nil || i64 < -2147483648 || i64 > 2147483647 {
 		payloadErrs = append(payloadErrs, fmt.Errorf(
 			"%w: %s '%s' has invalid payload: %s",
 			internal.ErrWorkflowNodePayloadInvalid,
@@ -649,15 +644,13 @@ func validateConditionSectionOrder(ctx context.Context, formID uuid.UUID, nodes 
 		switch nodeType {
 		case string(NodeTypeCondition):
 			nextTrue, ok := n["nextTrue"].(string)
-			if !ok || nextTrue == "" {
-				continue
+			if ok && nextTrue != "" {
+				nextNodes = append(nextNodes, nextTrue)
 			}
-			nextNodes = append(nextNodes, nextTrue)
 			nextFalse, ok := n["nextFalse"].(string)
-			if !ok || nextFalse == "" {
-				continue
+			if ok && nextFalse != "" {
+				nextNodes = append(nextNodes, nextFalse)
 			}
-			nextNodes = append(nextNodes, nextFalse)
 		default:
 			next, ok := n["next"].(string)
 			if !ok || next == "" {

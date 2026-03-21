@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"NYCU-SDC/core-system-backend/internal"
 
@@ -185,6 +186,11 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 	// We must validate before dereferencing pointers to avoid panics.
 	if payload.X == nil || payload.Y == nil {
 		err := fmt.Errorf("%w: payload.x and payload.y are required", internal.ErrWorkflowNodePayloadInvalid)
+		span.RecordError(err)
+		return CreateNodeRow{}, err
+	}
+	if *payload.X < math.MinInt32 || *payload.X > math.MaxInt32 || *payload.Y < math.MinInt32 || *payload.Y > math.MaxInt32 {
+		err := fmt.Errorf("%w: payload.x and payload.y must be int32", internal.ErrWorkflowNodePayloadInvalid)
 		span.RecordError(err)
 		return CreateNodeRow{}, err
 	}
