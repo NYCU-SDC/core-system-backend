@@ -136,7 +136,7 @@ func main() {
 
 	validator := internal.NewValidator()
 	problemWriter := internal.NewProblemWriter()
-	_, err = setup.NewService(logger, dbPool, "setup.yaml")
+	_, err = setup.NewService(logger, dbPool, "setup.example.yaml")
 	if err != nil {
 		logger.Fatal("Failed to setup", zap.Error(err))
 	}
