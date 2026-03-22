@@ -246,6 +246,14 @@ jobs:
       - name: List generated reports
         if: always()
         run: ls -lah reports/ || echo "No reports directory found"
+      
+      - name: Upload test reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          path: reports/*.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Teardown compose
         if: always()
