@@ -7,6 +7,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type Resolver interface {
+type UnitIdResolver interface {
 	ResolveUnitID(ctx context.Context, r *http.Request) (uuid.UUID, error)
+}
+
+type FormIdResolver interface {
+	ResolveFormID(ctx context.Context, r *http.Request) (uuid.UUID, error)
 }

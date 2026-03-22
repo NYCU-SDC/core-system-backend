@@ -441,6 +441,7 @@ type Form struct {
 	MessageAfterSubmission string
 	Status                 Status
 	UnitID                 pgtype.UUID
+	CreatedBy              uuid.UUID
 	LastEditor             uuid.UUID
 	Deadline               pgtype.Timestamptz
 	CreatedAt              pgtype.Timestamptz

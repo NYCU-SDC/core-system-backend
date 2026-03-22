@@ -2,32 +2,6 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    queries: "./internal/user/queries.sql"
-    schema: "./internal/database/full_schema.sql"
-    gen:
-      go:
-        package: "user"
-        out: "./internal/user"
-        sql_package: "pgx/v5"
-        overrides:
-          - db_type: "uuid"
-            go_type:
-              import: "github.com/google/uuid"
-              type: "UUID"
-  - engine: "postgresql"
-    queries: "./internal/unit/queries.sql"
-    schema: "./internal/database/full_schema.sql"
-    gen:
-      go:
-        package: "unit"
-        out: "./internal/unit"
-        sql_package: "pgx/v5"
-        overrides:
-          - db_type: "uuid"
-            go_type:
-              import: "github.com/google/uuid"
-              type: "UUID"
-  - engine: "postgresql"
     queries: "./internal/file/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:
@@ -47,45 +21,6 @@ sql:
       go:
         package: "tenant"
         out: "./internal/tenant"
-        sql_package: "pgx/v5"
-        overrides:
-          - db_type: "uuid"
-            go_type:
-              import: "github.com/google/uuid"
-              type: "UUID"
-  - engine: "postgresql"
-    queries: "./internal/jwt/queries.sql"
-    schema: "./internal/database/full_schema.sql"
-    gen:
-      go:
-        package: "jwt"
-        out: "./internal/jwt"
-        sql_package: "pgx/v5"
-        overrides:
-          - db_type: "uuid"
-            go_type:
-              import: "github.com/google/uuid"
-              type: "UUID"
-  - engine: "postgresql"
-    queries: "./internal/form/workflow/queries.sql"
-    schema: "./internal/database/full_schema.sql"
-    gen:
-      go:
-        package: "workflow"
-        out: "./internal/form/workflow"
-        sql_package: "pgx/v5"
-        overrides:
-          - db_type: "uuid"
-            go_type:
-              import: "github.com/google/uuid"
-              type: "UUID"
-  - engine: "postgresql"
-    queries: "./internal/form/queries.sql"
-    schema: "./internal/database/full_schema.sql"
-    gen:
-      go:
-        package: "form"
-        out: "./internal/form"
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -119,6 +54,19 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
   - engine: "postgresql"
+    queries: "./internal/form/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "form"
+        out: "./internal/form"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
     queries: "./internal/form/question/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:
@@ -132,12 +80,64 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
   - engine: "postgresql"
+    queries: "./internal/form/workflow/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "workflow"
+        out: "./internal/form/workflow"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/user/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "user"
+        out: "./internal/user"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/jwt/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "jwt"
+        out: "./internal/jwt"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
     queries: "./internal/inbox/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:
       go:
         package: "inbox"
         out: "./internal/inbox"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/unit/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "unit"
+        out: "./internal/unit"
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"

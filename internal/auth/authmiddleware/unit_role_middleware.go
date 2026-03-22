@@ -3,6 +3,7 @@ package authmiddleware
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver"
 	"NYCU-SDC/core-system-backend/internal/unit"
 	"context"
 	"errors"
@@ -17,10 +18,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
-
-type Resolver interface {
-	ResolveUnitID(ctx context.Context, r *http.Request) (uuid.UUID, error)
-}
 
 type UnitRoleService interface {
 	GetMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID) (unit.UnitRole, error)
@@ -49,7 +46,7 @@ func NewUnitRoleMiddleware(
 
 func (m *UnitRoleMiddleware) Require(
 	required auth.Role,
-	resolver Resolver,
+	resolver resolver.UnitIdResolver,
 ) func(http.HandlerFunc) http.HandlerFunc {
 
 	return func(next http.HandlerFunc) http.HandlerFunc {
@@ -61,7 +58,7 @@ func (m *UnitRoleMiddleware) Require(
 
 func (m *UnitRoleMiddleware) checkRole(
 	required auth.Role,
-	resolver Resolver,
+	resolver resolver.UnitIdResolver,
 	next http.HandlerFunc,
 	w http.ResponseWriter,
 	r *http.Request,

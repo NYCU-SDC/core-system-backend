@@ -33,6 +33,8 @@ type Querier interface {
 	GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
 	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	GetCreatorByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetFormIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
 type UserFormStatus string
@@ -151,6 +153,7 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 		Description:            fields.description,
 		PreviewMessage:         fields.previewMessage,
 		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
+		CreatedBy:              userID,
 		LastEditor:             userID,
 		Deadline:               fields.deadline,
 		PublishTime:            fields.publishTime,
@@ -449,4 +452,44 @@ func (s *Service) GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.
 	}
 
 	return unitID.Bytes, nil
+}
+
+func (s *Service) GetCreatorByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	ctx, span := s.tracer.Start(ctx, "GetCreatorByFormID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	creatorID, err := s.queries.GetCreatorByFormID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(internal.ErrFormNotFound)
+			return uuid.Nil, internal.ErrFormNotFound
+		}
+
+		err = databaseutil.WrapDBError(err, logger, "get creator by form id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return creatorID, nil
+}
+
+func (s *Service) GetFormIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	ctx, span := s.tracer.Start(ctx, "GetFormIDBySectionID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	formID, err := s.queries.GetFormIDBySectionID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(internal.ErrSectionNotFound)
+			return uuid.Nil, internal.ErrSectionNotFound
+		}
+
+		err = databaseutil.WrapDBError(err, logger, "get form id by section id")
+		span.RecordError(err)
+		return uuid.Nil, err
+	}
+
+	return formID, nil
 }

@@ -10,19 +10,20 @@ import (
 
 type SectionService interface {
 	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetFormIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
-type SectionResolver struct {
+type SectionPathResolver struct {
 	service SectionService
 }
 
-func NewSectionResolver(service SectionService) *SectionResolver {
-	return &SectionResolver{
+func NewSectionPathResolver(service SectionService) *SectionPathResolver {
+	return &SectionPathResolver{
 		service: service,
 	}
 }
 
-func (r *SectionResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+func (r *SectionPathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	sectionIDStr := req.PathValue("sectionId")
 	if sectionIDStr == "" {
 		return uuid.Nil, internal.ErrMissingSectionID
@@ -39,4 +40,23 @@ func (r *SectionResolver) ResolveUnitID(ctx context.Context, req *http.Request) 
 	}
 
 	return unitID, nil
+}
+
+func (r *SectionPathResolver) ResolveFormID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+	sectionIDStr := req.PathValue("sectionId")
+	if sectionIDStr == "" {
+		return uuid.Nil, internal.ErrMissingSectionID
+	}
+
+	sectionID, err := uuid.Parse(sectionIDStr)
+	if err != nil {
+		return uuid.Nil, internal.ErrInvalidSectionID
+	}
+
+	formID, err := r.service.GetFormIDBySectionID(ctx, sectionID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	return formID, nil
 }

@@ -12,17 +12,17 @@ type FormService interface {
 	GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
-type FormResolver struct {
+type FormPathResolver struct {
 	service FormService
 }
 
-func NewFormResolver(service FormService) *FormResolver {
-	return &FormResolver{
+func NewFormPathResolver(service FormService) *FormPathResolver {
+	return &FormPathResolver{
 		service: service,
 	}
 }
 
-func (r *FormResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+func (r *FormPathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	formIDStr := req.PathValue("formId")
 	if formIDStr == "" {
 		return uuid.Nil, internal.ErrMissingFormID
@@ -39,4 +39,18 @@ func (r *FormResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uu
 	}
 
 	return unitID, nil
+}
+
+func (r *FormPathResolver) ResolveFormID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+	formIDStr := req.PathValue("formId")
+	if formIDStr == "" {
+		return uuid.Nil, internal.ErrMissingFormID
+	}
+
+	formID, err := uuid.Parse(formIDStr)
+	if err != nil {
+		return uuid.Nil, internal.ErrInvalidFormID
+	}
+
+	return formID, nil
 }

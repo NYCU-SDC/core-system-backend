@@ -202,10 +202,10 @@ func main() {
 	tenantAuthMiddleware := authMiddleware.Append(tenantMiddleware.Middleware)
 
 	// Resolver
-	unitResolver := resolver.NewUnitResolver()
-	slugResolver := resolver.NewSlugResolver(tenantService)
-	formResolver := resolver.NewFormResolver(formService)
-	sectionResolver := resolver.NewSectionResolver(formService)
+	unitResolver := resolver.NewUnitPathResolver()
+	slugResolver := resolver.NewSlugPathResolver(tenantService)
+	formResolver := resolver.NewFormPathResolver(formService)
+	sectionResolver := resolver.NewSectionPathResolver(formService)
 
 	// Permission Middleware
 	globalRole := authmiddleware.NewGlobalRoleMiddleware(logger, problemWriter)
