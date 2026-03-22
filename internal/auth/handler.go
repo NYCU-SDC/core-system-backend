@@ -159,6 +159,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Redirect URL after successful login
 	redirectURL := r.URL.Query().Get("r")
 
 	// Determine callback URL based on oauth proxy configuration
@@ -172,6 +173,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseForCallback, providerName)
+		logger.Info(callbackURL)
 	} else {
 		if h.devMode {
 			customBase := r.URL.Query().Get("base")
@@ -230,7 +232,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var token *oauth2.Token
-	if callbackURL != "" {
+	if callbackURL == "" {
 		config := provider.ConfigWithCustomRedirectURL(callbackURL)
 		token, err = config.Exchange(traceCtx, code)
 		if err != nil {
