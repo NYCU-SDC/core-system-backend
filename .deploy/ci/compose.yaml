@@ -26,6 +26,12 @@ services:
       NYCU_OAUTH_CLIENT_SECRET: "dummy"
       VERSION: "ci"
       ALLOW_ORIGINS: "*"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   postgres:
     image: postgres:18
@@ -40,6 +46,21 @@ services:
       POSTGRES_DB: core_system
     networks:
       - core_system_ci
+
+  db-seed:
+    image: postgres:18
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./seed.sql:/seed.sql:ro
+    networks:
+      - core_system_ci
+    environment:
+      - PGPASSWORD=password
+    command: >
+      psql -h postgres -U postgres -d core_system -v ON_ERROR_STOP=1 -f /seed.sql
+    restart: "no"
 
 networks:
   core_system_ci:

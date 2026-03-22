@@ -218,10 +218,6 @@ jobs:
       - name: Start QA backend stack
         run: docker compose -f .deploy/ci/compose.yaml up -d --wait
 
-      - name: Seed QA user
-        run: |
-          cat .deploy/ci/seed.sql | docker compose -f .deploy/ci/compose.yaml exec -T postgres psql -U postgres -d core_system -v ON_ERROR_STOP=1
-
       - name: Checkout API scenarios repo
         uses: actions/checkout@v4
         with:
