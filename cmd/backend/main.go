@@ -85,6 +85,12 @@ func main() {
 		zap.String("environment", Environment),
 	}
 
+	if Environment == "snapshot" {
+		if snapshotVersion := os.Getenv("VERSION"); snapshotVersion != "" {
+			appMetadata = append(appMetadata, zap.String("snapshot_version", snapshotVersion))
+		}
+	}
+
 	cfg, cfgLog := config.Load()
 	err := cfg.Validate()
 	if err != nil {
