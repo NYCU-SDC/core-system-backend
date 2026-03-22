@@ -173,7 +173,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete file from database
-	if err := h.service.Delete(traceCtx, fileID); err != nil {
+	if err := h.service.DeleteFile(traceCtx, fileID); err != nil {
 		logger.Error("Failed to delete file", zap.Error(err), zap.String("file_id", fileIDStr))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToDeleteFile, logger)
 		span.RecordError(err)
