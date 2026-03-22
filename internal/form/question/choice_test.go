@@ -544,7 +544,7 @@ func TestRanking_DecodeRequest(t *testing.T) {
 					t.Fatalf("Expected 1 ranked choice, got %d", len(answer.RankedChoices))
 				}
 				if answer.RankedChoices[0].Snapshot.OtherText != "i love sdc" {
-					t.Errorf("Expected OtherText 'ranking other', got %q", answer.RankedChoices[0].Snapshot.OtherText)
+					t.Errorf("Expected OtherText 'i love sdc', got %q", answer.RankedChoices[0].Snapshot.OtherText)
 				}
 			},
 		},

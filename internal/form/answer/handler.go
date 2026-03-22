@@ -31,7 +31,7 @@ type Payload struct {
 	QuestionID   string          `json:"questionId" validate:"required,uuid"`
 	QuestionType string          `json:"questionType"`
 	Value        json.RawMessage `json:"value" validate:"required"`
-	OtherText    string          `json:"otherText,omitempty"`
+	OtherText    string          `json:"otherText,omitempty" validate:"max=100"`
 }
 
 // AnswersRequest is the request body for updating answers
