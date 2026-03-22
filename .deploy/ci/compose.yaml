@@ -49,6 +49,7 @@ services:
 
   db-seed:
     image: postgres:18
+    profiles: ["seed"]
     depends_on:
       backend:
         condition: service_healthy
