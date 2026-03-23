@@ -166,10 +166,10 @@ func NewUploadFile(q Question, formID uuid.UUID) (UploadFile, error) {
 	}, nil
 }
 
-func (u UploadFile) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (u UploadFile) DecodeRequest(param shared.AnswerParam) (any, error) {
 	// Request format (from UploadFiles): {"files": [{"fileId": "...", "originalFilename": "...", "contentType": "...", "size": 0}]}
 	var answer shared.UploadFileAnswer
-	if err := json.Unmarshal(rawValue, &answer); err != nil {
+	if err := json.Unmarshal(param.Value, &answer); err != nil {
 		return nil, fmt.Errorf("invalid upload file value format: %w", err)
 	}
 

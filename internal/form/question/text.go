@@ -48,9 +48,9 @@ func (s ShortText) Validate(rawValue json.RawMessage) error {
 	return nil
 }
 
-func (s ShortText) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (s ShortText) DecodeRequest(param shared.AnswerParam) (any, error) {
 	var value string
-	err := json.Unmarshal(rawValue, &value)
+	err := json.Unmarshal(param.Value, &value)
 	if err != nil {
 		return nil, fmt.Errorf("invalid short text value format: %w", err)
 	}
@@ -147,9 +147,9 @@ func (l LongText) Validate(rawValue json.RawMessage) error {
 	return nil
 }
 
-func (l LongText) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (l LongText) DecodeRequest(param shared.AnswerParam) (any, error) {
 	var value string
-	err := json.Unmarshal(rawValue, &value)
+	err := json.Unmarshal(param.Value, &value)
 	if err != nil {
 		return nil, fmt.Errorf("invalid long text value format: %w", err)
 	}
@@ -255,9 +255,9 @@ func (h Hyperlink) Validate(rawValue json.RawMessage) error {
 	return nil
 }
 
-func (h Hyperlink) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (h Hyperlink) DecodeRequest(param shared.AnswerParam) (any, error) {
 	var value string
-	err := json.Unmarshal(rawValue, &value)
+	err := json.Unmarshal(param.Value, &value)
 	if err != nil {
 		return nil, fmt.Errorf("invalid hyperlink value format: %w", err)
 	}
