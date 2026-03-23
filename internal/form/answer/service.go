@@ -23,6 +23,7 @@ import (
 
 type Querier interface {
 	ListByResponseID(ctx context.Context, responseID uuid.UUID) ([]Answer, error)
+	GetByID(ctx context.Context, id uuid.UUID) (Answer, error)
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
 }
@@ -35,7 +36,8 @@ type QuestionStore interface {
 // FileService defines the file storage operations needed by the answer service
 type FileService interface {
 	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	CreateAttachment(ctx context.Context, fileID uuid.UUID, resourceType file.ResourceType, resourceID uuid.UUID, createdBy *uuid.UUID) (file.FileAttachment, error)
+	DeletePhysicalFile(ctx context.Context, fileID uuid.UUID) error
 }
 
 type Answerable interface {
@@ -433,43 +435,59 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		return nil, Answer{}, nil, internal.ErrQuestionTypeMismatch
 	}
 
-	// Read existing uploaded files from the existing answer (if any) for append
+	// Read existing uploaded files from the existing answer (if any) for append.
 	var existingEntries []shared.UploadFileEntry
+
 	existingAnswer, err := s.queries.GetByResponseIDAndQuestionID(traceCtx, GetByResponseIDAndQuestionIDParams{
 		ResponseID: responseID,
 		QuestionID: questionID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			s.logger.Error("failed to get existing answer for question", zap.String("questionID", questionID.String()), zap.Error(err))
+			// First upload for this question: no existing answer yet.
+			existingEntries = []shared.UploadFileEntry{}
+		} else {
+			s.logger.Error("failed to get existing answer for question",
+				zap.String("questionID", questionID.String()),
+				zap.Error(err),
+			)
 			span.RecordError(err)
-			return nil, Answer{}, nil, fmt.Errorf("failed to get existing answer for question %s: %w", questionID, internal.ErrQuestionNotFound)
+			return nil, Answer{}, nil, err
 		}
-		return nil, Answer{}, nil, err
-	}
+	} else {
+		var existingUploadAnswer shared.UploadFileAnswer
+		if jsonErr := json.Unmarshal(existingAnswer.Value, &existingUploadAnswer); jsonErr != nil {
+			s.logger.Error("failed to unmarshal existing upload file answer",
+				zap.String("questionID", questionID.String()),
+				zap.Error(jsonErr),
+			)
+			span.RecordError(jsonErr)
+			return nil, Answer{}, nil, fmt.Errorf(
+				"failed to parse existing upload file answer for question %s: %w",
+				questionID,
+				internal.ErrValidationFailed,
+			)
+		}
 
-	var existingUploadAnswer shared.UploadFileAnswer
-	if jsonErr := json.Unmarshal(existingAnswer.Value, &existingUploadAnswer); jsonErr != nil {
-		s.logger.Error("failed to unmarshal existing upload file answer",
-			zap.String("questionID", questionID.String()),
-			zap.Error(jsonErr),
-		)
-		span.RecordError(jsonErr)
-		return nil, Answer{}, nil, fmt.Errorf("failed to parse existing upload file answer for question %s: %w", questionID, internal.ErrValidationFailed)
+		existingEntries = existingUploadAnswer.Files
 	}
-
-	existingEntries = existingUploadAnswer.Files
 
 	// deleteFiles is a best-effort helper that logs warnings on failure
 	deleteFiles := func(ids []string) {
 		for _, idStr := range ids {
 			id, parseErr := uuid.Parse(idStr)
 			if parseErr != nil {
-				logger.Warn("failed to parse file ID for cleanup", zap.String("fileID", idStr), zap.Error(parseErr))
+				logger.Warn("failed to parse file ID for cleanup",
+					zap.String("fileID", idStr),
+					zap.Error(parseErr),
+				)
 				continue
 			}
-			if delErr := s.fileService.Delete(traceCtx, id); delErr != nil {
-				logger.Warn("failed to delete orphan file", zap.String("fileID", idStr), zap.Error(delErr))
+			if delErr := s.fileService.DeletePhysicalFile(traceCtx, id); delErr != nil {
+				logger.Warn("failed to delete orphan file",
+					zap.String("fileID", idStr),
+					zap.Error(delErr),
+				)
 			}
 		}
 	}
@@ -530,146 +548,33 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		return nil, Answer{}, nil, fmt.Errorf("failed to upsert upload file answer: %w", errs[0])
 	}
 
+	upsertedAnswer := upsertedAnswers[0]
+
+	for _, entry := range newEntries {
+		_, attachErr := s.fileService.CreateAttachment(
+			traceCtx,
+			entry.FileID,
+			file.ResourceTypeFormAnswer,
+			upsertedAnswer.ID,
+			uploadedBy,
+		)
+		if attachErr != nil {
+			s.logger.Error("failed to create file attachment after upload answer upsert",
+				zap.String("answerID", upsertedAnswer.ID.String()),
+				zap.String("fileID", entry.FileID.String()),
+				zap.Error(attachErr),
+			)
+			span.RecordError(attachErr)
+			deleteFiles(fileIDs)
+			return nil, Answer{}, nil, fmt.Errorf("failed to create attachment for file %s: %w", entry.FileID, attachErr)
+		}
+	}
+
 	logger.Info("successfully uploaded files and upserted answer",
 		zap.String("questionID", questionID.String()),
+		zap.String("answerID", upsertedAnswer.ID.String()),
 		zap.Int("fileCount", len(mergedEntries)),
 	)
 
-	return newEntries, upsertedAnswers[0], answerableList[0], nil
-}
-
-// DeleteUploadedFile deletes a specific uploaded file from an upload_file question answer.
-func (s Service) DeleteUploadedFile(ctx context.Context, formID, responseID, questionID, fileID uuid.UUID) (Answer, Answerable, error) {
-	traceCtx, span := s.tracer.Start(ctx, "DeleteUploadedFile")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	// Get the answerable map to validate question type and membership
-	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
-	if err != nil {
-		logger.Error("failed to get answerable map for form",
-			zap.String("formID", formID.String()),
-			zap.Error(err),
-		)
-		span.RecordError(err)
-		return Answer{}, nil, err
-	}
-
-	answerable, found := answerableMap[questionID.String()]
-	if !found {
-		return Answer{}, nil, internal.ErrQuestionNotFound
-	}
-
-	// Validate the question is of upload_file type
-	if answerable.Question().Type != question.QuestionTypeUploadFile {
-		logger.Error("invalid question type for file deletion",
-			zap.String("questionID", questionID.String()),
-			zap.String("expectedType", string(question.QuestionTypeUploadFile)),
-			zap.String("actualType", string(answerable.Question().Type)),
-		)
-		span.RecordError(internal.ErrQuestionTypeMismatch)
-		return Answer{}, nil, internal.ErrQuestionTypeMismatch
-	}
-
-	// Read the existing answer
-	existingAnswer, err := s.queries.GetByResponseIDAndQuestionID(traceCtx, GetByResponseIDAndQuestionIDParams{
-		ResponseID: responseID,
-		QuestionID: questionID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			logger.Warn("upload_file answer not found when deleting file",
-				zap.String("responseID", responseID.String()),
-				zap.String("questionID", questionID.String()),
-				zap.String("fileID", fileID.String()),
-			)
-			return Answer{}, nil, internal.ErrNotFound
-		}
-
-		logger.Error("failed to get existing upload file answer",
-			zap.String("responseID", responseID.String()),
-			zap.String("questionID", questionID.String()),
-			zap.Error(err),
-		)
-		span.RecordError(err)
-		return Answer{}, nil, err
-	}
-
-	var existingUploadAnswer shared.UploadFileAnswer
-	err = json.Unmarshal(existingAnswer.Value, &existingUploadAnswer)
-	if err != nil {
-		logger.Error("failed to unmarshal existing upload file answer",
-			zap.String("questionID", questionID.String()),
-			zap.Error(err),
-		)
-		span.RecordError(err)
-		return Answer{}, nil, internal.ErrValidationFailed
-	}
-
-	// Remove the specified file from the answer
-	filteredEntries := make([]shared.UploadFileEntry, 0, len(existingUploadAnswer.Files))
-	foundFile := false
-
-	for _, entry := range existingUploadAnswer.Files {
-		if entry.FileID == fileID {
-			foundFile = true
-			continue
-		}
-		filteredEntries = append(filteredEntries, entry)
-	}
-
-	if !foundFile {
-		logger.Warn("file not found in upload_file answer",
-			zap.String("responseID", responseID.String()),
-			zap.String("questionID", questionID.String()),
-			zap.String("fileID", fileID.String()),
-		)
-		return Answer{}, nil, internal.ErrFileNotFound
-	}
-
-	// Rebuild and upsert the updated answer
-	answerValue, err := json.Marshal(shared.UploadFileAnswer{
-		Files: filteredEntries,
-	})
-	if err != nil {
-		logger.Error("failed to marshal updated upload file answer",
-			zap.String("questionID", questionID.String()),
-			zap.Error(err),
-		)
-		span.RecordError(err)
-		return Answer{}, nil, err
-	}
-
-	upsertedAnswers, answerableList, errs := s.Upsert(traceCtx, formID, responseID, []shared.AnswerParam{
-		{
-			QuestionID: questionID.String(),
-			Value:      answerValue,
-		},
-	})
-	if len(errs) > 0 {
-		logger.Error("failed to upsert upload file answer after deleting file",
-			zap.String("questionID", questionID.String()),
-			zap.Error(errs[0]),
-		)
-		span.RecordError(errs[0])
-		return Answer{}, nil, errs[0]
-	}
-
-	// Cleanup of the detached physical file after answer update succeeded.
-	err = s.fileService.Delete(traceCtx, fileID)
-	if err != nil {
-		logger.Warn("failed to delete detached file after answer update",
-			zap.String("fileID", fileID.String()),
-			zap.Error(err),
-		)
-	}
-
-	logger.Info("successfully deleted file from upload_file answer",
-		zap.String("responseID", responseID.String()),
-		zap.String("questionID", questionID.String()),
-		zap.String("fileID", fileID.String()),
-		zap.Int("remainingFileCount", len(filteredEntries)),
-	)
-
-	return upsertedAnswers[0], answerableList[0], nil
+	return newEntries, upsertedAnswer, answerableList[0], nil
 }

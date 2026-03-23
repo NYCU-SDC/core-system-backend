@@ -62,7 +62,6 @@ type Store interface {
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []question.Answerable, map[string]question.Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
 	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
-	DeleteUploadedFile(ctx context.Context, formID, responseID, questionID, fileID uuid.UUID) (Answer, Answerable, error)
 }
 
 // WorkflowResolver resolves which sections are active for a form response based on workflow and current answers.
@@ -662,71 +661,6 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, UploadFilesResponse{
 		Files: uploadedFiles,
 	})
-}
-
-// DeleteUploadedFile deletes a specific uploaded file from an upload_file question answer.
-// DELETE /responses/{responseId}/questions/{questionId}/files/{fileId}
-func (h *Handler) DeleteUploadedFile(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "DeleteUploadedFile")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	// Parse responseId from path
-	responseIDStr := r.PathValue("responseId")
-	responseID, err := handlerutil.ParseUUID(responseIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	// Parse questionId from path
-	questionIDStr := r.PathValue("questionId")
-	questionID, err := handlerutil.ParseUUID(questionIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	// Parse fileId from path
-	fileIDStr := r.PathValue("fileId")
-	fileID, err := handlerutil.ParseUUID(fileIDStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	// Get formID from responseID
-	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	// Ownership check
-	currentUser, ok := user.GetFromContext(traceCtx)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
-		return
-	}
-
-	submittedBy, err := h.responseStore.GetSubmittedBy(traceCtx, responseID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-	if submittedBy != currentUser.ID {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
-		return
-	}
-
-	_, _, err = h.store.DeleteUploadedFile(traceCtx, formID, responseID, questionID, fileID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	w.WriteHeader(http.StatusNoContent)
-
 }
 
 func (h *Handler) ToResponse(context context.Context, answer Answer, answerable Answerable, responseID uuid.UUID) (Response, error) {

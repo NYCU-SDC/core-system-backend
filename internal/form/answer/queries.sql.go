@@ -115,6 +115,26 @@ func (q *Queries) Get(ctx context.Context, arg GetParams) (uuid.UUID, error) {
 	return id, err
 }
 
+const getByID = `-- name: GetByID :one
+SELECT id, response_id, question_id, value, created_at, updated_at
+FROM answers
+WHERE id = $1
+`
+
+func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (Answer, error) {
+	row := q.db.QueryRow(ctx, getByID, id)
+	var i Answer
+	err := row.Scan(
+		&i.ID,
+		&i.ResponseID,
+		&i.QuestionID,
+		&i.Value,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getByResponseIDAndQuestionID = `-- name: GetByResponseIDAndQuestionID :one
 SELECT id, response_id, question_id, value, created_at, updated_at FROM answers
 WHERE response_id = $1 AND question_id = $2
