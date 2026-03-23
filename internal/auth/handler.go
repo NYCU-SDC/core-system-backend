@@ -233,12 +233,20 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info("debug", zap.Any("proxyClaims", callbackInfo.proxyClaims))
 	var token *oauth2.Token
-	if callbackURL == "" {
-		config := provider.ConfigWithCustomRedirectURL(callbackURL)
-		token, err = config.Exchange(traceCtx, code)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
-			return
+	if h.oauthProxyBaseURL != "" {
+		if callbackURL == "" {
+			config := provider.ConfigWithCustomRedirectURL(callbackURL)
+			token, err = config.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
+		} else {
+			token, err = provider.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
 		}
 	} else {
 		token, err = provider.Exchange(traceCtx, code)
