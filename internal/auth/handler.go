@@ -231,7 +231,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("debug", zap.String("code", code))
+	logger.Info("debug", zap.Any("proxyClaims", callbackInfo.proxyClaims))
 	var token *oauth2.Token
 	if callbackURL == "" {
 		config := provider.ConfigWithCustomRedirectURL(callbackURL)
