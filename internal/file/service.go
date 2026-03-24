@@ -305,7 +305,8 @@ func (s *Service) DeleteAttachmentByID(ctx context.Context, attachmentID uuid.UU
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if err := s.queries.DeleteAttachmentByID(traceCtx, attachmentID); err != nil {
+	err := s.queries.DeleteAttachmentByID(traceCtx, attachmentID)
+	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete attachment by id")
 		span.RecordError(err)
 		return err
@@ -325,7 +326,8 @@ func (s *Service) DeletePhysicalFile(ctx context.Context, fileID uuid.UUID) erro
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if err := s.queries.Delete(traceCtx, fileID); err != nil {
+	err := s.queries.Delete(traceCtx, fileID)
+	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete physical file")
 		span.RecordError(err)
 		return err
@@ -338,10 +340,10 @@ func (s *Service) DeletePhysicalFile(ctx context.Context, fileID uuid.UUID) erro
 	return nil
 }
 
-// DeleteFile is the generic delete orchestration entrypoint.
+// Delete is the generic delete orchestration entrypoint.
 // It asks the corresponding resource handler to remove the reference from each attached resource,
 // then deletes the attachment row, and finally deletes the physical file.
-func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID) error {
+func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "DeleteFile")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)

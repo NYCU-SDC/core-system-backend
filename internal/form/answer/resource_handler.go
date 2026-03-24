@@ -57,7 +57,8 @@ func (h *FileResourceHandler) RemoveFileReference(ctx context.Context, fileID uu
 	}
 
 	var uploadAnswer shared.UploadFileAnswer
-	if err := json.Unmarshal(answer.Value, &uploadAnswer); err != nil {
+	err = json.Unmarshal(answer.Value, &uploadAnswer)
+	if err != nil {
 		logger.Error("failed to unmarshal upload_file answer during file reference removal",
 			zap.String("answerID", resourceID.String()),
 			zap.String("fileID", fileID.String()),
