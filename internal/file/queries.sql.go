@@ -198,6 +198,34 @@ func (q *Queries) GetAll(ctx context.Context, arg GetAllParams) ([]GetAllRow, er
 	return items, nil
 }
 
+const getAttachmentByFileAndResource = `-- name: GetAttachmentByFileAndResource :one
+SELECT id, file_id, resource_type, resource_id, created_by, created_at
+FROM file_attachments
+WHERE file_id = $1
+  AND resource_type = $2
+  AND resource_id = $3
+`
+
+type GetAttachmentByFileAndResourceParams struct {
+	FileID       uuid.UUID
+	ResourceType ResourceType
+	ResourceID   uuid.UUID
+}
+
+func (q *Queries) GetAttachmentByFileAndResource(ctx context.Context, arg GetAttachmentByFileAndResourceParams) (FileAttachment, error) {
+	row := q.db.QueryRow(ctx, getAttachmentByFileAndResource, arg.FileID, arg.ResourceType, arg.ResourceID)
+	var i FileAttachment
+	err := row.Scan(
+		&i.ID,
+		&i.FileID,
+		&i.ResourceType,
+		&i.ResourceID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getAttachmentByID = `-- name: GetAttachmentByID :one
 SELECT id, file_id, resource_type, resource_id, created_by, created_at FROM file_attachments WHERE id = $1
 `

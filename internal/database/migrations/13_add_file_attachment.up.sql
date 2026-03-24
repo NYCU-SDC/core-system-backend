@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS file_attachments (
     resource_type resource_type NOT NULL,
     resource_id UUID NOT NULL,
     created_by UUID,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(file_id, resource_type, resource_id)
     );
 
 CREATE INDEX IF NOT EXISTS idx_file_attachments_file_id ON file_attachments(file_id);

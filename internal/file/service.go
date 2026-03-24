@@ -3,6 +3,7 @@ package file
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -30,6 +32,7 @@ type Querier interface {
 	ListAttachmentsByFileID(ctx context.Context, fileID uuid.UUID) ([]FileAttachment, error)
 	ListAttachmentsByResource(ctx context.Context, arg ListAttachmentsByResourceParams) ([]FileAttachment, error)
 	ExistsAttachmentByFileAndResource(ctx context.Context, arg ExistsAttachmentByFileAndResourceParams) (bool, error)
+	GetAttachmentByFileAndResource(ctx context.Context, arg GetAttachmentByFileAndResourceParams) (FileAttachment, error)
 	GetAttachmentByID(ctx context.Context, id uuid.UUID) (FileAttachment, error)
 	DeleteAttachmentByID(ctx context.Context, id uuid.UUID) error
 	DeleteAttachmentsByFileID(ctx context.Context, fileID uuid.UUID) error
@@ -143,44 +146,7 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 		return FileAttachment{}, internal.ErrFileNotFound
 	}
 
-	existsAttachment, err := s.queries.ExistsAttachmentByFileAndResource(
-		traceCtx,
-		ExistsAttachmentByFileAndResourceParams{
-			FileID:       fileID,
-			ResourceType: resourceType,
-			ResourceID:   resourceID,
-		},
-	)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check attachment existence")
-		span.RecordError(err)
-		return FileAttachment{}, err
-	}
-
-	if existsAttachment {
-		attachments, err := s.queries.ListAttachmentsByResource(traceCtx, ListAttachmentsByResourceParams{
-			ResourceType: resourceType,
-			ResourceID:   resourceID,
-		})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "list attachments by resource")
-			span.RecordError(err)
-			return FileAttachment{}, err
-		}
-
-		for _, att := range attachments {
-			if att.FileID == fileID {
-				return att, nil
-			}
-		}
-
-		return FileAttachment{}, fmt.Errorf(
-			"attachment existence mismatch for file %s resource %s/%s",
-			fileID.String(), resourceType, resourceID.String(),
-		)
-	}
-
-	var pgCreatedBy pgtype.UUID
+	pgCreatedBy := pgtype.UUID{Valid: false}
 	if createdBy != nil {
 		pgCreatedBy = pgtype.UUID{
 			Bytes: *createdBy,
@@ -194,20 +160,42 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 		ResourceID:   resourceID,
 		CreatedBy:    pgCreatedBy,
 	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create attachment")
-		span.RecordError(err)
-		return FileAttachment{}, err
+	if err == nil {
+		logger.Info("file attachment created",
+			zap.String("attachment_id", attachment.ID.String()),
+			zap.String("file_id", attachment.FileID.String()),
+			zap.String("resource_type", string(attachment.ResourceType)),
+			zap.String("resource_id", attachment.ResourceID.String()),
+		)
+		return attachment, nil
 	}
 
-	logger.Info("file attachment created",
-		zap.String("attachment_id", attachment.ID.String()),
-		zap.String("file_id", attachment.FileID.String()),
-		zap.String("resource_type", string(attachment.ResourceType)),
-		zap.String("resource_id", attachment.ResourceID.String()),
-	)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		existing, getErr := s.queries.GetAttachmentByFileAndResource(traceCtx, GetAttachmentByFileAndResourceParams{
+			FileID:       fileID,
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+		})
+		if getErr != nil {
+			getErr = databaseutil.WrapDBError(getErr, logger, "get existing attachment after unique violation")
+			span.RecordError(getErr)
+			return FileAttachment{}, getErr
+		}
 
-	return attachment, nil
+		logger.Info("file attachment already exists, returning existing record",
+			zap.String("attachment_id", existing.ID.String()),
+			zap.String("file_id", existing.FileID.String()),
+			zap.String("resource_type", string(existing.ResourceType)),
+			zap.String("resource_id", existing.ResourceID.String()),
+		)
+		return existing, nil
+	}
+
+	err = databaseutil.WrapDBError(err, logger, "create attachment")
+	span.RecordError(err)
+	return FileAttachment{}, err
+
 }
 
 // SaveFileForResource saves the file first, then creates the attachment

@@ -51,6 +51,13 @@ SELECT EXISTS(
     WHERE file_id = $1 AND resource_type = $2 AND resource_id = $3
 );
 
+-- name: GetAttachmentByFileAndResource :one
+SELECT *
+FROM file_attachments
+WHERE file_id = $1
+  AND resource_type = $2
+  AND resource_id = $3;
+
 -- name: DeleteAttachmentsByFileID :exec
 DELETE FROM file_attachments
 WHERE file_id = $1;
