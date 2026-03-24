@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
@@ -18,21 +17,21 @@ type Service struct {
 	db                    *pgxpool.Pool
 	config                SetupConfig
 	allowedOnboardingList AllowedOnboardingList
-	unitService           unit.Service
+	unitService           *unit.Service
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string) (*Service, error) {
-	var config SetupConfig
+func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, unitService *unit.Service) (*Service, error) {
 	data, err := os.ReadFile(setupPath)
 	if err != nil {
-		//missing setup files is expected, so the process can go on without setup files
-		logger.Warn("Failed to read setup file", zap.String("path", setupPath), zap.Error(err))
-	} else {
-		err = yaml.Unmarshal(data, &config)
-		if err != nil {
-			logger.Error("Failed to parse setup file", zap.String("path", setupPath), zap.Error(err))
-			return nil, fmt.Errorf("failed to parse setup file: %w", err)
-		}
+		logger.Error("Failed to read setup file", zap.String("path", setupPath), zap.Error(err))
+		return nil, fmt.Errorf("failed to read setup file: %w", err)
+	}
+
+	var config SetupConfig
+	err = yaml.Unmarshal(data, &config)
+	if err != nil {
+		logger.Error("Failed to parse setup file", zap.String("path", setupPath), zap.Error(err))
+		return nil, fmt.Errorf("failed to parse setup file: %w", err)
 	}
 
 	allowedList := make(AllowedOnboardingList)
@@ -47,6 +46,7 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string) (*Servic
 		db:                    db,
 		config:                config,
 		allowedOnboardingList: allowedList,
+		unitService:           unitService,
 	}
 
 	logger.Info("NewService proccess done", zap.Int("allowed_onboarding_count", len(allowedList)))
@@ -54,16 +54,29 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string) (*Servic
 	return service, nil
 }
 
-func (s *Service) Setup(ctx context.Context) error {
-	metadata := []byte{}
-	currentUserID := uuid.UUID{}
+func (s *Service) Setup(ctx context.Context, logger *zap.Logger) error {
+	adminCount := make(map[string]int)
+	for _, user := range s.config.Users {
+		for _, member := range user.OrgMember {
+			if member.OrgRole == "admin" {
+				adminCount[member.Slug]++
+			}
+		}
+	}
 	for _, org := range s.config.Organizations {
-		_, err := s.unitService.CreateOrganization(ctx, org.Name, org.Description, org.Slug, currentUserID, metadata)
+		if adminCount[org.Slug] < 1 {
+			s.logger.Error("The organization does not have the admin role", zap.String("org_name", org.Name))
+			return fmt.Errorf("The organization does not have the admin role", zap.String("org_name", org.Name))
+		}
+	}
+	for _, org := range s.config.Organizations {
+		_, err := s.unitService.CreateOrganization(ctx, org.Name, org.Description, org.Slug)
 		if err != nil {
 			s.logger.Error("Failed to initialize organization", zap.String("org_name", org.Name), zap.Error(err))
 			return err
 		}
 	}
+	logger.Info("Successfully initialized organizations")
 	return nil
 }
 

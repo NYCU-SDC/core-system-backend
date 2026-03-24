@@ -137,10 +137,6 @@ func main() {
 
 	validator := internal.NewValidator()
 	problemWriter := internal.NewProblemWriter()
-	_, err = setup.NewService(logger, dbPool, cfg.SetupPath)
-	if err != nil {
-		logger.Fatal("Failed to setup", zap.Error(err))
-	}
 
 	// Init Default Role
 	user.InitDefaultGlobalRole(cfg.DefaultGlobalRoles)
@@ -165,6 +161,14 @@ func main() {
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
+	setupService, err := setup.NewService(logger, dbPool, cfg.SetupPath, unitService)
+	if err != nil {
+		logger.Fatal("Failed to load setup config", zap.Error(err))
+	}
+	err = setupService.Setup(context.Background(), logger)
+	if err != nil {
+		logger.Fatal("Failed to setup", zap.Error(err))
+	}
 	// ============================================
 	// Handler
 	// ============================================

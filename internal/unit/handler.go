@@ -23,7 +23,8 @@ import (
 )
 
 type Store interface {
-	CreateOrganization(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
+	CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
+	CreateOrganization(ctx context.Context, name string, description string, slug string) (Unit, error)
 	CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
@@ -275,7 +276,7 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdOrg, err := h.store.CreateOrganization(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
+	createdOrg, err := h.store.CreateOrganizationWithCurrentUserID(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create org: %w", err), logger)
 		return

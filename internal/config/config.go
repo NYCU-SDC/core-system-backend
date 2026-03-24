@@ -45,8 +45,8 @@ type Config struct {
 	DefaultGlobalRoles  string `yaml:"default_global_roles" envconfig:"DEFAULT_GLOBAL_ROLES"`
 	DefaultOrgRoles     string `yaml:"default_org_roles" envconfig:"DEFAULT_ORG_ROLES"`
 
-	SetupPath        string `yaml:"setup_path" envconfig:"SETUP_PATH"`
-  AccessTokenExpiration  time.Duration `yaml:"-"`
+	SetupPath              string        `yaml:"setup_path" envconfig:"SETUP_PATH"`
+	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
 }
 
@@ -146,7 +146,7 @@ func Load() (Config, *LogBuffer) {
 		AllowOnboardingList:       "",
 		DefaultGlobalRoles:        "",
 		DefaultOrgRoles:           "",
-    SetupPath:                 "setup.yaml",
+		SetupPath:                 "setup.yaml",
 	}
 
 	var err error
@@ -231,7 +231,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		AllowOnboardingList: os.Getenv("ALLOW_ONBOARDING_LIST"),
 		DefaultGlobalRoles:  os.Getenv("DEFAULT_GLOBAL_ROLES"),
 		DefaultOrgRoles:     os.Getenv("DEFAULT_ORG_ROLES"),
-    SetupPath:           os.Getenv("SETUP_PATH"),
+		SetupPath:           os.Getenv("SETUP_PATH"),
 	}
 
 	return configutil.Merge[Config](config, envConfig)
@@ -256,7 +256,7 @@ func FromFlags(config *Config) (*Config, error) {
 	flag.StringVar(&flagConfig.NYCUOauth.ClientID, "nycu_oauth_client_id", "", "NYCU OAuth client ID")
 	flag.StringVar(&flagConfig.NYCUOauth.ClientSecret, "nycu_oauth_client_secret", "", "NYCU OAuth client secret")
 	flag.StringVar(&flagConfig.AllowOnboardingList, "allow_onboarding_list", "", "Allowed list of emails for onboarding")
-  flag.StringVar(&flagConfig.SetupPath, "setup_path", "", "Setup path")
+	flag.StringVar(&flagConfig.SetupPath, "setup_path", "", "Setup path")
 	flag.Parse()
 
 	return configutil.Merge[Config](config, flagConfig)
