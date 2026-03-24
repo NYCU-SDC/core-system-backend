@@ -66,7 +66,7 @@ func (s *Service) Setup(ctx context.Context, logger *zap.Logger) error {
 	for _, org := range s.config.Organizations {
 		if adminCount[org.Slug] < 1 {
 			s.logger.Error("The organization does not have the admin role", zap.String("org_name", org.Name))
-			return fmt.Errorf("The organization does not have the admin role", zap.String("org_name", org.Name))
+			return fmt.Errorf("the organization %s does not have the admin role", org.Name)
 		}
 	}
 	for _, org := range s.config.Organizations {
