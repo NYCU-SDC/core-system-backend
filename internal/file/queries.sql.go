@@ -404,3 +404,16 @@ func (q *Queries) ListAttachmentsByResource(ctx context.Context, arg ListAttachm
 	}
 	return items, nil
 }
+
+const lockFileByID = `-- name: LockFileByID :one
+SELECT id
+FROM files
+WHERE id = $1
+FOR UPDATE
+`
+
+func (q *Queries) LockFileByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockFileByID, id)
+	err := row.Scan(&id)
+	return id, err
+}

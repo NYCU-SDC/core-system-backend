@@ -61,3 +61,9 @@ WHERE file_id = $1
 -- name: DeleteAttachmentsByFileID :exec
 DELETE FROM file_attachments
 WHERE file_id = $1;
+
+-- name: LockFileByID :one
+SELECT id
+FROM files
+WHERE id = $1
+FOR UPDATE;

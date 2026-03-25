@@ -12,6 +12,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
@@ -26,6 +27,7 @@ type Querier interface {
 	GetByUploadedBy(ctx context.Context, uploadedBy pgtype.UUID) ([]GetByUploadedByRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
+	LockFileByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetAll(ctx context.Context, arg GetAllParams) ([]GetAllRow, error)
 	Count(ctx context.Context) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (FileAttachment, error)
@@ -36,15 +38,21 @@ type Querier interface {
 	GetAttachmentByID(ctx context.Context, id uuid.UUID) (FileAttachment, error)
 	DeleteAttachmentByID(ctx context.Context, id uuid.UUID) error
 	DeleteAttachmentsByFileID(ctx context.Context, fileID uuid.UUID) error
+	WithTx(tx pgx.Tx) *Queries
+}
+
+type TxBeginner interface {
+	BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error)
 }
 
 type ResourceHandler interface {
 	ResourceType() ResourceType
-	RemoveFileReference(ctx context.Context, fileID uuid.UUID, resourceID uuid.UUID) error
+	RemoveFileReference(ctx context.Context, q Querier, fileID uuid.UUID, resourceID uuid.UUID) error
 }
 
 type Service struct {
 	logger           *zap.Logger
+	db               DBTX
 	queries          Querier
 	tracer           trace.Tracer
 	validator        *Validator
@@ -59,6 +67,7 @@ func NewService(logger *zap.Logger, db DBTX, handlers ...ResourceHandler) *Servi
 
 	return &Service{
 		logger:           logger,
+		db:               db,
 		queries:          New(db),
 		tracer:           otel.Tracer("file/service"),
 		validator:        NewValidator(),
@@ -136,14 +145,46 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.ExistsByID(traceCtx, fileID)
+	var (
+		tx         pgx.Tx
+		err        error
+		needCommit bool
+	)
+
+	existingTx, ok := s.db.(pgx.Tx)
+	if ok {
+		tx = existingTx
+	} else {
+		beginner, ok := s.db.(TxBeginner)
+		if !ok {
+			return FileAttachment{}, fmt.Errorf("db does not support transactions")
+		}
+		tx, err = beginner.BeginTx(traceCtx, pgx.TxOptions{})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "begin tx for create attachment")
+			span.RecordError(err)
+			return FileAttachment{}, err
+		}
+		needCommit = true
+
+		defer func() {
+			err := tx.Rollback(traceCtx)
+			if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+				logger.Error("rollback failed", zap.Error(err))
+			}
+		}()
+	}
+
+	qtx := s.queries.WithTx(tx)
+
+	_, err = qtx.LockFileByID(traceCtx, fileID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check file existence")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return FileAttachment{}, internal.ErrFileNotFound
+		}
+		err = databaseutil.WrapDBError(err, logger, "lock file before create attachment")
 		span.RecordError(err)
 		return FileAttachment{}, err
-	}
-	if !exists {
-		return FileAttachment{}, internal.ErrFileNotFound
 	}
 
 	pgCreatedBy := pgtype.UUID{Valid: false}
@@ -154,13 +195,22 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 		}
 	}
 
-	attachment, err := s.queries.CreateAttachment(traceCtx, CreateAttachmentParams{
+	attachment, err := qtx.CreateAttachment(traceCtx, CreateAttachmentParams{
 		FileID:       fileID,
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		CreatedBy:    pgCreatedBy,
 	})
 	if err == nil {
+		if needCommit {
+			err := tx.Commit(traceCtx)
+			if err != nil {
+				err = databaseutil.WrapDBError(err, logger, "commit create attachment tx")
+				span.RecordError(err)
+				return FileAttachment{}, err
+			}
+		}
+
 		logger.Info("file attachment created",
 			zap.String("attachment_id", attachment.ID.String()),
 			zap.String("file_id", attachment.FileID.String()),
@@ -172,7 +222,7 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		existing, getErr := s.queries.GetAttachmentByFileAndResource(traceCtx, GetAttachmentByFileAndResourceParams{
+		existing, getErr := qtx.GetAttachmentByFileAndResource(traceCtx, GetAttachmentByFileAndResourceParams{
 			FileID:       fileID,
 			ResourceType: resourceType,
 			ResourceID:   resourceID,
@@ -183,19 +233,21 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 			return FileAttachment{}, getErr
 		}
 
-		logger.Info("file attachment already exists, returning existing record",
-			zap.String("attachment_id", existing.ID.String()),
-			zap.String("file_id", existing.FileID.String()),
-			zap.String("resource_type", string(existing.ResourceType)),
-			zap.String("resource_id", existing.ResourceID.String()),
-		)
+		if needCommit {
+			err := tx.Commit(traceCtx)
+			if err != nil {
+				err = databaseutil.WrapDBError(err, logger, "commit create attachment tx")
+				span.RecordError(err)
+				return FileAttachment{}, err
+			}
+		}
+
 		return existing, nil
 	}
 
 	err = databaseutil.WrapDBError(err, logger, "create attachment")
 	span.RecordError(err)
 	return FileAttachment{}, err
-
 }
 
 // SaveFileForResource saves the file first, then creates the attachment
@@ -308,7 +360,6 @@ func (s *Service) DeleteAttachmentByID(ctx context.Context, attachmentID uuid.UU
 }
 
 // DeletePhysicalFile unconditionally deletes the file row.
-// Most callers should prefer DeleteFile.
 func (s *Service) DeletePhysicalFile(ctx context.Context, fileID uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "DeletePhysicalFile")
 	defer span.End()
@@ -336,17 +387,49 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.ExistsByID(traceCtx, fileID)
+	var (
+		tx         pgx.Tx
+		err        error
+		needCommit bool
+	)
+
+	existingTx, ok := s.db.(pgx.Tx)
+	if ok {
+		tx = existingTx
+	} else {
+		beginner, ok := s.db.(TxBeginner)
+		if !ok {
+			return fmt.Errorf("db does not support transactions")
+		}
+		tx, err = beginner.BeginTx(traceCtx, pgx.TxOptions{})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "begin tx")
+			span.RecordError(err)
+			return err
+		}
+		needCommit = true
+
+		defer func() {
+			err := tx.Rollback(traceCtx)
+			if err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+				logger.Error("rollback failed", zap.Error(err))
+			}
+		}()
+	}
+
+	qtx := s.queries.WithTx(tx)
+
+	_, err = qtx.LockFileByID(traceCtx, fileID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check file existence before delete")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return internal.ErrFileNotFound
+		}
+		err = databaseutil.WrapDBError(err, logger, "lock file before delete")
 		span.RecordError(err)
 		return err
 	}
-	if !exists {
-		return internal.ErrFileNotFound
-	}
 
-	attachments, err := s.queries.ListAttachmentsByFileID(traceCtx, fileID)
+	attachments, err := qtx.ListAttachmentsByFileID(traceCtx, fileID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list attachments before delete file")
 		span.RecordError(err)
@@ -361,7 +444,7 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 			return err
 		}
 
-		if err := handler.RemoveFileReference(traceCtx, fileID, att.ResourceID); err != nil {
+		if err := handler.RemoveFileReference(traceCtx, qtx, fileID, att.ResourceID); err != nil {
 			err = fmt.Errorf(
 				"remove file reference from resource type %s resource id %s: %w",
 				att.ResourceType,
@@ -372,16 +455,27 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 			return err
 		}
 
-		if err := s.queries.DeleteAttachmentByID(traceCtx, att.ID); err != nil {
+		if err := qtx.DeleteAttachmentByID(traceCtx, att.ID); err != nil {
 			err = databaseutil.WrapDBError(err, logger, "delete attachment after removing resource reference")
 			span.RecordError(err)
 			return err
 		}
 	}
 
-	if err := s.DeletePhysicalFile(traceCtx, fileID); err != nil {
+	err = qtx.Delete(traceCtx, fileID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "delete file row")
 		span.RecordError(err)
 		return err
+	}
+
+	if needCommit {
+		err := tx.Commit(traceCtx)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "commit tx")
+			span.RecordError(err)
+			return err
+		}
 	}
 
 	logger.Info("file deleted successfully through orchestration",
