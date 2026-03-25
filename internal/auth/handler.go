@@ -33,7 +33,7 @@ type JWTIssuer interface {
 	NewState(ctx context.Context, service, environment, callbackURL, redirectURL string) (string, error)
 	NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string) (string, error)
 	Parse(ctx context.Context, tokenString string) (user.User, error)
-	ParseState(ctx context.Context, tokenString string) (string, error)
+	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
 	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
@@ -60,9 +60,9 @@ type OAuthProvider interface {
 }
 
 type callBackInfo struct {
-	code       string
-	oauthError string
-	redirectTo string
+	code        string
+	oauthError  string
+	proxyClaims *jwt.OauthProxyClaims
 }
 
 type Handler struct {
@@ -159,6 +159,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Redirect URL after successful login
 	redirectURL := r.URL.Query().Get("r")
 
 	// Determine callback URL based on oauth proxy configuration
@@ -172,6 +173,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseForCallback, providerName)
+		logger.Info(callbackURL)
 	} else {
 		if h.devMode {
 			customBase := r.URL.Query().Get("base")
@@ -220,7 +222,8 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := callbackInfo.code
-	redirectTo := callbackInfo.redirectTo
+	redirectTo := callbackInfo.proxyClaims.RedirectURL
+	callbackURL := callbackInfo.proxyClaims.CallbackURL
 	oauthError := callbackInfo.oauthError
 
 	if oauthError != "" {
@@ -228,10 +231,37 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := provider.Exchange(traceCtx, code)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
-		return
+	var token *oauth2.Token
+	if h.oauthProxyBaseURL != "" {
+		if callbackURL == "" {
+			config := provider.ConfigWithCustomRedirectURL(callbackURL)
+			token, err = config.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
+		} else {
+			token, err = provider.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
+		}
+	} else {
+		if callbackURL != "" {
+			config := provider.ConfigWithCustomRedirectURL(callbackURL)
+			token, err = config.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
+		} else {
+			token, err = provider.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
+		}
 	}
 
 	userInfo, auth, email, err := provider.GetUserInfo(traceCtx, token)
@@ -321,15 +351,15 @@ func (h *Handler) getCallBackInfo(ctx context.Context, url *url.URL) (callBackIn
 	state := url.Query().Get("state")
 	oauthError := url.Query().Get("error")
 
-	redirectURL, err := h.jwtIssuer.ParseState(ctx, state)
+	oauthProxyClaims, err := h.jwtIssuer.ParseState(ctx, state)
 	if err != nil {
 		return callBackInfo{}, err
 	}
 
 	return callBackInfo{
-		code:       code,
-		oauthError: oauthError,
-		redirectTo: redirectURL,
+		code:        code,
+		oauthError:  oauthError,
+		proxyClaims: oauthProxyClaims,
 	}, nil
 }
 

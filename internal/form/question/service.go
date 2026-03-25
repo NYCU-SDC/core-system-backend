@@ -1,6 +1,7 @@
 package question
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/shared"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -48,7 +49,7 @@ type Answerable interface {
 	DisplayValue(rawValue json.RawMessage) (string, error)
 
 	// DecodeRequest decodes the raw JSON value from the request into the appropriate Go type based on the question type.
-	DecodeRequest(rawValue json.RawMessage) (any, error)
+	DecodeRequest(param shared.AnswerParam) (any, error)
 
 	// DecodeStorage decodes the raw JSON value from the database into the appropriate Go type based on the question type.
 	DecodeStorage(rawValue json.RawMessage) (any, error)

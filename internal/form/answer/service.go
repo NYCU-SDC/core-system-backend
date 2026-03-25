@@ -48,7 +48,7 @@ type Answerable interface {
 	DisplayValue(rawValue json.RawMessage) (string, error)
 
 	// DecodeRequest decodes the raw JSON value from the request into the appropriate Go type based on the question type.
-	DecodeRequest(rawValue json.RawMessage) (any, error)
+	DecodeRequest(param shared.AnswerParam) (any, error)
 
 	// DecodeStorage decodes the raw JSON value from the database into the appropriate Go type based on the question type.
 	DecodeStorage(rawValue json.RawMessage) (any, error)
@@ -238,7 +238,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 		questionIDs[i] = questionID
 
-		encodedValue, err := pair.Answerable.DecodeRequest(pair.AnswerParam.Value)
+		encodedValue, err := pair.Answerable.DecodeRequest(pair.AnswerParam)
 		if err != nil {
 			logger.Error("failed to encode answer value for storage", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
 			span.RecordError(fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err))
