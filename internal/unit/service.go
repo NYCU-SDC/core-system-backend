@@ -54,7 +54,7 @@ type Service struct {
 	logger      *zap.Logger
 	queries     Querier
 	tracer      trace.Tracer
-	tenantStore tenantStore
+	TenantStore tenantStore
 }
 
 type Organization struct {
@@ -91,7 +91,7 @@ func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 		logger:      logger,
 		queries:     New(db),
 		tracer:      otel.Tracer("unit/service"),
-		tenantStore: tenantStore,
+		TenantStore: tenantStore,
 	}
 }
 
@@ -100,7 +100,7 @@ func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name 
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.tenantStore.SlugExists(traceCtx, slug)
+	exists, err := s.TenantStore.SlugExists(traceCtx, slug)
 	if err != nil {
 		span.RecordError(err)
 		return Unit{}, err
@@ -124,7 +124,7 @@ func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name 
 		return Unit{}, err
 	}
 
-	_, err = s.tenantStore.Create(traceCtx, org.ID, currentUserID, slug)
+	_, err = s.TenantStore.Create(traceCtx, org.ID, currentUserID, slug)
 	if err != nil {
 		span.RecordError(err)
 		return Unit{}, err
@@ -145,7 +145,7 @@ func (s *Service) CreateUnit(ctx context.Context, name string, description strin
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	_, orgID, err := s.tenantStore.GetSlugStatus(traceCtx, slug)
+	_, orgID, err := s.TenantStore.GetSlugStatus(traceCtx, slug)
 	if err != nil {
 		span.RecordError(err)
 		return Unit{}, err
@@ -180,7 +180,7 @@ func (s *Service) CreateOrganization(ctx context.Context, name string, descripti
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.tenantStore.SlugExists(traceCtx, slug)
+	exists, err := s.TenantStore.SlugExists(traceCtx, slug)
 	if err != nil {
 		span.RecordError(err)
 		return Unit{}, err
@@ -198,6 +198,12 @@ func (s *Service) CreateOrganization(ctx context.Context, name string, descripti
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create organization")
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
+	_, err = s.TenantStore.CreateWithoutOwner(traceCtx, org.ID, slug)
+	if err != nil {
 		span.RecordError(err)
 		return Unit{}, err
 	}
@@ -367,7 +373,7 @@ func (s *Service) UpdateOrg(ctx context.Context, originalSlug string, slug strin
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	_, orgID, err := s.tenantStore.GetSlugStatus(traceCtx, originalSlug)
+	_, orgID, err := s.TenantStore.GetSlugStatus(traceCtx, originalSlug)
 	if err != nil {
 		span.RecordError(err)
 		return Unit{}, err
@@ -380,7 +386,7 @@ func (s *Service) UpdateOrg(ctx context.Context, originalSlug string, slug strin
 			return Unit{}, internal.ErrOrgSlugInvalid
 		}
 
-		exists, err := s.tenantStore.SlugExists(traceCtx, slug)
+		exists, err := s.TenantStore.SlugExists(traceCtx, slug)
 		if err != nil {
 			span.RecordError(err)
 			return Unit{}, err
@@ -400,7 +406,7 @@ func (s *Service) UpdateOrg(ctx context.Context, originalSlug string, slug strin
 		tenantDbStrategy = "isolated"
 	}
 
-	_, err = s.tenantStore.Update(traceCtx, orgID, slug, tenantDbStrategy)
+	_, err = s.TenantStore.Update(traceCtx, orgID, slug, tenantDbStrategy)
 	if err != nil {
 		span.RecordError(err)
 		return Unit{}, err

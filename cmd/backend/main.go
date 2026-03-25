@@ -165,7 +165,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to load setup config", zap.Error(err))
 	}
-	err = setupService.Setup(context.Background(), logger)
+	err = setupService.Setup(context.Background())
 	if err != nil {
 		logger.Fatal("Failed to setup", zap.Error(err))
 	}

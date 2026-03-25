@@ -54,7 +54,7 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, unitServ
 	return service, nil
 }
 
-func (s *Service) Setup(ctx context.Context, logger *zap.Logger) error {
+func (s *Service) Setup(ctx context.Context) error {
 	adminCount := make(map[string]int)
 	for _, user := range s.config.Users {
 		for _, member := range user.OrgMember {
@@ -63,20 +63,30 @@ func (s *Service) Setup(ctx context.Context, logger *zap.Logger) error {
 			}
 		}
 	}
+
 	for _, org := range s.config.Organizations {
 		if adminCount[org.Slug] < 1 {
 			s.logger.Error("The organization does not have the admin role", zap.String("org_name", org.Name))
 			return fmt.Errorf("the organization %s does not have the admin role", org.Name)
 		}
 	}
+
 	for _, org := range s.config.Organizations {
-		_, err := s.unitService.CreateOrganization(ctx, org.Name, org.Description, org.Slug)
+		exist, err := s.unitService.TenantStore.SlugExists(ctx, org.Slug)
 		if err != nil {
-			s.logger.Error("Failed to initialize organization", zap.String("org_name", org.Name), zap.Error(err))
+			s.logger.Error("Failed to check if the organization exists", zap.Error(err))
 			return err
 		}
+		if !exist {
+			_, err := s.unitService.CreateOrganization(ctx, org.Name, org.Description, org.Slug)
+			if err != nil {
+				s.logger.Error("Failed to initialize organization", zap.String("org_name", org.Name), zap.Error(err))
+				return err
+			}
+		}
 	}
-	logger.Info("Successfully initialized organizations")
+
+	s.logger.Info("Successfully initialized organizations")
 	return nil
 }
 

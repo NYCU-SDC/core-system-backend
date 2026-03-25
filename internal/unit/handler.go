@@ -49,6 +49,7 @@ type formSubmitStore interface {
 type tenantStore interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 	Create(ctx context.Context, id uuid.UUID, ownerID uuid.UUID, slug string) (tenant.Tenant, error)
+	CreateWithoutOwner(ctx context.Context, id uuid.UUID, slug string) (tenant.Tenant, error)
 	Update(ctx context.Context, id uuid.UUID, slug string, dbStrategy tenant.DbStrategy) (tenant.Tenant, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 }
