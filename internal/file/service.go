@@ -47,7 +47,7 @@ type TxBeginner interface {
 
 type ResourceHandler interface {
 	ResourceType() ResourceType
-	RemoveFileReference(ctx context.Context, q Querier, fileID uuid.UUID, resourceID uuid.UUID) error
+	RemoveFileReference(ctx context.Context, fileID uuid.UUID, resourceID uuid.UUID) error
 }
 
 type Service struct {
@@ -159,6 +159,7 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 		if !ok {
 			return FileAttachment{}, fmt.Errorf("db does not support transactions")
 		}
+
 		tx, err = beginner.BeginTx(traceCtx, pgx.TxOptions{})
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "begin tx for create attachment")
@@ -242,6 +243,12 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 			}
 		}
 
+		logger.Info("file attachment already exists, returning existing record",
+			zap.String("attachment_id", existing.ID.String()),
+			zap.String("file_id", existing.FileID.String()),
+			zap.String("resource_type", string(existing.ResourceType)),
+			zap.String("resource_id", existing.ResourceID.String()),
+		)
 		return existing, nil
 	}
 
@@ -444,7 +451,7 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 			return err
 		}
 
-		if err := handler.RemoveFileReference(traceCtx, qtx, fileID, att.ResourceID); err != nil {
+		if err := handler.RemoveFileReference(traceCtx, fileID, att.ResourceID); err != nil {
 			err = fmt.Errorf(
 				"remove file reference from resource type %s resource id %s: %w",
 				att.ResourceType,
