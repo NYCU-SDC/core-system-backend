@@ -32,7 +32,7 @@ type Validator interface {
 	ValidateUpdateNodeIDs(ctx context.Context, currentWorkflow []byte, newWorkflow []byte) error
 }
 
-// nodePayload is the canonical shape for workflow node payloads.
+// NodePayload is the canonical shape for workflow node payloads.
 // It is shared by the validator and other workflow code.
 type NodePayload struct {
 	// Use pointers so `validate:"required"` can distinguish between:
