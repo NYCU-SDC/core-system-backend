@@ -16,7 +16,6 @@ import (
 	"NYCU-SDC/core-system-backend/internal/user"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
-	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -158,7 +157,8 @@ func NewHandler(
 func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetQuestionResponse")
 	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
+	logger := internal.WithContext(traceCtx, h.logger)
+	payloadLogger := withEvent(logger, eventTypeHTTPPayload)
 
 	// Parse responseId from path
 	responseIDStr := r.PathValue("responseId")
@@ -208,7 +208,7 @@ func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 
 	response, err := h.ToResponse(traceCtx, answer, answerable, responseID)
 	if err != nil {
-		logger.Error("Failed to convert answer to response", zap.Error(err))
+		payloadLogger.Error("failed to convert answer to response", zap.Error(err))
 		span.RecordError(err)
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -222,7 +222,9 @@ func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "UpdateFormResponse")
 	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
+	logger := internal.WithContext(traceCtx, h.logger)
+	payloadLogger := withEvent(logger, eventTypeHTTPPayload)
+	bizLogicLogger := withEvent(logger, eventTypeBizLogic)
 
 	// Parse responseId from path
 	responseIDStr := r.PathValue("responseId")
@@ -301,7 +303,16 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 
 		sectionIDStr := answerable.Question().SectionID.String()
 		if !sectionActiveMap[sectionIDStr] {
-			logger.Warn("attempted to answer question in skipped section", zap.String("questionID", answerRequest.QuestionID), zap.String("sectionID", sectionIDStr))
+			bizLogicLogger.Warn(
+				"Decision made: question_in_skipped_section, action: reject_answer",
+				zap.String("logic.category", "decision_point"),
+				zap.String("logic.reason", "question_in_skipped_section"),
+				zap.String("logic.action", "reject_answer"),
+				zap.Any("logic.context", map[string]string{
+					"question_id": answerRequest.QuestionID,
+					"section_id":  sectionIDStr,
+				}),
+			)
 			//h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
 			//return
 		}
@@ -326,7 +337,15 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, answerRequest := range req.Answers {
 		if typeMap[answerRequest.QuestionID] == question.QuestionTypeUploadFile {
-			logger.Warn("attempted to update upload_file question via PATCH answers", zap.String("questionID", answerRequest.QuestionID))
+			bizLogicLogger.Warn(
+				"Decision made: upload_file_requires_file_endpoint, action: reject_patch",
+				zap.String("logic.category", "decision_point"),
+				zap.String("logic.reason", "upload_file_requires_file_endpoint"),
+				zap.String("logic.action", "reject_patch"),
+				zap.Any("logic.context", map[string]string{
+					"question_id": answerRequest.QuestionID,
+				}),
+			)
 			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("question %s is of type upload_file and must be answered via the file upload endpoint: %w", answerRequest.QuestionID, internal.ErrQuestionTypeMismatch), logger)
 			return
 		}
@@ -359,7 +378,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	for i, answer := range answers {
 		response, err := h.ToResponse(traceCtx, answer, answerableList[i], responseID)
 		if err != nil {
-			logger.Error("Failed to convert answer to response", zap.Error(err))
+			payloadLogger.Error("failed to convert answer to response", zap.Error(err))
 			span.RecordError(err)
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
@@ -380,7 +399,9 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "ConnectOAuthAccountStart")
 	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
+	logger := internal.WithContext(traceCtx, h.logger)
+	bizLogicLogger := withEvent(logger, eventTypeBizLogic)
+	payloadLogger := withEvent(logger, eventTypeHTTPPayload)
 
 	// Parse responseId from path
 	responseIDStr := r.PathValue("responseId")
@@ -431,7 +452,7 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 
 	providerName, parseErr := question.ExtractOauthConnect(q.Metadata)
 	if parseErr != nil {
-		logger.Error("failed to extract oauth provider from question metadata", zap.String("questionID", questionID.String()), zap.Error(parseErr))
+		withEvent(logger, eventTypeUtilCodec).Error("failed to extract oauth provider from question metadata", zap.String("questionID", questionID.String()), zap.Error(parseErr))
 		span.RecordError(parseErr)
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
 		return
@@ -439,7 +460,16 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 
 	provider, ok := h.oauthProvider[string(providerName)]
 	if !ok {
-		logger.Error("oauth provider not found for question", zap.String("questionID", questionID.String()), zap.String("providerName", string(providerName)))
+		bizLogicLogger.Warn(
+			"Decision made: oauth_provider_not_found, action: reject_oauth_start",
+			zap.String("logic.category", "decision_point"),
+			zap.String("logic.reason", "oauth_provider_not_found"),
+			zap.String("logic.action", "reject_oauth_start"),
+			zap.Any("logic.context", map[string]string{
+				"question_id":   questionID.String(),
+				"provider_name": string(providerName),
+			}),
+		)
 		span.RecordError(fmt.Errorf("oauth provider not found for question: %s", providerName))
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %s", internal.ErrProviderNotFound, providerName), logger)
 		return
@@ -455,7 +485,7 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 	// Generate a signed state JWT carrying the form context
 	state, err := h.jwtIssuer.NewFormState(traceCtx, callbackURL, responseID, questionID, redirectURL)
 	if err != nil {
-		logger.Error("failed to generate form OAuth state", zap.Error(err))
+		payloadLogger.Error("failed to generate form OAuth state", zap.Error(err))
 		span.RecordError(err)
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrNewStateFailed, err), logger)
 		return
@@ -471,7 +501,8 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "OAuthAnswerCallback")
 	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
+	logger := internal.WithContext(traceCtx, h.logger)
+	payloadLogger := withEvent(logger, eventTypeHTTPPayload)
 
 	providerName := strings.ToLower(r.PathValue("provider"))
 	provider, ok := h.oauthProvider[providerName]
@@ -489,7 +520,7 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 	// Must be done before any redirect so we know where to send the user.
 	_, responseID, questionID, redirectURL, err := h.jwtIssuer.ParseFormState(traceCtx, stateToken)
 	if err != nil {
-		logger.Warn("failed to parse form state JWT", zap.Error(err))
+		withEvent(logger, eventTypeUtilCodec).Warn("failed to parse form state JWT", zap.Error(err))
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: invalid state", internal.ErrInvalidCallbackInfo), logger)
 		return
 	}
@@ -509,14 +540,14 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 
 	// If the provider returned an error (e.g. user denied access), redirect immediately
 	if oauthErr != "" {
-		logger.Warn("OAuth provider returned error", zap.String("error", oauthErr))
+		payloadLogger.Warn("OAuth provider returned error", zap.String("error", oauthErr))
 		span.RecordError(fmt.Errorf("oauth provider error: %s", oauthErr))
 		redirectWithStatus("error", oauthErr)
 		return
 	}
 
 	if code == "" {
-		logger.Warn("OAuth callback missing code parameter")
+		payloadLogger.Warn("OAuth callback missing code parameter")
 		redirectWithStatus("error", "missing_code")
 		return
 	}
@@ -524,7 +555,7 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 	// Exchange authorization code for token
 	token, err := provider.Exchange(traceCtx, code)
 	if err != nil {
-		logger.Error("failed to exchange OAuth code for token", zap.Error(err))
+		payloadLogger.Error("failed to exchange OAuth code for token", zap.Error(err))
 		span.RecordError(err)
 		redirectWithStatus("error", "exchange_failed")
 		return
@@ -533,7 +564,7 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 	// Fetch user info from provider
 	userInfo, authInfo, email, err := provider.GetUserInfo(traceCtx, token)
 	if err != nil {
-		logger.Error("failed to get user info from OAuth provider", zap.Error(err))
+		payloadLogger.Error("failed to get user info from OAuth provider", zap.Error(err))
 		span.RecordError(err)
 		redirectWithStatus("error", "userinfo_failed")
 		return
@@ -542,7 +573,7 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 	// Get formID from responseID (needed by Upsert)
 	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
 	if err != nil {
-		logger.Error("failed to get form ID for response", zap.String("responseID", responseID.String()), zap.Error(err))
+		payloadLogger.Error("failed to get form ID for response", zap.String("responseID", responseID.String()), zap.Error(err))
 		span.RecordError(err)
 		redirectWithStatus("error", "internal_error")
 		return
@@ -557,7 +588,7 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 		AvatarURL:  userInfo.AvatarUrl.String,
 	})
 	if err != nil {
-		logger.Error("failed to marshal OAuthConnectAnswer", zap.Error(err))
+		withEvent(logger, eventTypeUtilCodec).Error("failed to marshal OAuthConnectAnswer", zap.Error(err))
 		span.RecordError(err)
 		redirectWithStatus("error", "internal_error")
 		return
@@ -568,13 +599,13 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 		{QuestionID: questionID.String(), Value: answerValue},
 	})
 	if len(errs) > 0 {
-		logger.Error("failed to upsert OAuth connect answer", zap.Error(errs[0]))
+		payloadLogger.Error("failed to upsert OAuth connect answer", zap.Error(errs[0]))
 		span.RecordError(errs[0])
 		redirectWithStatus("error", "internal_error")
 		return
 	}
 
-	logger.Info("successfully stored OAuth connect answer",
+	payloadLogger.Info("successfully stored OAuth connect answer",
 		zap.String("provider", providerName),
 		zap.String("responseID", responseID.String()),
 		zap.String("questionID", questionID.String()),
@@ -587,7 +618,8 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "UploadQuestionFiles")
 	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
+	logger := internal.WithContext(traceCtx, h.logger)
+	payloadLogger := withEvent(logger, eventTypeHTTPPayload)
 
 	// Parse responseId from path
 	responseIDStr := r.PathValue("responseId")
@@ -653,7 +685,7 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info("successfully uploaded files",
+	payloadLogger.Info("successfully uploaded files",
 		zap.String("responseID", responseID.String()),
 		zap.String("questionID", questionID.String()),
 		zap.Int("fileCount", len(uploadedFiles)),
@@ -667,7 +699,8 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ToResponse(context context.Context, answer Answer, answerable Answerable, responseID uuid.UUID) (Response, error) {
 	traceCtx, span := h.tracer.Start(context, "ToResponse")
 	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
+	logger := internal.WithContext(traceCtx, h.logger)
+	codecLogger := withEvent(logger, eventTypeUtilCodec)
 
 	questionID := answerable.Question().ID
 
@@ -678,14 +711,14 @@ func (h *Handler) ToResponse(context context.Context, answer Answer, answerable 
 
 	valueStruct, err := answerable.DecodeStorage(answer.Value)
 	if err != nil {
-		logger.Error("failed to decode answer value from storage", zap.String("questionID", questionID.String()), zap.Error(err))
+		codecLogger.Error("failed to decode answer value from storage", zap.String("questionID", questionID.String()), zap.Error(err))
 		span.RecordError(err)
 		return Response{}, err
 	}
 
 	payload, err := answerable.EncodeRequest(valueStruct)
 	if err != nil {
-		logger.Error("failed to encode answer value for response", zap.String("questionID", questionID.String()), zap.Error(err))
+		codecLogger.Error("failed to encode answer value for response", zap.String("questionID", questionID.String()), zap.Error(err))
 		span.RecordError(err)
 		return Response{}, err
 	}
