@@ -1,13 +1,13 @@
-package workflow_test
+package workflow
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
-	"NYCU-SDC/core-system-backend/internal/form/workflow"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -17,47 +17,47 @@ import (
 	"go.uber.org/zap"
 )
 
-// mockQuerier is a mock implementation of workflow.Querier interface
+// mockQuerier is a mock implementation of Querier interface
 type mockQuerier struct {
 	mock.Mock
 }
 
-func (m *mockQuerier) Get(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error) {
+func (m *mockQuerier) Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, error) {
 	args := m.Called(ctx, formID)
-	return args.Get(0).(workflow.GetRow), args.Error(1)
+	return args.Get(0).(WorkflowVersion), args.Error(1)
 }
 
-func (m *mockQuerier) Update(ctx context.Context, arg workflow.UpdateParams) (workflow.UpdateRow, error) {
+func (m *mockQuerier) Update(ctx context.Context, arg UpdateParams) (UpdateRow, error) {
 	args := m.Called(ctx, arg)
-	return args.Get(0).(workflow.UpdateRow), args.Error(1)
+	return args.Get(0).(UpdateRow), args.Error(1)
 }
 
-func (m *mockQuerier) CreateNode(ctx context.Context, arg workflow.CreateNodeParams) (workflow.CreateNodeRow, error) {
+func (m *mockQuerier) CreateNode(ctx context.Context, arg CreateNodeParams) (CreateNodeRow, error) {
 	args := m.Called(ctx, arg)
-	return args.Get(0).(workflow.CreateNodeRow), args.Error(1)
+	return args.Get(0).(CreateNodeRow), args.Error(1)
 }
 
-func (m *mockQuerier) DeleteNode(ctx context.Context, arg workflow.DeleteNodeParams) ([]byte, error) {
+func (m *mockQuerier) DeleteNode(ctx context.Context, arg DeleteNodeParams) ([]byte, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).([]byte), args.Error(1)
 }
 
-func (m *mockQuerier) Activate(ctx context.Context, arg workflow.ActivateParams) (workflow.ActivateRow, error) {
+func (m *mockQuerier) Activate(ctx context.Context, arg ActivateParams) (ActivateRow, error) {
 	args := m.Called(ctx, arg)
-	return args.Get(0).(workflow.ActivateRow), args.Error(1)
+	return args.Get(0).(ActivateRow), args.Error(1)
 }
 
-// mockValidator is a mock implementation of workflow.Validator interface
+// mockValidator is a mock implementation of Validator interface
 type mockValidator struct {
 	mock.Mock
 }
 
-func (m *mockValidator) Activate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore workflow.QuestionStore) error {
+func (m *mockValidator) Activate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore QuestionStore) error {
 	args := m.Called(ctx, formID, workflow, questionStore)
 	return args.Error(0)
 }
 
-func (m *mockValidator) Validate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore workflow.QuestionStore) error {
+func (m *mockValidator) Validate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore QuestionStore) error {
 	args := m.Called(ctx, formID, workflow, questionStore)
 	return args.Error(0)
 }
@@ -72,7 +72,7 @@ func (m *mockValidator) ValidateUpdateNodeIDs(ctx context.Context, currentWorkfl
 	return args.Error(0)
 }
 
-// mockQuestionStore is a mock implementation of workflow.QuestionStore for testing
+// mockQuestionStore is a mock implementation of QuestionStore for testing
 type mockQuestionStore struct {
 	questions map[uuid.UUID]question.Answerable
 }
@@ -94,10 +94,14 @@ func (m *mockQuestionStore) ListByFormID(ctx context.Context, formID uuid.UUID) 
 	return result, nil
 }
 
-// createTestService creates a workflow.Service with mocked dependencies
-func createTestService(t *testing.T, logger *zap.Logger, tracer trace.Tracer, mockQuerier *mockQuerier, mockValidator *mockValidator, questionStore workflow.QuestionStore) *workflow.Service {
+func (m *mockQuestionStore) ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error) {
+	return nil, nil
+}
+
+// createTestService creates a Service with mocked dependencies
+func createTestService(t *testing.T, logger *zap.Logger, tracer trace.Tracer, mockQuerier *mockQuerier, mockValidator *mockValidator, questionStore QuestionStore) *Service {
 	t.Helper()
-	return workflow.NewServiceForTesting(logger, tracer, mockQuerier, mockValidator, questionStore)
+	return NewServiceForTesting(logger, tracer, mockQuerier, mockValidator, questionStore)
 }
 
 // createWorkflowJSON marshals nodes to JSON and fails the test on error
@@ -366,6 +370,18 @@ func createWorkflow_ConditionRule(t *testing.T, questionID string) []byte {
 // createWorkflow_ConditionRuleSourceWithQuestionID returns a workflow with condition rule with given source and questionID
 func createWorkflow_ConditionRuleSourceWithQuestionID(t *testing.T, source string, questionID string) []byte {
 	t.Helper()
+	return createWorkflow_ConditionRuleWithPatternAndSource(t, questionID, "yes", source)
+}
+
+// createWorkflow_ConditionRuleWithPattern returns a workflow with condition rule source=choice and the given pattern.
+func createWorkflow_ConditionRuleWithPattern(t *testing.T, questionID string, pattern string) []byte {
+	t.Helper()
+	return createWorkflow_ConditionRuleWithPatternAndSource(t, questionID, pattern, "choice")
+}
+
+// createWorkflow_ConditionRuleWithPatternAndSource returns a workflow with condition rule with given source and pattern.
+func createWorkflow_ConditionRuleWithPatternAndSource(t *testing.T, questionID string, pattern string, source string) []byte {
+	t.Helper()
 	startID := uuid.New()
 	conditionID := uuid.New()
 	endID := uuid.New()
@@ -393,7 +409,7 @@ func createWorkflow_ConditionRuleSourceWithQuestionID(t *testing.T, source strin
 			"conditionRule": map[string]interface{}{
 				"source":   source,
 				"question": questionID,
-				"pattern":  "yes",
+				"pattern":  pattern,
 			},
 		},
 		{
@@ -402,6 +418,29 @@ func createWorkflow_ConditionRuleSourceWithQuestionID(t *testing.T, source strin
 			"label": "End",
 		},
 	})
+}
+
+// createMockAnswerableWithChoiceIDs creates a choice-type question.Answerable with the given choice option IDs (for pattern validation tests).
+func createMockAnswerableWithChoiceIDs(t *testing.T, formID uuid.UUID, questionType question.QuestionType, choiceIDs []uuid.UUID) question.Answerable {
+	t.Helper()
+	require.True(t, question.ContainsType(question.ChoiceTypes, questionType), "questionType must be a choice type")
+	choices := make([]question.Choice, len(choiceIDs))
+	for i, id := range choiceIDs {
+		choices[i] = question.Choice{ID: id, Name: fmt.Sprintf("Option %d", i+1), Description: ""}
+	}
+	metadata, err := json.Marshal(map[string]any{"choice": choices})
+	require.NoError(t, err)
+	q := question.Question{
+		ID:       uuid.New(),
+		Required: false,
+		Type:     questionType,
+		Title:    pgtype.Text{String: "Test Question", Valid: true},
+		Order:    1,
+		Metadata: metadata,
+	}
+	answerable, err := question.NewAnswerable(q, formID)
+	require.NoError(t, err)
+	return answerable
 }
 
 // createMockAnswerable creates a question.Answerable for testing
@@ -570,13 +609,13 @@ func emptyQuestionStore() *mockQuestionStore {
 }
 
 // createWorkflow_ValidWithEmptyStore returns a minimal valid workflow (start -> end) and an empty question store.
-func createWorkflow_ValidWithEmptyStore(t *testing.T) ([]byte, workflow.QuestionStore) {
+func createWorkflow_ValidWithEmptyStore(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()
 	return createWorkflow_SimpleValid(t), emptyQuestionStore()
 }
 
 // createWorkflow_MissingStartNode returns a workflow with only an end node (invalid) and an empty question store.
-func createWorkflow_MissingStartNode(t *testing.T) ([]byte, workflow.QuestionStore) {
+func createWorkflow_MissingStartNode(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()
 	endID := uuid.New()
 	nodes := []map[string]interface{}{
@@ -586,7 +625,7 @@ func createWorkflow_MissingStartNode(t *testing.T) ([]byte, workflow.QuestionSto
 }
 
 // createWorkflow_DuplicateNodeIDs returns a workflow where two nodes share the same ID (invalid) and an empty question store.
-func createWorkflow_DuplicateNodeIDs(t *testing.T) ([]byte, workflow.QuestionStore) {
+func createWorkflow_DuplicateNodeIDs(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()
 	startID := uuid.New()
 	endID := uuid.New()
@@ -598,7 +637,7 @@ func createWorkflow_DuplicateNodeIDs(t *testing.T) ([]byte, workflow.QuestionSto
 }
 
 // createWorkflow_UnreachableNode returns a workflow with an orphan section (unreachable from start) and an empty question store.
-func createWorkflow_UnreachableNode(t *testing.T) ([]byte, workflow.QuestionStore) {
+func createWorkflow_UnreachableNode(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()
 	startID := uuid.New()
 	endID := uuid.New()
@@ -612,20 +651,20 @@ func createWorkflow_UnreachableNode(t *testing.T) ([]byte, workflow.QuestionStor
 }
 
 // createWorkflow_InvalidNextRefWithStore returns a workflow with an invalid next reference and an empty question store.
-func createWorkflow_InvalidNextRefWithStore(t *testing.T) ([]byte, workflow.QuestionStore) {
+func createWorkflow_InvalidNextRefWithStore(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()
 	return createWorkflow_InvalidNextRef(t), emptyQuestionStore()
 }
 
 // createWorkflow_ConditionRuleWithEmptyStore returns a workflow with a condition rule (given questionID as key) and an empty question store.
-func createWorkflow_ConditionRuleWithEmptyStore(t *testing.T, questionID string) ([]byte, workflow.QuestionStore) {
+func createWorkflow_ConditionRuleWithEmptyStore(t *testing.T, questionID string) ([]byte, QuestionStore) {
 	t.Helper()
 	return createWorkflow_ConditionRule(t, questionID), emptyQuestionStore()
 }
 
 // createWorkflow_ConditionNoRule returns a workflow with a condition node without conditionRule
 // (start -> condition -> end). Valid in draft mode.
-func createWorkflow_ConditionNoRule(t *testing.T) ([]byte, workflow.QuestionStore) {
+func createWorkflow_ConditionNoRule(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()
 	startID := uuid.New()
 	conditionID := uuid.New()

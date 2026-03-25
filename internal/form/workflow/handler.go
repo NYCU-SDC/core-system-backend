@@ -21,12 +21,13 @@ import (
 )
 
 type Store interface {
-	Get(ctx context.Context, formID uuid.UUID) (GetRow, error)
-	Update(ctx context.Context, formID uuid.UUID, workflow []byte, userID uuid.UUID) (UpdateRow, error)
+	Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, error)
+	Update(ctx context.Context, formID uuid.UUID, workflow []byte, userID uuid.UUID) (WorkflowVersion, error)
 	CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, userID uuid.UUID) (CreateNodeRow, error)
 	DeleteNode(ctx context.Context, formID uuid.UUID, nodeID uuid.UUID, userID uuid.UUID) ([]byte, error)
-	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (ActivateRow, error)
+	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (WorkflowVersion, error)
 	GetValidationInfo(ctx context.Context, formID uuid.UUID, workflow []byte) ([]ValidationInfo, error)
+	EnrichWorkflowResponse(ctx context.Context, formID uuid.UUID, apiWorkflow []byte) ([]byte, error)
 }
 
 type Handler struct {
@@ -231,8 +232,13 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	apiWorkflow, err = h.store.EnrichWorkflowResponse(traceCtx, formID, apiWorkflow)
+	if err != nil {
+		logger.Warn("failed to enrich workflow labels", zap.Error(err), zap.String("formId", formID.String()))
+	}
+
 	// Check validation status
-	validationInfos, err := h.store.GetValidationInfo(traceCtx, formID, []byte(row.Workflow))
+	validationInfos, err := h.store.GetValidationInfo(traceCtx, formID, apiWorkflow)
 	if err != nil {
 		// Log the error but don't fail the request - return empty info array
 		logger.Warn("failed to validate workflow activation", zap.Error(err), zap.String("formId", formID.String()))
@@ -322,6 +328,11 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to convert workflow to API format: %w", err), logger)
 		return
+	}
+
+	apiWorkflow, err = h.store.EnrichWorkflowResponse(traceCtx, formID, apiWorkflow)
+	if err != nil {
+		logger.Warn("failed to enrich workflow labels", zap.Error(err), zap.String("formId", formID.String()))
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, json.RawMessage(apiWorkflow))

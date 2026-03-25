@@ -1,4 +1,4 @@
-package workflow_test
+package workflow
 
 import (
 	"NYCU-SDC/core-system-backend/internal/form/answer"
@@ -8,7 +8,6 @@ import (
 
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
-	"NYCU-SDC/core-system-backend/internal/form/workflow"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -59,9 +58,9 @@ func TestService_ResolveSections_Simple(t *testing.T) {
 	})
 
 	mockQuerier := new(mockQuerier)
-	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
+	service := createTestService(t, logger, tracer, mockQuerier, new(mockValidator), nil)
 
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
+	mockQuerier.On("Get", mock.Anything, formID).Return(WorkflowVersion{
 		ID:       uuid.New(),
 		FormID:   formID,
 		Workflow: workflowJSON,
@@ -144,9 +143,9 @@ func TestService_ResolveSections_WithCondition_ChoiceTrue(t *testing.T) {
 	})
 
 	mockQuerier := new(mockQuerier)
-	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
+	service := createTestService(t, logger, tracer, mockQuerier, new(mockValidator), nil)
 
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
+	mockQuerier.On("Get", mock.Anything, formID).Return(WorkflowVersion{
 		ID:       uuid.New(),
 		FormID:   formID,
 		Workflow: workflowJSON,
@@ -251,9 +250,9 @@ func TestService_ResolveSections_MultipleChoice_AnyMatch(t *testing.T) {
 	})
 
 	mockQuerier := new(mockQuerier)
-	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
+	service := createTestService(t, logger, tracer, mockQuerier, new(mockValidator), nil)
 
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
+	mockQuerier.On("Get", mock.Anything, formID).Return(WorkflowVersion{
 		ID:       uuid.New(),
 		FormID:   formID,
 		Workflow: workflowJSON,
@@ -311,15 +310,16 @@ func TestService_ResolveSections_EmptyWorkflow(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop()
 	tracer := noop.NewTracerProvider().Tracer("test")
+	mockValidator := new(mockValidator)
 	formID := uuid.New()
 
 	// Empty workflow
 	workflowJSON := []byte("[]")
 
 	mockQuerier := new(mockQuerier)
-	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
+	service := createTestService(t, logger, tracer, mockQuerier, mockValidator, nil)
 
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
+	mockQuerier.On("Get", mock.Anything, formID).Return(WorkflowVersion{
 		ID:       uuid.New(),
 		FormID:   formID,
 		Workflow: workflowJSON,
