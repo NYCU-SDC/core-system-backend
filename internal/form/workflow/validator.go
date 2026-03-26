@@ -210,6 +210,16 @@ func parseWorkflow(workflow []byte) ([]map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid JSON format: %w", err)
 	}
+
+	// Normalize node types to lowercase so validation accepts API format (uppercase).
+	for i := range nodes {
+		typeVal, ok := nodes[i]["type"].(string)
+		if !ok {
+			continue
+		}
+		nodes[i]["type"] = strings.ToLower(typeVal)
+	}
+
 	return nodes, nil
 }
 
