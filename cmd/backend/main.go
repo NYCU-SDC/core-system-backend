@@ -244,6 +244,9 @@ func main() {
 	mux.Handle("GET /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 	mux.Handle("POST /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 
+	mux.Handle("POST /api/auth/link", basicMiddleware.HandlerFunc(authHandler.LinkAccount))
+	mux.Handle("POST /api/auth/link/abort", basicMiddleware.HandlerFunc(authHandler.LinkAccountAbort))
+
 	// JWT refresh
 	// ----------------------
 	mux.Handle("POST /api/auth/refresh", basicMiddleware.HandlerFunc(authHandler.RefreshToken))

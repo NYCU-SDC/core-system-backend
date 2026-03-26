@@ -377,6 +377,94 @@ func (s Service) ParseFormState(ctx context.Context, tokenString string) (callba
 	return tokenClaims.CallbackURL, parsedResponseID, parsedQuestionID, tokenClaims.RedirectURL, nil
 }
 
+// LinkClaims carries the OAuth identity that needs user confirmation before being linked to an existing account.
+type LinkClaims struct {
+	// Provider is the OAuth provider name (e.g. "google", "nycu").
+	Provider string
+
+	// ProviderID is the provider-specific stable user identifier.
+	ProviderID string
+
+	// UserID is the existed user id
+	UserID string
+
+	jwt.RegisteredClaims
+}
+
+// NewLinkToken mints a short-lived signed token that records the incoming
+// OAuth identity when it collides with an existing account's email.
+// The token is placed in an HttpOnly cookie so the frontend can later call
+// /api/auth/link to confirm the account merge.
+func (s Service) NewLinkToken(ctx context.Context, provider, providerID, userID string) (string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "NewLinkToken")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	id := uuid.New()
+	claims := &LinkClaims{
+		Provider:   provider,
+		ProviderID: providerID,
+		UserID:     userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    Issuer,
+			Subject:   id.String(),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(10 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID:        id.String(),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(s.oauthProxySecret))
+	if err != nil {
+		logger.Error("failed to sign pending binding token", zap.Error(err), zap.String("provider", provider))
+		return "", err
+	}
+
+	logger.Debug("Generated pending binding token", zap.String("provider", provider))
+	return tokenString, nil
+}
+
+// ParseLinkToken verifies a link token and returns its claims.
+func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, userID string, err error) {
+	traceCtx, span := s.tracer.Start(ctx, "ParseLinkToken")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	secret := func(token *jwt.Token) (interface{}, error) {
+		return []byte(s.oauthProxySecret), nil
+	}
+
+	tokenClaims := &LinkClaims{}
+	token, parseErr := jwt.ParseWithClaims(tokenString, tokenClaims, secret)
+	if parseErr != nil {
+		switch {
+		case errors.Is(parseErr, jwt.ErrTokenMalformed):
+			logger.Warn("Failed to parse link token due to malformed structure", zap.String("error", parseErr.Error()))
+		case errors.Is(parseErr, jwt.ErrSignatureInvalid):
+			logger.Warn("Failed to parse link token due to invalid signature", zap.String("error", parseErr.Error()))
+		case errors.Is(parseErr, jwt.ErrTokenExpired):
+			expiredTime, getErr := token.Claims.GetExpirationTime()
+			if getErr != nil {
+				logger.Error("Failed to get expiration time from link token", zap.Error(getErr))
+			} else {
+				logger.Warn("Link token expired", zap.Time("expired_at", expiredTime.Time))
+			}
+		case errors.Is(parseErr, jwt.ErrTokenNotValidYet):
+			logger.Warn("Link token not yet valid", zap.String("error", parseErr.Error()))
+		default:
+			logger.Error("Failed to parse link token", zap.Error(parseErr))
+		}
+		return "", "", "", parseErr
+	}
+
+	logger.Debug("Successfully parsed link token",
+		zap.String("provider", tokenClaims.Provider),
+	)
+	return tokenClaims.Provider, tokenClaims.ProviderID, tokenClaims.UserID, nil
+}
+
 func (s Service) GetUserIDByRefreshToken(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetUserIDByRefreshToken")
 	defer span.End()

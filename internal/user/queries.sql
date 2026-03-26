@@ -6,6 +6,15 @@ RETURNING *;
 -- name: ExistsByID :one
 SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);
 
+-- name: GetUserByEmail :one
+SELECT u.id, u.name, a.provider
+FROM user_emails e
+         JOIN users u ON e.user_id = u.id
+         JOIN auth a ON a.user_id = u.id
+WHERE e.value = $1
+ORDER BY a.created_at ASC
+    LIMIT 1;
+
 -- name: GetByID :one
 SELECT id, name, username, avatar_url, role, is_onboarded, created_at, updated_at, emails
 FROM users_with_emails
