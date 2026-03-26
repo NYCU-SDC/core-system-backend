@@ -105,7 +105,7 @@ func TestLinearScale_DecodeRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := ls.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := ls.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue)})
 
 			if tc.expectedError {
 				if err == nil {
@@ -364,7 +364,7 @@ func TestRating_DecodeRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := rating.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := rating.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue)})
 
 			if tc.expectedError {
 				if err == nil {

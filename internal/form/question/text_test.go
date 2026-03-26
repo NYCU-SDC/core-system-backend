@@ -39,7 +39,7 @@ func TestShortText_DecodeRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := st.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := st.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue)})
 
 			if tc.expectedError {
 				if err == nil {
@@ -137,7 +137,7 @@ func TestLongText_DecodeRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := lt.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := lt.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue)})
 
 			if tc.expectedError {
 				if err == nil {
@@ -183,7 +183,7 @@ func TestHyperlink_DecodeRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := hl.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := hl.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue)})
 
 			if tc.expectedError {
 				if err == nil {

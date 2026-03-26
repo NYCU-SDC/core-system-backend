@@ -120,7 +120,7 @@ func TestDate_DecodeRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := d.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := d.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue)})
 
 			if tc.expectedError {
 				if err == nil {
@@ -740,7 +740,7 @@ func TestDate_DecodeRequestWithDateRange(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := d.DecodeRequest(json.RawMessage(tc.rawValue))
+			_, err := d.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue)})
 
 			if tc.expectedError {
 				if err == nil {
@@ -819,7 +819,7 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 				t.Fatalf("Failed to create Date: %v", err)
 			}
 
-			result, err := d.DecodeRequest(json.RawMessage(tc.rawValue))
+			result, err := d.DecodeRequest(shared.AnswerParam{Value: json.RawMessage(tc.rawValue)})
 
 			if tc.expectedError {
 				if err == nil {

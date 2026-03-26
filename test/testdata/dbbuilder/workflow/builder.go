@@ -715,3 +715,44 @@ func (b Builder) CreateConditionNodeInvalidRegex() []byte {
 	require.NoError(b.t, err)
 	return workflowJSON
 }
+
+// CreateConditionNodeWithQuestionAndPattern creates a workflow with a condition node (source=choice) with the given question ID and pattern.
+func (b Builder) CreateConditionNodeWithQuestionAndPattern(questionID string, pattern string) []byte {
+	startID := uuid.New()
+	conditionID := uuid.New()
+	endID := uuid.New()
+	sectionID := uuid.New()
+	workflowJSON, err := json.Marshal([]map[string]interface{}{
+		{
+			"id":    startID.String(),
+			"type":  "start",
+			"label": "Start",
+			"next":  sectionID.String(),
+		},
+		{
+			"id":    sectionID.String(),
+			"type":  "section",
+			"label": "Section",
+			"next":  conditionID.String(),
+		},
+		{
+			"id":        conditionID.String(),
+			"type":      "condition",
+			"label":     "Condition",
+			"nextTrue":  endID.String(),
+			"nextFalse": endID.String(),
+			"conditionRule": map[string]interface{}{
+				"source":   "choice",
+				"question": questionID,
+				"pattern":  pattern,
+			},
+		},
+		{
+			"id":    endID.String(),
+			"type":  "end",
+			"label": "End",
+		},
+	})
+	require.NoError(b.t, err)
+	return workflowJSON
+}
