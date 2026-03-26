@@ -74,6 +74,7 @@ func (d DateAnswer) String() string {
 type ChoiceSnapshot struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	OtherText   string `json:"otherText"`
 }
 
 // SingleChoiceAnswer represents answer for single_choice and dropdown question types

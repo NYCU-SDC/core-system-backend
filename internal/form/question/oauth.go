@@ -78,9 +78,9 @@ func NewOAuthConnect(q Question, formID uuid.UUID) (OAuthConnect, error) {
 	}, nil
 }
 
-func (o OAuthConnect) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (o OAuthConnect) DecodeRequest(param shared.AnswerParam) (any, error) {
 	var v shared.OAuthConnectAnswer
-	if err := json.Unmarshal(rawValue, &v); err != nil {
+	if err := json.Unmarshal(param.Value, &v); err != nil {
 		return nil, fmt.Errorf("failed to decode oauth_connect answer from request: %w", err)
 	}
 	return v, nil

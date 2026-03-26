@@ -1,12 +1,12 @@
-package workflow_test
+package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
-
-	"NYCU-SDC/core-system-backend/internal/form/workflow"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -40,6 +40,12 @@ func TestService_Activate(t *testing.T) {
 				workflowJSON: createWorkflow_ComplexValid(t),
 			},
 		},
+		{
+			name: "activation preserves node IDs and question IDs",
+			params: Params{
+				workflowJSON: createWorkflow_ConditionRule(t, uuid.New().String()),
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -56,28 +62,34 @@ func TestService_Activate(t *testing.T) {
 			mockValidator := new(mockValidator)
 			service := createTestService(t, logger, tracer, mockQuerier, mockValidator, nil)
 
-			mockValidator.On("Activate", mock.Anything, formID, tc.params.workflowJSON, mock.Anything).Return(nil).Once()
+			workflowJSON := tc.params.workflowJSON
+			mockValidator.On("Activate", mock.Anything, formID, workflowJSON, mock.Anything).Return(nil).Once()
 
-			mockQuerier.On("Activate", mock.Anything, workflow.ActivateParams{
+			activatedID := uuid.New()
+			mockQuerier.On("Activate", mock.Anything, ActivateParams{
 				FormID:     formID,
 				LastEditor: userID,
-				Workflow:   tc.params.workflowJSON,
-			}).Return(workflow.ActivateRow{
-				ID:         uuid.New(),
+				Workflow:   workflowJSON,
+			}).Return(ActivateRow{
+				ID:         activatedID,
 				FormID:     formID,
 				LastEditor: userID,
 				IsActive:   true,
-				Workflow:   tc.params.workflowJSON,
+				Workflow:   workflowJSON,
 			}, nil).Once()
 
-			result, err := service.Activate(ctx, formID, userID, tc.params.workflowJSON)
+			result, err := service.Activate(ctx, formID, userID, workflowJSON)
 
 			require.NoError(t, err, "unexpected error: %v", err)
 			require.NotNilf(t, result.ID, "result.ID is nil")
 			require.Equal(t, formID, result.FormID, "formID mismatch")
 			require.Equal(t, userID, result.LastEditor, "userID mismatch")
 			require.True(t, result.IsActive, "result.IsActive is false")
-			require.Equal(t, tc.params.workflowJSON, result.Workflow, "workflow mismatch")
+			require.Equal(t, workflowJSON, result.Workflow, "workflow mismatch")
+			// Node IDs, question IDs, and condition rules in the workflow must remain unchanged after activation.
+			require.Equal(t, extractNodeIDs(t, workflowJSON), extractNodeIDs(t, result.Workflow), "node IDs must remain unchanged after activate")
+			require.Equal(t, extractQuestionIDs(t, workflowJSON), extractQuestionIDs(t, result.Workflow), "question IDs in condition rules must remain unchanged after activate")
+			require.Equal(t, extractConditionRules(t, workflowJSON), extractConditionRules(t, result.Workflow), "condition rules in condition nodes must remain unchanged after activate")
 
 			mockValidator.AssertExpectations(t)
 			mockQuerier.AssertExpectations(t)
@@ -106,6 +118,13 @@ func TestService_Update(t *testing.T) {
 			},
 			expectErr: false,
 		},
+		{
+			name: "draft update preserves version ID and workflow IDs",
+			params: Params{
+				workflowJSON: createWorkflow_ConditionRule(t, uuid.New().String()),
+			},
+			expectErr: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -119,18 +138,20 @@ func TestService_Update(t *testing.T) {
 			userID := uuid.New()
 
 			mockQuerier := new(mockQuerier)
-			realValidator := workflow.NewValidator()
-			service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, realValidator, nil)
-
+			realValidator := NewValidator()
+			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, nil)
 			workflowJSON := tc.params.workflowJSON
-			expectedRow := workflow.UpdateRow{
+			versionID := uuid.New()
+			updateRow := UpdateRow{
+				ID:         versionID,
 				FormID:     formID,
 				LastEditor: userID,
+				IsActive:   false,
 				Workflow:   workflowJSON,
 			}
 
-			currentWorkflowRow := workflow.GetRow{
-				ID:         uuid.New(),
+			currentWorkflowRow := WorkflowVersion{
+				ID:         versionID,
 				FormID:     formID,
 				LastEditor: userID,
 				IsActive:   false,
@@ -138,11 +159,11 @@ func TestService_Update(t *testing.T) {
 			}
 			mockQuerier.On("Get", mock.Anything, formID).Return(currentWorkflowRow, nil).Once()
 
-			mockQuerier.On("Update", mock.Anything, workflow.UpdateParams{
+			mockQuerier.On("Update", mock.Anything, UpdateParams{
 				FormID:     formID,
 				LastEditor: userID,
 				Workflow:   workflowJSON,
-			}).Return(expectedRow, nil).Once()
+			}).Return(updateRow, nil).Once()
 
 			result, err := service.Update(ctx, formID, workflowJSON, userID)
 
@@ -151,20 +172,114 @@ func TestService_Update(t *testing.T) {
 				mockQuerier.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
 			} else {
 				require.NoError(t, err, "unexpected error: %v", err)
-				require.Equal(t, expectedRow, result)
+				expectedVersion := WorkflowVersion(updateRow)
+				require.Equal(t, expectedVersion, result)
+				// When updating a draft, returned row ID must match current workflow version ID.
+				require.Equal(t, currentWorkflowRow.ID, result.ID, "Service.Update should preserve draft version ID")
+				// Node IDs, question IDs, and condition rules in the workflow must remain unchanged.
+				require.Equal(t, extractNodeIDs(t, workflowJSON), extractNodeIDs(t, result.Workflow), "node IDs must remain unchanged after update")
+				require.Equal(t, extractQuestionIDs(t, workflowJSON), extractQuestionIDs(t, result.Workflow), "question IDs in condition rules must remain unchanged after update")
+				require.Equal(t, extractConditionRules(t, workflowJSON), extractConditionRules(t, result.Workflow), "condition rules in condition nodes must remain unchanged after update")
 				mockQuerier.AssertExpectations(t)
 			}
 		})
 	}
 }
 
+// extractNodeIDs returns sorted node IDs from workflow JSON (for comparison in tests).
+func extractNodeIDs(t *testing.T, workflowJSON []byte) []string {
+	t.Helper()
+	var nodes []map[string]interface{}
+	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+
+	// Extract node IDs from nodes
+	var ids []string
+	for _, n := range nodes {
+		id, ok := n["id"].(string)
+		if !ok || id == "" {
+			continue
+		}
+		ids = append(ids, id)
+	}
+
+	sort.Strings(ids)
+	return ids
+}
+
+// extractQuestionIDs returns sorted question IDs from condition rules in workflow JSON.
+func extractQuestionIDs(t *testing.T, workflowJSON []byte) []string {
+	t.Helper()
+	var nodes []map[string]interface{}
+	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+
+	// Extract question IDs from condition rules
+	var ids []string
+	for _, n := range nodes {
+		// Extract condition rule from node
+		cr, ok := n["conditionRule"].(map[string]interface{})
+		if !ok || cr == nil {
+			continue
+		}
+
+		// Extract question ID from condition rule
+		q, ok := cr["question"].(string)
+		if !ok || q == "" {
+			continue
+		}
+		ids = append(ids, q)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// conditionRuleEntry holds a condition node ID and its conditionRule for comparison.
+type conditionRuleEntry struct {
+	NodeID string
+	Rule   map[string]interface{}
+}
+
+// extractConditionRules returns condition rules from workflow JSON, sorted by node ID, for comparison.
+func extractConditionRules(t *testing.T, workflowJSON []byte) []conditionRuleEntry {
+	t.Helper()
+	var nodes []map[string]interface{}
+	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
+	var out []conditionRuleEntry
+	for _, n := range nodes {
+		nodeID, ok := n["id"].(string)
+		if !ok || nodeID == "" {
+			continue
+		}
+
+		// Extract condition rule from node
+		cr, ok := n["conditionRule"].(map[string]interface{})
+		if !ok || cr == nil {
+			continue
+		}
+
+		// Clone so we don't mutate the original
+		rule := make(map[string]interface{}, len(cr))
+		for questionID, pattern := range cr {
+			rule[questionID] = pattern
+		}
+
+		// Add condition rule to output
+		out = append(out, conditionRuleEntry{
+			NodeID: nodeID,
+			Rule:   rule,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].NodeID < out[j].NodeID })
+	return out
+}
+
 func TestService_CreateNode(t *testing.T) {
 	t.Parallel()
+	tracer := noop.NewTracerProvider().Tracer("test")
 
 	type Params struct {
 		workflowJSON  []byte
-		nodeType      workflow.NodeType
-		questionStore workflow.QuestionStore
+		nodeType      NodeType
+		questionStore QuestionStore
 	}
 
 	type testCase struct {
@@ -178,7 +293,7 @@ func TestService_CreateNode(t *testing.T) {
 			name: "invalid node type parameter - start",
 			params: Params{
 				workflowJSON:  createWorkflow_SimpleValid(t),
-				nodeType:      workflow.NodeTypeStart,
+				nodeType:      NodeTypeStart,
 				questionStore: nil,
 			},
 			expectErr: true,
@@ -187,7 +302,7 @@ func TestService_CreateNode(t *testing.T) {
 			name: "invalid node type parameter - end",
 			params: Params{
 				workflowJSON:  createWorkflow_SimpleValid(t),
-				nodeType:      workflow.NodeTypeEnd,
+				nodeType:      NodeTypeEnd,
 				questionStore: nil,
 			},
 			expectErr: true,
@@ -196,7 +311,7 @@ func TestService_CreateNode(t *testing.T) {
 			name: "invalid node type parameter - empty string",
 			params: Params{
 				workflowJSON:  createWorkflow_SimpleValid(t),
-				nodeType:      workflow.NodeType(""),
+				nodeType:      NodeType(""),
 				questionStore: nil,
 			},
 			expectErr: true,
@@ -205,7 +320,7 @@ func TestService_CreateNode(t *testing.T) {
 			name: "invalid node type parameter - unknown type",
 			params: Params{
 				workflowJSON:  createWorkflow_SimpleValid(t),
-				nodeType:      workflow.NodeType("unknown"),
+				nodeType:      NodeType("unknown"),
 				questionStore: nil,
 			},
 			expectErr: true,
@@ -214,7 +329,7 @@ func TestService_CreateNode(t *testing.T) {
 			name: "valid workflow - simple section creation",
 			params: Params{
 				workflowJSON:  createWorkflow_SimpleValid(t),
-				nodeType:      workflow.NodeTypeSection,
+				nodeType:      NodeTypeSection,
 				questionStore: nil,
 			},
 			expectErr: false,
@@ -223,7 +338,7 @@ func TestService_CreateNode(t *testing.T) {
 			name: "valid workflow - condition node creation",
 			params: Params{
 				workflowJSON:  createWorkflow_SimpleValid(t),
-				nodeType:      workflow.NodeTypeCondition,
+				nodeType:      NodeTypeCondition,
 				questionStore: nil,
 			},
 			expectErr: false,
@@ -236,28 +351,27 @@ func TestService_CreateNode(t *testing.T) {
 
 			ctx := context.Background()
 			logger := zap.NewNop()
-			tracer := noop.NewTracerProvider().Tracer("test")
 			formID := uuid.New()
 			userID := uuid.New()
 
 			mockQuerier := new(mockQuerier)
-			realValidator := workflow.NewValidator()
+			realValidator := NewValidator()
 
-			service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
+			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
 
 			// Only set up mock if node type is valid (service will call querier)
 			// Note: CreateNode calls the querier BEFORE validation, so we need to set up the mock
 			// for all valid node types, even when validation will fail
 			switch tc.params.nodeType {
-			case workflow.NodeTypeSection, workflow.NodeTypeCondition:
-				expectedRow := workflow.CreateNodeRow{
+			case NodeTypeSection, NodeTypeCondition:
+				expectedRow := CreateNodeRow{
 					NodeID:    uuid.New(),
 					NodeType:  tc.params.nodeType,
 					NodeLabel: nil,
 					Workflow:  tc.params.workflowJSON,
 				}
 
-				mockQuerier.On("CreateNode", mock.Anything, workflow.CreateNodeParams{
+				mockQuerier.On("CreateNode", mock.Anything, CreateNodeParams{
 					FormID:     formID,
 					LastEditor: userID,
 					Type:       tc.params.nodeType,
@@ -270,7 +384,7 @@ func TestService_CreateNode(t *testing.T) {
 				require.Error(t, err, "expected error but got nil")
 				// For invalid node types, querier should not be called
 				switch tc.params.nodeType {
-				case workflow.NodeTypeSection, workflow.NodeTypeCondition:
+				case NodeTypeSection, NodeTypeCondition:
 					mockQuerier.AssertExpectations(t)
 				default:
 					mockQuerier.AssertNotCalled(t, "CreateNode")
@@ -286,6 +400,7 @@ func TestService_CreateNode(t *testing.T) {
 
 func TestService_Get(t *testing.T) {
 	t.Parallel()
+	tracer := noop.NewTracerProvider().Tracer("test")
 
 	type testCase struct {
 		name      string
@@ -299,7 +414,7 @@ func TestService_Get(t *testing.T) {
 			name:   "successful get",
 			formID: uuid.New(),
 			setupMock: func(mq *mockQuerier, formID uuid.UUID) {
-				expectedRow := workflow.GetRow{
+				expectedRow := WorkflowVersion{
 					ID:         uuid.New(),
 					FormID:     formID,
 					LastEditor: uuid.New(),
@@ -318,7 +433,6 @@ func TestService_Get(t *testing.T) {
 
 			ctx := context.Background()
 			logger := zap.NewNop()
-			tracer := noop.NewTracerProvider().Tracer("test")
 			mockQuerier := new(mockQuerier)
 			mockValidator := new(mockValidator)
 			service := createTestService(t, logger, tracer, mockQuerier, mockValidator, nil)
@@ -329,7 +443,7 @@ func TestService_Get(t *testing.T) {
 
 			if tc.expectErr {
 				require.Error(t, err)
-				require.Equal(t, workflow.GetRow{}, result)
+				require.Equal(t, WorkflowVersion{}, result)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, result.ID)
@@ -347,7 +461,7 @@ func TestService_DeleteNode(t *testing.T) {
 	type Params struct {
 		workflowJSON  []byte
 		nodeID        uuid.UUID
-		questionStore workflow.QuestionStore
+		questionStore QuestionStore
 	}
 
 	type testCase struct {
@@ -379,13 +493,12 @@ func TestService_DeleteNode(t *testing.T) {
 			userID := uuid.New()
 
 			mockQuerier := new(mockQuerier)
-			realValidator := workflow.NewValidator()
-
-			service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
+			realValidator := NewValidator()
+			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
 
 			workflowJSON := tc.params.workflowJSON
 
-			mockQuerier.On("DeleteNode", mock.Anything, workflow.DeleteNodeParams{
+			mockQuerier.On("DeleteNode", mock.Anything, DeleteNodeParams{
 				FormID:     formID,
 				LastEditor: userID,
 				NodeID:     tc.params.nodeID.String(),
@@ -409,6 +522,7 @@ func TestService_DeleteNode(t *testing.T) {
 // using mocked errors to verify edge cases in error parsing logic.
 func TestService_GetWorkflow_ValidationErrors(t *testing.T) {
 	t.Parallel()
+	tracer := noop.NewTracerProvider().Tracer("test")
 
 	type testCase struct {
 		name            string
@@ -470,7 +584,6 @@ func TestService_GetWorkflow_ValidationErrors(t *testing.T) {
 
 			ctx := context.Background()
 			logger := zap.NewNop()
-			tracer := noop.NewTracerProvider().Tracer("test")
 			mockQuerier := new(mockQuerier)
 			mockValidator := new(mockValidator)
 			service := createTestService(t, logger, tracer, mockQuerier, mockValidator, nil)

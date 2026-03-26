@@ -31,6 +31,7 @@ type Payload struct {
 	QuestionID   string          `json:"questionId" validate:"required,uuid"`
 	QuestionType string          `json:"questionType"`
 	Value        json.RawMessage `json:"value" validate:"required"`
+	OtherText    string          `json:"otherText,omitempty" validate:"max=100"`
 }
 
 // AnswersRequest is the request body for updating answers
@@ -336,6 +337,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		answerParams = append(answerParams, shared.AnswerParam{
 			QuestionID: answerRequest.QuestionID,
 			Value:      answerRequest.Value,
+			OtherText:  answerRequest.OtherText,
 		})
 	}
 
@@ -697,6 +699,33 @@ func (h *Handler) ToResponse(context context.Context, answer Answer, answerable 
 			QuestionID:   questionID.String(),
 			QuestionType: strings.ToUpper(string(answerable.Question().Type)),
 			Value:        payload,
+			OtherText:    extractOtherText(valueStruct),
 		},
 	}, nil
+}
+
+func extractOtherText(answer any) string {
+	switch v := answer.(type) {
+	case shared.SingleChoiceAnswer:
+		return v.Snapshot.OtherText
+	case shared.MultipleChoiceAnswer:
+		for _, c := range v.Choices {
+			if c.Snapshot.OtherText != "" {
+				return c.Snapshot.OtherText
+			}
+		}
+	case shared.RankingAnswer:
+		for _, c := range v.RankedChoices {
+			if c.Snapshot.OtherText != "" {
+				return c.Snapshot.OtherText
+			}
+		}
+	case shared.DetailedMultipleChoiceAnswer:
+		for _, c := range v.Choices {
+			if c.Snapshot.OtherText != "" {
+				return c.Snapshot.OtherText
+			}
+		}
+	}
+	return ""
 }

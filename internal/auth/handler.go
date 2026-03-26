@@ -173,6 +173,7 @@ func (h *Handler) Oauth2Start(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		callbackURL = fmt.Sprintf("%s/api/auth/login/oauth/%s/callback", baseForCallback, providerName)
+		logger.Info(callbackURL)
 	} else {
 		if h.devMode {
 			customBase := r.URL.Query().Get("base")
@@ -231,18 +232,35 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var token *oauth2.Token
-	if callbackURL != "" {
-		config := provider.ConfigWithCustomRedirectURL(callbackURL)
-		token, err = config.Exchange(traceCtx, code)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
-			return
+	if h.oauthProxyBaseURL != "" {
+		if callbackURL == "" {
+			config := provider.ConfigWithCustomRedirectURL(callbackURL)
+			token, err = config.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
+		} else {
+			token, err = provider.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
 		}
 	} else {
-		token, err = provider.Exchange(traceCtx, code)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
-			return
+		if callbackURL != "" {
+			config := provider.ConfigWithCustomRedirectURL(callbackURL)
+			token, err = config.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
+		} else {
+			token, err = provider.Exchange(traceCtx, code)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %v", internal.ErrInvalidExchangeToken, err), logger)
+				return
+			}
 		}
 	}
 
