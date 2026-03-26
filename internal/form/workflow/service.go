@@ -38,8 +38,8 @@ type NodePayload struct {
 	// Use pointers so `validate:"required"` can distinguish between:
 	// - field missing/null => nil pointer (invalid)
 	// - valid value 0 => non-nil pointer with value 0 (valid)
-	X *int `json:"x" validate:"required,int32"`
-	Y *int `json:"y" validate:"required,int32"`
+	X *int `json:"x" validate:"required"`
+	Y *int `json:"y" validate:"required"`
 }
 
 type Service struct {
