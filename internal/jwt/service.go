@@ -427,7 +427,7 @@ func (s Service) NewLinkToken(ctx context.Context, provider, providerID, userID 
 }
 
 // ParseLinkToken verifies a link token and returns its claims.
-func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, userID string, err error) {
+func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID string, userID uuid.UUID, err error) {
 	traceCtx, span := s.tracer.Start(ctx, "ParseLinkToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -456,13 +456,19 @@ func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provid
 		default:
 			logger.Error("Failed to parse link token", zap.Error(parseErr))
 		}
-		return "", "", "", parseErr
+		return "", "", uuid.UUID{}, parseErr
+	}
+
+	userID, err = uuid.Parse(tokenClaims.UserID)
+	if err != nil {
+		logger.Error("Failed to parse user id from link token", zap.String("error", tokenClaims.UserID), zap.Error(err))
+		return "", "", uuid.UUID{}, parseErr
 	}
 
 	logger.Debug("Successfully parsed link token",
 		zap.String("provider", tokenClaims.Provider),
 	)
-	return tokenClaims.Provider, tokenClaims.ProviderID, tokenClaims.UserID, nil
+	return tokenClaims.Provider, tokenClaims.ProviderID, userID, nil
 }
 
 func (s Service) GetUserIDByRefreshToken(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {

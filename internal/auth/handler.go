@@ -37,7 +37,7 @@ type JWTIssuer interface {
 	Parse(ctx context.Context, tokenString string) (user.User, error)
 	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
 	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
-	ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, userID string, err error)
+	ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID string, userID uuid.UUID, err error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
 }
@@ -282,8 +282,13 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 		redirectURL := redirectTo
 		if redirectURL == "" {
-			redirectURL = fmt.Sprintf("/link?name=%s&oauthProvider=%s&email=%s", result.ExistingName, result.ExistingProvider, email)
+			q := url.Values{}
+			q.Set("name", result.ExistingName)
+			q.Set("oauthProvider", result.ExistingProvider)
+			q.Set("email", email)
+			redirectURL = "/link?" + q.Encode()
 		}
+
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
 	}
@@ -526,13 +531,7 @@ func (h *Handler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, providerID, userIDStr, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
-		return
-	}
-
-	userID, err := uuid.Parse(userIDStr)
+	provider, providerID, userID, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
 		return
