@@ -305,6 +305,7 @@ func payloadCoordValidationErrors(
 			nodeID,
 			missingMsg,
 		))
+		return payloadErrs
 	}
 
 	n, ok := val.(json.Number)
