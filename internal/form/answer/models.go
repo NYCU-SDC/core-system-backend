@@ -479,7 +479,7 @@ type FileAttachment struct {
 	FileID       uuid.UUID
 	ResourceType ResourceType
 	ResourceID   uuid.UUID
-	CreatedBy    pgtype.UUID
+	CreatedBy    uuid.UUID
 	CreatedAt    pgtype.Timestamptz
 }
 

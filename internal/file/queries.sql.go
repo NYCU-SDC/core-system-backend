@@ -69,7 +69,7 @@ type CreateAttachmentParams struct {
 	FileID       uuid.UUID
 	ResourceType ResourceType
 	ResourceID   uuid.UUID
-	CreatedBy    pgtype.UUID
+	CreatedBy    uuid.UUID
 }
 
 func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (FileAttachment, error) {
