@@ -75,6 +75,17 @@ func NewService(logger *zap.Logger, db DBTX, handlers ...ResourceHandler) *Servi
 	}
 }
 
+func (s *Service) WithTx(tx pgx.Tx) *Service {
+	return &Service{
+		logger:           s.logger,
+		db:               tx,
+		queries:          s.queries.WithTx(tx),
+		tracer:           s.tracer,
+		validator:        s.validator,
+		resourceHandlers: s.resourceHandlers,
+	}
+}
+
 // SaveFile saves the uploaded file data to database with validation
 // uploadedBy can be nil for system uploads
 // opts are validation options (e.g., WithWebP(), WithMaxSize(1024))
