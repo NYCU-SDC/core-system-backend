@@ -41,7 +41,7 @@ type QuestionStore interface {
 // FileService defines the file storage operations needed by the answer service
 type FileService interface {
 	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
-	CreateAttachment(ctx context.Context, fileID uuid.UUID, resourceType file.ResourceType, resourceID uuid.UUID, createdBy *uuid.UUID) (file.FileAttachment, error)
+	CreateAttachment(ctx context.Context, fileID uuid.UUID, resourceType file.ResourceType, resourceID uuid.UUID, createdBy uuid.UUID) (file.FileAttachment, error)
 	DeletePhysicalFile(ctx context.Context, fileID uuid.UUID) error
 	WithTx(tx pgx.Tx) *file.Service
 }
@@ -416,7 +416,7 @@ func extractChoicesFromStoredDetailedMultiAnswer(rawValue []byte) ([]question.Ch
 // Existing upload_file entries are loaded first, then new file rows, answer upsert,
 // and file attachments are all executed within the same database transaction.
 // Any failure before commit rolls back the whole operation.
-func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error) {
+func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UploadFiles")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -496,7 +496,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 			return nil, Answer{}, nil, fmt.Errorf("failed to open uploaded file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
 		}
 
-		savedFile, saveErr := ftx.SaveFile(traceCtx, f, fh.Filename, fh.Header.Get("Content-Type"), uploadedBy)
+		savedFile, saveErr := ftx.SaveFile(traceCtx, f, fh.Filename, fh.Header.Get("Content-Type"), &uploadedBy)
 		_ = f.Close()
 
 		if saveErr != nil {

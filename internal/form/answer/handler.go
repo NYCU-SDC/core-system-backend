@@ -62,7 +62,7 @@ type Store interface {
 	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error)
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []question.Answerable, map[string]question.Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
-	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
+	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
 }
 
 // WorkflowResolver resolves which sections are active for a form response based on workflow and current answers.
@@ -648,7 +648,7 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 
 	// Upload files and upsert answer
 	uploadedBy := currentUser.ID
-	uploadedFiles, _, _, err := h.store.UploadFiles(traceCtx, formID, responseID, questionID, fileHeaders, &uploadedBy)
+	uploadedFiles, _, _, err := h.store.UploadFiles(traceCtx, formID, responseID, questionID, fileHeaders, uploadedBy)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

@@ -151,7 +151,7 @@ func (s *Service) SaveFile(ctx context.Context, fileContent io.Reader, originalF
 }
 
 // CreateAttachment links an existing file to a resource
-func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resourceType ResourceType, resourceID uuid.UUID, createdBy *uuid.UUID) (FileAttachment, error) {
+func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resourceType ResourceType, resourceID uuid.UUID, createdBy uuid.UUID) (FileAttachment, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateAttachment")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -199,19 +199,11 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 		return FileAttachment{}, err
 	}
 
-	pgCreatedBy := pgtype.UUID{Valid: false}
-	if createdBy != nil {
-		pgCreatedBy = pgtype.UUID{
-			Bytes: *createdBy,
-			Valid: true,
-		}
-	}
-
 	attachment, err := qtx.CreateAttachment(traceCtx, CreateAttachmentParams{
 		FileID:       fileID,
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
-		CreatedBy:    pgCreatedBy,
+		CreatedBy:    createdBy,
 	})
 	if err == nil {
 		if needCommit {
@@ -276,6 +268,7 @@ func (s *Service) SaveFileForResource(
 	uploadedBy *uuid.UUID,
 	resourceType ResourceType,
 	resourceID uuid.UUID,
+	createdBy uuid.UUID,
 	opts ...ValidatorOption,
 ) (File, FileAttachment, error) {
 	traceCtx, span := s.tracer.Start(ctx, "SaveFileForResource")
@@ -288,7 +281,7 @@ func (s *Service) SaveFileForResource(
 		return File{}, FileAttachment{}, err
 	}
 
-	attachment, err := s.CreateAttachment(traceCtx, savedFile.ID, resourceType, resourceID, uploadedBy)
+	attachment, err := s.CreateAttachment(traceCtx, savedFile.ID, resourceType, resourceID, createdBy)
 	if err != nil {
 		span.RecordError(err)
 		logger.Warn("failed to create attachment after saving file; cleaning up orphan file",
