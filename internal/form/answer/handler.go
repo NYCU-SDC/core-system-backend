@@ -313,7 +313,9 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := ValidatePatchAnswersAgainstWorkflow(traceCtx, h.workflowResolver, formID, responseID, answersForWorkflow, answerableMap, req.Answers, logger, span); err != nil {
+	err = ValidatePatchAnswersAgainstWorkflow(traceCtx, h.workflowResolver, formID, responseID, answersForWorkflow, answerableMap, req.Answers, logger, span)
+
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
