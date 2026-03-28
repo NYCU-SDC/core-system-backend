@@ -16,7 +16,7 @@ import (
 // applied by question ID (payload wins). Request values are normalized with the same
 // DecodeRequest + JSON marshal path as Upsert so workflow resolution (DecodeStorage /
 // MatchesPattern) sees storage-shaped bytes, not raw API wire JSON.
-func MergeAnswersForWorkflowResolution(
+func (s Service) MergeAnswersForWorkflowResolution(
 	currentAnswers []Answer,
 	payloads []Payload,
 	answerableMap map[string]question.Answerable,

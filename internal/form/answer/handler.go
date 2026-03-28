@@ -66,6 +66,7 @@ type Store interface {
 	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
 	ValidatePatchAnswersAgainstWorkflow(ctx context.Context, formID, responseID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, payloads []Payload, logger *zap.Logger, span trace.Span) error
 	ValidateUploadFilesAgainstWorkflow(ctx context.Context, formID, responseID, questionID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, logger *zap.Logger, span trace.Span) error
+	MergeAnswersForWorkflowResolution(currentAnswers []Answer, payloads []Payload, answerableMap map[string]question.Answerable) ([]Answer, error)
 }
 
 type QuestionGetter interface {
@@ -286,7 +287,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 
 	// List() resolves ranking choices from DB only. When DMC and RANKING are sent
 	// in one PATCH, the source DMC is not stored yet, so ranking metadata is empty
-	// and MergeAnswersForWorkflowResolution would fail. Re-resolve using this batch.
+	// and merge for workflow would fail. Re-resolve using this batch.
 	answerableMap, err = h.store.ResolveRankingChoices(traceCtx, responseID, answerableMap, answerParams)
 	if err != nil {
 		logger.Warn("rejected PATCH answers: ranking choice resolution failed",
@@ -300,7 +301,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 
 	// Merge this request into answers used for workflow resolution so conditions see values
 	// from the same PATCH (and stay consistent with post-upsert state).
-	answersForWorkflow, err := MergeAnswersForWorkflowResolution(currentAnswers, req.Answers, answerableMap)
+	answersForWorkflow, err := h.store.MergeAnswersForWorkflowResolution(currentAnswers, req.Answers, answerableMap)
 	if err != nil {
 		logger.Warn("rejected PATCH answers: workflow answer merge failed",
 			zap.String("formID", formID.String()),
