@@ -113,6 +113,12 @@ var (
 	// Answer / Workflow: cannot answer questions in a section skipped by workflow
 	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
 
+	// Workflow merge (PATCH answers normalized for section resolution)
+	ErrWorkflowMergeInvalidQuestionID  = errors.New("invalid question id for workflow resolution")
+	ErrWorkflowMergeQuestionNotInForm  = errors.New("question does not belong to this form")
+	ErrWorkflowMergeAnswerValueInvalid = errors.New("invalid answer value for workflow resolution")
+	ErrWorkflowMergeAnswerEncodeFailed = errors.New("failed to encode answer for workflow resolution")
+
 	// Workflow Errors
 	ErrWorkflowNotFound              = errors.New("no workflow configured for this form")
 	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
@@ -288,7 +294,30 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
 	case errors.Is(err, ErrAnswerSectionSkipped):
-		return problem.NewValidateProblem("cannot answer questions in a section that is skipped by the form workflow")
+		return problem.NewValidateProblemWithErrors(
+			"cannot answer questions in a section that is skipped by the form workflow",
+			[]string{err.Error()},
+		)
+	case errors.Is(err, ErrWorkflowMergeInvalidQuestionID):
+		return problem.NewValidateProblemWithErrors(
+			"invalid question id",
+			[]string{err.Error()},
+		)
+	case errors.Is(err, ErrWorkflowMergeQuestionNotInForm):
+		return problem.NewValidateProblemWithErrors(
+			"question does not belong to this form",
+			[]string{err.Error()},
+		)
+	case errors.Is(err, ErrWorkflowMergeAnswerValueInvalid):
+		return problem.NewValidateProblemWithErrors(
+			"invalid answer value for workflow resolution",
+			[]string{err.Error()},
+		)
+	case errors.Is(err, ErrWorkflowMergeAnswerEncodeFailed):
+		return problem.NewValidateProblemWithErrors(
+			"failed to encode answer for workflow resolution",
+			[]string{err.Error()},
+		)
 
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowNotFound):
@@ -296,7 +325,10 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
 	case errors.Is(err, ErrWorkflowResolveSectionsFailed):
-		return problem.NewValidateProblem("failed to resolve workflow sections")
+		return problem.NewValidateProblemWithErrors(
+			"failed to resolve workflow sections",
+			[]string{err.Error()},
+		)
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
 	case errors.Is(err, ErrUnmarshalWorkflow):

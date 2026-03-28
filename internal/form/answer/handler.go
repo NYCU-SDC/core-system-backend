@@ -278,9 +278,18 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 
 	// Merge this request into answers used for workflow resolution so conditions see values
 	// from the same PATCH (and stay consistent with post-upsert state).
-	answersForWorkflow := MergeAnswersForWorkflowResolution(currentAnswers, req.Answers)
+	answersForWorkflow, err := MergeAnswersForWorkflowResolution(currentAnswers, req.Answers, answerableMap)
+	if err != nil {
+		logger.Warn("rejected PATCH answers: workflow answer merge failed",
+			zap.String("formID", formID.String()),
+			zap.String("responseID", responseID.String()),
+			zap.Error(err),
+		)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
 
-	if err := ValidatePatchAnswersAgainstWorkflow(traceCtx, h.workflowResolver, formID, answersForWorkflow, answerableMap, req.Answers, logger, span); err != nil {
+	if err := ValidatePatchAnswersAgainstWorkflow(traceCtx, h.workflowResolver, formID, responseID, answersForWorkflow, answerableMap, req.Answers, logger, span); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -304,7 +313,11 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, answerRequest := range req.Answers {
 		if typeMap[answerRequest.QuestionID] == question.QuestionTypeUploadFile {
-			logger.Warn("attempted to update upload_file question via PATCH answers", zap.String("questionID", answerRequest.QuestionID))
+			logger.Warn("rejected PATCH answers for upload_file question",
+				zap.String("formID", formID.String()),
+				zap.String("responseID", responseID.String()),
+				zap.String("questionID", answerRequest.QuestionID),
+			)
 			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("question %s is of type upload_file and must be answered via the file upload endpoint: %w", answerRequest.QuestionID, internal.ErrQuestionTypeMismatch), logger)
 			return
 		}
@@ -616,7 +629,14 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 
 	sectionIDs, err := h.workflowResolver.ResolveSections(traceCtx, formID, currentAnswers, answerableMap)
 	if err != nil && !errors.Is(err, internal.ErrWorkflowNotFound) {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err), logger)
+		wrapped := fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
+		logger.Warn("rejected file upload: workflow section resolution failed",
+			zap.String("formID", formID.String()),
+			zap.String("responseID", responseID.String()),
+			zap.String("questionID", questionID.String()),
+			zap.Error(wrapped),
+		)
+		h.problemWriter.WriteError(traceCtx, w, wrapped, logger)
 		return
 	}
 
@@ -632,7 +652,12 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		} else {
 			sectionIDStr := answerable.Question().SectionID.String()
 			if !sectionActiveMap[sectionIDStr] {
-				logger.Warn("attempted to upload files for question in skipped section", zap.String("questionID", questionID.String()), zap.String("sectionID", sectionIDStr))
+				logger.Warn("rejected file upload for workflow-skipped section",
+					zap.String("formID", formID.String()),
+					zap.String("responseID", responseID.String()),
+					zap.String("questionID", questionID.String()),
+					zap.String("sectionID", sectionIDStr),
+				)
 				h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
 				return
 			}

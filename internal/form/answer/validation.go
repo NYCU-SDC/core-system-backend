@@ -24,6 +24,7 @@ func ValidatePatchAnswersAgainstWorkflow(
 	ctx context.Context,
 	resolver WorkflowResolver,
 	formID uuid.UUID,
+	responseID uuid.UUID,
 	answersForWorkflow []Answer,
 	answerableMap map[string]question.Answerable,
 	payloads []Payload,
@@ -36,7 +37,11 @@ func ValidatePatchAnswersAgainstWorkflow(
 			return nil
 		}
 		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
-		logger.Error("failed to resolve sections from workflow", zap.Error(err))
+		logger.Error("workflow section resolution failed",
+			zap.String("formID", formID.String()),
+			zap.String("responseID", responseID.String()),
+			zap.Error(err),
+		)
 		span.RecordError(err)
 		return err
 	}
@@ -52,7 +57,12 @@ func ValidatePatchAnswersAgainstWorkflow(
 		}
 		sectionIDStr := answerable.Question().SectionID.String()
 		if !sectionActiveMap[sectionIDStr] {
-			logger.Warn("attempted to answer question in skipped section", zap.String("questionID", p.QuestionID), zap.String("sectionID", sectionIDStr))
+			logger.Warn("rejected answer patch for workflow-skipped section",
+				zap.String("formID", formID.String()),
+				zap.String("responseID", responseID.String()),
+				zap.String("questionID", p.QuestionID),
+				zap.String("sectionID", sectionIDStr),
+			)
 			return internal.ErrAnswerSectionSkipped
 		}
 	}
