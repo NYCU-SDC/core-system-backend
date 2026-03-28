@@ -341,80 +341,6 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	return response, result, nil
 }
 
-// resolveWorkflowSectionsForResponse runs ResolveSections and builds sectionActiveMap when a workflow exists.
-// If ErrWorkflowNotFound, returns workflowMissing=true with nil sectionIDs and an empty sectionActiveMap
-// (Get fills both after loading sections). Any other error is wrapped and returned.
-func (s Service) ResolveWorkflowSectionsForResponse(
-	ctx context.Context,
-	formID uuid.UUID,
-	answerPayload []answer.Answer,
-	answerableMap map[string]question.Answerable,
-	responseID uuid.UUID,
-	logger *zap.Logger,
-	span trace.Span,
-) (sectionIDs []uuid.UUID, workflowMissing bool, sectionActiveMap map[string]bool, err error) {
-	sectionIDs, err = s.workflowResolver.ResolveSections(ctx, formID, answerPayload, answerableMap)
-	if err != nil {
-		if errors.Is(err, internal.ErrWorkflowNotFound) {
-			return nil, true, make(map[string]bool), nil
-		}
-		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
-		logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", responseID.String()))
-		span.RecordError(err)
-		return nil, false, nil, err
-	}
-
-	sectionActiveMap = make(map[string]bool, len(sectionIDs))
-	for _, sectionID := range sectionIDs {
-		sectionActiveMap[sectionID.String()] = true
-	}
-	return sectionIDs, false, sectionActiveMap, nil
-}
-
-// calculateSectionProgress determines the progress status of a section based on its questions and answers
-func calculateSectionProgress(answerables []question.Answerable, answerMap map[string]struct {
-	Answer     answer.Answer
-	Answerable question.Answerable
-}) SectionProgress {
-	if len(answerables) == 0 {
-		return SectionProgressCompleted
-	}
-
-	hasAnyAnswer := false
-	requiredCount := 0
-	requiredAnsweredCount := 0
-
-	for _, ans := range answerables {
-		q := ans.Question()
-		questionID := q.ID.String()
-
-		if q.Required {
-			requiredCount++
-			if _, hasAnswer := answerMap[questionID]; hasAnswer {
-				requiredAnsweredCount++
-			}
-		}
-
-		// Check if this question has an answer
-		if _, hasAnswer := answerMap[questionID]; hasAnswer {
-			hasAnyAnswer = true
-		}
-	}
-
-	// If no answers at all, it's NOT_STARTED
-	if !hasAnyAnswer {
-		return SectionProgressNotStarted
-	}
-
-	// If all required questions are answered, it's COMPLETED
-	if requiredCount == requiredAnsweredCount {
-		return SectionProgressCompleted
-	}
-
-	// Otherwise, it's DRAFT (at least one answer, but not all required)
-	return SectionProgressDraft
-}
-
 func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetFormIDByID")
 	defer span.End()
@@ -538,4 +464,78 @@ func (s Service) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormRespons
 	}
 
 	return formResponse, nil
+}
+
+// ResolveWorkflowSectionsForResponse runs ResolveSections and builds sectionActiveMap when a workflow exists.
+// If ErrWorkflowNotFound, returns workflowMissing=true with nil sectionIDs and an empty sectionActiveMap
+// (Get fills both after loading sections). Any other error is wrapped and returned.
+func (s Service) ResolveWorkflowSectionsForResponse(
+	ctx context.Context,
+	formID uuid.UUID,
+	answerPayload []answer.Answer,
+	answerableMap map[string]question.Answerable,
+	responseID uuid.UUID,
+	logger *zap.Logger,
+	span trace.Span,
+) (sectionIDs []uuid.UUID, workflowMissing bool, sectionActiveMap map[string]bool, err error) {
+	sectionIDs, err = s.workflowResolver.ResolveSections(ctx, formID, answerPayload, answerableMap)
+	if err != nil {
+		if errors.Is(err, internal.ErrWorkflowNotFound) {
+			return nil, true, make(map[string]bool), nil
+		}
+		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
+		logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", responseID.String()))
+		span.RecordError(err)
+		return nil, false, nil, err
+	}
+
+	sectionActiveMap = make(map[string]bool, len(sectionIDs))
+	for _, sectionID := range sectionIDs {
+		sectionActiveMap[sectionID.String()] = true
+	}
+	return sectionIDs, false, sectionActiveMap, nil
+}
+
+// calculateSectionProgress determines the progress status of a section based on its questions and answers
+func calculateSectionProgress(answerables []question.Answerable, answerMap map[string]struct {
+	Answer     answer.Answer
+	Answerable question.Answerable
+}) SectionProgress {
+	if len(answerables) == 0 {
+		return SectionProgressCompleted
+	}
+
+	hasAnyAnswer := false
+	requiredCount := 0
+	requiredAnsweredCount := 0
+
+	for _, ans := range answerables {
+		q := ans.Question()
+		questionID := q.ID.String()
+
+		if q.Required {
+			requiredCount++
+			if _, hasAnswer := answerMap[questionID]; hasAnswer {
+				requiredAnsweredCount++
+			}
+		}
+
+		// Check if this question has an answer
+		if _, hasAnswer := answerMap[questionID]; hasAnswer {
+			hasAnyAnswer = true
+		}
+	}
+
+	// If no answers at all, it's NOT_STARTED
+	if !hasAnyAnswer {
+		return SectionProgressNotStarted
+	}
+
+	// If all required questions are answered, it's COMPLETED
+	if requiredCount == requiredAnsweredCount {
+		return SectionProgressCompleted
+	}
+
+	// Otherwise, it's DRAFT (at least one answer, but not all required)
+	return SectionProgressDraft
 }
