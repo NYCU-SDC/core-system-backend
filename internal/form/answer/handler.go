@@ -3,6 +3,7 @@ package answer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -283,7 +284,17 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	// Resolve active sections from workflow so we reject answers for skipped sections
 	sectionIDs, err := h.workflowResolver.ResolveSections(traceCtx, formID, currentAnswers, answerableMap)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err), logger)
+		if errors.Is(err, internal.ErrWorkflowNotFound) {
+			logger.Error("workflow not found", zap.Error(err))
+			span.RecordError(err)
+			err = fmt.Errorf("%w: %w", internal.ErrWorkflowNotFound, err)
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
+		logger.Error("failed to resolve sections from workflow", zap.Error(err))
+		span.RecordError(err)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -302,9 +313,10 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		sectionIDStr := answerable.Question().SectionID.String()
 		if !sectionActiveMap[sectionIDStr] {
 			logger.Warn("attempted to answer question in skipped section", zap.String("questionID", answerRequest.QuestionID), zap.String("sectionID", sectionIDStr))
-			//h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
-			//return
+			h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
+			return
 		}
+
 	}
 
 	// Collect all question IDs first for a single batch type lookup
@@ -626,6 +638,39 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 	if uploadSubmittedBy != currentUser.ID {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
 		return
+	}
+
+	// Resolve active sections from workflow so we reject file uploads for skipped sections.
+	// This mirrors UpdateFormResponse skipped-section enforcement.
+	currentAnswers, _, answerableMap, err := h.store.List(traceCtx, formID, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	sectionIDs, err := h.workflowResolver.ResolveSections(traceCtx, formID, currentAnswers, answerableMap)
+	if err != nil && !errors.Is(err, internal.ErrWorkflowNotFound) {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err), logger)
+		return
+	}
+
+	if err == nil {
+		sectionActiveMap := make(map[string]bool)
+		for _, sid := range sectionIDs {
+			sectionActiveMap[sid.String()] = true
+		}
+
+		answerable, ok := answerableMap[questionID.String()]
+		if !ok {
+			// Let UploadFiles validate question membership/type.
+		} else {
+			sectionIDStr := answerable.Question().SectionID.String()
+			if !sectionActiveMap[sectionIDStr] {
+				logger.Warn("attempted to upload files for question in skipped section", zap.String("questionID", questionID.String()), zap.String("sectionID", sectionIDStr))
+				h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
+				return
+			}
+		}
 	}
 
 	// Parse multipart form (limit to maxFiles * 10 MB each)

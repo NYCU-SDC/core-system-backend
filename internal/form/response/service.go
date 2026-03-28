@@ -217,18 +217,28 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	}
 
 	// Resolve which sections are active based on workflow conditions
-	sectionIDs, err := s.workflowResolver.ResolveSections(traceCtx, response.FormID, answerPayload, answerableMap)
+	var sectionIDs []uuid.UUID
+	workflowMissing := false
+	sectionIDs, err = s.workflowResolver.ResolveSections(traceCtx, response.FormID, answerPayload, answerableMap)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
-		logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", response.ID.String()))
-		span.RecordError(err)
-		return FormResponse{}, nil, err
+		if errors.Is(err, internal.ErrWorkflowNotFound) {
+			workflowMissing = true
+			sectionIDs = nil
+		} else {
+			err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
+			logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", response.ID.String()))
+			span.RecordError(err)
+			return FormResponse{}, nil, err
+		}
 	}
 
-	// Build active section ID map for quick lookup
+	// Build active section ID map for quick lookup.
+	// If the workflow is missing, we fill this after loading all sections.
 	sectionActiveMap := make(map[string]bool)
-	for _, sectionID := range sectionIDs {
-		sectionActiveMap[sectionID.String()] = true
+	if !workflowMissing {
+		for _, sectionID := range sectionIDs {
+			sectionActiveMap[sectionID.String()] = true
+		}
 	}
 
 	// Get all sections with their questions
@@ -243,6 +253,15 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	sectionMap := make(map[string]question.SectionWithAnswerableList)
 	for _, swq := range sectionWithQuestion {
 		sectionMap[swq.Section.ID.String()] = swq
+	}
+
+	if workflowMissing {
+		// No workflow -> all sections are considered active and returned in form-DB order.
+		sectionIDs = make([]uuid.UUID, 0, len(sectionWithQuestion))
+		for _, swq := range sectionWithQuestion {
+			sectionIDs = append(sectionIDs, swq.Section.ID)
+			sectionActiveMap[swq.Section.ID.String()] = true
+		}
 	}
 
 	// Build result list with sections ordered by workflow (active sections first, then skipped)
@@ -297,9 +316,8 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	for _, swq := range sectionWithQuestion {
 		sectionIDStr := swq.Section.ID.String()
 		if !sectionActiveMap[sectionIDStr] {
-			// Collect all answerables and corresponding answers for this skipped section.
+			// Collect answerables for this skipped section.
 			// Same resolved-answerable preference as for active sections above.
-			var sectionAnswers []answer.Answer
 			var sectionAnswerables []question.Answerable
 
 			for _, ans := range swq.AnswerableList {
@@ -312,18 +330,13 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 				} else {
 					sectionAnswerables = append(sectionAnswerables, ans)
 				}
-
-				// Preserve existing answers even though section is skipped
-				if ansData, hasAnswer := answerPayloadMap[questionID]; hasAnswer {
-					sectionAnswers = append(sectionAnswers, ansData.Answer)
-				}
 			}
 
 			result = append(result, SectionWithAnswerableAndAnswer{
 				Section:         swq.Section,
 				SectionProgress: SectionProgressSkipped,
 				Answerable:      sectionAnswerables,
-				Answer:          sectionAnswers,
+				Answer:          []answer.Answer{},
 			})
 		}
 	}

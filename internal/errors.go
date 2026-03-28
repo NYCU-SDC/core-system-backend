@@ -46,7 +46,7 @@ var (
 	ErrInvalidSectionID = errors.New("invalid section id")
 	ErrMissingFormID    = errors.New("missing form id")
 	ErrInvalidFormID    = errors.New("invalid form id")
-	
+
 	// JWT Authentication Errors
 	ErrMissingAuthHeader       = errors.New("missing access token")
 	ErrInvalidAuthHeaderFormat = errors.New("invalid access token")
@@ -111,9 +111,10 @@ var (
 	ErrResponseNotOwned       = errors.New("response does not belong to the current user")
 
 	// Answer / Workflow: cannot answer questions in a section skipped by workflow
-	//ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
+	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
 
 	// Workflow Errors
+	ErrWorkflowNotFound              = errors.New("no workflow configured for this form")
 	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
 	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
 	ErrWorkflowNotActive             = errors.New("workflow is not active")
@@ -286,10 +287,12 @@ func ErrorHandler(err error) problem.Problem {
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
-	//case errors.Is(err, ErrAnswerSectionSkipped):
-	//	return problem.NewValidateProblem("cannot answer questions in a section that is skipped by the form workflow")
+	case errors.Is(err, ErrAnswerSectionSkipped):
+		return problem.NewValidateProblem("cannot answer questions in a section that is skipped by the form workflow")
 
 	// Workflow Errors
+	case errors.Is(err, ErrWorkflowNotFound):
+		return problem.NewNotFoundProblem("workflow not found")
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
 	case errors.Is(err, ErrWorkflowResolveSectionsFailed):

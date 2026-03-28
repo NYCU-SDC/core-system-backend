@@ -1,14 +1,17 @@
 package workflow
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"NYCU-SDC/core-system-backend/internal/form/question"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 // ResolveSections traverses the workflow and returns an ordered list of section IDs
@@ -28,6 +31,9 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 	// Get the workflow for this form
 	workflowRow, err := s.queries.Get(ctx, formID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, internal.ErrWorkflowNotFound
+		}
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to get workflow for form %s: %w", formID, err)
 	}
