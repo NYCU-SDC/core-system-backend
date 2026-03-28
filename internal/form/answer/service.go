@@ -450,7 +450,8 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	existingTx, ok := s.db.(pgx.Tx)
 	if ok {
 		tx = existingTx
-	} else {
+	}
+	if !ok {
 		beginner, ok := s.db.(TxBeginner)
 		if !ok {
 			return nil, Answer{}, nil, fmt.Errorf("db does not support transactions")
@@ -466,8 +467,16 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 
 		defer func() {
 			rollbackErr := tx.Rollback(traceCtx)
-			if rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
-				logger.Error("rollback failed", zap.Error(rollbackErr))
+			if rollbackErr != nil {
+				if !errors.Is(rollbackErr, pgx.ErrTxClosed) {
+					logger.Error("rollback failed", zap.Error(rollbackErr))
+					span.RecordError(rollbackErr)
+				}
+			} else {
+				logger.Warn("transaction rolled back",
+					zap.String("questionID", questionID.String()),
+					zap.String("responseID", responseID.String()),
+				)
 			}
 		}()
 	}
@@ -526,7 +535,13 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		return nil, Answer{}, nil, fmt.Errorf("failed to marshal upload file answer: %w", internal.ErrValidationFailed)
 	}
 
-	upsertedAnswers, err := qtx.BatchUpsert(traceCtx, BatchUpsertParams{ResponseIds: []uuid.UUID{responseID}, QuestionIds: []uuid.UUID{questionID}, Values: [][]byte{answerValue}})
+	upsertedAnswers, err := qtx.BatchUpsert(
+		traceCtx,
+		BatchUpsertParams{
+			ResponseIds: []uuid.UUID{responseID},
+			QuestionIds: []uuid.UUID{questionID},
+			Values:      [][]byte{answerValue},
+		})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "batch upsert upload file answer")
 		span.RecordError(err)

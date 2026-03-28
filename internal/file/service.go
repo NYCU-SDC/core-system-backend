@@ -466,7 +466,8 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 			return err
 		}
 
-		if err := qtx.DeleteAttachmentByID(traceCtx, att.ID); err != nil {
+		err := qtx.DeleteAttachmentByID(traceCtx, att.ID)
+		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "delete attachment after removing resource reference")
 			span.RecordError(err)
 			return err
