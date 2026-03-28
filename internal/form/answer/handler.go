@@ -66,11 +66,6 @@ type Store interface {
 	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
 }
 
-// WorkflowResolver resolves which sections are active for a form response based on workflow and current answers.
-type WorkflowResolver interface {
-	ResolveSections(ctx context.Context, formID uuid.UUID, answers []Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error)
-}
-
 type QuestionGetter interface {
 	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 	ListTypesByIDs(ctx context.Context, ids []uuid.UUID) (map[string]question.QuestionType, error)
@@ -281,42 +276,13 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve active sections from workflow so we reject answers for skipped sections
-	sectionIDs, err := h.workflowResolver.ResolveSections(traceCtx, formID, currentAnswers, answerableMap)
-	if err != nil {
-		if errors.Is(err, internal.ErrWorkflowNotFound) {
-			logger.Error("workflow not found", zap.Error(err))
-			span.RecordError(err)
-			err = fmt.Errorf("%w: %w", internal.ErrWorkflowNotFound, err)
-			h.problemWriter.WriteError(traceCtx, w, err, logger)
-			return
-		}
-		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
-		logger.Error("failed to resolve sections from workflow", zap.Error(err))
-		span.RecordError(err)
+	// Merge this request into answers used for workflow resolution so conditions see values
+	// from the same PATCH (and stay consistent with post-upsert state).
+	answersForWorkflow := MergeAnswersForWorkflowResolution(currentAnswers, req.Answers)
+
+	if err := ValidatePatchAnswersAgainstWorkflow(traceCtx, h.workflowResolver, formID, answersForWorkflow, answerableMap, req.Answers, logger, span); err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	sectionActiveMap := make(map[string]bool)
-	for _, sid := range sectionIDs {
-		sectionActiveMap[sid.String()] = true
-	}
-
-	// Check if the question is in a skipped section
-	for _, answerRequest := range req.Answers {
-		answerable, ok := answerableMap[answerRequest.QuestionID]
-		if !ok {
-			continue // question not in form; will be rejected later by Upsert
-		}
-
-		sectionIDStr := answerable.Question().SectionID.String()
-		if !sectionActiveMap[sectionIDStr] {
-			logger.Warn("attempted to answer question in skipped section", zap.String("questionID", answerRequest.QuestionID), zap.String("sectionID", sectionIDStr))
-			h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
-			return
-		}
-
 	}
 
 	// Collect all question IDs first for a single batch type lookup
