@@ -68,3 +68,55 @@ func ValidatePatchAnswersAgainstWorkflow(
 	}
 	return nil
 }
+
+// ValidateUploadFilesAgainstWorkflow returns nil if the file upload may proceed.
+// ErrWorkflowNotFound is treated as no section constraint. Other ResolveSections errors are wrapped.
+// If the question is missing from answerableMap, returns nil so UploadFiles can validate membership.
+func ValidateUploadFilesAgainstWorkflow(
+	ctx context.Context,
+	resolver WorkflowResolver,
+	formID, responseID, questionID uuid.UUID,
+	answersForWorkflow []Answer,
+	answerableMap map[string]question.Answerable,
+	logger *zap.Logger,
+	span trace.Span,
+) error {
+	sectionIDs, err := resolver.ResolveSections(ctx, formID, answersForWorkflow, answerableMap)
+	if err != nil {
+		if errors.Is(err, internal.ErrWorkflowNotFound) {
+			return nil
+		}
+
+		wrapped := fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
+		logger.Warn("rejected file upload: workflow section resolution failed",
+			zap.String("formID", formID.String()),
+			zap.String("responseID", responseID.String()),
+			zap.String("questionID", questionID.String()),
+			zap.Error(wrapped),
+		)
+		span.RecordError(wrapped)
+		return wrapped
+	}
+
+	sectionActiveMap := make(map[string]bool, len(sectionIDs))
+	for _, sid := range sectionIDs {
+		sectionActiveMap[sid.String()] = true
+	}
+
+	answerable, ok := answerableMap[questionID.String()]
+	if !ok {
+		return nil
+	}
+
+	sectionIDStr := answerable.Question().SectionID.String()
+	if !sectionActiveMap[sectionIDStr] {
+		logger.Warn("rejected file upload for workflow-skipped section",
+			zap.String("formID", formID.String()),
+			zap.String("responseID", responseID.String()),
+			zap.String("questionID", questionID.String()),
+			zap.String("sectionID", sectionIDStr),
+		)
+		return internal.ErrAnswerSectionSkipped
+	}
+	return nil
+}

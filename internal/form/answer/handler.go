@@ -3,7 +3,6 @@ package answer
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -644,41 +643,10 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sectionIDs, err := h.workflowResolver.ResolveSections(traceCtx, formID, currentAnswers, answerableMap)
-	if err != nil && !errors.Is(err, internal.ErrWorkflowNotFound) {
-		wrapped := fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
-		logger.Warn("rejected file upload: workflow section resolution failed",
-			zap.String("formID", formID.String()),
-			zap.String("responseID", responseID.String()),
-			zap.String("questionID", questionID.String()),
-			zap.Error(wrapped),
-		)
-		h.problemWriter.WriteError(traceCtx, w, wrapped, logger)
+	err = ValidateUploadFilesAgainstWorkflow(traceCtx, h.workflowResolver, formID, responseID, questionID, currentAnswers, answerableMap, logger, span)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
-	}
-
-	if err == nil {
-		sectionActiveMap := make(map[string]bool)
-		for _, sid := range sectionIDs {
-			sectionActiveMap[sid.String()] = true
-		}
-
-		answerable, ok := answerableMap[questionID.String()]
-		if !ok {
-			// Let UploadFiles validate question membership/type.
-		} else {
-			sectionIDStr := answerable.Question().SectionID.String()
-			if !sectionActiveMap[sectionIDStr] {
-				logger.Warn("rejected file upload for workflow-skipped section",
-					zap.String("formID", formID.String()),
-					zap.String("responseID", responseID.String()),
-					zap.String("questionID", questionID.String()),
-					zap.String("sectionID", sectionIDStr),
-				)
-				h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
-				return
-			}
-		}
 	}
 
 	// Parse multipart form (limit to maxFiles * 10 MB each)
