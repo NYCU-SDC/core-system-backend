@@ -151,7 +151,8 @@ func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResp
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if err := s.ValidateFormExists(traceCtx, formID); err != nil {
+	err := s.ValidateFormExists(traceCtx, formID)
+	if err != nil {
 		span.RecordError(err)
 		return []FormResponse{}, err
 	}
