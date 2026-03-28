@@ -94,7 +94,7 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	// Resolve dynamic choices for Ranking questions. In the read path there is
 	// no request batch, so pass an empty slice, the resolver will fall back to
 	// DB lookups using the stored answers for the source questions.
-	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, nil)
+	answerableMap, err = s.ResolveRankingChoices(traceCtx, responseID, answerableMap, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to resolve ranking choices: %w", err)
 	}
@@ -180,7 +180,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 	// Resolve dynamic choices for Ranking questions whose options come from a
 	// source DetailedMultiChoice question's stored answer.
-	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, answers)
+	answerableMap, err = s.ResolveRankingChoices(traceCtx, responseID, answerableMap, answers)
 	if err != nil {
 		return nil, nil, []error{err}
 	}
@@ -282,7 +282,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	return transformedAnswers, answerableList, nil
 }
 
-// resolveRankingChoices populates the Rank field of every Ranking answerable
+// ResolveRankingChoices populates the Rank field of every Ranking answerable
 // whose SourceID points to a DetailedMultiChoice question.
 //
 // Resolution order:
@@ -296,7 +296,11 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 // If the source answer is absent in both places the Ranking's Rank stays nil,
 // which means Validate will pass for an empty submission but reject any
 // submitted choice IDs (they cannot be validated against an empty list).
-func (s Service) resolveRankingChoices(
+//
+// For PATCH, pass the incoming answers so List()-only DB resolution can be
+// overridden when DMC and RANKING are submitted together (Upsert and workflow
+// merge already call this with the batch).
+func (s Service) ResolveRankingChoices(
 	ctx context.Context,
 	responseID uuid.UUID,
 	answerableMap map[string]question.Answerable,
@@ -401,7 +405,8 @@ func extractChoicesFromStoredDetailedMultiAnswer(rawValue []byte) ([]question.Ch
 	return choices, nil
 }
 
-// UploadFiles uploads files for an upload_file question and upserts the answer.// It validates that the question exists, belongs to the form, and is of type upload_file.
+// UploadFiles uploads files for an upload_file question and upserts the answer.
+// It validates that the question exists, belongs to the form, and is of type upload_file.
 // Files are saved via fileService, and the resulting file IDs are stored as the answer.
 //
 // Eventual consistency for orphan file cleanup:

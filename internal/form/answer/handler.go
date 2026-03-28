@@ -62,6 +62,7 @@ type UploadFilesResponse struct {
 type Store interface {
 	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error)
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []question.Answerable, map[string]question.Answerable, error)
+	ResolveRankingChoices(ctx context.Context, responseID uuid.UUID, answerableMap map[string]question.Answerable, answers []shared.AnswerParam) (map[string]question.Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
 	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
 }
@@ -276,6 +277,29 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	answerParams := make([]shared.AnswerParam, 0, len(req.Answers))
+	for _, answerRequest := range req.Answers {
+		answerParams = append(answerParams, shared.AnswerParam{
+			QuestionID: answerRequest.QuestionID,
+			Value:      answerRequest.Value,
+			OtherText:  answerRequest.OtherText,
+		})
+	}
+
+	// List() resolves ranking choices from DB only. When DMC and RANKING are sent
+	// in one PATCH, the source DMC is not stored yet, so ranking metadata is empty
+	// and MergeAnswersForWorkflowResolution would fail. Re-resolve using this batch.
+	answerableMap, err = h.store.ResolveRankingChoices(traceCtx, responseID, answerableMap, answerParams)
+	if err != nil {
+		logger.Warn("rejected PATCH answers: ranking choice resolution failed",
+			zap.String("formID", formID.String()),
+			zap.String("responseID", responseID.String()),
+			zap.Error(err),
+		)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	// Merge this request into answers used for workflow resolution so conditions see values
 	// from the same PATCH (and stay consistent with post-upsert state).
 	answersForWorkflow, err := MergeAnswersForWorkflowResolution(currentAnswers, req.Answers, answerableMap)
@@ -321,15 +345,6 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("question %s is of type upload_file and must be answered via the file upload endpoint: %w", answerRequest.QuestionID, internal.ErrQuestionTypeMismatch), logger)
 			return
 		}
-	}
-
-	answerParams := make([]shared.AnswerParam, 0, len(req.Answers))
-	for _, answerRequest := range req.Answers {
-		answerParams = append(answerParams, shared.AnswerParam{
-			QuestionID: answerRequest.QuestionID,
-			Value:      answerRequest.Value,
-			OtherText:  answerRequest.OtherText,
-		})
 	}
 
 	// Upsert answers
