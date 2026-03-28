@@ -64,6 +64,8 @@ type Store interface {
 	ResolveRankingChoices(ctx context.Context, responseID uuid.UUID, answerableMap map[string]question.Answerable, answers []shared.AnswerParam) (map[string]question.Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
 	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
+	ValidatePatchAnswersAgainstWorkflow(ctx context.Context, formID, responseID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, payloads []Payload, logger *zap.Logger, span trace.Span) error
+	ValidateUploadFilesAgainstWorkflow(ctx context.Context, formID, responseID, questionID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, logger *zap.Logger, span trace.Span) error
 }
 
 type QuestionGetter interface {
@@ -100,7 +102,6 @@ type Handler struct {
 	store             Store
 	questionStore     QuestionGetter
 	responseStore     ResponseStore
-	workflowResolver  WorkflowResolver
 	jwtIssuer         JWTIssuer
 	oauthProvider     map[string]OAuthProvider
 	baseURL           string
@@ -115,7 +116,6 @@ func NewHandler(
 	store Store,
 	questionStore QuestionGetter,
 	responseStore ResponseStore,
-	workflowResolver WorkflowResolver,
 	jwtIssuer JWTIssuer,
 	googleClientID, googleClientSecret string,
 	githubClientID, githubClientSecret string,
@@ -140,7 +140,6 @@ func NewHandler(
 		store:             store,
 		questionStore:     questionStore,
 		responseStore:     responseStore,
-		workflowResolver:  workflowResolver,
 		jwtIssuer:         jwtIssuer,
 		oauthProvider:     providers,
 		baseURL:           baseURL,
@@ -312,7 +311,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = ValidatePatchAnswersAgainstWorkflow(traceCtx, h.workflowResolver, formID, responseID, answersForWorkflow, answerableMap, req.Answers, logger, span)
+	err = h.store.ValidatePatchAnswersAgainstWorkflow(traceCtx, formID, responseID, answersForWorkflow, answerableMap, req.Answers, logger, span)
 
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -643,7 +642,7 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = ValidateUploadFilesAgainstWorkflow(traceCtx, h.workflowResolver, formID, responseID, questionID, currentAnswers, answerableMap, logger, span)
+	err = h.store.ValidateUploadFilesAgainstWorkflow(traceCtx, formID, responseID, questionID, currentAnswers, answerableMap, logger, span)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

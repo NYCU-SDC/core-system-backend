@@ -13,25 +13,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// WorkflowResolver resolves which sections are active for a form response based on workflow and current answers.
-type WorkflowResolver interface {
-	ResolveSections(ctx context.Context, formID uuid.UUID, answers []Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error)
-}
-
 // ValidatePatchAnswersAgainstWorkflow returns nil if the PATCH may proceed.
 // ErrWorkflowNotFound is treated as no constraint. Other errors should be passed to WriteError.
-func ValidatePatchAnswersAgainstWorkflow(
+func (s Service) ValidatePatchAnswersAgainstWorkflow(
 	ctx context.Context,
-	resolver WorkflowResolver,
-	formID uuid.UUID,
-	responseID uuid.UUID,
+	formID, responseID uuid.UUID,
 	answersForWorkflow []Answer,
 	answerableMap map[string]question.Answerable,
 	payloads []Payload,
 	logger *zap.Logger,
 	span trace.Span,
 ) error {
-	sectionIDs, err := resolver.ResolveSections(ctx, formID, answersForWorkflow, answerableMap)
+	sectionIDs, err := s.workflowResolver.ResolveSections(ctx, formID, answersForWorkflow, answerableMap)
 	if err != nil {
 		if errors.Is(err, internal.ErrWorkflowNotFound) {
 			return nil
@@ -72,16 +65,17 @@ func ValidatePatchAnswersAgainstWorkflow(
 // ValidateUploadFilesAgainstWorkflow returns nil if the file upload may proceed.
 // ErrWorkflowNotFound is treated as no section constraint. Other ResolveSections errors are wrapped.
 // If the question is missing from answerableMap, returns nil so UploadFiles can validate membership.
-func ValidateUploadFilesAgainstWorkflow(
+func (s Service) ValidateUploadFilesAgainstWorkflow(
 	ctx context.Context,
-	resolver WorkflowResolver,
-	formID, responseID, questionID uuid.UUID,
+	formID uuid.UUID,
+	responseID uuid.UUID,
+	questionID uuid.UUID,
 	answersForWorkflow []Answer,
 	answerableMap map[string]question.Answerable,
 	logger *zap.Logger,
 	span trace.Span,
 ) error {
-	sectionIDs, err := resolver.ResolveSections(ctx, formID, answersForWorkflow, answerableMap)
+	sectionIDs, err := s.workflowResolver.ResolveSections(ctx, formID, answersForWorkflow, answerableMap)
 	if err != nil {
 		if errors.Is(err, internal.ErrWorkflowNotFound) {
 			return nil

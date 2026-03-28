@@ -38,6 +38,10 @@ type FileService interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
+type WorkflowResolver interface {
+	ResolveSections(ctx context.Context, formID uuid.UUID, answers []Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error)
+}
+
 type Answerable interface {
 	Question() question.Question
 
@@ -56,21 +60,23 @@ type Answerable interface {
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger           *zap.Logger
+	queries          Querier
+	tracer           trace.Tracer
+	workflowResolver WorkflowResolver
 
 	questionStore QuestionStore
 	fileService   FileService
 }
 
-func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileService FileService) *Service {
+func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileService FileService, workflowResolver WorkflowResolver) *Service {
 	return &Service{
-		logger:        logger,
-		queries:       New(db),
-		tracer:        otel.Tracer("answer/service"),
-		questionStore: questionStore,
-		fileService:   fileService,
+		logger:           logger,
+		queries:          New(db),
+		tracer:           otel.Tracer("answer/service"),
+		workflowResolver: workflowResolver,
+		questionStore:    questionStore,
+		fileService:      fileService,
 	}
 }
 
