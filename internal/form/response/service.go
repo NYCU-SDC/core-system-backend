@@ -229,29 +229,13 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 		}
 	}
 
-	// Resolve which sections are active based on workflow conditions
-	var sectionIDs []uuid.UUID
-	workflowMissing := false
-	sectionIDs, err = s.workflowResolver.ResolveSections(traceCtx, response.FormID, answerPayload, answerableMap)
+	// Resolve workflow sections for the response
+	sectionIDs, workflowMissing, sectionActiveMap, err := s.ResolveWorkflowSectionsForResponse(
+		traceCtx, response.FormID, answerPayload, answerableMap, response.ID, logger, span,
+	)
 	if err != nil {
-		if errors.Is(err, internal.ErrWorkflowNotFound) {
-			workflowMissing = true
-			sectionIDs = nil
-		} else {
-			err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
-			logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", response.ID.String()))
-			span.RecordError(err)
-			return FormResponse{}, nil, err
-		}
-	}
-
-	// Build active section ID map for quick lookup.
-	// If the workflow is missing, we fill this after loading all sections.
-	sectionActiveMap := make(map[string]bool)
-	if !workflowMissing {
-		for _, sectionID := range sectionIDs {
-			sectionActiveMap[sectionID.String()] = true
-		}
+		span.RecordError(err)
+		return FormResponse{}, nil, err
 	}
 
 	// Get all sections with their questions
@@ -355,6 +339,36 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	}
 
 	return response, result, nil
+}
+
+// resolveWorkflowSectionsForResponse runs ResolveSections and builds sectionActiveMap when a workflow exists.
+// If ErrWorkflowNotFound, returns workflowMissing=true with nil sectionIDs and an empty sectionActiveMap
+// (Get fills both after loading sections). Any other error is wrapped and returned.
+func (s Service) ResolveWorkflowSectionsForResponse(
+	ctx context.Context,
+	formID uuid.UUID,
+	answerPayload []answer.Answer,
+	answerableMap map[string]question.Answerable,
+	responseID uuid.UUID,
+	logger *zap.Logger,
+	span trace.Span,
+) (sectionIDs []uuid.UUID, workflowMissing bool, sectionActiveMap map[string]bool, err error) {
+	sectionIDs, err = s.workflowResolver.ResolveSections(ctx, formID, answerPayload, answerableMap)
+	if err != nil {
+		if errors.Is(err, internal.ErrWorkflowNotFound) {
+			return nil, true, make(map[string]bool), nil
+		}
+		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
+		logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", responseID.String()))
+		span.RecordError(err)
+		return nil, false, nil, err
+	}
+
+	sectionActiveMap = make(map[string]bool, len(sectionIDs))
+	for _, sectionID := range sectionIDs {
+		sectionActiveMap[sectionID.String()] = true
+	}
+	return sectionIDs, false, sectionActiveMap, nil
 }
 
 // calculateSectionProgress determines the progress status of a section based on its questions and answers
