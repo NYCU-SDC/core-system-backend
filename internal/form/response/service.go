@@ -128,9 +128,8 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 	return newResponse, nil
 }
 
-// ListByFormID retrieves all responses for a given form
-func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
-	traceCtx, span := s.tracer.Start(ctx, "ListByFormID")
+func (s Service) ValidateFormExists(ctx context.Context, formID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "ValidateFormExists")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
@@ -138,10 +137,23 @@ func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResp
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check form exists")
 		span.RecordError(err)
-		return []FormResponse{}, err
+		return err
 	}
 	if !exists {
-		return []FormResponse{}, internal.ErrFormNotFound
+		return internal.ErrFormNotFound
+	}
+	return nil
+}
+
+// ListByFormID retrieves all responses for a given form
+func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListByFormID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	if err := s.ValidateFormExists(traceCtx, formID); err != nil {
+		span.RecordError(err)
+		return []FormResponse{}, err
 	}
 
 	responses, err := s.queries.ListByFormID(traceCtx, formID)

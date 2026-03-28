@@ -83,6 +83,7 @@ type Store interface {
 	Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error)
+	ValidateFormExists(ctx context.Context, formID uuid.UUID) error
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
 }
@@ -128,6 +129,13 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	err = h.store.ValidateFormExists(traceCtx, formID)
+	if err != nil {
+		span.RecordError(err)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
