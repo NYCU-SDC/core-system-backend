@@ -1,4 +1,4 @@
-package resolver
+package slug
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
@@ -12,17 +12,17 @@ type TenantService interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 }
 
-type SlugPathResolver struct {
+type PathResolver struct {
 	service TenantService
 }
 
-func NewSlugPathResolver(service TenantService) *SlugPathResolver {
-	return &SlugPathResolver{
+func NewPathResolver(service TenantService) *PathResolver {
+	return &PathResolver{
 		service: service,
 	}
 }
 
-func (r *SlugPathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+func (r *PathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	slug := req.PathValue("slug")
 	if slug == "" {
 		return uuid.Nil, internal.ErrMissingSlug

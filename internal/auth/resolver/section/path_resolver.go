@@ -1,4 +1,4 @@
-package resolver
+package section
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
@@ -13,17 +13,17 @@ type SectionService interface {
 	GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
-type SectionPathResolver struct {
+type PathResolver struct {
 	service SectionService
 }
 
-func NewSectionPathResolver(service SectionService) *SectionPathResolver {
-	return &SectionPathResolver{
+func NewPathResolver(service SectionService) *PathResolver {
+	return &PathResolver{
 		service: service,
 	}
 }
 
-func (r *SectionPathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+func (r *PathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	sectionIDStr := req.PathValue("sectionId")
 	if sectionIDStr == "" {
 		return uuid.Nil, internal.ErrMissingSectionID
@@ -42,7 +42,7 @@ func (r *SectionPathResolver) ResolveUnitID(ctx context.Context, req *http.Reque
 	return unitID, nil
 }
 
-func (r *SectionPathResolver) ResolveFormID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+func (r *PathResolver) ResolveFormID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	sectionIDStr := req.PathValue("sectionId")
 	if sectionIDStr == "" {
 		return uuid.Nil, internal.ErrMissingSectionID

@@ -1,4 +1,4 @@
-package resolver
+package form
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
@@ -12,17 +12,17 @@ type FormService interface {
 	GetUnitIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
-type FormPathResolver struct {
+type PathResolver struct {
 	service FormService
 }
 
-func NewFormPathResolver(service FormService) *FormPathResolver {
-	return &FormPathResolver{
+func NewPathResolver(service FormService) *PathResolver {
+	return &PathResolver{
 		service: service,
 	}
 }
 
-func (r *FormPathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+func (r *PathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	formIDStr := req.PathValue("formId")
 	if formIDStr == "" {
 		return uuid.Nil, internal.ErrMissingFormID
@@ -41,7 +41,7 @@ func (r *FormPathResolver) ResolveUnitID(ctx context.Context, req *http.Request)
 	return unitID, nil
 }
 
-func (r *FormPathResolver) ResolveFormID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+func (r *PathResolver) ResolveFormID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	formIDStr := req.PathValue("formId")
 	if formIDStr == "" {
 		return uuid.Nil, internal.ErrMissingFormID

@@ -1,4 +1,4 @@
-package resolver
+package unit
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
@@ -8,13 +8,13 @@ import (
 	"github.com/google/uuid"
 )
 
-type UnitPathResolver struct{}
+type PathResolver struct{}
 
-func NewUnitPathResolver() *UnitPathResolver {
-	return &UnitPathResolver{}
+func NewPathResolver() *PathResolver {
+	return &PathResolver{}
 }
 
-func (r *UnitPathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
+func (r *PathResolver) ResolveUnitID(ctx context.Context, req *http.Request) (uuid.UUID, error) {
 	unitIDStr := req.PathValue("unitId")
 	if unitIDStr == "" {
 		return uuid.Nil, internal.ErrMissingUnitID

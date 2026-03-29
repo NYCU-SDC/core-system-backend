@@ -4,7 +4,6 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth"
 	"NYCU-SDC/core-system-backend/internal/auth/authmiddleware"
-	"NYCU-SDC/core-system-backend/internal/auth/resolver"
 	"NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/cors"
 	"NYCU-SDC/core-system-backend/internal/distribute"
@@ -50,6 +49,11 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	formresolver "NYCU-SDC/core-system-backend/internal/auth/resolver/form"
+	sectionresolver "NYCU-SDC/core-system-backend/internal/auth/resolver/section"
+	slugresolver "NYCU-SDC/core-system-backend/internal/auth/resolver/slug"
+	unitresolver "NYCU-SDC/core-system-backend/internal/auth/resolver/unit"
 )
 
 var AppName = "no-app-name"
@@ -206,10 +210,10 @@ func main() {
 	tenantAuthMiddleware := authMiddleware.Append(tenantMiddleware.Middleware)
 
 	// Resolver
-	unitResolver := resolver.NewUnitPathResolver()
-	slugResolver := resolver.NewSlugPathResolver(tenantService)
-	formResolver := resolver.NewFormPathResolver(formService)
-	sectionResolver := resolver.NewSectionPathResolver(formService)
+	unitResolver := unitresolver.NewPathResolver()
+	slugResolver := slugresolver.NewPathResolver(tenantService)
+	formResolver := formresolver.NewPathResolver(formService)
+	sectionResolver := sectionresolver.NewPathResolver(formService)
 
 	// Permission Middleware
 	globalRole := authmiddleware.NewGlobalRoleMiddleware(logger, problemWriter)
