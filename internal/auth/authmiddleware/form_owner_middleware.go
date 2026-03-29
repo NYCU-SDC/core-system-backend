@@ -18,7 +18,7 @@ import (
 )
 
 type FormOwnerService interface {
-	GetCreatorByFormID(ctx context.Context, formID uuid.UUID) (uuid.UUID, error)
+	GetCreatorByID(ctx context.Context, formID uuid.UUID) (uuid.UUID, error)
 }
 
 type FormOwnerMiddleware struct {
@@ -43,7 +43,7 @@ func NewFormOwnerMiddleware(
 }
 
 func (m *FormOwnerMiddleware) Require(
-	resolver resolver.FormIdResolver,
+	resolver resolver.FormIDResolver,
 ) func(http.HandlerFunc) http.HandlerFunc {
 
 	return func(next http.HandlerFunc) http.HandlerFunc {
@@ -54,7 +54,7 @@ func (m *FormOwnerMiddleware) Require(
 }
 
 func (m *FormOwnerMiddleware) checkOwner(
-	resolver resolver.FormIdResolver,
+	resolver resolver.FormIDResolver,
 	next http.HandlerFunc,
 	w http.ResponseWriter,
 	r *http.Request,
@@ -76,7 +76,7 @@ func (m *FormOwnerMiddleware) checkOwner(
 		return
 	}
 
-	creatorID, err := m.service.GetCreatorByFormID(traceCtx, formID)
+	creatorID, err := m.service.GetCreatorByID(traceCtx, formID)
 	if err != nil {
 		if errors.Is(err, internal.ErrFormNotFound) {
 			logger.Warn("form not found",

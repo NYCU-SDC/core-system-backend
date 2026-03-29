@@ -9,7 +9,7 @@ import (
 )
 
 type FormService interface {
-	GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetUnitIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
 type FormPathResolver struct {
@@ -33,7 +33,7 @@ func (r *FormPathResolver) ResolveUnitID(ctx context.Context, req *http.Request)
 		return uuid.Nil, internal.ErrInvalidFormID
 	}
 
-	unitID, err := r.service.GetUnitIDByFormID(ctx, formID)
+	unitID, err := r.service.GetUnitIDByID(ctx, formID)
 	if err != nil {
 		return uuid.Nil, err
 	}

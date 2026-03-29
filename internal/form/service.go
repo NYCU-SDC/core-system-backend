@@ -30,11 +30,11 @@ type Querier interface {
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
-	GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
+	GetUnitIDByID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
 	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
-	GetCreatorByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
-	GetFormIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetCreatorByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
 type UserFormStatus string
@@ -410,12 +410,12 @@ func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, erro
 	return imageData, nil
 }
 
-func (s *Service) GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+func (s *Service) GetUnitIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	ctx, span := s.tracer.Start(ctx, "GetUnitIDByFormID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	unitID, err := s.queries.GetUnitIDByFormID(ctx, id)
+	unitID, err := s.queries.GetUnitIDByID(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get unit id by form id")
 		span.RecordError(err)
@@ -454,12 +454,12 @@ func (s *Service) GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.
 	return unitID.Bytes, nil
 }
 
-func (s *Service) GetCreatorByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+func (s *Service) GetCreatorByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	ctx, span := s.tracer.Start(ctx, "GetCreatorByFormID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	creatorID, err := s.queries.GetCreatorByFormID(ctx, id)
+	creatorID, err := s.queries.GetCreatorByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			span.RecordError(internal.ErrFormNotFound)
@@ -474,12 +474,12 @@ func (s *Service) GetCreatorByFormID(ctx context.Context, id uuid.UUID) (uuid.UU
 	return creatorID, nil
 }
 
-func (s *Service) GetFormIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+func (s *Service) GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	ctx, span := s.tracer.Start(ctx, "GetFormIDBySectionID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	formID, err := s.queries.GetFormIDBySectionID(ctx, id)
+	formID, err := s.queries.GetIDBySectionID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			span.RecordError(internal.ErrSectionNotFound)

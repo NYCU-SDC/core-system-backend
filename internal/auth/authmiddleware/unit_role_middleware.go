@@ -46,7 +46,7 @@ func NewUnitRoleMiddleware(
 
 func (m *UnitRoleMiddleware) Require(
 	required auth.Role,
-	resolver resolver.UnitIdResolver,
+	resolver resolver.UnitIDResolver,
 ) func(http.HandlerFunc) http.HandlerFunc {
 
 	return func(next http.HandlerFunc) http.HandlerFunc {
@@ -58,7 +58,7 @@ func (m *UnitRoleMiddleware) Require(
 
 func (m *UnitRoleMiddleware) checkRole(
 	required auth.Role,
-	resolver resolver.UnitIdResolver,
+	resolver resolver.UnitIDResolver,
 	next http.HandlerFunc,
 	w http.ResponseWriter,
 	r *http.Request,

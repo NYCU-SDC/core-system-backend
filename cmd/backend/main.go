@@ -214,14 +214,14 @@ func main() {
 	// Permission Middleware
 	globalRole := authmiddleware.NewGlobalRoleMiddleware(logger, problemWriter)
 	unitRole := authmiddleware.NewUnitRoleMiddleware(unitService, logger, problemWriter)
-	formCreator := authmiddleware.NewFormOwnerMiddleware(formService, logger, problemWriter)
+	formRole := authmiddleware.NewFormOwnerMiddleware(formService, logger, problemWriter)
 	op := authmiddleware.NewOperation(logger, problemWriter)
 
-	GlobalAdmin := globalRole.Require(auth.RoleAdmin)
-	UnitAdmin := unitRole.Require(auth.RoleAdmin, formResolver)
-	UnitMember := unitRole.Require(auth.RoleMember, formResolver)
-	FormCreator := formCreator.Require(formResolver)
-	FormOwner := op.Or(UnitAdmin, op.And(UnitMember, FormCreator))
+	globalAdmin := globalRole.Require(auth.RoleAdmin)
+	unitAdmin := unitRole.Require(auth.RoleAdmin, formResolver)
+	unitMember := unitRole.Require(auth.RoleMember, formResolver)
+	formCreator := formRole.Require(formResolver)
+	formOwner := op.Or(unitAdmin, op.And(unitMember, formCreator))
 
 	// HTTP Server
 	mux := http.NewServeMux()
@@ -269,11 +269,11 @@ func main() {
 
 	// Organization Management
 	// ----------------------
-	mux.Handle("GET /api/orgs", authMiddleware.Append(GlobalAdmin).HandlerFunc(unitHandler.GetAllOrganizations))
+	mux.Handle("GET /api/orgs", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.GetAllOrganizations))
 	mux.Handle("GET /api/orgs/{slug}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.GetOrgByID))
-	mux.Handle("POST /api/orgs", authMiddleware.Append(GlobalAdmin).HandlerFunc(unitHandler.CreateOrg))
+	mux.Handle("POST /api/orgs", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.CreateOrg))
 	mux.Handle("PUT /api/orgs/{slug}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.UpdateOrg))
-	mux.Handle("DELETE /api/orgs/{slug}", authMiddleware.Append(GlobalAdmin).HandlerFunc(unitHandler.DeleteOrg))
+	mux.Handle("DELETE /api/orgs/{slug}", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.DeleteOrg))
 
 	// Organization Relations
 	// ----------------------
@@ -320,7 +320,7 @@ func main() {
 	mux.Handle("GET /api/orgs/{slug}/forms", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(formHandler.ListByOrgHandler))
 	mux.Handle("POST /api/orgs/{slug}/forms", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(formHandler.CreateUnderOrgHandler))
 	mux.Handle("PATCH /api/forms/{formId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(formHandler.PatchHandler))
-	mux.Handle("DELETE /api/forms/{formId}", authMiddleware.Append(FormOwner).HandlerFunc(formHandler.DeleteHandler))
+	mux.Handle("DELETE /api/forms/{formId}", authMiddleware.Append(formOwner).HandlerFunc(formHandler.DeleteHandler))
 
 	// Form Resource
 	mux.Handle("GET /api/forms/fonts", authMiddleware.HandlerFunc(formHandler.GetFontsHandler))
@@ -350,7 +350,7 @@ func main() {
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.Create))
 	// --- (Update response is not allowed)
-	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.Append(FormOwner).HandlerFunc(responseHandler.Delete))
+	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.Append(formOwner).HandlerFunc(responseHandler.Delete))
 
 	// Response Operations
 	mux.Handle("POST /api/responses/{responseId}/submit", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))

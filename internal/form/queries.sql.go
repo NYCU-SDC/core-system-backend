@@ -373,40 +373,40 @@ func (q *Queries) GetCoverImage(ctx context.Context, formID uuid.UUID) ([]byte, 
 	return image_data, err
 }
 
-const getCreatorByFormID = `-- name: GetCreatorByFormID :one
+const getCreatorByID = `-- name: GetCreatorByID :one
 SELECT created_by
 FROM forms
 WHERE id = $1
 `
 
-func (q *Queries) GetCreatorByFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getCreatorByFormID, id)
+func (q *Queries) GetCreatorByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getCreatorByID, id)
 	var created_by uuid.UUID
 	err := row.Scan(&created_by)
 	return created_by, err
 }
 
-const getFormIDBySectionID = `-- name: GetFormIDBySectionID :one
+const getIDBySectionID = `-- name: GetIDBySectionID :one
 SELECT form_id
 FROM sections
 WHERE id = $1
 `
 
-func (q *Queries) GetFormIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getFormIDBySectionID, id)
+func (q *Queries) GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getIDBySectionID, id)
 	var form_id uuid.UUID
 	err := row.Scan(&form_id)
 	return form_id, err
 }
 
-const getUnitIDByFormID = `-- name: GetUnitIDByFormID :one
+const getUnitIDByID = `-- name: GetUnitIDByID :one
 SELECT unit_id
 FROM forms
 WHERE id = $1
 `
 
-func (q *Queries) GetUnitIDByFormID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, getUnitIDByFormID, id)
+func (q *Queries) GetUnitIDByID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getUnitIDByID, id)
 	var unit_id pgtype.UUID
 	err := row.Scan(&unit_id)
 	return unit_id, err

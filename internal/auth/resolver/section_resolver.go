@@ -10,7 +10,7 @@ import (
 
 type SectionService interface {
 	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
-	GetFormIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
 type SectionPathResolver struct {
@@ -53,7 +53,7 @@ func (r *SectionPathResolver) ResolveFormID(ctx context.Context, req *http.Reque
 		return uuid.Nil, internal.ErrInvalidSectionID
 	}
 
-	formID, err := r.service.GetFormIDBySectionID(ctx, sectionID)
+	formID, err := r.service.GetIDBySectionID(ctx, sectionID)
 	if err != nil {
 		return uuid.Nil, err
 	}

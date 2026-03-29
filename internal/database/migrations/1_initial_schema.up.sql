@@ -116,7 +116,6 @@ CREATE TABLE IF NOT EXISTS forms (
     status status NOT NULL DEFAULT 'draft',
     deadline TIMESTAMPTZ,
     unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
-    created_by UUID NOT NULL REFERENCES users(id) ,
     last_editor UUID NOT NULL REFERENCES users(id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
