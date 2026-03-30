@@ -21,17 +21,17 @@ type Service struct {
 }
 
 func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, unitService *unit.Service) (*Service, error) {
+	var config SetupConfig
 	data, err := os.ReadFile(setupPath)
 	if err != nil {
-		logger.Error("Failed to read setup file", zap.String("path", setupPath), zap.Error(err))
-		return nil, fmt.Errorf("failed to read setup file: %w", err)
-	}
-
-	var config SetupConfig
-	err = yaml.Unmarshal(data, &config)
-	if err != nil {
-		logger.Error("Failed to parse setup file", zap.String("path", setupPath), zap.Error(err))
-		return nil, fmt.Errorf("failed to parse setup file: %w", err)
+		//missing setup files is expected, so the process can go on without setup files
+		logger.Warn("Failed to read setup file", zap.String("path", setupPath), zap.Error(err))
+	} else {
+		err = yaml.Unmarshal(data, &config)
+		if err != nil {
+			logger.Error("Failed to parse setup file", zap.String("path", setupPath), zap.Error(err))
+			return nil, fmt.Errorf("failed to parse setup file: %w", err)
+		}
 	}
 
 	allowedList := make(AllowedOnboardingList)
