@@ -424,7 +424,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	// Get the answerable map to validate question type and membership
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
-		s.logger.Error("failed to get answerable map for form", zap.String("formID", formID.String()), zap.Error(err))
+		logger.Error("failed to get answerable map for form", zap.String("formID", formID.String()), zap.Error(err))
 		span.RecordError(err)
 		return nil, Answer{}, nil, err
 	}
@@ -436,7 +436,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 
 	// Validate the question is of upload_file type
 	if answerable.Question().Type != question.QuestionTypeUploadFile {
-		s.logger.Error("invalid question type", zap.String("questionID", questionID.String()), zap.String("expectedType", string(question.QuestionTypeUploadFile)), zap.String("actualType", string(answerable.Question().Type)))
+		logger.Error("invalid question type", zap.String("questionID", questionID.String()), zap.String("expectedType", string(question.QuestionTypeUploadFile)), zap.String("actualType", string(answerable.Question().Type)))
 		span.RecordError(internal.ErrQuestionTypeMismatch)
 		return nil, Answer{}, nil, internal.ErrQuestionTypeMismatch
 	}
@@ -447,37 +447,25 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		needCommit bool
 	)
 
-	existingTx, ok := s.db.(pgx.Tx)
-	if ok {
-		tx = existingTx
+	tx, needCommit, err = s.beginOrReuseTx(traceCtx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "begin tx for upload files")
+		span.RecordError(err)
+		return nil, Answer{}, nil, err
 	}
-	if !ok {
-		beginner, ok := s.db.(TxBeginner)
-		if !ok {
-			return nil, Answer{}, nil, fmt.Errorf("db does not support transactions")
-		}
 
-		tx, err = beginner.BeginTx(traceCtx, pgx.TxOptions{})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "begin tx for upload files")
-			span.RecordError(err)
-			return nil, Answer{}, nil, err
-		}
-		needCommit = true
-
+	if needCommit {
 		defer func() {
 			rollbackErr := tx.Rollback(traceCtx)
-			if rollbackErr != nil {
-				if !errors.Is(rollbackErr, pgx.ErrTxClosed) {
-					logger.Error("rollback failed", zap.Error(rollbackErr))
-					span.RecordError(rollbackErr)
-				}
-			} else {
-				logger.Warn("transaction rolled back",
-					zap.String("questionID", questionID.String()),
-					zap.String("responseID", responseID.String()),
-				)
+			if rollbackErr == nil {
+				return
 			}
+			if errors.Is(rollbackErr, pgx.ErrTxClosed) {
+				return
+			}
+
+			logger.Error("rollback failed", zap.Error(rollbackErr))
+			span.RecordError(rollbackErr)
 		}()
 	}
 
@@ -500,16 +488,22 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	for _, fh := range files {
 		f, err := fh.Open()
 		if err != nil {
-			s.logger.Error("failed to open uploaded file", zap.String("fileID", fh.Filename), zap.Error(err))
+			logger.Error("failed to open uploaded file", zap.String("filename", fh.Filename), zap.Error(err))
 			span.RecordError(err)
 			return nil, Answer{}, nil, fmt.Errorf("failed to open uploaded file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
 		}
 
 		savedFile, saveErr := ftx.SaveFile(traceCtx, f, fh.Filename, fh.Header.Get("Content-Type"), &uploadedBy)
-		_ = f.Close()
+		closeErr := f.Close()
+		if closeErr != nil {
+			logger.Warn("failed to close uploaded file stream",
+				zap.String("filename", fh.Filename),
+				zap.Error(closeErr),
+			)
+		}
 
 		if saveErr != nil {
-			s.logger.Error("failed to save uploaded file", zap.String("filename", fh.Filename), zap.Error(saveErr))
+			logger.Error("failed to save uploaded file", zap.String("filename", fh.Filename), zap.Error(saveErr))
 			span.RecordError(saveErr)
 			return nil, Answer{}, nil, fmt.Errorf("failed to save file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
 		}
@@ -530,7 +524,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	// Build the answer value as a full UploadFileAnswer and upsert
 	answerValue, err := json.Marshal(shared.UploadFileAnswer{Files: mergedEntries})
 	if err != nil {
-		s.logger.Error("failed to marshal upload file answer value", zap.String("questionID", questionID.String()), zap.Error(err))
+		logger.Error("failed to marshal upload file answer value", zap.String("questionID", questionID.String()), zap.Error(err))
 		span.RecordError(err)
 		return nil, Answer{}, nil, fmt.Errorf("failed to marshal upload file answer: %w", internal.ErrValidationFailed)
 	}
@@ -559,7 +553,7 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 			uploadedBy,
 		)
 		if attachErr != nil {
-			s.logger.Error("failed to create file attachment after upload answer upsert",
+			logger.Error("failed to create file attachment after upload answer upsert",
 				zap.String("answerID", upsertedAnswer.ID.String()),
 				zap.String("fileID", entry.FileID.String()),
 				zap.Error(attachErr),
@@ -609,4 +603,24 @@ func (s Service) loadPreviousUploadFileEntries(ctx context.Context, q Querier, r
 	}
 
 	return existingUploadAnswer.Files, nil
+}
+
+func (s Service) beginOrReuseTx(
+	ctx context.Context,
+) (pgx.Tx, bool, error) {
+	if existingTx, ok := s.db.(pgx.Tx); ok {
+		return existingTx, false, nil
+	}
+
+	beginner, ok := s.db.(TxBeginner)
+	if !ok {
+		return nil, false, fmt.Errorf("db does not support transactions")
+	}
+
+	tx, err := beginner.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, false, err
+	}
+
+	return tx, true, nil
 }
