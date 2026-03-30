@@ -193,6 +193,47 @@ func (ns NullQuestionType) Value() (driver.Value, error) {
 	return string(ns.QuestionType), nil
 }
 
+type ResourceType string
+
+const (
+	ResourceTypeFormAnswer ResourceType = "form_answer"
+)
+
+func (e *ResourceType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ResourceType(s)
+	case string:
+		*e = ResourceType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ResourceType: %T", src)
+	}
+	return nil
+}
+
+type NullResourceType struct {
+	ResourceType ResourceType
+	Valid        bool // Valid is true if ResourceType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullResourceType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ResourceType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ResourceType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullResourceType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ResourceType), nil
+}
+
 type ResponseProgress string
 
 const (
@@ -431,6 +472,15 @@ type File struct {
 	UploadedBy       pgtype.UUID
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
+}
+
+type FileAttachment struct {
+	ID           uuid.UUID
+	FileID       uuid.UUID
+	ResourceType ResourceType
+	ResourceID   uuid.UUID
+	CreatedBy    uuid.UUID
+	CreatedAt    pgtype.Timestamptz
 }
 
 type Form struct {
