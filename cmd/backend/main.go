@@ -150,9 +150,14 @@ func main() {
 	// Service
 	// ============================================
 
-	fileService := file.NewService(logger, dbPool)
 	tenantService := tenant.NewService(logger, dbPool)
 	unitService := unit.NewService(logger, dbPool, tenantService)
+	
+	//Resource handler wiring for generic file deletion
+	answerQueries := answer.New(dbPool)
+	answerFileHandler := answer.NewFileResourceHandler(logger, answerQueries)
+	fileService := file.NewService(logger, dbPool, answerFileHandler)
+
 	userService := user.NewService(logger, dbPool, fileService, unitService)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
@@ -374,6 +379,7 @@ func main() {
 	// Todo: Admin only endpoint
 	mux.Handle("GET /api/files", authMiddleware.HandlerFunc(fileHandler.List))
 	mux.Handle("GET /api/files/me", authMiddleware.HandlerFunc(fileHandler.ListMyFiles))
+	mux.Handle("DELETE /api/files/{id}", authMiddleware.HandlerFunc(fileHandler.Delete))
 
 	// End of API routes
 	// ============================================

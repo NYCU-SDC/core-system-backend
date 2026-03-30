@@ -61,3 +61,8 @@ RETURNING *;
 -- name: DeleteByResponseID :exec
 DELETE FROM answers
 WHERE response_id = $1;
+
+-- name: GetByID :one
+SELECT id, response_id, question_id, value, created_at, updated_at
+FROM answers
+WHERE id = $1;
