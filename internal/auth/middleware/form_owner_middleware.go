@@ -1,4 +1,4 @@
-package authmiddleware
+package middleware
 
 import (
 	"NYCU-SDC/core-system-backend/internal"

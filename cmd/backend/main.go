@@ -3,7 +3,6 @@ package main
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth"
-	"NYCU-SDC/core-system-backend/internal/auth/authmiddleware"
 	"NYCU-SDC/core-system-backend/internal/auth/resolver/formresolver"
 	"NYCU-SDC/core-system-backend/internal/auth/resolver/sectionresolver"
 	"NYCU-SDC/core-system-backend/internal/auth/resolver/slugresolver"
@@ -36,6 +35,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	authmiddleware "NYCU-SDC/core-system-backend/internal/auth/middleware"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
