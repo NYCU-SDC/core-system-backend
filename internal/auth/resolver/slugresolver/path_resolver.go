@@ -1,4 +1,4 @@
-package slug
+package slugresolver
 
 import (
 	"NYCU-SDC/core-system-backend/internal"

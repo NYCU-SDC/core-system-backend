@@ -1,4 +1,4 @@
-package section
+package sectionresolver
 
 import (
 	"NYCU-SDC/core-system-backend/internal"

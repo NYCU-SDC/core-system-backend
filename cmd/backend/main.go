@@ -4,6 +4,10 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth"
 	"NYCU-SDC/core-system-backend/internal/auth/authmiddleware"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver/formresolver"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver/sectionresolver"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver/slugresolver"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver/unitresolver"
 	"NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/cors"
 	"NYCU-SDC/core-system-backend/internal/distribute"
@@ -49,11 +53,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	formresolver "NYCU-SDC/core-system-backend/internal/auth/resolver/form"
-	sectionresolver "NYCU-SDC/core-system-backend/internal/auth/resolver/section"
-	slugresolver "NYCU-SDC/core-system-backend/internal/auth/resolver/slug"
-	unitresolver "NYCU-SDC/core-system-backend/internal/auth/resolver/unit"
 )
 
 var AppName = "no-app-name"
