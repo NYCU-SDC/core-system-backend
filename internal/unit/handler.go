@@ -23,7 +23,8 @@ import (
 )
 
 type Store interface {
-	CreateOrganization(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
+	CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
+	CreateOrganization(ctx context.Context, name string, description string, slug string) (Unit, error)
 	CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
@@ -39,6 +40,7 @@ type Store interface {
 	RemoveMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) error
 	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error)
 	UpdateUnitMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, newRole UnitRole) error
+	SlugExists(ctx context.Context, slug string) (bool, error)
 }
 
 type formSubmitStore interface {
@@ -48,6 +50,7 @@ type formSubmitStore interface {
 type tenantStore interface {
 	GetSlugStatus(ctx context.Context, slug string) (bool, uuid.UUID, error)
 	Create(ctx context.Context, id uuid.UUID, ownerID uuid.UUID, slug string) (tenant.Tenant, error)
+	CreateWithoutOwner(ctx context.Context, id uuid.UUID, slug string) (tenant.Tenant, error)
 	Update(ctx context.Context, id uuid.UUID, slug string, dbStrategy tenant.DbStrategy) (tenant.Tenant, error)
 	SlugExists(ctx context.Context, slug string) (bool, error)
 }
@@ -275,7 +278,7 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdOrg, err := h.store.CreateOrganization(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
+	createdOrg, err := h.store.CreateOrganizationWithCurrentUserID(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create org: %w", err), logger)
 		return
