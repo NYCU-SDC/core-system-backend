@@ -72,7 +72,7 @@ func (s *Service) Setup(ctx context.Context) error {
 	}
 
 	for _, org := range s.config.Organizations {
-		exist, err := s.unitService.TenantStore.SlugExists(ctx, org.Slug)
+		exist, err := s.unitService.SlugExists(ctx, org.Slug)
 		if err != nil {
 			s.logger.Error("Failed to check if the organization exists", zap.Error(err))
 			return err

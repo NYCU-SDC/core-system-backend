@@ -40,6 +40,7 @@ type Store interface {
 	RemoveMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) error
 	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error)
 	UpdateUnitMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, newRole UnitRole) error
+	SlugExists(ctx context.Context, slug string) (bool, error)
 }
 
 type formSubmitStore interface {
