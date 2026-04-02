@@ -150,7 +150,7 @@ func TestUnitService_Create(t *testing.T) {
 				result, err = unitService.CreateOrganizationWithCurrentUserID(ctx, params.name, params.description, params.slug, params.ownerID, params.metadata)
 				require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			} else {
-				result, err = unitService.CreateUnit(ctx, params.name, params.description, params.slug, params.metadata)
+				result, err = unitService.CreateUnit(ctx, params.name, params.description, params.parentUnitID, params.metadata)
 				require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			}
 
