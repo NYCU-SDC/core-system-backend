@@ -1,0 +1,5 @@
+ALTER TABLE forms
+DROP CONSTRAINT IF EXISTS forms_created_by_fkey;
+
+ALTER TABLE forms
+DROP COLUMN IF EXISTS created_by;

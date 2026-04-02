@@ -3,8 +3,10 @@ package main
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth"
-	"NYCU-SDC/core-system-backend/internal/auth/authmiddleware"
-	"NYCU-SDC/core-system-backend/internal/auth/resolver"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver/formresolver"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver/sectionresolver"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver/slugresolver"
+	"NYCU-SDC/core-system-backend/internal/auth/resolver/unitresolver"
 	"NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/cors"
 	"NYCU-SDC/core-system-backend/internal/distribute"
@@ -33,6 +35,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	authmiddleware "NYCU-SDC/core-system-backend/internal/auth/middleware"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -137,10 +141,6 @@ func main() {
 
 	validator := internal.NewValidator()
 	problemWriter := internal.NewProblemWriter()
-	_, err = setup.NewService(logger, dbPool, cfg.SetupPath)
-	if err != nil {
-		logger.Fatal("Failed to setup", zap.Error(err))
-	}
 
 	// Init Default Role
 	user.InitDefaultGlobalRole(cfg.DefaultGlobalRoles)
@@ -150,9 +150,14 @@ func main() {
 	// Service
 	// ============================================
 
-	fileService := file.NewService(logger, dbPool)
 	tenantService := tenant.NewService(logger, dbPool)
 	unitService := unit.NewService(logger, dbPool, tenantService)
+	
+	//Resource handler wiring for generic file deletion
+	answerQueries := answer.New(dbPool)
+	answerFileHandler := answer.NewFileResourceHandler(logger, answerQueries)
+	fileService := file.NewService(logger, dbPool, answerFileHandler)
+
 	userService := user.NewService(logger, dbPool, fileService, unitService)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
@@ -165,6 +170,14 @@ func main() {
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
+	setupService, err := setup.NewService(logger, dbPool, cfg.SetupPath, unitService)
+	if err != nil {
+		logger.Fatal("Failed to load setup config", zap.Error(err))
+	}
+	err = setupService.Setup(context.Background())
+	if err != nil {
+		logger.Fatal("Failed to setup", zap.Error(err))
+	}
 	// ============================================
 	// Handler
 	// ============================================
@@ -206,14 +219,22 @@ func main() {
 	tenantAuthMiddleware := authMiddleware.Append(tenantMiddleware.Middleware)
 
 	// Resolver
-	unitResolver := resolver.NewUnitResolver()
-	slugResolver := resolver.NewSlugResolver(tenantService)
-	formResolver := resolver.NewFormResolver(formService)
-	sectionResolver := resolver.NewSectionResolver(formService)
+	unitResolver := unitresolver.NewPathResolver()
+	slugResolver := slugresolver.NewPathResolver(tenantService)
+	formResolver := formresolver.NewPathResolver(formService)
+	sectionResolver := sectionresolver.NewPathResolver(formService)
 
 	// Permission Middleware
 	globalRole := authmiddleware.NewGlobalRoleMiddleware(logger, problemWriter)
 	unitRole := authmiddleware.NewUnitRoleMiddleware(unitService, logger, problemWriter)
+	formRole := authmiddleware.NewFormOwnerMiddleware(formService, logger, problemWriter)
+	op := authmiddleware.NewOperation(logger, problemWriter)
+
+	globalAdmin := globalRole.Require(auth.RoleAdmin)
+	unitAdmin := unitRole.Require(auth.RoleAdmin, formResolver)
+	unitMember := unitRole.Require(auth.RoleMember, formResolver)
+	formCreator := formRole.Require(formResolver)
+	formOwner := op.Or(unitAdmin, op.And(unitMember, formCreator))
 
 	// HTTP Server
 	mux := http.NewServeMux()
@@ -261,11 +282,11 @@ func main() {
 
 	// Organization Management
 	// ----------------------
-	mux.Handle("GET /api/orgs", authMiddleware.Append(globalRole.Require(auth.RoleAdmin)).HandlerFunc(unitHandler.GetAllOrganizations))
+	mux.Handle("GET /api/orgs", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.GetAllOrganizations))
 	mux.Handle("GET /api/orgs/{slug}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.GetOrgByID))
-	mux.Handle("POST /api/orgs", authMiddleware.Append(globalRole.Require(auth.RoleAdmin)).HandlerFunc(unitHandler.CreateOrg))
+	mux.Handle("POST /api/orgs", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.CreateOrg))
 	mux.Handle("PUT /api/orgs/{slug}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.UpdateOrg))
-	mux.Handle("DELETE /api/orgs/{slug}", authMiddleware.Append(globalRole.Require(auth.RoleAdmin)).HandlerFunc(unitHandler.DeleteOrg))
+	mux.Handle("DELETE /api/orgs/{slug}", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.DeleteOrg))
 
 	// Organization Relations
 	// ----------------------
@@ -288,7 +309,7 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, unitResolver)).HandlerFunc(unitHandler.GetUnitByID))
 	mux.Handle("POST /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.CreateUnit))
-	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.UpdateUnit))
+	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.UpdateUnit))
 	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.DeleteUnit))
 
 	mux.Handle("GET /api/orgs/{slug}/units/{unitId}/subunits", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, unitResolver)).HandlerFunc(unitHandler.ListUnitSubUnits))
@@ -312,7 +333,7 @@ func main() {
 	mux.Handle("GET /api/orgs/{slug}/forms", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(formHandler.ListByOrgHandler))
 	mux.Handle("POST /api/orgs/{slug}/forms", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(formHandler.CreateUnderOrgHandler))
 	mux.Handle("PATCH /api/forms/{formId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(formHandler.PatchHandler))
-	mux.Handle("DELETE /api/forms/{formId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(formHandler.DeleteHandler))
+	mux.Handle("DELETE /api/forms/{formId}", authMiddleware.Append(formOwner).HandlerFunc(formHandler.DeleteHandler))
 
 	// Form Resource
 	mux.Handle("GET /api/forms/fonts", authMiddleware.HandlerFunc(formHandler.GetFontsHandler))
@@ -342,7 +363,7 @@ func main() {
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.Create))
 	// --- (Update response is not allowed)
-	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(responseHandler.Delete))
+	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.Append(formOwner).HandlerFunc(responseHandler.Delete))
 
 	// Response Operations
 	mux.Handle("POST /api/responses/{responseId}/submit", authMiddleware.HandlerFunc(submitHandler.SubmitHandler))
@@ -374,6 +395,7 @@ func main() {
 	// Todo: Admin only endpoint
 	mux.Handle("GET /api/files", authMiddleware.HandlerFunc(fileHandler.List))
 	mux.Handle("GET /api/files/me", authMiddleware.HandlerFunc(fileHandler.ListMyFiles))
+	mux.Handle("DELETE /api/files/{id}", authMiddleware.HandlerFunc(fileHandler.Delete))
 
 	// End of API routes
 	// ============================================

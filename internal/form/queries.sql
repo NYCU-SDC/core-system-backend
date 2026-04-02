@@ -5,6 +5,7 @@ WITH created AS (
                        description,
                        preview_message,
                        unit_id,
+                       created_by,
                        last_editor,
                        deadline,
                        publish_time,
@@ -19,7 +20,7 @@ WITH created AS (
     VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, $14
+        $11, $12, $13, $14, $15
     )
     RETURNING *
 ),
@@ -187,7 +188,7 @@ RETURNING id;
 -- name: GetCoverImage :one
 SELECT image_data FROM form_covers WHERE form_id = $1;
 
--- name: GetUnitIDByFormID :one
+-- name: GetUnitIDByID :one
 SELECT unit_id
 FROM forms
 WHERE id = $1;
@@ -197,3 +198,13 @@ SELECT f.unit_id
 FROM sections s
 JOIN forms f ON s.form_id = f.id
 WHERE s.id = $1;
+
+-- name: GetCreatorByID :one
+SELECT created_by
+FROM forms
+WHERE id = $1;
+
+-- name: GetIDBySectionID :one
+SELECT form_id
+FROM sections
+WHERE id = $1;

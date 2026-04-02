@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS forms (
     message_after_submission TEXT NOT NULL,
     status status NOT NULL DEFAULT 'draft',
     unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     last_editor UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     deadline TIMESTAMPTZ DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
