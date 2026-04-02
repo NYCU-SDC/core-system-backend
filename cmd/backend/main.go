@@ -308,7 +308,7 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, unitResolver)).HandlerFunc(unitHandler.GetUnitByID))
 	mux.Handle("POST /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.CreateOrgUnit))
-	mux.Handle("POST /api/units/{unitId}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.CreateUnit))
+	mux.Handle("POST /api/units/{unitId}/units", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.CreateUnit))
 	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.UpdateUnit))
 	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.DeleteUnit))
 

@@ -25,7 +25,7 @@ import (
 type Store interface {
 	CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
 	CreateOrganization(ctx context.Context, name string, description string, slug string) (Unit, error)
-	CreateUnit(ctx context.Context, name string, description string, parentID uuid.UUID, metadata []byte) (Unit, error)
+	CreateUnitWithUserID(ctx context.Context, name string, description string, parentID uuid.UUID, UserID uuid.UUID, metadata []byte) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
 	ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID) ([]Organization, error)
@@ -233,7 +233,13 @@ func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdUnit, err := h.store.CreateUnit(traceCtx, req.Name, req.Description, orgID, metadataBytes)
+	User, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("no user found in request context"), logger)
+		return
+	}
+
+	createdUnit, err := h.store.CreateUnitWithUserID(traceCtx, req.Name, req.Description, orgID, User.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), logger)
 		return
@@ -267,7 +273,13 @@ func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdUnit, err := h.store.CreateUnit(traceCtx, req.Name, req.Description, unitID, metadataBytes)
+	User, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("no user found in request context"), logger)
+		return
+	}
+
+	createdUnit, err := h.store.CreateUnitWithUserID(traceCtx, req.Name, req.Description, unitID, User.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), logger)
 		return
