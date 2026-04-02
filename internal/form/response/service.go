@@ -313,8 +313,9 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	for _, swq := range sectionWithQuestion {
 		sectionIDStr := swq.Section.ID.String()
 		if !sectionActiveMap[sectionIDStr] {
-			// Collect answerables for this skipped section.
-			// Same resolved-answerable preference as for active sections above.
+			// Collect answerables and corresponding answers for this skipped section.
+			// Same resolved-answerable and answer-payload behavior as for active sections.
+			var sectionAnswers []answer.Answer
 			var sectionAnswerables []question.Answerable
 
 			for _, ans := range swq.AnswerableList {
@@ -327,13 +328,18 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 				} else {
 					sectionAnswerables = append(sectionAnswerables, ans)
 				}
+
+				answerData, hasAnswer := answerPayloadMap[questionID]
+				if hasAnswer {
+					sectionAnswers = append(sectionAnswers, answerData.Answer)
+				}
 			}
 
 			result = append(result, SectionWithAnswerableAndAnswer{
 				Section:         swq.Section,
 				SectionProgress: SectionProgressSkipped,
 				Answerable:      sectionAnswerables,
-				Answer:          []answer.Answer{},
+				Answer:          sectionAnswers,
 			})
 		}
 	}
