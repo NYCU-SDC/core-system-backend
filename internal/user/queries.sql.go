@@ -117,6 +117,29 @@ func (q *Queries) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
 	return exists, err
 }
 
+const getByEmail = `-- name: GetByEmail :one
+SELECT u.id, u.name, a.provider
+FROM user_emails e
+         JOIN users u ON e.user_id = u.id
+         JOIN auth a ON a.user_id = u.id
+WHERE e.value = $1
+ORDER BY a.created_at ASC
+    LIMIT 1
+`
+
+type GetByEmailRow struct {
+	ID       uuid.UUID
+	Name     pgtype.Text
+	Provider string
+}
+
+func (q *Queries) GetByEmail(ctx context.Context, value string) (GetByEmailRow, error) {
+	row := q.db.QueryRow(ctx, getByEmail, value)
+	var i GetByEmailRow
+	err := row.Scan(&i.ID, &i.Name, &i.Provider)
+	return i, err
+}
+
 const getByID = `-- name: GetByID :one
 SELECT id, name, username, avatar_url, role, is_onboarded, created_at, updated_at, emails
 FROM users_with_emails
@@ -178,29 +201,6 @@ func (q *Queries) GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.
 	var user_id uuid.UUID
 	err := row.Scan(&user_id)
 	return user_id, err
-}
-
-const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT u.id, u.name, a.provider
-FROM user_emails e
-         JOIN users u ON e.user_id = u.id
-         JOIN auth a ON a.user_id = u.id
-WHERE e.value = $1
-ORDER BY a.created_at ASC
-    LIMIT 1
-`
-
-type GetUserByEmailRow struct {
-	ID       uuid.UUID
-	Name     pgtype.Text
-	Provider string
-}
-
-func (q *Queries) GetUserByEmail(ctx context.Context, value string) (GetUserByEmailRow, error) {
-	row := q.db.QueryRow(ctx, getUserByEmail, value)
-	var i GetUserByEmailRow
-	err := row.Scan(&i.ID, &i.Name, &i.Provider)
-	return i, err
 }
 
 const update = `-- name: Update :one

@@ -41,7 +41,7 @@ type Querier interface {
 	Update(ctx context.Context, arg UpdateParams) (User, error)
 	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
 	CreateEmail(ctx context.Context, arg CreateEmailParams) error
-	GetUserByEmail(ctx context.Context, value string) (GetUserByEmailRow, error)
+	GetByEmail(ctx context.Context, value string) (GetByEmailRow, error)
 }
 
 // FileOperator defines the interface for file operations needed by user service
@@ -165,7 +165,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 
 	// Different provider, same email → binding confirmation required
 	if email != "" {
-		existingUser, err := s.queries.GetUserByEmail(traceCtx, email)
+		existingUser, err := s.queries.GetByEmail(traceCtx, email)
 		if err == nil {
 			// Found a user with the same email under a different provider
 			logger.Info("Email already exists under different provider, binding confirmation required",
@@ -187,7 +187,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		}
 	}
 
-	// User not found -> create new user
+	// User not exists -> create new user
 	logger.Info("User not found, creating new user", zap.String("provider", oauthProvider), zap.String("provider_id", oauthProviderID))
 
 	defaultRoles := DefaultGlobalRoles(email)
@@ -228,6 +228,13 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	}
 
 	logger.Info("Created new user", zap.String("user_id", newUser.ID.String()), zap.String("username", newUser.Username.String))
+
+	// Create email entry
+	err = s.CreateEmail(traceCtx, newUser.ID, email)
+	if err != nil {
+		span.RecordError(err)
+		return FindOrCreateResult{}, err
+	}
 
 	// Create auth entry
 	err = s.CreateAuth(traceCtx, newUser.ID, oauthProvider, oauthProviderID)

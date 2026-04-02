@@ -310,15 +310,6 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Normal login: issue access and refresh tokens.
-	if email != "" {
-		err := h.userStore.CreateEmail(traceCtx, result.UserID, email)
-		if err != nil {
-			h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToCreateEmail, logger)
-			return
-		}
-	}
-
 	accessTokenID, refreshTokenID, err := h.generateJWT(traceCtx, result.UserID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
