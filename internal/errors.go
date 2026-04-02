@@ -46,7 +46,7 @@ var (
 	ErrInvalidSectionID = errors.New("invalid section id")
 	ErrMissingFormID    = errors.New("missing form id")
 	ErrInvalidFormID    = errors.New("invalid form id")
-	
+
 	// JWT Authentication Errors
 	ErrMissingAuthHeader       = errors.New("missing access token")
 	ErrInvalidAuthHeaderFormat = errors.New("invalid access token")

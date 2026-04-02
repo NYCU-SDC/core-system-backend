@@ -25,7 +25,7 @@ import (
 type Store interface {
 	CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
 	CreateOrganization(ctx context.Context, name string, description string, slug string) (Unit, error)
-	CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error)
+	CreateUnit(ctx context.Context, name string, description string, parentID uuid.UUID, metadata []byte) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
 	ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID) ([]Organization, error)
@@ -203,15 +203,15 @@ func convertOrgResponse(u Unit, slug string) OrganizationResponse {
 
 var slugPattern = `^[a-zA-Z0-9_-]+$`
 
-func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnit")
+func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateOrgUnit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req Request
 
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
 		return
 	}
 
@@ -227,7 +227,47 @@ func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdUnit, err := h.store.CreateUnit(traceCtx, req.Name, req.Description, orgSlug, metadataBytes)
+	_, orgID, err := h.tenantStore.GetSlugStatus(traceCtx, orgSlug)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org ID by slug: %w", err), logger)
+		return
+	}
+
+	createdUnit, err := h.store.CreateUnit(traceCtx, req.Name, req.Description, orgID, metadataBytes)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, convertUnitResponse(createdUnit))
+}
+
+func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnit")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var req Request
+
+	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
+		return
+	}
+
+	metadataBytes, err := json.Marshal(req.Metadata)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to marshal metadata: %w", err), logger)
+		return
+	}
+
+	idStr := r.PathValue("unitId")
+	unitID, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidUnitID, logger)
+		return
+	}
+
+	createdUnit, err := h.store.CreateUnit(traceCtx, req.Name, req.Description, unitID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), logger)
 		return
