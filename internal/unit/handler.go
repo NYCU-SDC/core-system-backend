@@ -201,18 +201,6 @@ func convertOrgResponse(u Unit, slug string) OrganizationResponse {
 	}
 }
 
-type parentChildResponse struct {
-	ParentID *uuid.UUID `json:"parentId,omitempty"`
-	ChildID  uuid.UUID  `json:"childId"`
-	OrgID    uuid.UUID  `json:"orgId"`
-}
-
-type ParentChildRequest struct {
-	ParentID uuid.UUID `json:"parentId"`
-	ChildID  uuid.UUID `json:"childId" validate:"required"`
-	OrgID    uuid.UUID `json:"orgId" validate:"required"`
-}
-
 var slugPattern = `^[a-zA-Z0-9_-]+$`
 
 func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
@@ -492,36 +480,6 @@ func (h *Handler) DeleteUnit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
-}
-
-func (h *Handler) AddParentChild(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "AddParent")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	var req ParentChildRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
-		return
-	}
-
-	pc, err := h.store.AddParent(traceCtx, req.ParentID, req.ChildID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to add parent-child relationship: %w", err), logger)
-		return
-	}
-
-	var parent *uuid.UUID
-	if req.ParentID != uuid.Nil {
-		pid := req.ParentID
-		parent = &pid
-	}
-	response := parentChildResponse{
-		ParentID: parent,
-		ChildID:  pc.ID,
-		OrgID:    pc.OrgID.Bytes,
-	}
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
 }
 
 func (h *Handler) ListOrgSubUnits(w http.ResponseWriter, r *http.Request) {

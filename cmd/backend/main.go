@@ -152,7 +152,7 @@ func main() {
 
 	tenantService := tenant.NewService(logger, dbPool)
 	unitService := unit.NewService(logger, dbPool, tenantService)
-	
+
 	//Resource handler wiring for generic file deletion
 	answerQueries := answer.New(dbPool)
 	answerFileHandler := answer.NewFileResourceHandler(logger, answerQueries)
@@ -292,7 +292,6 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.ListOrgSubUnits))
 	mux.Handle("GET /api/orgs/{slug}/unit-ids", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.ListOrgSubUnitIDs))
-	mux.Handle("POST /api/orgs/relations", authMiddleware.HandlerFunc(unitHandler.AddParentChild))
 
 	// Organization Membership
 	// ----------------------
