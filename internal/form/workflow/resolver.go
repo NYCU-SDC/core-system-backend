@@ -40,7 +40,8 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 
 	// Parse workflow JSON into nodes
 	var nodes []map[string]interface{}
-	if err := json.Unmarshal(workflowRow.Workflow, &nodes); err != nil {
+	err = json.Unmarshal(workflowRow.Workflow, &nodes)
+	if err != nil {
 		span.RecordError(err)
 		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
 	}
@@ -48,7 +49,8 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 	// Build node map for quick lookup
 	nodeMap := make(map[string]map[string]interface{})
 	for _, node := range nodes {
-		if id, ok := node["id"].(string); ok {
+		id, ok := node["id"].(string)
+		if ok {
 			nodeMap[id] = node
 		}
 	}
@@ -62,7 +64,8 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 	// Find start node
 	var currentNodeID string
 	for _, node := range nodes {
-		if nodeType, ok := node["type"].(string); ok && nodeType == "start" {
+		nodeType, ok := node["type"].(string)
+		if ok && nodeType == string(NodeTypeStart) {
 			currentNodeID, _ = node["id"].(string)
 			break
 		}
@@ -94,12 +97,12 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 		}
 
 		switch nodeType {
-		case "start":
+		case string(NodeTypeStart):
 			// Move to next node
 			next, _ := currentNode["next"].(string)
 			currentNodeID = next
 
-		case "section":
+		case string(NodeTypeSection):
 			// Record this section ID
 			sectionID, err := uuid.Parse(currentNodeID)
 			if err != nil {
@@ -111,7 +114,7 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 			next, _ := currentNode["next"].(string)
 			currentNodeID = next
 
-		case "condition":
+		case string(NodeTypeCondition):
 			// Evaluate condition and determine next node
 			nextNodeID, canEvaluate, err := s.evaluateCondition(currentNode, answerMap, answerableMap)
 			if err != nil {
@@ -126,7 +129,7 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 
 			currentNodeID = nextNodeID
 
-		case "end":
+		case string(NodeTypeEnd):
 			// Reached the end, stop traversal
 			return sectionIDs, nil
 
@@ -160,7 +163,8 @@ func (s *Service) evaluateCondition(conditionNode map[string]interface{}, answer
 		Pattern  string `json:"pattern"`  // Regex pattern
 	}
 
-	if err := json.Unmarshal(conditionRuleBytes, &conditionRule); err != nil {
+	err = json.Unmarshal(conditionRuleBytes, &conditionRule)
+	if err != nil {
 		return "", false, fmt.Errorf("failed to unmarshal conditionRule: %w", err)
 	}
 
