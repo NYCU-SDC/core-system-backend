@@ -38,6 +38,9 @@ type AnswerStore interface {
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]answer.Answer, []question.Answerable, map[string]question.Answerable, error)
 }
 
+type UserStore interface {
+	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
+}
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
@@ -64,9 +67,10 @@ type Service struct {
 	sectionWithQuestionStore SectionWithQuestionStore
 	workflowResolver         WorkflowResolver
 	formStore                FormStore
+	userStore                UserStore
 }
 
-func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver, formStore FormStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver, formStore FormStore, userStore UserStore) *Service {
 	return &Service{
 		logger:  logger,
 		queries: New(db),
@@ -76,6 +80,7 @@ func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionSto
 		sectionWithQuestionStore: sectionStore,
 		workflowResolver:         workflowResolver,
 		formStore:                formStore,
+		userStore:                userStore,
 	}
 }
 
@@ -162,6 +167,16 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
+
+	exists, err := s.userStore.ExistsByID(ctx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check user exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		return nil, internal.ErrUserNotFound
+	}
 
 	responses, err := s.queries.ListBySubmittedBy(ctx, userID)
 	if err != nil {
