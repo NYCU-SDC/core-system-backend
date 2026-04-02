@@ -64,8 +64,8 @@ type Store interface {
 	ResolveRankingChoices(ctx context.Context, responseID uuid.UUID, answerableMap map[string]question.Answerable, answers []shared.AnswerParam) (map[string]question.Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
 	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
-	ValidatePatchAnswersAgainstWorkflow(ctx context.Context, formID, responseID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, payloads []Payload, logger *zap.Logger, span trace.Span) error
-	ValidateUploadFilesAgainstWorkflow(ctx context.Context, formID, responseID, questionID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, logger *zap.Logger, span trace.Span) error
+	ValidatePatchAnswersAgainstWorkflow(ctx context.Context, formID, responseID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, payloads []Payload) error
+	ValidateUploadFilesAgainstWorkflow(ctx context.Context, formID, responseID, questionID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable) error
 	MergeAnswersForWorkflowResolution(currentAnswers []Answer, payloads []Payload, answerableMap map[string]question.Answerable) ([]Answer, error)
 }
 
@@ -312,7 +312,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.store.ValidatePatchAnswersAgainstWorkflow(traceCtx, formID, responseID, answersForWorkflow, answerableMap, req.Answers, logger, span)
+	err = h.store.ValidatePatchAnswersAgainstWorkflow(traceCtx, formID, responseID, answersForWorkflow, answerableMap, req.Answers)
 
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -643,7 +643,7 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.store.ValidateUploadFilesAgainstWorkflow(traceCtx, formID, responseID, questionID, currentAnswers, answerableMap, logger, span)
+	err = h.store.ValidateUploadFilesAgainstWorkflow(traceCtx, formID, responseID, questionID, currentAnswers, answerableMap)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
