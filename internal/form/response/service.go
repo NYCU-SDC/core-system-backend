@@ -230,8 +230,8 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	}
 
 	// Resolve workflow sections for the response
-	sectionIDs, workflowMissing, sectionActiveMap, err := s.ResolveWorkflowSectionsForResponse(
-		traceCtx, response.FormID, answerPayload, answerableMap, response.ID, logger, span,
+	sectionIDs, sectionActiveMap, err := s.ResolveWorkflowSectionsForResponse(
+		traceCtx, response.FormID, answerPayload, answerableMap, response.ID,
 	)
 	if err != nil {
 		span.RecordError(err)
@@ -250,15 +250,6 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	sectionMap := make(map[string]question.SectionWithAnswerableList)
 	for _, swq := range sectionWithQuestion {
 		sectionMap[swq.Section.ID.String()] = swq
-	}
-
-	if workflowMissing {
-		// No workflow -> all sections are considered active and returned in form-DB order.
-		sectionIDs = make([]uuid.UUID, 0, len(sectionWithQuestion))
-		for _, swq := range sectionWithQuestion {
-			sectionIDs = append(sectionIDs, swq.Section.ID)
-			sectionActiveMap[swq.Section.ID.String()] = true
-		}
 	}
 
 	// Build result list with sections ordered by workflow (active sections first, then skipped)
@@ -473,33 +464,44 @@ func (s Service) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormRespons
 }
 
 // ResolveWorkflowSectionsForResponse runs ResolveSections and builds sectionActiveMap when a workflow exists.
-// If ErrWorkflowNotFound, returns workflowMissing=true with nil sectionIDs and an empty sectionActiveMap
-// (Get fills both after loading sections). Any other error is wrapped and returned.
+// If ErrWorkflowNotFound, it returns the error and no section ordering/active-map is produced.
+// Any other error is wrapped and returned.
 func (s Service) ResolveWorkflowSectionsForResponse(
 	ctx context.Context,
 	formID uuid.UUID,
 	answerPayload []answer.Answer,
 	answerableMap map[string]question.Answerable,
 	responseID uuid.UUID,
-	logger *zap.Logger,
-	span trace.Span,
-) (sectionIDs []uuid.UUID, workflowMissing bool, sectionActiveMap map[string]bool, err error) {
-	sectionIDs, err = s.workflowResolver.ResolveSections(ctx, formID, answerPayload, answerableMap)
+) (sectionIDs []uuid.UUID, sectionActiveMap map[string]bool, err error) {
+	traceCtx, span := s.tracer.Start(ctx, "ResolveWorkflowSectionsForResponse")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	sectionIDs, err = s.workflowResolver.ResolveSections(traceCtx, formID, answerPayload, answerableMap)
 	if err != nil {
 		if errors.Is(err, internal.ErrWorkflowNotFound) {
-			return nil, true, make(map[string]bool), nil
+			logger.Error("Workflow not found for response", zap.String("responseID", responseID.String()))
+			span.RecordError(err)
+
+			// return empty sectionIDs and sectionActiveMap and the error
+			return nil, nil, err
 		}
+
 		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
 		logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", responseID.String()))
 		span.RecordError(err)
-		return nil, false, nil, err
+
+		// return empty sectionIDs and sectionActiveMap and the error
+		return nil, nil, err
 	}
 
 	sectionActiveMap = make(map[string]bool, len(sectionIDs))
 	for _, sectionID := range sectionIDs {
 		sectionActiveMap[sectionID.String()] = true
 	}
-	return sectionIDs, false, sectionActiveMap, nil
+
+	// return the sectionIDs and sectionActiveMap and nil
+	return sectionIDs, sectionActiveMap, nil
 }
 
 // calculateSectionProgress determines the progress status of a section based on its questions and answers
