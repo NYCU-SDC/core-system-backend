@@ -3,7 +3,6 @@ package user
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/file"
-
 	"context"
 	"errors"
 	"fmt"
@@ -124,7 +123,7 @@ func resolveAvatarUrl(name, avatarUrl string) string {
 // FindOrCreateResult is the result of FindOrCreate.
 // If ExistingProvider is non-empty, it means a different provider already has the same email,
 // and the caller should trigger the account binding confirmation flow.
-// In that case, ExistingName and ExistingProvider are populated and UserID is zero.
+// In that case, ExistingName, ExistingProvider, and UserID are populated.
 // Otherwise, UserID is set and ExistingName/ExistingProvider are empty.
 type FindOrCreateResult struct {
 	UserID           uuid.UUID
@@ -339,6 +338,10 @@ func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, pr
 		ProviderID: providerID,
 	})
 	if err != nil {
+		if errors.Is(err, databaseutil.ErrUniqueViolation) {
+			logger.Info("The auth entry of the user already exists", zap.Error(err))
+			return nil
+		}
 		err = databaseutil.WrapDBError(err, logger, "create auth")
 		span.RecordError(err)
 		return err
