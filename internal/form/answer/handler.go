@@ -61,13 +61,12 @@ type UploadFilesResponse struct {
 type Store interface {
 	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error)
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []question.Answerable, map[string]question.Answerable, error)
+	ResolveRankingChoices(ctx context.Context, responseID uuid.UUID, answerableMap map[string]question.Answerable, answers []shared.AnswerParam) (map[string]question.Answerable, error)
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]Answer, []Answerable, []error)
 	UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error)
-}
-
-// WorkflowResolver resolves which sections are active for a form response based on workflow and current answers.
-type WorkflowResolver interface {
-	ResolveSections(ctx context.Context, formID uuid.UUID, answers []Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error)
+	ValidatePatchAnswersAgainstWorkflow(ctx context.Context, formID, responseID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, payloads []Payload) error
+	ValidateUploadFilesAgainstWorkflow(ctx context.Context, formID, responseID, questionID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable) error
+	MergeAnswersForWorkflowResolution(ctx context.Context, currentAnswers []Answer, payloads []Payload, answerableMap map[string]question.Answerable) ([]Answer, error)
 }
 
 type QuestionGetter interface {
@@ -104,7 +103,6 @@ type Handler struct {
 	store             Store
 	questionStore     QuestionGetter
 	responseStore     ResponseStore
-	workflowResolver  WorkflowResolver
 	jwtIssuer         JWTIssuer
 	oauthProvider     map[string]OAuthProvider
 	baseURL           string
@@ -119,7 +117,6 @@ func NewHandler(
 	store Store,
 	questionStore QuestionGetter,
 	responseStore ResponseStore,
-	workflowResolver WorkflowResolver,
 	jwtIssuer JWTIssuer,
 	googleClientID, googleClientSecret string,
 	githubClientID, githubClientSecret string,
@@ -144,7 +141,6 @@ func NewHandler(
 		store:             store,
 		questionStore:     questionStore,
 		responseStore:     responseStore,
-		workflowResolver:  workflowResolver,
 		jwtIssuer:         jwtIssuer,
 		oauthProvider:     providers,
 		baseURL:           baseURL,
@@ -280,31 +276,47 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve active sections from workflow so we reject answers for skipped sections
-	sectionIDs, err := h.workflowResolver.ResolveSections(traceCtx, formID, currentAnswers, answerableMap)
+	answerParams := make([]shared.AnswerParam, 0, len(req.Answers))
+	for _, answerRequest := range req.Answers {
+		answerParams = append(answerParams, shared.AnswerParam{
+			QuestionID: answerRequest.QuestionID,
+			Value:      answerRequest.Value,
+			OtherText:  answerRequest.OtherText,
+		})
+	}
+
+	// List() resolves ranking choices from DB only. When DMC and RANKING are sent
+	// in one PATCH, the source DMC is not stored yet, so ranking metadata is empty
+	// and merge for workflow would fail. Re-resolve using this batch.
+	answerableMap, err = h.store.ResolveRankingChoices(traceCtx, responseID, answerableMap, answerParams)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err), logger)
+		logger.Warn("rejected PATCH answers: ranking choice resolution failed",
+			zap.String("formID", formID.String()),
+			zap.String("responseID", responseID.String()),
+			zap.Error(err),
+		)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	sectionActiveMap := make(map[string]bool)
-	for _, sid := range sectionIDs {
-		sectionActiveMap[sid.String()] = true
+	// Merge this request into answers used for workflow resolution so conditions see values
+	// from the same PATCH (and stay consistent with post-upsert state).
+	answersForWorkflow, err := h.store.MergeAnswersForWorkflowResolution(traceCtx, currentAnswers, req.Answers, answerableMap)
+	if err != nil {
+		logger.Warn("rejected PATCH answers: workflow answer merge failed",
+			zap.String("formID", formID.String()),
+			zap.String("responseID", responseID.String()),
+			zap.Error(err),
+		)
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
-	// Check if the question is in a skipped section
-	for _, answerRequest := range req.Answers {
-		answerable, ok := answerableMap[answerRequest.QuestionID]
-		if !ok {
-			continue // question not in form; will be rejected later by Upsert
-		}
+	err = h.store.ValidatePatchAnswersAgainstWorkflow(traceCtx, formID, responseID, answersForWorkflow, answerableMap, req.Answers)
 
-		sectionIDStr := answerable.Question().SectionID.String()
-		if !sectionActiveMap[sectionIDStr] {
-			logger.Warn("attempted to answer question in skipped section", zap.String("questionID", answerRequest.QuestionID), zap.String("sectionID", sectionIDStr))
-			//h.problemWriter.WriteError(traceCtx, w, internal.ErrAnswerSectionSkipped, logger)
-			//return
-		}
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
 	// Collect all question IDs first for a single batch type lookup
@@ -326,19 +338,14 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, answerRequest := range req.Answers {
 		if typeMap[answerRequest.QuestionID] == question.QuestionTypeUploadFile {
-			logger.Warn("attempted to update upload_file question via PATCH answers", zap.String("questionID", answerRequest.QuestionID))
+			logger.Warn("rejected PATCH answers for upload_file question",
+				zap.String("formID", formID.String()),
+				zap.String("responseID", responseID.String()),
+				zap.String("questionID", answerRequest.QuestionID),
+			)
 			h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("question %s is of type upload_file and must be answered via the file upload endpoint: %w", answerRequest.QuestionID, internal.ErrQuestionTypeMismatch), logger)
 			return
 		}
-	}
-
-	answerParams := make([]shared.AnswerParam, 0, len(req.Answers))
-	for _, answerRequest := range req.Answers {
-		answerParams = append(answerParams, shared.AnswerParam{
-			QuestionID: answerRequest.QuestionID,
-			Value:      answerRequest.Value,
-			OtherText:  answerRequest.OtherText,
-		})
 	}
 
 	// Upsert answers
@@ -625,6 +632,20 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	if uploadSubmittedBy != currentUser.ID {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
+		return
+	}
+
+	// Resolve active sections from workflow so we reject file uploads for skipped sections.
+	// This mirrors UpdateFormResponse skipped-section enforcement.
+	currentAnswers, _, answerableMap, err := h.store.List(traceCtx, formID, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	err = h.store.ValidateUploadFilesAgainstWorkflow(traceCtx, formID, responseID, questionID, currentAnswers, answerableMap)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 

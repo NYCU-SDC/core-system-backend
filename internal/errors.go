@@ -46,7 +46,7 @@ var (
 	ErrInvalidSectionID = errors.New("invalid section id")
 	ErrMissingFormID    = errors.New("missing form id")
 	ErrInvalidFormID    = errors.New("invalid form id")
-	
+
 	// JWT Authentication Errors
 	ErrMissingAuthHeader       = errors.New("missing access token")
 	ErrInvalidAuthHeaderFormat = errors.New("invalid access token")
@@ -111,9 +111,16 @@ var (
 	ErrResponseNotOwned       = errors.New("response does not belong to the current user")
 
 	// Answer / Workflow: cannot answer questions in a section skipped by workflow
-	//ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
+	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
+
+	// Workflow merge (PATCH answers normalized for section resolution)
+	ErrWorkflowMergeInvalidQuestionID  = errors.New("invalid question id for workflow resolution")
+	ErrWorkflowMergeQuestionNotInForm  = errors.New("question does not belong to this form")
+	ErrWorkflowMergeAnswerValueInvalid = errors.New("invalid answer value for workflow resolution")
+	ErrWorkflowMergeAnswerEncodeFailed = errors.New("failed to encode answer for workflow resolution")
 
 	// Workflow Errors
+	ErrWorkflowNotFound              = errors.New("no workflow configured for this form")
 	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
 	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
 	ErrWorkflowNotActive             = errors.New("workflow is not active")
@@ -286,14 +293,42 @@ func ErrorHandler(err error) problem.Problem {
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
-	//case errors.Is(err, ErrAnswerSectionSkipped):
-	//	return problem.NewValidateProblem("cannot answer questions in a section that is skipped by the form workflow")
+	case errors.Is(err, ErrAnswerSectionSkipped):
+		return problem.NewValidateProblemWithErrors(
+			"cannot answer questions in a section that is skipped by the form workflow",
+			[]string{err.Error()},
+		)
+	case errors.Is(err, ErrWorkflowMergeInvalidQuestionID):
+		return problem.NewValidateProblemWithErrors(
+			"invalid question id",
+			[]string{err.Error()},
+		)
+	case errors.Is(err, ErrWorkflowMergeQuestionNotInForm):
+		return problem.NewValidateProblemWithErrors(
+			"question does not belong to this form",
+			[]string{err.Error()},
+		)
+	case errors.Is(err, ErrWorkflowMergeAnswerValueInvalid):
+		return problem.NewValidateProblemWithErrors(
+			"invalid answer value for workflow resolution",
+			[]string{err.Error()},
+		)
+	case errors.Is(err, ErrWorkflowMergeAnswerEncodeFailed):
+		return problem.NewValidateProblemWithErrors(
+			"failed to encode answer for workflow resolution",
+			[]string{err.Error()},
+		)
 
 	// Workflow Errors
+	case errors.Is(err, ErrWorkflowNotFound):
+		return problem.NewNotFoundProblem("workflow not found")
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
 	case errors.Is(err, ErrWorkflowResolveSectionsFailed):
-		return problem.NewValidateProblem("failed to resolve workflow sections")
+		return problem.NewValidateProblemWithErrors(
+			"failed to resolve workflow sections",
+			[]string{err.Error()},
+		)
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
 	case errors.Is(err, ErrUnmarshalWorkflow):

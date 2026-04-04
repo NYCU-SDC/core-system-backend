@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -46,6 +47,10 @@ type FileService interface {
 	WithTx(tx pgx.Tx) *file.Service
 }
 
+type WorkflowResolver interface {
+	ResolveSections(ctx context.Context, formID uuid.UUID, answers []Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error)
+}
+
 type Answerable interface {
 	Question() question.Question
 
@@ -64,23 +69,25 @@ type Answerable interface {
 }
 
 type Service struct {
-	logger  *zap.Logger
-	db      DBTX
-	queries Querier
-	tracer  trace.Tracer
+	logger           *zap.Logger
+	db               DBTX
+	queries          Querier
+	tracer           trace.Tracer
+	workflowResolver WorkflowResolver
 
 	questionStore QuestionStore
 	fileService   FileService
 }
 
-func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileService FileService) *Service {
+func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileService FileService, workflowResolver WorkflowResolver) *Service {
 	return &Service{
-		logger:        logger,
-		db:            db,
-		queries:       New(db),
-		tracer:        otel.Tracer("answer/service"),
-		questionStore: questionStore,
-		fileService:   fileService,
+		logger:           logger,
+		db:               db,
+		queries:          New(db),
+		tracer:           otel.Tracer("answer/service"),
+		workflowResolver: workflowResolver,
+		questionStore:    questionStore,
+		fileService:      fileService,
 	}
 }
 
@@ -104,7 +111,7 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	// Resolve dynamic choices for Ranking questions. In the read path there is
 	// no request batch, so pass an empty slice, the resolver will fall back to
 	// DB lookups using the stored answers for the source questions.
-	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, nil)
+	answerableMap, err = s.ResolveRankingChoices(traceCtx, responseID, answerableMap, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to resolve ranking choices: %w", err)
 	}
@@ -190,7 +197,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 	// Resolve dynamic choices for Ranking questions whose options come from a
 	// source DetailedMultiChoice question's stored answer.
-	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, answers)
+	answerableMap, err = s.ResolveRankingChoices(traceCtx, responseID, answerableMap, answers)
 	if err != nil {
 		return nil, nil, []error{err}
 	}
@@ -292,7 +299,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	return transformedAnswers, answerableList, nil
 }
 
-// resolveRankingChoices populates the Rank field of every Ranking answerable
+// ResolveRankingChoices populates the Rank field of every Ranking answerable
 // whose SourceID points to a DetailedMultiChoice question.
 //
 // Resolution order:
@@ -306,7 +313,11 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 // If the source answer is absent in both places the Ranking's Rank stays nil,
 // which means Validate will pass for an empty submission but reject any
 // submitted choice IDs (they cannot be validated against an empty list).
-func (s Service) resolveRankingChoices(
+//
+// For PATCH, pass the incoming answers so List()-only DB resolution can be
+// overridden when DMC and RANKING are submitted together (Upsert and workflow
+// merge already call this with the batch).
+func (s Service) ResolveRankingChoices(
 	ctx context.Context,
 	responseID uuid.UUID,
 	answerableMap map[string]question.Answerable,
@@ -413,6 +424,7 @@ func extractChoicesFromStoredDetailedMultiAnswer(rawValue []byte) ([]question.Ch
 
 // UploadFiles uploads files for an upload_file question and upserts the answer.
 // It validates that the question exists, belongs to the form, and is of type upload_file.
+//
 // Existing upload_file entries are loaded first, then new file rows, answer upsert,
 // and file attachments are all executed within the same database transaction.
 // Any failure before commit rolls back the whole operation.
@@ -623,4 +635,83 @@ func (s Service) beginOrReuseTx(
 	}
 
 	return tx, true, nil
+}
+
+// MergeAnswersForWorkflowResolution returns a new slice: a shallow copy of currentAnswers
+// when payloads is empty; otherwise the same answers with each matching payload merged by
+// question ID (payload wins). Request values are normalized with the same DecodeRequest +
+// JSON marshal path as Upsert so workflow resolution (DecodeStorage / MatchesPattern) sees
+// storage-shaped bytes, not raw API wire JSON.
+func (s Service) MergeAnswersForWorkflowResolution(
+	ctx context.Context,
+	currentAnswers []Answer,
+	payloads []Payload,
+	answerableMap map[string]question.Answerable,
+) ([]Answer, error) {
+	traceCtx, span := s.tracer.Start(ctx, "MergeAnswersForWorkflowResolution")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	if len(payloads) == 0 {
+		return append([]Answer(nil), currentAnswers...), nil
+	}
+
+	answerMap := make(map[uuid.UUID]Answer, len(currentAnswers)+len(payloads))
+	for _, ans := range currentAnswers {
+		answerMap[ans.QuestionID] = ans
+	}
+
+	for _, payload := range payloads {
+		qid, err := handlerutil.ParseUUID(payload.QuestionID)
+		if err != nil {
+			err = fmt.Errorf("%w: invalid questionId %q: %w", internal.ErrWorkflowMergeInvalidQuestionID, payload.QuestionID, err)
+			logger.Error("workflow merge: invalid question ID", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+
+		answerable, ok := answerableMap[payload.QuestionID]
+		if !ok {
+			err := fmt.Errorf("%w: question %s not found in form", internal.ErrWorkflowMergeQuestionNotInForm, payload.QuestionID)
+			logger.Error("workflow merge: question not in form", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+
+		decoded, err := answerable.DecodeRequest(shared.AnswerParam{
+			QuestionID: payload.QuestionID,
+			Value:      payload.Value,
+			OtherText:  payload.OtherText,
+		})
+		if err != nil {
+			err = fmt.Errorf("%w: answer value for question %s: %w", internal.ErrWorkflowMergeAnswerValueInvalid, payload.QuestionID, err)
+			logger.Error("workflow merge: decode answer failed", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+
+		storageBytes, err := json.Marshal(decoded)
+		if err != nil {
+			err = fmt.Errorf("%w: encode answer for question %s: %w", internal.ErrWorkflowMergeAnswerEncodeFailed, payload.QuestionID, err)
+			logger.Error("workflow merge: marshal encoded answer failed", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+
+		prev := answerMap[qid]
+		prev.QuestionID = qid
+		prev.Value = storageBytes
+		answerMap[qid] = prev
+	}
+
+	out := make([]Answer, 0, len(answerMap))
+	for _, ans := range answerMap {
+		out = append(out, ans)
+	}
+
+	logger.Info("merged answers for workflow resolution",
+		zap.Int("payloadCount", len(payloads)),
+		zap.Int("mergedAnswerCount", len(out)),
+	)
+	return out, nil
 }
