@@ -133,11 +133,11 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 	return newResponse, nil
 }
 
-// ListBySubmittedBy retrieves all responses submitted by a given user
+// ListByFormIDAndSubmittedBy retrieves all responses submitted by a given user
 func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUID, userID uuid.UUID) ([]FormResponse, error) {
-	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
+	traceCtx, span := s.tracer.Start(ctx, "ListByFormIDAndSubmittedBy")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	exists, err := s.userStore.ExistsByID(ctx, userID)
 	if err != nil {
@@ -173,11 +173,11 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 }
 
 func (s Service) ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error) {
-	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
+	traceCtx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
-	responses, err := s.queries.ListBySubmittedBy(ctx, submittedBy)
+	responses, err := s.queries.ListBySubmittedBy(traceCtx, submittedBy)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list responses by submitted by")
 		span.RecordError(err)
