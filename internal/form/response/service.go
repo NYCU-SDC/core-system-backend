@@ -139,7 +139,7 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.userStore.ExistsByID(ctx, userID)
+	exists, err := s.userStore.ExistsByID(traceCtx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check user exists")
 		span.RecordError(err)
@@ -149,7 +149,7 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 		return nil, internal.ErrUserNotFound
 	}
 
-	exists, err = s.formStore.Exists(ctx, formID)
+	exists, err = s.formStore.Exists(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check form exists")
 		span.RecordError(err)
@@ -159,7 +159,7 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 		return nil, internal.ErrFormNotFound
 	}
 
-	responses, err := s.queries.ListByFormIDAndSubmittedBy(ctx, ListByFormIDAndSubmittedByParams{
+	responses, err := s.queries.ListByFormIDAndSubmittedBy(traceCtx, ListByFormIDAndSubmittedByParams{
 		FormID:      formID,
 		SubmittedBy: userID,
 	})
