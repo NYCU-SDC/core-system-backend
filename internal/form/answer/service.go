@@ -642,10 +642,15 @@ func (s Service) beginOrReuseTx(
 // DecodeRequest + JSON marshal path as Upsert so workflow resolution (DecodeStorage /
 // MatchesPattern) sees storage-shaped bytes, not raw API wire JSON.
 func (s Service) MergeAnswersForWorkflowResolution(
+	ctx context.Context,
 	currentAnswers []Answer,
 	payloads []Payload,
 	answerableMap map[string]question.Answerable,
 ) ([]Answer, error) {
+	traceCtx, span := s.tracer.Start(ctx, "MergeAnswersForWorkflowResolution")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
 	if len(payloads) == 0 {
 		return currentAnswers, nil
 	}
@@ -658,12 +663,18 @@ func (s Service) MergeAnswersForWorkflowResolution(
 	for _, payload := range payloads {
 		qid, err := handlerutil.ParseUUID(payload.QuestionID)
 		if err != nil {
-			return nil, fmt.Errorf("%w: invalid questionId %q: %w", internal.ErrWorkflowMergeInvalidQuestionID, payload.QuestionID, err)
+			err = fmt.Errorf("%w: invalid questionId %q: %w", internal.ErrWorkflowMergeInvalidQuestionID, payload.QuestionID, err)
+			logger.Error("workflow merge: invalid question ID", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
 		}
 
 		answerable, ok := answerableMap[payload.QuestionID]
 		if !ok {
-			return nil, fmt.Errorf("%w: question %s not found in form", internal.ErrWorkflowMergeQuestionNotInForm, payload.QuestionID)
+			err := fmt.Errorf("%w: question %s not found in form", internal.ErrWorkflowMergeQuestionNotInForm, payload.QuestionID)
+			logger.Error("workflow merge: question not in form", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
 		}
 
 		decoded, err := answerable.DecodeRequest(shared.AnswerParam{
@@ -672,12 +683,18 @@ func (s Service) MergeAnswersForWorkflowResolution(
 			OtherText:  payload.OtherText,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("%w: answer value for question %s: %w", internal.ErrWorkflowMergeAnswerValueInvalid, payload.QuestionID, err)
+			err = fmt.Errorf("%w: answer value for question %s: %w", internal.ErrWorkflowMergeAnswerValueInvalid, payload.QuestionID, err)
+			logger.Error("workflow merge: decode answer failed", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
 		}
 
 		storageBytes, err := json.Marshal(decoded)
 		if err != nil {
-			return nil, fmt.Errorf("%w: encode answer for question %s: %w", internal.ErrWorkflowMergeAnswerEncodeFailed, payload.QuestionID, err)
+			err = fmt.Errorf("%w: encode answer for question %s: %w", internal.ErrWorkflowMergeAnswerEncodeFailed, payload.QuestionID, err)
+			logger.Error("workflow merge: marshal encoded answer failed", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
 		}
 
 		prev := answerMap[qid]
@@ -690,5 +707,10 @@ func (s Service) MergeAnswersForWorkflowResolution(
 	for _, ans := range answerMap {
 		out = append(out, ans)
 	}
+
+	logger.Info("merged answers for workflow resolution",
+		zap.Int("payloadCount", len(payloads)),
+		zap.Int("mergedAnswerCount", len(out)),
+	)
 	return out, nil
 }
