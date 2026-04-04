@@ -637,10 +637,11 @@ func (s Service) beginOrReuseTx(
 	return tx, true, nil
 }
 
-// MergeAnswersForWorkflowResolution returns a copy of current answers with each payload
-// applied by question ID (payload wins). Request values are normalized with the same
-// DecodeRequest + JSON marshal path as Upsert so workflow resolution (DecodeStorage /
-// MatchesPattern) sees storage-shaped bytes, not raw API wire JSON.
+// MergeAnswersForWorkflowResolution returns a new slice: a shallow copy of currentAnswers
+// when payloads is empty; otherwise the same answers with each matching payload merged by
+// question ID (payload wins). Request values are normalized with the same DecodeRequest +
+// JSON marshal path as Upsert so workflow resolution (DecodeStorage / MatchesPattern) sees
+// storage-shaped bytes, not raw API wire JSON.
 func (s Service) MergeAnswersForWorkflowResolution(
 	ctx context.Context,
 	currentAnswers []Answer,
@@ -652,7 +653,7 @@ func (s Service) MergeAnswersForWorkflowResolution(
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	if len(payloads) == 0 {
-		return currentAnswers, nil
+		return append([]Answer(nil), currentAnswers...), nil
 	}
 
 	answerMap := make(map[uuid.UUID]Answer, len(currentAnswers)+len(payloads))
