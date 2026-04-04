@@ -142,9 +142,6 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		ResponseJSONs: make([]Response, 0),
 	}
 	for _, currentResponse := range userResponses {
-		if currentResponse.FormID != formID {
-			continue
-		}
 		listResponse.ResponseJSONs = append(listResponse.ResponseJSONs, Response{
 			ID:          currentResponse.ID.String(),
 			SubmittedBy: currentResponse.SubmittedBy.String(),
