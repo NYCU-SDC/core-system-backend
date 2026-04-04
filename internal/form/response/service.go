@@ -26,7 +26,7 @@ type Querier interface {
 	ExistsByFormIDAndSubmittedBy(ctx context.Context, arg ExistsByFormIDAndSubmittedByParams) (bool, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	ListByFormIDAndSubmittedBy(ctx context.Context, arg ListByFormIDAndSubmittedByParams) ([]FormResponse, error)
-	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
+	ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error)
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error)
 }
 
@@ -172,12 +172,22 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 	return responses, nil
 }
 
-func (s Service) ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error) {
+func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	responses, err := s.queries.ListBySubmittedBy(traceCtx, submittedBy)
+	exists, err := s.userStore.ExistsByID(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check user exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		return nil, internal.ErrUserNotFound
+	}
+
+	responses, err := s.queries.ListBySubmittedBy(traceCtx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list responses by submitted by")
 		span.RecordError(err)
