@@ -133,7 +133,7 @@ func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []sh
 	return formResponse, nil
 }
 
-func (s *Service) ListFormsOfUser(ctx context.Context, responseID uuid.UUID, userID uuid.UUID) ([]form.UserForm, error) {
+func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form.UserForm, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListFormsOfUser")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
