@@ -24,8 +24,8 @@ type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 	ExistsByFormIDAndSubmittedBy(ctx context.Context, arg ExistsByFormIDAndSubmittedByParams) (bool, error)
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	ListByFormIDAndSubmittedBy(ctx context.Context, arg ListByFormIDAndSubmittedByParams) ([]FormResponse, error)
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error)
 }
@@ -133,37 +133,8 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 	return newResponse, nil
 }
 
-// ListByFormID retrieves all responses for a given form
-func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
-	traceCtx, span := s.tracer.Start(ctx, "ListByFormID")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	exists, err := s.formStore.Exists(traceCtx, formID)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check form exists")
-		span.RecordError(err)
-		return []FormResponse{}, err
-	}
-
-	if !exists {
-		logger.Error("Form not found", zap.String("formID", formID.String()))
-		span.RecordError(internal.ErrFormNotFound)
-		return []FormResponse{}, internal.ErrFormNotFound
-	}
-
-	responses, err := s.queries.ListByFormID(traceCtx, formID)
-	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "form_id", formID.String(), logger, "list responses by form id")
-		span.RecordError(err)
-		return []FormResponse{}, err
-	}
-
-	return responses, nil
-}
-
 // ListBySubmittedBy retrieves all responses submitted by a given user
-func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
+func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUID, userID uuid.UUID) ([]FormResponse, error) {
 	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -178,7 +149,35 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 		return nil, internal.ErrUserNotFound
 	}
 
-	responses, err := s.queries.ListBySubmittedBy(ctx, userID)
+	exists, err = s.formStore.Exists(ctx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		return nil, internal.ErrFormNotFound
+	}
+
+	responses, err := s.queries.ListByFormIDAndSubmittedBy(ctx, ListByFormIDAndSubmittedByParams{
+		FormID:      formID,
+		SubmittedBy: userID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list responses by submitted by")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return responses, nil
+}
+
+func (s Service) ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error) {
+	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	responses, err := s.queries.ListBySubmittedBy(ctx, submittedBy)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list responses by submitted by")
 		span.RecordError(err)
