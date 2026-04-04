@@ -40,7 +40,7 @@ type Querier interface {
 	Update(ctx context.Context, arg UpdateParams) (User, error)
 	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
 	CreateEmail(ctx context.Context, arg CreateEmailParams) error
-	GetByEmail(ctx context.Context, value string) (GetByEmailRow, error)
+	GetWithEarliestProviderByEmail(ctx context.Context, value string) (GetWithEarliestProviderByEmailRow, error)
 }
 
 // FileOperator defines the interface for file operations needed by user service
@@ -165,7 +165,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 
 	// Different provider, same email → binding confirmation required
 	if email != "" {
-		existingUser, err := s.queries.GetByEmail(traceCtx, email)
+		existingUser, err := s.queries.GetWithEarliestProviderByEmail(traceCtx, email)
 		if err == nil {
 			// Found a user with the same email under a different provider
 			logger.Info("Email already exists under different provider, binding confirmation required",

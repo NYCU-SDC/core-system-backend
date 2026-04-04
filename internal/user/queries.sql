@@ -6,7 +6,7 @@ RETURNING *;
 -- name: ExistsByID :one
 SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);
 
--- name: GetByEmail :one
+-- name: GetWithEarliestProviderByEmail :one
 SELECT u.id, u.name, a.provider, a.provider_id
 FROM user_emails e
          JOIN users u ON e.user_id = u.id
