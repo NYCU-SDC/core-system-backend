@@ -7,7 +7,7 @@ RETURNING *;
 SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);
 
 -- name: GetByEmail :one
-SELECT u.id, u.name, a.provider
+SELECT u.id, u.name, a.provider, a.provider_id
 FROM user_emails e
          JOIN users u ON e.user_id = u.id
          JOIN auth a ON a.user_id = u.id

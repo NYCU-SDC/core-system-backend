@@ -123,12 +123,13 @@ func resolveAvatarUrl(name, avatarUrl string) string {
 // FindOrCreateResult is the result of FindOrCreate.
 // If ExistingProvider is non-empty, it means a different provider already has the same email,
 // and the caller should trigger the account binding confirmation flow.
-// In that case, ExistingName, ExistingProvider, and UserID are populated.
-// Otherwise, UserID is set and ExistingName/ExistingProvider are empty.
+// In that case, ExistingName, ExistingProvider, ExistingProviderID, and UserID are populated.
+// Otherwise, UserID is set and the Existing* fields are empty.
 type FindOrCreateResult struct {
-	UserID           uuid.UUID
-	ExistingName     string
-	ExistingProvider string
+	UserID             uuid.UUID
+	ExistingName       string
+	ExistingProvider   string
+	ExistingProviderID string
 }
 
 func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl string, email string, role []string, oauthProvider, oauthProviderID string) (FindOrCreateResult, error) {
@@ -174,9 +175,10 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 				zap.String("new_provider", oauthProvider),
 			)
 			return FindOrCreateResult{
-				UserID:           existingUser.ID,
-				ExistingName:     existingUser.Name.String,
-				ExistingProvider: existingUser.Provider,
+				UserID:             existingUser.ID,
+				ExistingName:       existingUser.Name.String,
+				ExistingProvider:   existingUser.Provider,
+				ExistingProviderID: existingUser.ProviderID,
 			}, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -236,8 +238,13 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	}
 
 	// Create auth entry
-	err = s.CreateAuth(traceCtx, newUser.ID, oauthProvider, oauthProviderID)
+	_, err = s.queries.CreateAuth(traceCtx, CreateAuthParams{
+		UserID:     newUser.ID,
+		Provider:   oauthProvider,
+		ProviderID: oauthProviderID,
+	})
 	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create auth")
 		span.RecordError(err)
 		return FindOrCreateResult{}, err
 	}
@@ -327,12 +334,29 @@ func (s *Service) downloadAndSaveAvatar(ctx context.Context, avatarURL string, u
 	return backendURL
 }
 
-func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, providerID string) error {
+// CreateAuth validates that the given userID actually owns the existingProvider/existingProviderID
+// entry before creating the new auth record, preventing callers from arbitrarily
+// linking a provider to a user they do not control.
+func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, providerID, existingProvider, existingProviderID string) error {
 	traceCtx, span := s.tracer.Start(ctx, "CreateAuth")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	_, err := s.queries.CreateAuth(traceCtx, CreateAuthParams{
+	// Verify the target user actually owns the claimed existing auth entry.
+	ownerID, err := s.queries.GetIDByAuth(traceCtx, GetIDByAuthParams{
+		Provider:   existingProvider,
+		ProviderID: existingProviderID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "verify existing auth ownership")
+		span.RecordError(err)
+		return err
+	}
+	if ownerID != userID {
+		return internal.ErrInvalidAuthUser
+	}
+
+	_, err = s.queries.CreateAuth(traceCtx, CreateAuthParams{
 		UserID:     userID,
 		Provider:   provider,
 		ProviderID: providerID,

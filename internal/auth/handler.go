@@ -33,11 +33,11 @@ type JWTIssuer interface {
 	New(ctx context.Context, user user.User) (string, error)
 	NewState(ctx context.Context, service, environment, callbackURL, redirectURL string) (string, error)
 	NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string) (string, error)
-	NewLinkToken(ctx context.Context, provider, providerID, userID string) (string, error)
+	NewLinkToken(ctx context.Context, provider, providerID, existingProvider, existingProviderID, userID string) (string, error)
 	Parse(ctx context.Context, tokenString string) (user.User, error)
 	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
 	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
-	ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID string, userID uuid.UUID, err error)
+	ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, existingProvider, existingProviderID string, userID uuid.UUID, err error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
 }
@@ -51,8 +51,7 @@ type UserStore interface {
 	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
 	GetByID(ctx context.Context, id uuid.UUID) (user.UsersWithEmail, error)
 	FindOrCreate(ctx context.Context, name, username, avatarUrl string, email string, role []string, oauthProvider, oauthProviderID string) (user.FindOrCreateResult, error)
-	CreateAuth(ctx context.Context, userID uuid.UUID, provider, providerID string) error
-	CreateEmail(ctx context.Context, userID uuid.UUID, email string) error
+	CreateAuth(ctx context.Context, userID uuid.UUID, provider, providerID, existingProvider, existingProviderID string) error
 }
 
 type OAuthProvider interface {
@@ -290,7 +289,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Do not issue access tokens yet; set a linking cookie and
 	// redirect to the binding confirmation page.
 	if result.ExistingProvider != "" {
-		linkToken, err := h.jwtIssuer.NewLinkToken(traceCtx, auth.Provider, auth.ProviderID, result.UserID.String())
+		linkToken, err := h.jwtIssuer.NewLinkToken(traceCtx, auth.Provider, auth.ProviderID, result.ExistingProvider, result.ExistingProviderID, result.UserID.String())
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
 			return
@@ -539,14 +538,14 @@ func (h *Handler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, providerID, userID, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
+	provider, providerID, existingProvider, existingProviderID, userID, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
 		return
 	}
 
-	// Link the new provider to the existing account
-	err = h.userStore.CreateAuth(traceCtx, userID, provider, providerID)
+	// Link the new provider to the existing account.
+	err = h.userStore.CreateAuth(traceCtx, userID, provider, providerID, existingProvider, existingProviderID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

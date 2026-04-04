@@ -388,6 +388,12 @@ type LinkClaims struct {
 	// UserID is the existed user id
 	UserID string
 
+	// ExistingProvider is the OAuth provider name already associated with the existing account.
+	ExistingProvider string
+
+	// ExistingProviderID is the provider-specific ID already associated with the existing account.
+	ExistingProviderID string
+
 	jwt.RegisteredClaims
 }
 
@@ -395,16 +401,18 @@ type LinkClaims struct {
 // OAuth identity when it collides with an existing account's email.
 // The token is placed in an HttpOnly cookie so the frontend can later call
 // /api/auth/link to confirm the account merge.
-func (s Service) NewLinkToken(ctx context.Context, provider, providerID, userID string) (string, error) {
+func (s Service) NewLinkToken(ctx context.Context, provider, providerID, existingProvider, existingProviderID, userID string) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "NewLinkToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	id := uuid.New()
 	claims := &LinkClaims{
-		Provider:   provider,
-		ProviderID: providerID,
-		UserID:     userID,
+		Provider:           provider,
+		ProviderID:         providerID,
+		UserID:             userID,
+		ExistingProvider:   existingProvider,
+		ExistingProviderID: existingProviderID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    Issuer,
 			Subject:   id.String(),
@@ -418,16 +426,16 @@ func (s Service) NewLinkToken(ctx context.Context, provider, providerID, userID 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(s.oauthProxySecret))
 	if err != nil {
-		logger.Error("failed to sign pending binding token", zap.Error(err), zap.String("provider", provider))
+		logger.Error("failed to sign pending binding token", zap.Error(err), zap.String("userID", userID))
 		return "", err
 	}
 
-	logger.Debug("Generated pending binding token", zap.String("provider", provider))
+	logger.Debug("Generated pending binding token", zap.String("userID", userID))
 	return tokenString, nil
 }
 
 // ParseLinkToken verifies a link token and returns its claims.
-func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID string, userID uuid.UUID, err error) {
+func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, existingProvider, existingProviderID string, userID uuid.UUID, err error) {
 	traceCtx, span := s.tracer.Start(ctx, "ParseLinkToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -456,19 +464,20 @@ func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provid
 		default:
 			logger.Error("Failed to parse link token", zap.Error(parseErr))
 		}
-		return "", "", uuid.UUID{}, parseErr
+		return "", "", "", "", uuid.UUID{}, parseErr
 	}
 
 	userID, err = uuid.Parse(tokenClaims.UserID)
 	if err != nil {
-		logger.Error("Failed to parse user id from link token", zap.String("error", tokenClaims.UserID), zap.Error(err))
-		return "", "", uuid.UUID{}, parseErr
+		logger.Error("Failed to parse user id from link token", zap.String("user_id", tokenClaims.UserID), zap.Error(err))
+		return "", "", "", "", uuid.UUID{}, err
 	}
 
 	logger.Debug("Successfully parsed link token",
 		zap.String("provider", tokenClaims.Provider),
+		zap.String("existing_provider", tokenClaims.ExistingProvider),
 	)
-	return tokenClaims.Provider, tokenClaims.ProviderID, userID, nil
+	return tokenClaims.Provider, tokenClaims.ProviderID, tokenClaims.ExistingProvider, tokenClaims.ExistingProviderID, userID, nil
 }
 
 func (s Service) GetUserIDByRefreshToken(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
