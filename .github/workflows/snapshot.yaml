@@ -236,7 +236,6 @@ jobs:
         with:
           scenarios-path: './core-system-api/scenarios/user-journey'
           output-dir: './reports'
-          httpyac-version: 'latest'
           env: |
             BASE_URL=${{ env.QA_BASE_URL }}
             LOGIN_USER_ID=${{ env.QA_LOGIN_USER_ID }}
