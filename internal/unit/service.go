@@ -650,3 +650,14 @@ func (s *Service) UpdateUnitMemberRole(
 func (s *Service) SlugExists(ctx context.Context, slug string) (bool, error) {
 	return s.tenantStore.SlugExists(ctx, slug)
 }
+
+func (s *Service) GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error) {
+	exists, orgID, err := s.tenantStore.GetSlugStatus(ctx, slug)
+	if err != nil {
+		return uuid.UUID{}, fmt.Errorf("failed to resolve slug %q: %w", slug, err)
+	}
+	if !exists {
+		return uuid.UUID{}, fmt.Errorf("organization with slug %q not found", slug)
+	}
+	return orgID, nil
+}

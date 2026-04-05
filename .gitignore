@@ -141,7 +141,7 @@ fabric.properties
 
 .idea
 bin
-backend
+/backend
 
 config.yaml
 .env
