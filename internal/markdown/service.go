@@ -1,0 +1,121 @@
+package markdown
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"unicode/utf8"
+
+	"NYCU-SDC/core-system-backend/internal"
+
+	"github.com/microcosm-cc/bluemonday"
+
+	pm "github.com/karitham/prosemirror"
+)
+
+// Process validates a ProseMirror JSON document, renders HTML, sanitizes it, and returns canonical JSON.
+func Process(raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
+	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
+		return []byte(EmptyDocumentJSON), "", nil
+	}
+
+	var root pm.Node
+	err = json.Unmarshal(raw, &root)
+	if err != nil {
+		return nil, "", wrapUnmarshalErr(err)
+	}
+
+	if root.Type.Name != NodeDoc {
+		return nil, "", fmt.Errorf("%w: root type must be doc", internal.ErrInvalidDocumentRoot)
+	}
+
+	err = validateNode(root)
+	if err != nil {
+		return nil, "", err
+	}
+
+	rawHTML, err := renderHTML(root)
+	if err != nil {
+		return nil, "", err
+	}
+
+	p := bluemonday.UGCPolicy()
+	cleanHTML = p.Sanitize(rawHTML)
+
+	canonicalJSON, err = json.Marshal(root)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %w", internal.ErrInvalidDocumentMarshal, err)
+	}
+
+	return canonicalJSON, cleanHTML, nil
+}
+
+// PlainText extracts visible text from a valid ProseMirror JSON document.
+func PlainText(raw []byte) (string, error) {
+	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
+		return "", nil
+	}
+
+	var root pm.Node
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return "", wrapUnmarshalErr(err)
+	}
+
+	if root.Type.Name != NodeDoc {
+		return "", fmt.Errorf("%w: root type must be doc", internal.ErrInvalidDocumentRoot)
+	}
+
+	if err := validateNode(root); err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	collectText(root, &b)
+
+	return b.String(), nil
+}
+
+// FromPlaintext builds a minimal ProseMirror document from plain text.
+func FromPlaintext(plain string) (canonicalJSON []byte, html string, err error) {
+	textJSON, err := json.Marshal(plain)
+	if err != nil {
+		return nil, "", err
+	}
+
+	raw := fmt.Sprintf(`{"type":%q,"content":[{"type":%q,"content":[{"type":%q,"text":%s}]}]}`,
+		NodeDoc, NodeParagraph, NodeText, textJSON)
+
+	return Process([]byte(raw))
+}
+
+// PreviewSnippet returns the first maxRunes runes of plain text from a ProseMirror JSON payload.
+func PreviewSnippet(raw []byte, maxRunes int) (string, error) {
+	pt, err := PlainText(raw)
+	if err != nil {
+		return "", err
+	}
+
+	if maxRunes <= 0 || utf8.RuneCountInString(pt) <= maxRunes {
+		return pt, nil
+	}
+
+	runes := []rune(pt)
+
+	return string(runes[:maxRunes]), nil
+}
+
+// wrapUnmarshalErr maps encoding/json errors to the appropriate sentinel.
+// JSON syntax errors → ErrInvalidDocumentJSON.
+// Schema errors (unknown node/mark type from karitham) → ErrInvalidDocumentNode.
+func wrapUnmarshalErr(err error) error {
+	var syntaxErr *json.SyntaxError
+	var typeErr *json.UnmarshalTypeError
+
+	if errors.As(err, &syntaxErr) || errors.As(err, &typeErr) {
+		return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentJSON, err)
+	}
+
+	return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
+}
