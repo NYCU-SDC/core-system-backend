@@ -3,6 +3,7 @@ package setup
 import (
 	"NYCU-SDC/core-system-backend/internal/unit"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
@@ -27,7 +28,12 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, setupDat
 	if err != nil {
 		if setupData != "" {
 			logger.Info("Loading setup config from SETUP_YAML environment variable")
-			data = []byte(setupData)
+			decoded, decErr := base64.StdEncoding.DecodeString(setupData)
+			if decErr != nil {
+				logger.Error("Failed to base64 decode SETUP_YAML", zap.Error(decErr))
+				return nil, fmt.Errorf("failed to base64 decode SETUP_YAML: %w", decErr)
+			}
+			data = decoded
 		} else {
 			// missing setup config is expected, so the process can go on without it
 			logger.Warn("No setup config found (neither file nor SETUP_YAML env)", zap.String("path", setupPath))

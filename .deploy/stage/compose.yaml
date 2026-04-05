@@ -27,7 +27,7 @@ services:
       ALLOW_ORIGINS: "*"
       DEFAULT_GLOBAL_ROLES: ${DEFAULT_GLOBAL_ROLES}
       DEFAULT_ORG_ROLES: ${DEFAULT_ORG_ROLES}
-      SETUP_YAML: ${SETUP_YAML}
+      SETUP_YAML: "b3JnYW5pemF0aW9uczoKICAtIG5hbWU6ICJEZWZhdWx0IE9yZ2FuaXphdGlvbiIKICAgIHNsdWc6ICJzZGMiCiAgICBkZXNjcmlwdGlvbjogIlNEQyBpcyBhIHN0dWRlbnQgb3JnYW5pemF0aW9uIGF0IE5ZQ1UgdGhhdCBmb2N1c2VzIG9uIHNvZnR3YXJlIGRldmVsb3BtZW50IGFuZCB0ZWNobm9sb2d5LiI="
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"
