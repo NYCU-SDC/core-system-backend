@@ -80,7 +80,7 @@ const getByID = `-- name: GetByID :one
 SELECT 
     uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived,
     im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
-    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
     CASE WHEN im.type = 'form' THEN f.title END AS title,
     CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
     CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
@@ -144,7 +144,7 @@ const list = `-- name: List :many
 SELECT 
     uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived,
     im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
-    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
     CASE WHEN im.type = 'form' THEN f.title END AS title,
     CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
     CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
@@ -159,8 +159,8 @@ WHERE uim.user_id = $1
   AND (uim.is_archived = COALESCE($4::boolean, false))
   AND ($5::text = '' OR $5::text IS NULL OR (
     CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || $5::text || '%'
-    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || $5::text || '%'
-    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g') ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) ELSE '' END ILIKE '%' || $5::text || '%'
   ))
 LIMIT COALESCE($7::int, 10)
 OFFSET COALESCE($6::int, 0)
@@ -254,8 +254,8 @@ WHERE uim.user_id = $1
   AND (uim.is_archived = COALESCE($4::boolean, false))
   AND ($5::text = '' OR $5::text IS NULL OR (
     CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || $5::text || '%'
-    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || $5::text || '%'
-    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g') ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) ELSE '' END ILIKE '%' || $5::text || '%'
   ))
 `
 
@@ -289,7 +289,7 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 WHERE uim.message_id = im.id AND uim.id = $4 AND uim.user_id = $5
 RETURNING uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived, im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
-CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
 CASE WHEN im.type = 'form' THEN f.title END AS title,
 CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
 CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name

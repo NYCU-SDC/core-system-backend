@@ -12,7 +12,8 @@ CREATE TYPE visibility AS ENUM(
 CREATE TABLE IF NOT EXISTS forms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
-    description TEXT,
+    description_json JSONB NOT NULL DEFAULT '{"type":"doc","content":[]}'::jsonb,
+    description_html TEXT NOT NULL DEFAULT '',
     preview_message TEXT DEFAULT NULL,
     message_after_submission TEXT NOT NULL,
     status status NOT NULL DEFAULT 'draft',
@@ -43,7 +44,8 @@ CREATE TABLE IF NOT EXISTS sections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
     title VARCHAR(255) DEFAULT NULL,
-    description TEXT DEFAULT NULL,
+    description_json JSONB NOT NULL DEFAULT '{"type":"doc","content":[]}'::jsonb,
+    description_html TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

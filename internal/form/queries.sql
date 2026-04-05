@@ -2,7 +2,8 @@
 WITH created AS (
     INSERT INTO forms (
                        title,
-                       description,
+                       description_json,
+                       description_html,
                        preview_message,
                        unit_id,
                        created_by,
@@ -20,7 +21,7 @@ WITH created AS (
     VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15
+        $11, $12, $13, $14, $15, $16
     )
     RETURNING *
 ),
@@ -64,7 +65,8 @@ WITH updated AS (
     UPDATE forms
     SET
         title = COALESCE(sqlc.narg('title')::text, forms.title),
-        description = COALESCE(sqlc.narg('description')::text, forms.description),
+        description_json = COALESCE(sqlc.narg('description_json')::jsonb, forms.description_json),
+        description_html = COALESCE(sqlc.narg('description_html')::text, forms.description_html),
         preview_message = COALESCE(sqlc.narg('preview_message')::text, forms.preview_message),
         last_editor = sqlc.arg('last_editor'),
         deadline = COALESCE(sqlc.narg('deadline')::timestamptz, forms.deadline),
