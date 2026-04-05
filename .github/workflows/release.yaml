@@ -186,6 +186,11 @@ jobs:
                     "path": "/github-oauth",
                     "secret_name": "CLIENT_SECRET",
                     "env_name": "GITHUB_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "SETUP_YAML",
+                    "env_name": "SETUP_YAML"
                   }
                 ]
               }
@@ -271,6 +276,11 @@ jobs:
                     "path": "/github-oauth",
                     "secret_name": "CLIENT_SECRET",
                     "env_name": "GITHUB_OAUTH_CLIENT_SECRET"
+                  },
+                  {
+                    "path": "/",
+                    "secret_name": "SETUP_YAML",
+                    "env_name": "SETUP_YAML"
                   }
                 ]
               }

@@ -46,6 +46,7 @@ type Config struct {
 	DefaultOrgRoles     string `yaml:"default_org_roles" envconfig:"DEFAULT_ORG_ROLES"`
 
 	SetupPath              string        `yaml:"setup_path" envconfig:"SETUP_PATH"`
+	SetupData              string        `yaml:"setup_data" envconfig:"SETUP_YAML"`
 	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
 }
@@ -232,6 +233,7 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		DefaultGlobalRoles:  os.Getenv("DEFAULT_GLOBAL_ROLES"),
 		DefaultOrgRoles:     os.Getenv("DEFAULT_ORG_ROLES"),
 		SetupPath:           os.Getenv("SETUP_PATH"),
+		SetupData:           os.Getenv("SETUP_YAML"),
 	}
 
 	return configutil.Merge[Config](config, envConfig)

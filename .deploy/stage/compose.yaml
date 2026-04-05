@@ -27,6 +27,7 @@ services:
       ALLOW_ORIGINS: "*"
       DEFAULT_GLOBAL_ROLES: ${DEFAULT_GLOBAL_ROLES}
       DEFAULT_ORG_ROLES: ${DEFAULT_ORG_ROLES}
+      SETUP_YAML: ${SETUP_YAML}
     labels:
       - "vector.enable=true"
       - "traefik.enable=true"

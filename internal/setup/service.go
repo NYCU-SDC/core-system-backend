@@ -20,17 +20,24 @@ type Service struct {
 	unitService           *unit.Service
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, unitService *unit.Service) (*Service, error) {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, setupData string, unitService *unit.Service) (*Service, error) {
 	var config SetupConfig
+
 	data, err := os.ReadFile(setupPath)
 	if err != nil {
-		//missing setup files is expected, so the process can go on without setup files
-		logger.Warn("Failed to read setup file", zap.String("path", setupPath), zap.Error(err))
-	} else {
-		err = yaml.Unmarshal(data, &config)
-		if err != nil {
-			logger.Error("Failed to parse setup file", zap.String("path", setupPath), zap.Error(err))
-			return nil, fmt.Errorf("failed to parse setup file: %w", err)
+		if setupData != "" {
+			logger.Info("Loading setup config from SETUP_YAML environment variable")
+			data = []byte(setupData)
+		} else {
+			// missing setup config is expected, so the process can go on without it
+			logger.Warn("No setup config found (neither file nor SETUP_YAML env)", zap.String("path", setupPath))
+		}
+	}
+
+	if data != nil {
+		if err := yaml.Unmarshal(data, &config); err != nil {
+			logger.Error("Failed to parse setup config", zap.Error(err))
+			return nil, fmt.Errorf("failed to parse setup config: %w", err)
 		}
 	}
 
