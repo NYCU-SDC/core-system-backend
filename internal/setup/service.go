@@ -2,6 +2,7 @@ package setup
 
 import (
 	"NYCU-SDC/core-system-backend/internal/unit"
+	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"fmt"
 	"os"
@@ -18,9 +19,10 @@ type Service struct {
 	config                SetupConfig
 	allowedOnboardingList AllowedOnboardingList
 	unitService           *unit.Service
+	userService           *user.Service
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, unitService *unit.Service) (*Service, error) {
+func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, unitService *unit.Service, userService *user.Service) (*Service, error) {
 	var config SetupConfig
 	data, err := os.ReadFile(setupPath)
 	if err != nil {
@@ -47,6 +49,7 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, unitServ
 		config:                config,
 		allowedOnboardingList: allowedList,
 		unitService:           unitService,
+		userService:           userService,
 	}
 
 	logger.Info("NewService proccess done", zap.Int("allowed_onboarding_count", len(allowedList)))
@@ -85,8 +88,17 @@ func (s *Service) Setup(ctx context.Context) error {
 			}
 		}
 	}
-
 	s.logger.Info("Successfully initialized organizations")
+
+	for _, user := range s.config.Users {
+		_, err := s.userService.FindOrCreateByEmail(ctx, user.Email, user.GlobalRole)
+		if err != nil {
+			s.logger.Error("Failed to find or create user", zap.String("email", user.Email), zap.Error(err))
+			return err
+		}
+	}
+	s.logger.Info("Successfully initialized users")
+
 	return nil
 }
 

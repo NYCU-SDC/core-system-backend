@@ -180,6 +180,17 @@ func (q *Queries) GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.
 	return user_id, err
 }
 
+const getIDByEmail = `-- name: GetIDByEmail :one
+SELECT user_id FROM user_emails WHERE value = $1 LIMIT 1
+`
+
+func (q *Queries) GetIDByEmail(ctx context.Context, value string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getIDByEmail, value)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const update = `-- name: Update :one
 UPDATE users
 SET name = $2, username = $3, avatar_url = $4, is_onboarded = $5,

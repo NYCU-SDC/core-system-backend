@@ -3,7 +3,6 @@ package user
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/file"
-
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +13,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -40,6 +40,7 @@ type Querier interface {
 	Update(ctx context.Context, arg UpdateParams) (User, error)
 	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
 	CreateEmail(ctx context.Context, arg CreateEmailParams) error
+	GetIDByEmail(ctx context.Context, value string) (uuid.UUID, error)
 }
 
 // FileOperator defines the interface for file operations needed by user service
@@ -49,12 +50,16 @@ type FileOperator interface {
 	DownloadFromURL(ctx context.Context, url string, filename string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
 }
 
+type onboardingChecker interface {
+	AllowedOnboarding(email string) bool
+}
 type Service struct {
-	logger       *zap.Logger
-	queries      Querier
-	tracer       trace.Tracer
-	fileOperator FileOperator
-	orgWriter    OrgMemberWriter
+	logger            *zap.Logger
+	queries           Querier
+	tracer            trace.Tracer
+	fileOperator      FileOperator
+	orgWriter         OrgMemberWriter
+	onboardingChecker onboardingChecker
 }
 
 type Profile struct {
@@ -246,6 +251,73 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	return newUser.ID, nil
 }
 
+type OrgMember struct {
+	Slug    string `yaml:"slug"`
+	OrgRole string `yaml:"org_role"`
+}
+
+func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalRole []string) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "InitialFindOrCreate")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	id, err := s.queries.GetIDByEmail(traceCtx, email)
+	if err != nil && err != pgx.ErrNoRows {
+		err = databaseutil.WrapDBError(err, logger, "get user id existence by email")
+		span.RecordError(err)
+		return uuid.UUID{}, err
+	}
+
+	if id != uuid.Nil {
+		logger.Debug("Updated existing user", zap.String("user_id", id.String()))
+		return id, nil
+	}
+
+	logger.Info("User not found, creating new user", zap.String("email", email))
+
+	defaultRoles := DefaultGlobalRoles(email)
+
+	roleSet := map[string]struct{}{}
+
+	for _, r := range globalRole {
+		roleSet[r] = struct{}{}
+	}
+
+	for _, r := range defaultRoles {
+		roleSet[r] = struct{}{}
+	}
+
+	var finalRoles []string
+	for r := range roleSet {
+		finalRoles = append(finalRoles, r)
+	}
+
+	if len(finalRoles) == 0 {
+		finalRoles = []string{"user"}
+	}
+
+	logger.Info("Final global roles for new user", zap.Strings("roles", finalRoles))
+
+	newUser, err := s.queries.Create(traceCtx, CreateParams{Role: finalRoles})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create user")
+		span.RecordError(err)
+		return uuid.UUID{}, err
+	}
+	logger.Info("Created new user", zap.String("user_id", newUser.ID.String()))
+
+	err = s.queries.CreateEmail(traceCtx, CreateEmailParams{
+		UserID: newUser.ID,
+		Value:  email})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create email")
+		span.RecordError(err)
+		return uuid.UUID{}, err
+	}
+
+	return newUser.ID, nil
+}
+
 // downloadAndSaveAvatar downloads an avatar from a URL and saves it to the file service
 // Returns the backend URL for the saved avatar, or empty string if failed
 func (s *Service) downloadAndSaveAvatar(ctx context.Context, avatarURL string, userID uuid.UUID) string {
@@ -354,7 +426,7 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 	}
 	isAllowed := false
 	for _, userEmail := range userEmails {
-		if IsAllowed(userEmail) {
+		if s.onboardingChecker.AllowedOnboarding(userEmail) {
 			isAllowed = true
 			break
 		}
