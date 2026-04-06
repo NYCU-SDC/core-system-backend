@@ -5,8 +5,10 @@ import (
 	"NYCU-SDC/core-system-backend/internal/file"
 	"NYCU-SDC/core-system-backend/internal/form/font"
 	"NYCU-SDC/core-system-backend/internal/form/question"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,7 +34,7 @@ type DressingRequest struct {
 
 type Request struct {
 	Title                  string           `json:"title" validate:"required"`
-	Description            string           `json:"description"`
+	Description            json.RawMessage  `json:"description"`
 	PreviewMessage         string           `json:"previewMessage"`
 	Deadline               *time.Time       `json:"deadline"`
 	PublishTime            *time.Time       `json:"publishTime"`
@@ -45,7 +47,7 @@ type Request struct {
 
 type PatchRequest struct {
 	Title                  *string          `json:"title" validate:"omitempty"`
-	Description            *string          `json:"description" validate:"omitempty"`
+	Description            *json.RawMessage `json:"description"`
 	PreviewMessage         *string          `json:"previewMessage"`
 	Deadline               *time.Time       `json:"deadline"`
 	PublishTime            *time.Time       `json:"publishTime"`
@@ -59,7 +61,8 @@ type PatchRequest struct {
 type Response struct {
 	ID                     string               `json:"id"`
 	Title                  string               `json:"title"`
-	Description            string               `json:"description"`
+	Description            json.RawMessage      `json:"description"`
+	DescriptionHtml        string               `json:"descriptionHtml,omitempty"`
 	PreviewMessage         string               `json:"previewMessage"`
 	Status                 string               `json:"status"`
 	UnitID                 string               `json:"unitId"`
@@ -80,15 +83,16 @@ type CoverUploadResponse struct {
 }
 
 type SectionRequest struct {
-	Title       string  `json:"title" validate:"required"`
-	Description *string `json:"description"`
+	Title       string           `json:"title" validate:"required"`
+	Description *json.RawMessage `json:"description"`
 }
 
 type SectionResponse struct {
-	ID          string `json:"id"`
-	FormID      string `json:"formId"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
+	ID              string          `json:"id"`
+	FormID          string          `json:"formId"`
+	Title           string          `json:"title"`
+	Description     json.RawMessage `json:"description,omitempty"`
+	DescriptionHtml string          `json:"descriptionHtml,omitempty"`
 }
 
 // statusToUppercase converts database status format (lowercase) to API format (uppercase).
@@ -135,13 +139,18 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		publishTime = nil
 	}
 
+	desc := json.RawMessage(form.DescriptionJson)
+	if len(desc) == 0 {
+		desc = json.RawMessage(markdown.EmptyDocumentJSON)
+	}
 	return Response{
-		ID:             form.ID.String(),
-		Title:          form.Title,
-		Description:    form.Description.String,
-		PreviewMessage: form.PreviewMessage.String,
-		Status:         statusToUppercase(form.Status),
-		UnitID:         form.UnitID.String(),
+		ID:              form.ID.String(),
+		Title:           form.Title,
+		Description:     desc,
+		DescriptionHtml: form.DescriptionHtml,
+		PreviewMessage:  form.PreviewMessage.String,
+		Status:          statusToUppercase(form.Status),
+		UnitID:          form.UnitID.String(),
 		LastEditor: user.ProfileResponse{
 			ID:        editor.ID,
 			Name:      editor.Name.String,
@@ -183,7 +192,7 @@ type tenantStore interface {
 }
 
 type questionStore interface {
-	UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (question.Section, error)
+	UpdateSection(ctx context.Context, arg question.UpdateSectionParams) (question.Section, error)
 	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 }
 
@@ -259,7 +268,8 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 	response := ToResponse(Form{
 		ID:                     currentForm.ID,
 		Title:                  currentForm.Title,
-		Description:            currentForm.Description,
+		DescriptionJson:        currentForm.DescriptionJson,
+		DescriptionHtml:        currentForm.DescriptionHtml,
 		PreviewMessage:         currentForm.PreviewMessage,
 		Status:                 currentForm.Status,
 		UnitID:                 currentForm.UnitID,
@@ -331,7 +341,8 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	response := ToResponse(Form{
 		ID:                     currentForm.ID,
 		Title:                  currentForm.Title,
-		Description:            currentForm.Description,
+		DescriptionJson:        currentForm.DescriptionJson,
+		DescriptionHtml:        currentForm.DescriptionHtml,
 		PreviewMessage:         currentForm.PreviewMessage,
 		Status:                 currentForm.Status,
 		UnitID:                 currentForm.UnitID,
@@ -377,9 +388,16 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 		responses = append(responses, ToResponse(Form{
 			ID:                     form.ID,
 			Title:                  form.Title,
-			Description:            form.Description,
+			DescriptionJson:        form.DescriptionJson,
+			DescriptionHtml:        form.DescriptionHtml,
 			PreviewMessage:         form.PreviewMessage,
 			Status:                 form.Status,
+			UnitID:                 form.UnitID,
+			CreatedBy:              form.CreatedBy,
+			LastEditor:             form.LastEditor,
+			Deadline:               form.Deadline,
+			CreatedAt:              form.CreatedAt,
+			UpdatedAt:              form.UpdatedAt,
 			MessageAfterSubmission: form.MessageAfterSubmission,
 			Visibility:             form.Visibility,
 			GoogleSheetUrl:         form.GoogleSheetUrl,
@@ -441,7 +459,8 @@ func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) 
 	response := ToResponse(Form{
 		ID:                     newForm.ID,
 		Title:                  newForm.Title,
-		Description:            newForm.Description,
+		DescriptionJson:        newForm.DescriptionJson,
+		DescriptionHtml:        newForm.DescriptionHtml,
 		PreviewMessage:         newForm.PreviewMessage,
 		Status:                 newForm.Status,
 		UnitID:                 newForm.UnitID,
@@ -501,7 +520,8 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 		responses[i] = ToResponse(Form{
 			ID:                     currentForm.ID,
 			Title:                  currentForm.Title,
-			Description:            currentForm.Description,
+			DescriptionJson:        currentForm.DescriptionJson,
+			DescriptionHtml:        currentForm.DescriptionHtml,
 			PreviewMessage:         currentForm.PreviewMessage,
 			Status:                 currentForm.Status,
 			UnitID:                 currentForm.UnitID,
@@ -651,7 +671,8 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	response := ToResponse(Form{
 		ID:                     currentForm.ID,
 		Title:                  currentForm.Title,
-		Description:            currentForm.Description,
+		DescriptionJson:        currentForm.DescriptionJson,
+		DescriptionHtml:        currentForm.DescriptionHtml,
 		PreviewMessage:         currentForm.PreviewMessage,
 		Status:                 currentForm.Status,
 		UnitID:                 currentForm.UnitID,
@@ -721,22 +742,37 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	description := ""
+	params := question.UpdateSectionParams{
+		ID:     sectionID,
+		FormID: formID,
+		Title:  pgtype.Text{String: req.Title, Valid: true},
+	}
 	if req.Description != nil {
-		description = *req.Description
+		j, htmlStr, err := markdown.ProcessAPIInput([]byte(*req.Description))
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		params.DescriptionJson = j
+		params.DescriptionHtml = pgtype.Text{String: htmlStr, Valid: true}
 	}
 
-	section, err := h.questionStore.UpdateSection(traceCtx, sectionID, formID, req.Title, description)
+	section, err := h.questionStore.UpdateSection(traceCtx, params)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
+	secDesc := json.RawMessage(section.DescriptionJson)
+	if len(secDesc) == 0 {
+		secDesc = json.RawMessage(markdown.EmptyDocumentJSON)
+	}
 	response := SectionResponse{
-		ID:          section.ID.String(),
-		FormID:      section.FormID.String(),
-		Title:       section.Title.String,
-		Description: section.Description.String,
+		ID:              section.ID.String(),
+		FormID:          section.FormID.String(),
+		Title:           section.Title.String,
+		Description:     secDesc,
+		DescriptionHtml: section.DescriptionHtml,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)

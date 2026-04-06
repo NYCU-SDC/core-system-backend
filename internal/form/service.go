@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5"
@@ -54,7 +55,8 @@ type UserForm struct {
 
 type formFields struct {
 	title                  string
-	description            pgtype.Text
+	descriptionJSON        []byte
+	descriptionHTML        string
 	previewMessage         pgtype.Text
 	deadline               pgtype.Timestamptz
 	publishTime            pgtype.Timestamptz
@@ -94,7 +96,7 @@ func visibilityFromAPIFormat(v string) Visibility {
 	}
 }
 
-func buildFormFieldsFromRequest(request Request) formFields {
+func buildFormFieldsFromRequest(request Request) (formFields, error) {
 	form := formFields{}
 
 	if request.Deadline != nil {
@@ -109,14 +111,20 @@ func buildFormFieldsFromRequest(request Request) formFields {
 		form.publishTime = pgtype.Timestamptz{Valid: false}
 	}
 
+	descJSON, descHTML, err := markdown.ProcessAPIInput([]byte(request.Description))
+	if err != nil {
+		return formFields{}, err
+	}
+	form.descriptionJSON = descJSON
+	form.descriptionHTML = descHTML
+
 	preview := request.PreviewMessage
-	if preview == "" && request.Description != "" {
-		runes := []rune(request.Description)
-		if len(runes) > 25 {
-			preview = string(runes[:25])
-		} else {
-			preview = request.Description
+	if preview == "" {
+		snip, err := markdown.PreviewSnippet(descJSON, 25)
+		if err != nil {
+			return formFields{}, err
 		}
+		preview = snip
 	}
 
 	if request.Dressing != nil {
@@ -131,14 +139,13 @@ func buildFormFieldsFromRequest(request Request) formFields {
 		form.dressingTextFont = pgtype.Text{Valid: false}
 	}
 
-	form.description = pgtype.Text{String: request.Description, Valid: true}
 	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
 	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""}
 	form.messageAfterSubmission = request.MessageAfterSubmission
 	form.visibility = visibilityFromAPIFormat(request.Visibility)
 	form.title = request.Title
 
-	return form
+	return form, nil
 }
 
 func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
@@ -146,11 +153,16 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	fields := buildFormFieldsFromRequest(request)
+	fields, err := buildFormFieldsFromRequest(request)
+	if err != nil {
+		span.RecordError(err)
+		return CreateRow{}, err
+	}
 
 	newForm, err := s.queries.Create(ctx, CreateParams{
 		Title:                  fields.title,
-		Description:            fields.description,
+		DescriptionJson:        fields.descriptionJSON,
+		DescriptionHtml:        fields.descriptionHTML,
 		PreviewMessage:         fields.previewMessage,
 		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
 		CreatedBy:              userID,
@@ -189,7 +201,13 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 	}
 
 	if request.Description != nil {
-		params.Description = pgtype.Text{String: *request.Description, Valid: true}
+		j, h, err := markdown.ProcessAPIInput([]byte(*request.Description))
+		if err != nil {
+			span.RecordError(err)
+			return PatchRow{}, err
+		}
+		params.DescriptionJson = j
+		params.DescriptionHtml = pgtype.Text{String: h, Valid: true}
 	}
 
 	if request.PreviewMessage != nil {

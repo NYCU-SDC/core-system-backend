@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"NYCU-SDC/core-system-backend/internal/form/richcontent"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/internal/user"
 
 	"github.com/google/uuid"
@@ -15,7 +15,7 @@ import (
 
 func TestToResponse_proseMirrorAndHTML(t *testing.T) {
 	doc := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hi"}]}]}`)
-	canonical, html, err := richcontent.Process(doc)
+	canonical, html, err := markdown.Process(doc)
 	require.NoError(t, err)
 
 	f := Form{
