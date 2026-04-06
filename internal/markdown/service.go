@@ -15,6 +15,27 @@ import (
 	pm "github.com/karitham/prosemirror"
 )
 
+// ProcessAPIInput validates rich text from HTTP APIs. It accepts canonical ProseMirror JSON
+// (object root) or a JSON-encoded plain string, which is converted to a single paragraph.
+func ProcessAPIInput(raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return Process(raw)
+	}
+
+	if raw[0] == '"' {
+		var plain string
+		err = json.Unmarshal(raw, &plain)
+		if err != nil {
+			return nil, "", wrapUnmarshalErr(err)
+		}
+
+		return FromPlaintext(plain)
+	}
+
+	return Process(raw)
+}
+
 // Process validates a ProseMirror JSON document, renders HTML, sanitizes it, and returns canonical JSON.
 func Process(raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
 	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
