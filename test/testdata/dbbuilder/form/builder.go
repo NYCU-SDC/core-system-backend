@@ -2,6 +2,7 @@ package formbuilder
 
 import (
 	"NYCU-SDC/core-system-backend/internal/form"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/test/testdata"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	"context"
@@ -75,9 +76,13 @@ func (b Builder) Create(opts ...Option) form.CreateRow {
 		}
 	}
 
+	descJSON, descHTML, err := markdown.FromPlaintext(p.Description)
+	require.NoError(b.t, err)
+
 	formRow, err := queries.Create(context.Background(), form.CreateParams{
 		Title:                  p.Title,
-		Description:            pgtype.Text{String: p.Description, Valid: p.Description != ""},
+		DescriptionJson:        descJSON,
+		DescriptionHtml:        descHTML,
 		PreviewMessage:         preview,
 		UnitID:                 p.UnitID,
 		CreatedBy:              p.CreatedBy,

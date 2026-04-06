@@ -330,14 +330,15 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 
 				questionQueries := question.New(db)
 				createRow, err := questionQueries.Create(context.Background(), question.CreateParams{
-					SectionID:   sectionID,
-					Required:    false,
-					Type:        question.QuestionTypeSingleChoice,
-					Title:       pgtype.Text{String: "Q", Valid: true},
-					Description: pgtype.Text{},
-					Metadata:    metadata,
-					Order:       1,
-					SourceID:    pgtype.UUID{},
+					SectionID:       sectionID,
+					Required:        false,
+					Type:            question.QuestionTypeSingleChoice,
+					Title:           pgtype.Text{String: "Q", Valid: true},
+					DescriptionJson: []byte(`{"type":"doc","content":[]}`),
+					DescriptionHtml: "",
+					Metadata:        metadata,
+					Order:           1,
+					SourceID:        pgtype.UUID{},
 				})
 				require.NoError(t, err)
 				questionID := createRow.ID
