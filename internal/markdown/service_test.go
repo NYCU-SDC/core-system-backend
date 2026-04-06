@@ -10,34 +10,63 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProcessRequest_plainString(t *testing.T) {
+func TestProcessRequest(t *testing.T) {
 	t.Parallel()
-	j, h, err := ProcessRequest([]byte(`"Hello world"`))
-	require.NoError(t, err)
-	require.Contains(t, string(j), `"type":"doc"`)
-	require.Contains(t, string(j), "Hello world")
-	require.Contains(t, h, "Hello world")
 
-	j2, _, err := ProcessRequest([]byte(`""`))
-	require.NoError(t, err)
-	require.Contains(t, string(j2), `"type":"doc"`)
-}
+	testCases := []struct {
+		name        string
+		raw         []byte
+		validate    func(t *testing.T, raw []byte, docJSON []byte, docHTML string)
+		expectedErr error
+	}{
+		{
+			name: "JSON-encoded plain string",
+			raw:  []byte(`"Hello world"`),
+			validate: func(t *testing.T, _ []byte, docJSON []byte, docHTML string) {
+				t.Helper()
+				require.Contains(t, string(docJSON), `"type":"doc"`)
+				require.Contains(t, string(docJSON), "Hello world")
+				require.Contains(t, docHTML, "Hello world")
+			},
+		},
+		{
+			name: "empty JSON string",
+			raw:  []byte(`""`),
+			validate: func(t *testing.T, _ []byte, docJSON []byte, _ string) {
+				t.Helper()
+				require.Contains(t, string(docJSON), `"type":"doc"`)
+			},
+		},
+		{
+			name:        "malformed JSON string",
+			raw:         []byte(`"unclosed`),
+			expectedErr: internal.ErrInvalidDocumentJSON,
+		},
+		{
+			name: "prose mirror object matches Process",
+			raw:  []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x"}]}]}`),
+			validate: func(t *testing.T, raw []byte, docJSON []byte, docHTML string) {
+				t.Helper()
+				j2, h2, err := Process(raw)
+				require.NoError(t, err)
+				require.Equal(t, string(j2), string(docJSON))
+				require.Equal(t, h2, docHTML)
+			},
+		},
+	}
 
-func TestProcessRequest_malformedJSONString(t *testing.T) {
-	t.Parallel()
-	_, _, err := ProcessRequest([]byte(`"unclosed`))
-	require.ErrorIs(t, err, internal.ErrInvalidDocumentJSON)
-}
-
-func TestProcessRequest_proseMirrorObject(t *testing.T) {
-	t.Parallel()
-	raw := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x"}]}]}`)
-	j1, h1, err := ProcessRequest(raw)
-	require.NoError(t, err)
-	j2, h2, err := Process(raw)
-	require.NoError(t, err)
-	require.Equal(t, string(j2), string(j1))
-	require.Equal(t, h2, h1)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			docJSON, docHTML, err := ProcessRequest(tc.raw)
+			if tc.expectedErr != nil {
+				require.ErrorIs(t, err, tc.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			tc.validate(t, tc.raw, docJSON, docHTML)
+		})
+	}
 }
 
 func TestProcess(t *testing.T) {
