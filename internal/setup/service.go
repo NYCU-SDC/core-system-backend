@@ -41,7 +41,8 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, setupDat
 	}
 
 	if data != nil {
-		if err := yaml.Unmarshal(data, &config); err != nil {
+		err = yaml.Unmarshal(data, &config)
+		if err != nil {
 			logger.Error("Failed to parse setup config", zap.Error(err))
 			return nil, fmt.Errorf("failed to parse setup config: %w", err)
 		}
