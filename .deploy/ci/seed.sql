@@ -3,9 +3,21 @@
 
 DO $$
 DECLARE
+    v_slug TEXT := 'SDC';
     v_user_id UUID := '4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e';
-    v_org_id  UUID := 'cfc4e7f4-629f-420e-a79d-a58849cfd236';
+    v_org_id  UUID;
 BEGIN
+    SELECT org_id
+    INTO v_org_id
+    FROM slug_history
+    WHERE slug = v_slug
+    ORDER BY created_at DESC, id DESC;
+    LIMIT 1;
+
+    IF v_org_id IS NULL THEN
+        RAISE EXCEPTION '% organization not found in slug_history', v_slug;
+    END IF;
+
     INSERT INTO users (id, name, username, avatar_url, role)
     VALUES (v_user_id, 'John Doe', 'qa_user', '', ARRAY['admin','user'])
     ON CONFLICT (id) DO NOTHING;
