@@ -55,6 +55,7 @@ type Service struct {
 	tracer       trace.Tracer
 	fileOperator FileOperator
 	orgWriter    OrgMemberWriter
+	orgResolver  OrgSlugResolver
 }
 
 type Profile struct {
@@ -74,13 +75,18 @@ type OrgMemberWriter interface {
 	) error
 }
 
-func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter) *Service {
+type OrgSlugResolver interface {
+	GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error)
+}
+
+func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter, orgResolver OrgSlugResolver) *Service {
 	return &Service{
 		logger:       logger,
 		queries:      New(db),
 		tracer:       otel.Tracer("user/service"),
 		fileOperator: fileOperator,
 		orgWriter:    orgWriter,
+		orgResolver:  orgResolver,
 	}
 }
 
@@ -226,20 +232,27 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		}
 	}
 
-	defaultOrgID := uuid.MustParse("cfc4e7f4-629f-420e-a79d-a58849cfd236")
 	defaultOrgRole, ok := DefaultOrgRole(email)
 
-	if ok && s.orgWriter != nil {
-		err := s.orgWriter.AddMemberWithRole(
-			traceCtx,
-			defaultOrgID,
-			newUser.ID,
-			defaultOrgRole,
-		)
+	if ok && s.orgWriter != nil && s.orgResolver != nil {
+		const defaultOrgSlug = "SDC"
+		defaultOrgID, resolveErr := s.orgResolver.GetOrgIDBySlug(traceCtx, defaultOrgSlug)
+		if resolveErr != nil {
+			logger.Warn("failed to resolve default org slug",
+				zap.String("slug", defaultOrgSlug),
+				zap.Error(resolveErr))
+		} else {
+			err := s.orgWriter.AddMemberWithRole(
+				traceCtx,
+				defaultOrgID,
+				newUser.ID,
+				defaultOrgRole,
+			)
 
-		if err != nil {
-			logger.Warn("failed to apply default org role",
-				zap.Error(err))
+			if err != nil {
+				logger.Warn("failed to apply default org role",
+					zap.Error(err))
+			}
 		}
 	}
 
