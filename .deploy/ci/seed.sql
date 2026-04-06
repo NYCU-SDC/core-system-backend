@@ -11,7 +11,7 @@ BEGIN
     INTO v_org_id
     FROM slug_history
     WHERE slug = v_slug
-    ORDER BY created_at DESC, id DESC;
+    ORDER BY created_at DESC, id DESC
     LIMIT 1;
 
     IF v_org_id IS NULL THEN
