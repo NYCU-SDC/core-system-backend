@@ -235,7 +235,7 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	defaultOrgRole, ok := DefaultOrgRole(email)
 
 	if ok && s.orgWriter != nil && s.orgResolver != nil {
-		const defaultOrgSlug = "sdc"
+		const defaultOrgSlug = "SDC"
 		defaultOrgID, resolveErr := s.orgResolver.GetOrgIDBySlug(traceCtx, defaultOrgSlug)
 		if resolveErr != nil {
 			logger.Warn("failed to resolve default org slug",
