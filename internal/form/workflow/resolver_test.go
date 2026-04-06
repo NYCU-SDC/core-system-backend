@@ -1,4 +1,4 @@
-package workflow_test
+package workflow
 
 import (
 	"NYCU-SDC/core-system-backend/internal/form/answer"
@@ -8,7 +8,6 @@ import (
 
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
-	"NYCU-SDC/core-system-backend/internal/form/workflow"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -18,15 +17,100 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestService_ResolveSections_Simple(t *testing.T) {
-	t.Parallel()
+type setupParams struct {
+	formID        uuid.UUID
+	workflowJSON  []byte
+	answers       []answer.Answer
+	answerableMap map[string]question.Answerable
+	sections      []uuid.UUID
+	expected      []uuid.UUID
+	expectedErr   error
+}
 
+type testCase struct {
+	name     string
+	setup    func(t *testing.T) setupParams
+	validate func(t *testing.T, setup setupParams, result []uuid.UUID, err error)
+}
+
+func TestService_ResolveSections(t *testing.T) {
 	ctx := context.Background()
 	logger := zap.NewNop()
 	tracer := noop.NewTracerProvider().Tracer("test")
-	formID := uuid.New()
 
-	// Create a simple workflow: Start -> Section A -> Section B -> End
+	testCases := []testCase{
+		{
+			name:  "simple",
+			setup: buildSimpleSetup,
+			validate: func(t *testing.T, setup setupParams, result []uuid.UUID, err error) {
+				require.NoError(t, err)
+				require.Equal(t, setup.expected, result)
+			},
+		},
+		{
+			name:  "choice condition true -> nextTrue",
+			setup: buildChoiceConditionTrueNextTrueSetup,
+			validate: func(t *testing.T, setup setupParams, result []uuid.UUID, err error) {
+				require.NoError(t, err)
+				require.Equal(t, setup.expected, result)
+			},
+		},
+		{
+			name:  "multiple choice condition match -> nextTrue",
+			setup: buildMultipleChoiceConditionMatchNextTrueSetup,
+			validate: func(t *testing.T, setup setupParams, result []uuid.UUID, err error) {
+				require.NoError(t, err)
+				require.Equal(t, setup.expected, result)
+			},
+		},
+		{
+			name:  "detailed multi choice mismatch -> nextFalse",
+			setup: buildDetailedMultiChoiceMismatchNextFalseSetup,
+			validate: func(t *testing.T, setup setupParams, result []uuid.UUID, err error) {
+				require.NoError(t, err)
+				require.Equal(t, setup.expected, result)
+			},
+		},
+		{
+			name:  "empty workflow error",
+			setup: buildEmptyWorkflowErrorSetup,
+			validate: func(t *testing.T, setup setupParams, result []uuid.UUID, err error) {
+				// Workflow row exists but JSON is `[]`: no start node, not ErrWorkflowNotFound
+				// (ErrWorkflowNotFound is only when queries.Get returns pgx.ErrNoRows).
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "start node not found")
+				require.Empty(t, result)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			setup := tc.setup(t)
+
+			mockQuerier := new(mockQuerier)
+			service := createTestService(t, logger, tracer, mockQuerier, new(mockValidator), nil)
+			mockQuerier.On("Get", mock.Anything, setup.formID).Return(WorkflowVersion{
+				ID:       setup.formID,
+				FormID:   setup.formID,
+				Workflow: setup.workflowJSON,
+			}, nil).Once()
+
+			result, err := service.ResolveSections(ctx, setup.formID, setup.answers, setup.answerableMap)
+
+			if tc.validate != nil {
+				tc.validate(t, setup, result, err)
+			}
+		})
+	}
+}
+
+func buildSimpleSetup(t *testing.T) setupParams {
+	t.Helper()
+
+	formID := uuid.New()
 	startID := uuid.New()
 	sectionAID := uuid.New()
 	sectionBID := uuid.New()
@@ -58,46 +142,31 @@ func TestService_ResolveSections_Simple(t *testing.T) {
 		},
 	})
 
-	mockQuerier := new(mockQuerier)
-	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
-
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
-		ID:       uuid.New(),
-		FormID:   formID,
-		Workflow: workflowJSON,
-	}, nil).Once()
-
-	// No answers provided
 	var answers []answer.Answer
-	answerableMap := map[string]question.Answerable{} // Empty since no questions
-
-	result, err := service.ResolveSections(ctx, formID, answers, answerableMap)
-
-	require.NoError(t, err)
-	require.Len(t, result, 2)
-	require.Equal(t, sectionAID, result[0])
-	require.Equal(t, sectionBID, result[1])
-
-	mockQuerier.AssertExpectations(t)
+	answerableMap := map[string]question.Answerable{}
+	return setupParams{
+		formID:        formID,
+		workflowJSON:  workflowJSON,
+		answers:       answers,
+		answerableMap: answerableMap,
+		sections:      []uuid.UUID{sectionAID, sectionBID},
+		expected:      []uuid.UUID{sectionAID, sectionBID},
+	}
 }
 
-func TestService_ResolveSections_WithCondition_ChoiceTrue(t *testing.T) {
-	t.Parallel()
+func buildChoiceConditionTrueNextTrueSetup(t *testing.T) setupParams {
+	t.Helper()
 
-	ctx := context.Background()
-	logger := zap.NewNop()
-	tracer := noop.NewTracerProvider().Tracer("test")
 	formID := uuid.New()
-
-	// Create workflow: Start -> Section A -> Condition -> (true: Section B) / (false: Section C) -> End
 	startID := uuid.New()
 	sectionAID := uuid.New()
-	conditionID := uuid.New()
 	sectionBID := uuid.New()
 	sectionCID := uuid.New()
 	endID := uuid.New()
+	conditionID := uuid.New()
 	questionID := uuid.New()
 	choiceID := uuid.New()
+	responseID := uuid.New()
 
 	workflowJSON := createWorkflowJSON(t, []map[string]interface{}{
 		{
@@ -121,7 +190,7 @@ func TestService_ResolveSections_WithCondition_ChoiceTrue(t *testing.T) {
 			"conditionRule": map[string]interface{}{
 				"source":   "choice",
 				"question": questionID.String(),
-				"pattern":  "^" + choiceID.String() + "$", // Exact match for choice ID
+				"pattern":  "^" + choiceID.String() + "$",
 			},
 		},
 		{
@@ -143,68 +212,43 @@ func TestService_ResolveSections_WithCondition_ChoiceTrue(t *testing.T) {
 		},
 	})
 
-	mockQuerier := new(mockQuerier)
-	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
-
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
-		ID:       uuid.New(),
-		FormID:   formID,
-		Workflow: workflowJSON,
-	}, nil).Once()
-
-	// Create answer with the matching choice ID
-	answerValue, err := json.Marshal(shared.SingleChoiceAnswer{
-		ChoiceID: choiceID,
-		Snapshot: shared.ChoiceSnapshot{Name: "Option A", Description: ""},
-	})
-	require.NoError(t, err)
-
 	answers := []answer.Answer{
-		{
-			ID:         uuid.New(),
-			ResponseID: uuid.New(),
-			QuestionID: questionID,
-			Value:      answerValue,
-			CreatedAt:  pgtype.Timestamptz{},
-			UpdatedAt:  pgtype.Timestamptz{},
-		},
+		buildAnswer(t, questionID, responseID, shared.SingleChoiceAnswer{
+			ChoiceID: choiceID,
+			Snapshot: shared.ChoiceSnapshot{Name: "Option A", Description: ""},
+		}),
 	}
-
-	// Create answerable for the question (SingleChoice type)
-	answerable := createSingleChoiceAnswerable(t, questionID, sectionAID, formID, choiceID)
 
 	answerableMap := map[string]question.Answerable{
-		questionID.String(): answerable,
+		questionID.String(): createSingleChoiceAnswerable(t, questionID, sectionAID, formID, choiceID),
 	}
 
-	result, err := service.ResolveSections(ctx, formID, answers, answerableMap)
-
-	require.NoError(t, err)
-	require.Len(t, result, 2)
-	require.Equal(t, sectionAID, result[0])
-	require.Equal(t, sectionBID, result[1]) // Should follow nextTrue (8 matches pattern)
-
-	mockQuerier.AssertExpectations(t)
+	setup := setupParams{
+		formID:        formID,
+		workflowJSON:  workflowJSON,
+		answers:       answers,
+		answerableMap: answerableMap,
+		sections:      []uuid.UUID{sectionAID, sectionBID, sectionCID},
+		expected:      []uuid.UUID{sectionAID, sectionBID},
+		expectedErr:   nil,
+	}
+	return setup
 }
 
-func TestService_ResolveSections_MultipleChoice_AnyMatch(t *testing.T) {
-	t.Parallel()
+func buildMultipleChoiceConditionMatchNextTrueSetup(t *testing.T) setupParams {
+	t.Helper()
 
-	ctx := context.Background()
-	logger := zap.NewNop()
-	tracer := noop.NewTracerProvider().Tracer("test")
 	formID := uuid.New()
-
-	// Create workflow with condition checking multiple choice
 	startID := uuid.New()
 	sectionAID := uuid.New()
-	conditionID := uuid.New()
 	sectionBID := uuid.New()
 	sectionCID := uuid.New()
 	endID := uuid.New()
+	conditionID := uuid.New()
 	questionID := uuid.New()
 	targetChoiceID := uuid.New()
 	otherChoiceID := uuid.New()
+	responseID := uuid.New()
 
 	workflowJSON := createWorkflowJSON(t, []map[string]interface{}{
 		{
@@ -250,93 +294,164 @@ func TestService_ResolveSections_MultipleChoice_AnyMatch(t *testing.T) {
 		},
 	})
 
-	mockQuerier := new(mockQuerier)
-	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
-
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
-		ID:       uuid.New(),
-		FormID:   formID,
-		Workflow: workflowJSON,
-	}, nil).Once()
-
-	// Create multiple choice answer with target choice ID among selected choices
-	answerValue, err := json.Marshal(shared.MultipleChoiceAnswer{
-		Choices: []struct {
-			ChoiceID uuid.UUID             `json:"choiceId"`
-			Snapshot shared.ChoiceSnapshot `json:"snapshot"`
-		}{
-			{
-				ChoiceID: otherChoiceID,
-				Snapshot: shared.ChoiceSnapshot{Name: "Option A", Description: ""},
-			},
-			{
-				ChoiceID: targetChoiceID, // This one matches!
-				Snapshot: shared.ChoiceSnapshot{Name: "Option B", Description: ""},
-			},
-		},
-	})
-	require.NoError(t, err)
-
 	answers := []answer.Answer{
-		{
-			ID:         uuid.New(),
-			ResponseID: uuid.New(),
-			QuestionID: questionID,
-			Value:      answerValue,
-			CreatedAt:  pgtype.Timestamptz{},
-			UpdatedAt:  pgtype.Timestamptz{},
-		},
+		buildAnswer(t, questionID, responseID, shared.MultipleChoiceAnswer{
+			Choices: []struct {
+				ChoiceID uuid.UUID             `json:"choiceId"`
+				Snapshot shared.ChoiceSnapshot `json:"snapshot"`
+			}{
+				{
+					ChoiceID: otherChoiceID,
+					Snapshot: shared.ChoiceSnapshot{Name: "Option A", Description: ""},
+				},
+				{
+					ChoiceID: targetChoiceID,
+					Snapshot: shared.ChoiceSnapshot{Name: "Option B", Description: ""},
+				},
+			},
+		}),
 	}
 
-	// Create answerable for the question (MultipleChoice type)
-	answerable := createMultipleChoiceAnswerable(t, questionID, sectionAID, formID, targetChoiceID, otherChoiceID)
+	answerableMap := map[string]question.Answerable{
+		questionID.String(): createMultipleChoiceAnswerable(t, questionID, sectionAID, formID, targetChoiceID, otherChoiceID),
+	}
 
+	setup := setupParams{
+		formID:        formID,
+		workflowJSON:  workflowJSON,
+		answers:       answers,
+		answerableMap: answerableMap,
+		sections:      []uuid.UUID{sectionAID, sectionBID, sectionCID},
+		expected:      []uuid.UUID{sectionAID, sectionBID},
+		expectedErr:   nil,
+	}
+	return setup
+}
+
+func buildDetailedMultiChoiceMismatchNextFalseSetup(t *testing.T) setupParams {
+	t.Helper()
+
+	formID := uuid.New()
+	startID := uuid.New()
+	sectionAID := uuid.New()
+	sectionBID := uuid.New()
+	sectionCID := uuid.New()
+	endID := uuid.New()
+	conditionID := uuid.New()
+	questionID := uuid.New()
+	choiceBID := uuid.New()
+	choiceCID := uuid.New()
+	responseID := uuid.New()
+
+	workflowJSON := createWorkflowJSON(t, []map[string]interface{}{
+		{
+			"id":    startID.String(),
+			"type":  "start",
+			"label": "Start",
+			"next":  sectionAID.String(),
+		},
+		{
+			"id":    sectionAID.String(),
+			"type":  "section",
+			"label": "Section A",
+			"next":  conditionID.String(),
+		},
+		{
+			"id":        conditionID.String(),
+			"type":      "condition",
+			"label":     "Condition",
+			"nextTrue":  sectionBID.String(),
+			"nextFalse": sectionCID.String(),
+			"conditionRule": map[string]interface{}{
+				"source":   "choice",
+				"question": questionID.String(),
+				"pattern":  choiceBID.String(),
+			},
+		},
+		{
+			"id":    sectionBID.String(),
+			"type":  "section",
+			"label": "Section B",
+			"next":  endID.String(),
+		},
+		{
+			"id":    sectionCID.String(),
+			"type":  "section",
+			"label": "Section C",
+			"next":  endID.String(),
+		},
+		{
+			"id":    endID.String(),
+			"type":  "end",
+			"label": "End",
+		},
+	})
+
+	answers := []answer.Answer{
+		buildAnswer(t, questionID, responseID, shared.DetailedMultipleChoiceAnswer{
+			Choices: []struct {
+				ChoiceID uuid.UUID             `json:"choiceId"`
+				Snapshot shared.ChoiceSnapshot `json:"snapshot"`
+			}{
+				{
+					ChoiceID: choiceCID,
+					Snapshot: shared.ChoiceSnapshot{
+						Name:        "Option C",
+						Description: "",
+						OtherText:   "",
+					},
+				},
+			},
+		}),
+	}
+
+	answerable := createMockAnswerableWithChoiceIDs(t, formID, question.QuestionTypeDetailedMultipleChoice, []uuid.UUID{choiceBID, choiceCID})
 	answerableMap := map[string]question.Answerable{
 		questionID.String(): answerable,
 	}
 
-	result, err := service.ResolveSections(ctx, formID, answers, answerableMap)
-
-	require.NoError(t, err)
-	require.Len(t, result, 2)
-	require.Equal(t, sectionAID, result[0])
-	require.Equal(t, sectionBID, result[1]) // Should follow nextTrue (one choice matches)
-
-	mockQuerier.AssertExpectations(t)
+	setup := setupParams{
+		formID:        formID,
+		workflowJSON:  workflowJSON,
+		answers:       answers,
+		answerableMap: answerableMap,
+		sections:      []uuid.UUID{sectionAID, uuid.Nil, sectionCID},
+		expected:      []uuid.UUID{sectionAID, sectionCID},
+		expectedErr:   nil,
+	}
+	return setup
 }
 
-func TestService_ResolveSections_EmptyWorkflow(t *testing.T) {
-	t.Parallel()
+func buildEmptyWorkflowErrorSetup(t *testing.T) setupParams {
+	t.Helper()
 
-	ctx := context.Background()
-	logger := zap.NewNop()
-	tracer := noop.NewTracerProvider().Tracer("test")
 	formID := uuid.New()
-
-	// Empty workflow
 	workflowJSON := []byte("[]")
-
-	mockQuerier := new(mockQuerier)
-	service := workflow.NewServiceForTesting(logger, tracer, mockQuerier, nil, nil)
-
-	mockQuerier.On("Get", mock.Anything, formID).Return(workflow.GetRow{
-		ID:       uuid.New(),
-		FormID:   formID,
-		Workflow: workflowJSON,
-	}, nil).Once()
-
 	var answers []answer.Answer
-
-	// Empty answerableMap for empty workflow test
 	answerableMap := map[string]question.Answerable{}
 
-	result, err := service.ResolveSections(ctx, formID, answers, answerableMap)
+	return setupParams{
+		formID:        formID,
+		workflowJSON:  workflowJSON,
+		answers:       answers,
+		answerableMap: answerableMap,
+	}
+}
 
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "start node not found")
-	require.Nil(t, result)
+func buildAnswer(t *testing.T, questionID, responseID uuid.UUID, value any) answer.Answer {
+	t.Helper()
 
-	mockQuerier.AssertExpectations(t)
+	valueBytes, err := json.Marshal(value)
+	require.NoError(t, err)
+
+	return answer.Answer{
+		ID:         responseID,
+		ResponseID: responseID,
+		QuestionID: questionID,
+		Value:      valueBytes,
+		CreatedAt:  pgtype.Timestamptz{},
+		UpdatedAt:  pgtype.Timestamptz{},
+	}
 }
 
 // Helper function to create a SingleChoice answerable for testing

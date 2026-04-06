@@ -81,8 +81,7 @@ type CreateResponse struct {
 
 type Store interface {
 	Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
-	ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error)
+	ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUID, userID uuid.UUID) ([]FormResponse, error)
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
 }
@@ -132,7 +131,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only return the responses submitted by the current user
-	userResponses, err := h.store.ListBySubmittedBy(traceCtx, currentUser.ID)
+	userResponses, err := h.store.ListByFormIDAndSubmittedBy(traceCtx, formID, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -143,9 +142,6 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		ResponseJSONs: make([]Response, 0),
 	}
 	for _, currentResponse := range userResponses {
-		if currentResponse.FormID != formID {
-			continue
-		}
 		listResponse.ResponseJSONs = append(listResponse.ResponseJSONs, Response{
 			ID:          currentResponse.ID.String(),
 			SubmittedBy: currentResponse.SubmittedBy.String(),

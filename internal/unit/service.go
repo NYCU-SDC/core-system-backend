@@ -95,8 +95,8 @@ func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 	}
 }
 
-func (s *Service) CreateOrganization(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error) {
-	traceCtx, span := s.tracer.Start(ctx, "CreateOrganization")
+func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateOrganizationWithCurrentUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
@@ -173,6 +173,48 @@ func (s *Service) CreateUnit(ctx context.Context, name string, description strin
 		zap.String("metadata", string(unit.Metadata)))
 
 	return unit, nil
+}
+
+func (s *Service) CreateOrganization(ctx context.Context, name string, description string, slug string) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateOrganization")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.tenantStore.SlugExists(traceCtx, slug)
+	if err != nil {
+		span.RecordError(err)
+		return Unit{}, err
+	}
+	if exists {
+		span.RecordError(internal.ErrOrgSlugAlreadyExists)
+		return Unit{}, internal.ErrOrgSlugAlreadyExists
+	}
+
+	org, err := s.queries.Create(traceCtx, CreateParams{
+		Name:        pgtype.Text{String: name, Valid: name != ""},
+		OrgID:       pgtype.UUID{Valid: false},
+		Description: pgtype.Text{String: description, Valid: true},
+		Type:        UnitTypeOrganization,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create organization")
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
+	_, err = s.tenantStore.CreateWithoutOwner(traceCtx, org.ID, slug)
+	if err != nil {
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
+	logger.Info("Created organization",
+		zap.String("org_id", org.ID.String()),
+		zap.String("name", org.Name.String),
+		zap.String("description", org.Description.String),
+		zap.String("metadata", string(org.Metadata)))
+
+	return org, nil
 }
 
 func (s *Service) GetAllOrganizations(ctx context.Context) ([]Organization, error) {
@@ -481,7 +523,7 @@ func (s *Service) GetMemberRole(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "", internal.ErrPermissionDenied
+			return "", internal.ErrNotFound
 		}
 
 		err = databaseutil.WrapDBError(err, logger, "get member role")
@@ -603,4 +645,8 @@ func (s *Service) UpdateUnitMemberRole(
 	}
 
 	return nil
+}
+
+func (s *Service) SlugExists(ctx context.Context, slug string) (bool, error) {
+	return s.tenantStore.SlugExists(ctx, slug)
 }

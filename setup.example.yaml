@@ -1,0 +1,12 @@
+organizations:
+  - name: "Organization name"
+    slug: "slug"
+    description: "Organization description"
+users:
+  - email: "example@gmail.com"
+    global_role:
+      - admin
+    org_member:
+      - slug: "slug"
+        org_role: member
+    allowed_onboarding: true

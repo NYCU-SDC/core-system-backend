@@ -38,7 +38,9 @@ func DefaultOrgRole(email string) (string, bool) {
 func parseMulti(cfg string) map[string][]string {
 	result := make(map[string][]string)
 
-	entries := strings.Split(cfg, ",")
+	entries := strings.FieldsFunc(cfg, func(r rune) bool {
+		return r == ',' || r == '\n'
+	})
 
 	for _, entry := range entries {
 		entry = strings.TrimSpace(entry)
@@ -63,7 +65,9 @@ func parseMulti(cfg string) map[string][]string {
 func parseSingle(cfg string) map[string]string {
 	result := make(map[string]string)
 
-	entries := strings.Split(cfg, ",")
+	entries := strings.FieldsFunc(cfg, func(r rune) bool {
+		return r == ',' || r == '\n'
+	})
 
 	for _, entry := range entries {
 		entry = strings.TrimSpace(entry)

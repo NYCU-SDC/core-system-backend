@@ -110,10 +110,10 @@ func (s LinearScale) Validate(rawValue json.RawMessage) error {
 	return nil
 }
 
-func (s LinearScale) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (s LinearScale) DecodeRequest(param shared.AnswerParam) (any, error) {
 	// API sends int32 for linear scale
 	var value int
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	if err := json.Unmarshal(param.Value, &value); err != nil {
 		return nil, fmt.Errorf("invalid linear scale value format: %w", err)
 	}
 
@@ -244,10 +244,10 @@ func (s Rating) Validate(rawValue json.RawMessage) error {
 	return nil
 }
 
-func (s Rating) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (s Rating) DecodeRequest(param shared.AnswerParam) (any, error) {
 	// API sends int32 for rating
 	var value int
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	if err := json.Unmarshal(param.Value, &value); err != nil {
 		return nil, fmt.Errorf("invalid rating value format: %w", err)
 	}
 

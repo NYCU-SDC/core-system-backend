@@ -24,9 +24,9 @@ type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 	ExistsByFormIDAndSubmittedBy(ctx context.Context, arg ExistsByFormIDAndSubmittedByParams) (bool, error)
-	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]FormResponse, error)
+	ListByFormIDAndSubmittedBy(ctx context.Context, arg ListByFormIDAndSubmittedByParams) ([]FormResponse, error)
+	ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error)
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error)
 }
 
@@ -38,6 +38,9 @@ type AnswerStore interface {
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]answer.Answer, []question.Answerable, map[string]question.Answerable, error)
 }
 
+type UserStore interface {
+	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
+}
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
@@ -64,9 +67,10 @@ type Service struct {
 	sectionWithQuestionStore SectionWithQuestionStore
 	workflowResolver         WorkflowResolver
 	formStore                FormStore
+	userStore                UserStore
 }
 
-func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver, formStore FormStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionStore SectionWithQuestionStore, workflowResolver WorkflowResolver, formStore FormStore, userStore UserStore) *Service {
 	return &Service{
 		logger:  logger,
 		queries: New(db),
@@ -76,6 +80,7 @@ func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionSto
 		sectionWithQuestionStore: sectionStore,
 		workflowResolver:         workflowResolver,
 		formStore:                formStore,
+		userStore:                userStore,
 	}
 }
 
@@ -128,39 +133,61 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 	return newResponse, nil
 }
 
-// ListByFormID retrieves all responses for a given form
-func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
-	traceCtx, span := s.tracer.Start(ctx, "ListByFormID")
+// ListByFormIDAndSubmittedBy retrieves all responses submitted by a given user
+func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUID, userID uuid.UUID) ([]FormResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListByFormIDAndSubmittedBy")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.formStore.Exists(traceCtx, formID)
+	exists, err := s.userStore.ExistsByID(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check user exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		return nil, internal.ErrUserNotFound
+	}
+
+	exists, err = s.formStore.Exists(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check form exists")
 		span.RecordError(err)
-		return []FormResponse{}, err
+		return nil, err
 	}
 	if !exists {
-		return []FormResponse{}, internal.ErrFormNotFound
+		return nil, internal.ErrFormNotFound
 	}
 
-	responses, err := s.queries.ListByFormID(traceCtx, formID)
+	responses, err := s.queries.ListByFormIDAndSubmittedBy(traceCtx, ListByFormIDAndSubmittedByParams{
+		FormID:      formID,
+		SubmittedBy: userID,
+	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "form_id", formID.String(), logger, "list responses by form id")
+		err = databaseutil.WrapDBError(err, logger, "list responses by submitted by")
 		span.RecordError(err)
-		return []FormResponse{}, err
+		return nil, err
 	}
 
 	return responses, nil
 }
 
-// ListBySubmittedBy retrieves all responses submitted by a given user
 func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
-	ctx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
+	traceCtx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
-	responses, err := s.queries.ListBySubmittedBy(ctx, userID)
+	exists, err := s.userStore.ExistsByID(traceCtx, userID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check user exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !exists {
+		return nil, internal.ErrUserNotFound
+	}
+
+	responses, err := s.queries.ListBySubmittedBy(traceCtx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list responses by submitted by")
 		span.RecordError(err)
@@ -216,19 +243,13 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 		}
 	}
 
-	// Resolve which sections are active based on workflow conditions
-	sectionIDs, err := s.workflowResolver.ResolveSections(traceCtx, response.FormID, answerPayload, answerableMap)
+	// Resolve workflow sections for the response
+	sectionIDs, sectionActiveMap, err := s.ResolveWorkflowSectionsForResponse(
+		traceCtx, response.FormID, answerPayload, answerableMap, response.ID,
+	)
 	if err != nil {
-		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
-		logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", response.ID.String()))
 		span.RecordError(err)
 		return FormResponse{}, nil, err
-	}
-
-	// Build active section ID map for quick lookup
-	sectionActiveMap := make(map[string]bool)
-	for _, sectionID := range sectionIDs {
-		sectionActiveMap[sectionID.String()] = true
 	}
 
 	// Get all sections with their questions
@@ -297,8 +318,8 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	for _, swq := range sectionWithQuestion {
 		sectionIDStr := swq.Section.ID.String()
 		if !sectionActiveMap[sectionIDStr] {
-			// Collect all answerables and corresponding answers for this skipped section.
-			// Same resolved-answerable preference as for active sections above.
+			// Collect answerables and corresponding answers for this skipped section.
+			// Same resolved-answerable and answer-payload behavior as for active sections.
 			var sectionAnswers []answer.Answer
 			var sectionAnswerables []question.Answerable
 
@@ -313,9 +334,9 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 					sectionAnswerables = append(sectionAnswerables, ans)
 				}
 
-				// Preserve existing answers even though section is skipped
-				if ansData, hasAnswer := answerPayloadMap[questionID]; hasAnswer {
-					sectionAnswers = append(sectionAnswers, ansData.Answer)
+				answerData, hasAnswer := answerPayloadMap[questionID]
+				if hasAnswer {
+					sectionAnswers = append(sectionAnswers, answerData.Answer)
 				}
 			}
 
@@ -329,50 +350,6 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	}
 
 	return response, result, nil
-}
-
-// calculateSectionProgress determines the progress status of a section based on its questions and answers
-func calculateSectionProgress(answerables []question.Answerable, answerMap map[string]struct {
-	Answer     answer.Answer
-	Answerable question.Answerable
-}) SectionProgress {
-	if len(answerables) == 0 {
-		return SectionProgressCompleted
-	}
-
-	hasAnyAnswer := false
-	requiredCount := 0
-	requiredAnsweredCount := 0
-
-	for _, ans := range answerables {
-		q := ans.Question()
-		questionID := q.ID.String()
-
-		if q.Required {
-			requiredCount++
-			if _, hasAnswer := answerMap[questionID]; hasAnswer {
-				requiredAnsweredCount++
-			}
-		}
-
-		// Check if this question has an answer
-		if _, hasAnswer := answerMap[questionID]; hasAnswer {
-			hasAnyAnswer = true
-		}
-	}
-
-	// If no answers at all, it's NOT_STARTED
-	if !hasAnyAnswer {
-		return SectionProgressNotStarted
-	}
-
-	// If all required questions are answered, it's COMPLETED
-	if requiredCount == requiredAnsweredCount {
-		return SectionProgressCompleted
-	}
-
-	// Otherwise, it's DRAFT (at least one answer, but not all required)
-	return SectionProgressDraft
 }
 
 func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
@@ -498,4 +475,89 @@ func (s Service) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormRespons
 	}
 
 	return formResponse, nil
+}
+
+// ResolveWorkflowSectionsForResponse runs ResolveSections and builds sectionActiveMap when a workflow exists.
+// If ErrWorkflowNotFound, it returns the error and no section ordering/active-map is produced.
+// Any other error is wrapped and returned.
+func (s Service) ResolveWorkflowSectionsForResponse(
+	ctx context.Context,
+	formID uuid.UUID,
+	answerPayload []answer.Answer,
+	answerableMap map[string]question.Answerable,
+	responseID uuid.UUID,
+) (sectionIDs []uuid.UUID, sectionActiveMap map[string]bool, err error) {
+	traceCtx, span := s.tracer.Start(ctx, "ResolveWorkflowSectionsForResponse")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	sectionIDs, err = s.workflowResolver.ResolveSections(traceCtx, formID, answerPayload, answerableMap)
+	if err != nil {
+		if errors.Is(err, internal.ErrWorkflowNotFound) {
+			logger.Error("Workflow not found for response", zap.String("responseID", responseID.String()))
+			span.RecordError(err)
+
+			// return empty sectionIDs and sectionActiveMap and the error
+			return nil, nil, err
+		}
+
+		err = fmt.Errorf("%w: %w", internal.ErrWorkflowResolveSectionsFailed, err)
+		logger.Error("Failed to resolve sections for response", zap.Error(err), zap.String("responseID", responseID.String()))
+		span.RecordError(err)
+
+		// return empty sectionIDs and sectionActiveMap and the error
+		return nil, nil, err
+	}
+
+	sectionActiveMap = make(map[string]bool, len(sectionIDs))
+	for _, sectionID := range sectionIDs {
+		sectionActiveMap[sectionID.String()] = true
+	}
+
+	// return the sectionIDs and sectionActiveMap and nil
+	return sectionIDs, sectionActiveMap, nil
+}
+
+// calculateSectionProgress determines the progress status of a section based on its questions and answers
+func calculateSectionProgress(answerables []question.Answerable, answerMap map[string]struct {
+	Answer     answer.Answer
+	Answerable question.Answerable
+}) SectionProgress {
+	if len(answerables) == 0 {
+		return SectionProgressCompleted
+	}
+
+	hasAnyAnswer := false
+	requiredCount := 0
+	requiredAnsweredCount := 0
+
+	for _, ans := range answerables {
+		q := ans.Question()
+		questionID := q.ID.String()
+
+		if q.Required {
+			requiredCount++
+			if _, hasAnswer := answerMap[questionID]; hasAnswer {
+				requiredAnsweredCount++
+			}
+		}
+
+		// Check if this question has an answer
+		if _, hasAnswer := answerMap[questionID]; hasAnswer {
+			hasAnyAnswer = true
+		}
+	}
+
+	// If no answers at all, it's NOT_STARTED
+	if !hasAnyAnswer {
+		return SectionProgressNotStarted
+	}
+
+	// If all required questions are answered, it's COMPLETED
+	if requiredCount == requiredAnsweredCount {
+		return SectionProgressCompleted
+	}
+
+	// Otherwise, it's DRAFT (at least one answer, but not all required)
+	return SectionProgressDraft
 }

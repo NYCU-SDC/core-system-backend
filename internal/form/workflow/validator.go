@@ -52,10 +52,11 @@ const (
 	ValidationTypeUnknown  ValidationInfoType = "unknown"
 )
 
-// QuestionStore defines the interface for querying form questions
-// This allows the validator to check if condition rule question IDs exist and match expected types
+// QuestionStore defines the interface for querying form questions and sections.
+// Used for validation (condition rule question IDs), label enrichment (section titles, condition labels).
 type QuestionStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
 }
 
 type workflowValidator struct{}
@@ -209,6 +210,16 @@ func parseWorkflow(workflow []byte) ([]map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid JSON format: %w", err)
 	}
+
+	// Normalize node types to lowercase so validation accepts API format (uppercase).
+	for i := range nodes {
+		typeVal, ok := nodes[i]["type"].(string)
+		if !ok {
+			continue
+		}
+		nodes[i]["type"] = strings.ToLower(typeVal)
+	}
+
 	return nodes, nil
 }
 

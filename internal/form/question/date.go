@@ -178,10 +178,10 @@ func (d Date) Validate(rawValue json.RawMessage) error {
 	return nil
 }
 
-func (d Date) DecodeRequest(rawValue json.RawMessage) (any, error) {
+func (d Date) DecodeRequest(param shared.AnswerParam) (any, error) {
 	// API sends ISO 8601 date string (e.g., "2024-12-31T00:00:00Z" or "2024-12-31")
 	var value string
-	if err := json.Unmarshal(rawValue, &value); err != nil {
+	if err := json.Unmarshal(param.Value, &value); err != nil {
 		return nil, fmt.Errorf("invalid date value format: %w", err)
 	}
 

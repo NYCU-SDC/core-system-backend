@@ -40,22 +40,22 @@ func (_m *MockQuerier) EXPECT() *MockQuerier_Expecter {
 }
 
 // Activate provides a mock function for the type MockQuerier
-func (_mock *MockQuerier) Activate(ctx context.Context, arg workflow.ActivateParams) (workflow.ActivateRow, error) {
+func (_mock *MockQuerier) Activate(ctx context.Context, arg workflow.ActivateParams) (workflow.WorkflowVersion, error) {
 	ret := _mock.Called(ctx, arg)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Activate")
 	}
 
-	var r0 workflow.ActivateRow
+	var r0 workflow.WorkflowVersion
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.ActivateParams) (workflow.ActivateRow, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.ActivateParams) (workflow.WorkflowVersion, error)); ok {
 		return returnFunc(ctx, arg)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.ActivateParams) workflow.ActivateRow); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.ActivateParams) workflow.WorkflowVersion); ok {
 		r0 = returnFunc(ctx, arg)
 	} else {
-		r0 = ret.Get(0).(workflow.ActivateRow)
+		r0 = ret.Get(0).(workflow.WorkflowVersion)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, workflow.ActivateParams) error); ok {
 		r1 = returnFunc(ctx, arg)
@@ -95,12 +95,12 @@ func (_c *MockQuerier_Activate_Call) Run(run func(ctx context.Context, arg workf
 	return _c
 }
 
-func (_c *MockQuerier_Activate_Call) Return(activateRow workflow.ActivateRow, err error) *MockQuerier_Activate_Call {
-	_c.Call.Return(activateRow, err)
+func (_c *MockQuerier_Activate_Call) Return(workflowVersion workflow.WorkflowVersion, err error) *MockQuerier_Activate_Call {
+	_c.Call.Return(workflowVersion, err)
 	return _c
 }
 
-func (_c *MockQuerier_Activate_Call) RunAndReturn(run func(ctx context.Context, arg workflow.ActivateParams) (workflow.ActivateRow, error)) *MockQuerier_Activate_Call {
+func (_c *MockQuerier_Activate_Call) RunAndReturn(run func(ctx context.Context, arg workflow.ActivateParams) (workflow.WorkflowVersion, error)) *MockQuerier_Activate_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -240,22 +240,22 @@ func (_c *MockQuerier_DeleteNode_Call) RunAndReturn(run func(ctx context.Context
 }
 
 // Get provides a mock function for the type MockQuerier
-func (_mock *MockQuerier) Get(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error) {
+func (_mock *MockQuerier) Get(ctx context.Context, formID uuid.UUID) (workflow.WorkflowVersion, error) {
 	ret := _mock.Called(ctx, formID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Get")
 	}
 
-	var r0 workflow.GetRow
+	var r0 workflow.WorkflowVersion
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) (workflow.GetRow, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) (workflow.WorkflowVersion, error)); ok {
 		return returnFunc(ctx, formID)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) workflow.GetRow); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID) workflow.WorkflowVersion); ok {
 		r0 = returnFunc(ctx, formID)
 	} else {
-		r0 = ret.Get(0).(workflow.GetRow)
+		r0 = ret.Get(0).(workflow.WorkflowVersion)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID) error); ok {
 		r1 = returnFunc(ctx, formID)
@@ -295,33 +295,33 @@ func (_c *MockQuerier_Get_Call) Run(run func(ctx context.Context, formID uuid.UU
 	return _c
 }
 
-func (_c *MockQuerier_Get_Call) Return(getRow workflow.GetRow, err error) *MockQuerier_Get_Call {
-	_c.Call.Return(getRow, err)
+func (_c *MockQuerier_Get_Call) Return(workflowVersion workflow.WorkflowVersion, err error) *MockQuerier_Get_Call {
+	_c.Call.Return(workflowVersion, err)
 	return _c
 }
 
-func (_c *MockQuerier_Get_Call) RunAndReturn(run func(ctx context.Context, formID uuid.UUID) (workflow.GetRow, error)) *MockQuerier_Get_Call {
+func (_c *MockQuerier_Get_Call) RunAndReturn(run func(ctx context.Context, formID uuid.UUID) (workflow.WorkflowVersion, error)) *MockQuerier_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Update provides a mock function for the type MockQuerier
-func (_mock *MockQuerier) Update(ctx context.Context, arg workflow.UpdateParams) (workflow.UpdateRow, error) {
+func (_mock *MockQuerier) Update(ctx context.Context, arg workflow.UpdateParams) (workflow.WorkflowVersion, error) {
 	ret := _mock.Called(ctx, arg)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Update")
 	}
 
-	var r0 workflow.UpdateRow
+	var r0 workflow.WorkflowVersion
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.UpdateParams) (workflow.UpdateRow, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.UpdateParams) (workflow.WorkflowVersion, error)); ok {
 		return returnFunc(ctx, arg)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.UpdateParams) workflow.UpdateRow); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.UpdateParams) workflow.WorkflowVersion); ok {
 		r0 = returnFunc(ctx, arg)
 	} else {
-		r0 = ret.Get(0).(workflow.UpdateRow)
+		r0 = ret.Get(0).(workflow.WorkflowVersion)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, workflow.UpdateParams) error); ok {
 		r1 = returnFunc(ctx, arg)
@@ -361,12 +361,12 @@ func (_c *MockQuerier_Update_Call) Run(run func(ctx context.Context, arg workflo
 	return _c
 }
 
-func (_c *MockQuerier_Update_Call) Return(updateRow workflow.UpdateRow, err error) *MockQuerier_Update_Call {
-	_c.Call.Return(updateRow, err)
+func (_c *MockQuerier_Update_Call) Return(workflowVersion workflow.WorkflowVersion, err error) *MockQuerier_Update_Call {
+	_c.Call.Return(workflowVersion, err)
 	return _c
 }
 
-func (_c *MockQuerier_Update_Call) RunAndReturn(run func(ctx context.Context, arg workflow.UpdateParams) (workflow.UpdateRow, error)) *MockQuerier_Update_Call {
+func (_c *MockQuerier_Update_Call) RunAndReturn(run func(ctx context.Context, arg workflow.UpdateParams) (workflow.WorkflowVersion, error)) *MockQuerier_Update_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -13,6 +13,7 @@ import (
 	"mime/multipart"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -23,8 +24,14 @@ import (
 
 type Querier interface {
 	ListByResponseID(ctx context.Context, responseID uuid.UUID) ([]Answer, error)
+	GetByID(ctx context.Context, id uuid.UUID) (Answer, error)
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
+	WithTx(tx pgx.Tx) *Queries
+}
+
+type TxBeginner interface {
+	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
 }
 
 type QuestionStore interface {
@@ -35,7 +42,13 @@ type QuestionStore interface {
 // FileService defines the file storage operations needed by the answer service
 type FileService interface {
 	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
-	Delete(ctx context.Context, id uuid.UUID) error
+	CreateAttachment(ctx context.Context, fileID uuid.UUID, resourceType file.ResourceType, resourceID uuid.UUID, createdBy uuid.UUID) (file.FileAttachment, error)
+	DeletePhysicalFile(ctx context.Context, fileID uuid.UUID) error
+	WithTx(tx pgx.Tx) *file.Service
+}
+
+type WorkflowResolver interface {
+	ResolveSections(ctx context.Context, formID uuid.UUID, answers []Answer, answerableMap map[string]question.Answerable) ([]uuid.UUID, error)
 }
 
 type Answerable interface {
@@ -46,7 +59,7 @@ type Answerable interface {
 	DisplayValue(rawValue json.RawMessage) (string, error)
 
 	// DecodeRequest decodes the raw JSON value from the request into the appropriate Go type based on the question type.
-	DecodeRequest(rawValue json.RawMessage) (any, error)
+	DecodeRequest(param shared.AnswerParam) (any, error)
 
 	// DecodeStorage decodes the raw JSON value from the database into the appropriate Go type based on the question type.
 	DecodeStorage(rawValue json.RawMessage) (any, error)
@@ -56,21 +69,25 @@ type Answerable interface {
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger           *zap.Logger
+	db               DBTX
+	queries          Querier
+	tracer           trace.Tracer
+	workflowResolver WorkflowResolver
 
 	questionStore QuestionStore
 	fileService   FileService
 }
 
-func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileService FileService) *Service {
+func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileService FileService, workflowResolver WorkflowResolver) *Service {
 	return &Service{
-		logger:        logger,
-		queries:       New(db),
-		tracer:        otel.Tracer("answer/service"),
-		questionStore: questionStore,
-		fileService:   fileService,
+		logger:           logger,
+		db:               db,
+		queries:          New(db),
+		tracer:           otel.Tracer("answer/service"),
+		workflowResolver: workflowResolver,
+		questionStore:    questionStore,
+		fileService:      fileService,
 	}
 }
 
@@ -94,7 +111,7 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	// Resolve dynamic choices for Ranking questions. In the read path there is
 	// no request batch, so pass an empty slice, the resolver will fall back to
 	// DB lookups using the stored answers for the source questions.
-	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, nil)
+	answerableMap, err = s.ResolveRankingChoices(traceCtx, responseID, answerableMap, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to resolve ranking choices: %w", err)
 	}
@@ -180,7 +197,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 	// Resolve dynamic choices for Ranking questions whose options come from a
 	// source DetailedMultiChoice question's stored answer.
-	answerableMap, err = s.resolveRankingChoices(traceCtx, responseID, answerableMap, answers)
+	answerableMap, err = s.ResolveRankingChoices(traceCtx, responseID, answerableMap, answers)
 	if err != nil {
 		return nil, nil, []error{err}
 	}
@@ -236,7 +253,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 
 		questionIDs[i] = questionID
 
-		encodedValue, err := pair.Answerable.DecodeRequest(pair.AnswerParam.Value)
+		encodedValue, err := pair.Answerable.DecodeRequest(pair.AnswerParam)
 		if err != nil {
 			logger.Error("failed to encode answer value for storage", zap.String("questionID", pair.AnswerParam.QuestionID), zap.Error(err))
 			span.RecordError(fmt.Errorf("failed to encode answer value for question ID %s: %w", pair.AnswerParam.QuestionID, err))
@@ -282,7 +299,7 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 	return transformedAnswers, answerableList, nil
 }
 
-// resolveRankingChoices populates the Rank field of every Ranking answerable
+// ResolveRankingChoices populates the Rank field of every Ranking answerable
 // whose SourceID points to a DetailedMultiChoice question.
 //
 // Resolution order:
@@ -296,7 +313,11 @@ func (s Service) Upsert(ctx context.Context, formID, responseID uuid.UUID, answe
 // If the source answer is absent in both places the Ranking's Rank stays nil,
 // which means Validate will pass for an empty submission but reject any
 // submitted choice IDs (they cannot be validated against an empty list).
-func (s Service) resolveRankingChoices(
+//
+// For PATCH, pass the incoming answers so List()-only DB resolution can be
+// overridden when DMC and RANKING are submitted together (Upsert and workflow
+// merge already call this with the batch).
+func (s Service) ResolveRankingChoices(
 	ctx context.Context,
 	responseID uuid.UUID,
 	answerableMap map[string]question.Answerable,
@@ -401,15 +422,13 @@ func extractChoicesFromStoredDetailedMultiAnswer(rawValue []byte) ([]question.Ch
 	return choices, nil
 }
 
-// UploadFiles uploads files for an upload_file question and upserts the answer.// It validates that the question exists, belongs to the form, and is of type upload_file.
-// Files are saved via fileService, and the resulting file IDs are stored as the answer.
+// UploadFiles uploads files for an upload_file question and upserts the answer.
+// It validates that the question exists, belongs to the form, and is of type upload_file.
 //
-// Eventual consistency for orphan file cleanup:
-//   - If saving a new file fails mid-loop, already-saved new files are cleaned up.
-//   - If Upsert fails, all newly saved files are cleaned up.
-//   - After a successful Upsert, old file IDs from the previous answer are deleted
-//     on a best-effort basis; failures are logged as warnings but do not affect the response.
-func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy *uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error) {
+// Existing upload_file entries are loaded first, then new file rows, answer upsert,
+// and file attachments are all executed within the same database transaction.
+// Any failure before commit rolls back the whole operation.
+func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID uuid.UUID, files []*multipart.FileHeader, uploadedBy uuid.UUID) ([]shared.UploadFileEntry, Answer, Answerable, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UploadFiles")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -417,9 +436,9 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 	// Get the answerable map to validate question type and membership
 	answerableMap, err := s.questionStore.GetAnswerableMapByFormID(traceCtx, formID)
 	if err != nil {
-		s.logger.Error("failed to get answerable map for form", zap.String("formID", formID.String()), zap.Error(err))
+		logger.Error("failed to get answerable map for form", zap.String("formID", formID.String()), zap.Error(err))
 		span.RecordError(err)
-		return nil, Answer{}, nil, internal.ErrInternalServerError
+		return nil, Answer{}, nil, err
 	}
 
 	answerable, found := answerableMap[questionID.String()]
@@ -429,71 +448,79 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 
 	// Validate the question is of upload_file type
 	if answerable.Question().Type != question.QuestionTypeUploadFile {
-		s.logger.Error("invalid question type", zap.String("questionID", questionID.String()), zap.String("expectedType", string(question.QuestionTypeUploadFile)), zap.String("actualType", string(answerable.Question().Type)))
+		logger.Error("invalid question type", zap.String("questionID", questionID.String()), zap.String("expectedType", string(question.QuestionTypeUploadFile)), zap.String("actualType", string(answerable.Question().Type)))
 		span.RecordError(internal.ErrQuestionTypeMismatch)
 		return nil, Answer{}, nil, internal.ErrQuestionTypeMismatch
 	}
 
-	// Read old file IDs from the existing answer (if any) for later cleanup
-	var oldFileIDs []string
-	existingAnswer, err := s.queries.GetByResponseIDAndQuestionID(traceCtx, GetByResponseIDAndQuestionIDParams{
-		ResponseID: responseID,
-		QuestionID: questionID,
-	})
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		s.logger.Error("failed to get existing answer for answer", zap.String("questionID", questionID.String()), zap.Error(err))
+	// Read existing uploaded files from the existing answer (if any) for append.
+	var (
+		tx         pgx.Tx
+		needCommit bool
+	)
+
+	tx, needCommit, err = s.beginOrReuseTx(traceCtx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "begin tx for upload files")
 		span.RecordError(err)
-		return nil, Answer{}, nil, fmt.Errorf("failed to get existing answer for question %s: %w", questionID, internal.ErrInternalServerError)
-	}
-	if err == nil {
-		// Extract old file IDs from the stored answer for later cleanup
-		var existingUploadAnswer shared.UploadFileAnswer
-		if jsonErr := json.Unmarshal(existingAnswer.Value, &existingUploadAnswer); jsonErr == nil {
-			for _, entry := range existingUploadAnswer.Files {
-				oldFileIDs = append(oldFileIDs, entry.FileID.String())
-			}
-		}
+		return nil, Answer{}, nil, err
 	}
 
-	// deleteFiles is a best-effort helper that logs warnings on failure
-	deleteFiles := func(ids []string) {
-		for _, idStr := range ids {
-			id, parseErr := uuid.Parse(idStr)
-			if parseErr != nil {
-				logger.Warn("failed to parse file ID for cleanup", zap.String("fileID", idStr), zap.Error(parseErr))
-				continue
+	if needCommit {
+		defer func() {
+			rollbackErr := tx.Rollback(traceCtx)
+			if rollbackErr == nil {
+				return
 			}
-			if delErr := s.fileService.Delete(traceCtx, id); delErr != nil {
-				logger.Warn("failed to delete orphan file", zap.String("fileID", idStr), zap.Error(delErr))
+			if errors.Is(rollbackErr, pgx.ErrTxClosed) {
+				return
 			}
-		}
+
+			logger.Error("rollback failed", zap.Error(rollbackErr))
+			span.RecordError(rollbackErr)
+		}()
+	}
+
+	qtx := s.queries.WithTx(tx)
+	ftx := s.fileService.WithTx(tx)
+
+	existingEntries, err := s.loadPreviousUploadFileEntries(traceCtx, qtx, responseID, questionID)
+	if err != nil {
+		logger.Error("failed to load previous upload file entries",
+			zap.String("questionID", questionID.String()),
+			zap.Error(err),
+		)
+		span.RecordError(err)
+		return nil, Answer{}, nil, err
 	}
 
 	// Save each uploaded file; on failure clean up any already-saved new files
-	entries := make([]shared.UploadFileEntry, 0, len(files))
-	fileIDs := make([]string, 0, len(files))
+	newEntries := make([]shared.UploadFileEntry, 0, len(files))
 
 	for _, fh := range files {
 		f, err := fh.Open()
 		if err != nil {
-			s.logger.Error("failed to open uploaded file", zap.String("fileID", fh.Filename), zap.Error(err))
+			logger.Error("failed to open uploaded file", zap.String("filename", fh.Filename), zap.Error(err))
 			span.RecordError(err)
-			deleteFiles(fileIDs)
 			return nil, Answer{}, nil, fmt.Errorf("failed to open uploaded file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
 		}
 
-		savedFile, saveErr := s.fileService.SaveFile(traceCtx, f, fh.Filename, fh.Header.Get("Content-Type"), uploadedBy)
-		_ = f.Close()
+		savedFile, saveErr := ftx.SaveFile(traceCtx, f, fh.Filename, fh.Header.Get("Content-Type"), &uploadedBy)
+		closeErr := f.Close()
+		if closeErr != nil {
+			logger.Warn("failed to close uploaded file stream",
+				zap.String("filename", fh.Filename),
+				zap.Error(closeErr),
+			)
+		}
 
 		if saveErr != nil {
-			s.logger.Error("failed to save uploaded file", zap.String("fileID", fh.Filename), zap.Error(saveErr))
+			logger.Error("failed to save uploaded file", zap.String("filename", fh.Filename), zap.Error(saveErr))
 			span.RecordError(saveErr)
-			deleteFiles(fileIDs)
 			return nil, Answer{}, nil, fmt.Errorf("failed to save file %q: %w", fh.Filename, internal.ErrFailedToSaveFile)
 		}
 
-		fileIDs = append(fileIDs, savedFile.ID.String())
-		entries = append(entries, shared.UploadFileEntry{
+		newEntries = append(newEntries, shared.UploadFileEntry{
 			FileID:           savedFile.ID,
 			OriginalFilename: savedFile.OriginalFilename,
 			ContentType:      savedFile.ContentType,
@@ -501,34 +528,190 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		})
 	}
 
+	// Append new files to existing files
+	mergedEntries := make([]shared.UploadFileEntry, 0, len(existingEntries)+len(newEntries))
+	mergedEntries = append(mergedEntries, existingEntries...)
+	mergedEntries = append(mergedEntries, newEntries...)
+
 	// Build the answer value as a full UploadFileAnswer and upsert
-	answerValue, err := json.Marshal(shared.UploadFileAnswer{Files: entries})
+	answerValue, err := json.Marshal(shared.UploadFileAnswer{Files: mergedEntries})
 	if err != nil {
-		s.logger.Error("failed to marshal upload file answer value", zap.String("questionID", questionID.String()), zap.Error(err))
+		logger.Error("failed to marshal upload file answer value", zap.String("questionID", questionID.String()), zap.Error(err))
 		span.RecordError(err)
-		deleteFiles(fileIDs)
-		return nil, Answer{}, nil, fmt.Errorf("failed to marshal upload file answer: %w", internal.ErrInternalServerError)
+		return nil, Answer{}, nil, fmt.Errorf("failed to marshal upload file answer: %w", internal.ErrValidationFailed)
 	}
 
-	upsertedAnswers, answerableList, errs := s.Upsert(traceCtx, formID, responseID, []shared.AnswerParam{
-		{QuestionID: questionID.String(), Value: answerValue},
-	})
-	if len(errs) > 0 {
-		s.logger.Error("failed to upsert upload file answer", zap.String("questionID", questionID.String()), zap.Error(errs[0]))
-		span.RecordError(errs[0])
-		deleteFiles(fileIDs)
-		return nil, Answer{}, nil, fmt.Errorf("failed to upsert upload file answer: %w", errs[0])
+	upsertedAnswers, err := qtx.BatchUpsert(
+		traceCtx,
+		BatchUpsertParams{
+			ResponseIds: []uuid.UUID{responseID},
+			QuestionIds: []uuid.UUID{questionID},
+			Values:      [][]byte{answerValue},
+		})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "batch upsert upload file answer")
+		span.RecordError(err)
+		return nil, Answer{}, nil, fmt.Errorf("failed to upsert upload file answer: %w", err)
 	}
 
-	// Best-effort: delete old files now that the new answer is committed
-	if len(oldFileIDs) > 0 {
-		deleteFiles(oldFileIDs)
+	upsertedAnswer := upsertedAnswers[0]
+
+	for _, entry := range newEntries {
+		_, attachErr := ftx.CreateAttachment(
+			traceCtx,
+			entry.FileID,
+			file.ResourceTypeFormAnswer,
+			upsertedAnswer.ID,
+			uploadedBy,
+		)
+		if attachErr != nil {
+			logger.Error("failed to create file attachment after upload answer upsert",
+				zap.String("answerID", upsertedAnswer.ID.String()),
+				zap.String("fileID", entry.FileID.String()),
+				zap.Error(attachErr),
+			)
+			span.RecordError(attachErr)
+			return nil, Answer{}, nil, fmt.Errorf("failed to create attachment for file %s: %w", entry.FileID, attachErr)
+		}
+	}
+
+	if needCommit {
+		if err := tx.Commit(traceCtx); err != nil {
+			err = databaseutil.WrapDBError(err, logger, "commit upload files tx")
+			span.RecordError(err)
+			return nil, Answer{}, nil, err
+		}
 	}
 
 	logger.Info("successfully uploaded files and upserted answer",
 		zap.String("questionID", questionID.String()),
-		zap.Int("fileCount", len(fileIDs)),
+		zap.String("answerID", upsertedAnswer.ID.String()),
+		zap.Int("fileCount", len(mergedEntries)),
 	)
 
-	return entries, upsertedAnswers[0], answerableList[0], nil
+	return newEntries, upsertedAnswer, answerable, nil
+}
+
+func (s Service) loadPreviousUploadFileEntries(ctx context.Context, q Querier, responseID uuid.UUID, questionID uuid.UUID) ([]shared.UploadFileEntry, error) {
+	existingAnswer, err := q.GetByResponseIDAndQuestionID(ctx, GetByResponseIDAndQuestionIDParams{
+		ResponseID: responseID,
+		QuestionID: questionID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []shared.UploadFileEntry{}, nil
+		}
+		return nil, err
+	}
+
+	var existingUploadAnswer shared.UploadFileAnswer
+	err = json.Unmarshal(existingAnswer.Value, &existingUploadAnswer)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal existing upload_file answer: %w", internal.ErrValidationFailed)
+	}
+
+	if existingUploadAnswer.Files == nil {
+		return []shared.UploadFileEntry{}, nil
+	}
+
+	return existingUploadAnswer.Files, nil
+}
+
+func (s Service) beginOrReuseTx(
+	ctx context.Context,
+) (pgx.Tx, bool, error) {
+	if existingTx, ok := s.db.(pgx.Tx); ok {
+		return existingTx, false, nil
+	}
+
+	beginner, ok := s.db.(TxBeginner)
+	if !ok {
+		return nil, false, fmt.Errorf("db does not support transactions")
+	}
+
+	tx, err := beginner.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, false, err
+	}
+
+	return tx, true, nil
+}
+
+// MergeAnswersForWorkflowResolution returns a new slice: a shallow copy of currentAnswers
+// when payloads is empty; otherwise the same answers with each matching payload merged by
+// question ID (payload wins). Request values are normalized with the same DecodeRequest +
+// JSON marshal path as Upsert so workflow resolution (DecodeStorage / MatchesPattern) sees
+// storage-shaped bytes, not raw API wire JSON.
+func (s Service) MergeAnswersForWorkflowResolution(
+	ctx context.Context,
+	currentAnswers []Answer,
+	payloads []Payload,
+	answerableMap map[string]question.Answerable,
+) ([]Answer, error) {
+	traceCtx, span := s.tracer.Start(ctx, "MergeAnswersForWorkflowResolution")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	if len(payloads) == 0 {
+		return append([]Answer(nil), currentAnswers...), nil
+	}
+
+	answerMap := make(map[uuid.UUID]Answer, len(currentAnswers)+len(payloads))
+	for _, ans := range currentAnswers {
+		answerMap[ans.QuestionID] = ans
+	}
+
+	for _, payload := range payloads {
+		qid, err := handlerutil.ParseUUID(payload.QuestionID)
+		if err != nil {
+			err = fmt.Errorf("%w: invalid questionId %q: %w", internal.ErrWorkflowMergeInvalidQuestionID, payload.QuestionID, err)
+			logger.Error("workflow merge: invalid question ID", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+
+		answerable, ok := answerableMap[payload.QuestionID]
+		if !ok {
+			err := fmt.Errorf("%w: question %s not found in form", internal.ErrWorkflowMergeQuestionNotInForm, payload.QuestionID)
+			logger.Error("workflow merge: question not in form", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+
+		decoded, err := answerable.DecodeRequest(shared.AnswerParam{
+			QuestionID: payload.QuestionID,
+			Value:      payload.Value,
+			OtherText:  payload.OtherText,
+		})
+		if err != nil {
+			err = fmt.Errorf("%w: answer value for question %s: %w", internal.ErrWorkflowMergeAnswerValueInvalid, payload.QuestionID, err)
+			logger.Error("workflow merge: decode answer failed", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+
+		storageBytes, err := json.Marshal(decoded)
+		if err != nil {
+			err = fmt.Errorf("%w: encode answer for question %s: %w", internal.ErrWorkflowMergeAnswerEncodeFailed, payload.QuestionID, err)
+			logger.Error("workflow merge: marshal encoded answer failed", zap.String("questionID", payload.QuestionID), zap.Error(err))
+			span.RecordError(err)
+			return nil, err
+		}
+
+		prev := answerMap[qid]
+		prev.QuestionID = qid
+		prev.Value = storageBytes
+		answerMap[qid] = prev
+	}
+
+	out := make([]Answer, 0, len(answerMap))
+	for _, ans := range answerMap {
+		out = append(out, ans)
+	}
+
+	logger.Info("merged answers for workflow resolution",
+		zap.Int("payloadCount", len(payloads)),
+		zap.Int("mergedAnswerCount", len(out)),
+	)
+	return out, nil
 }

@@ -87,6 +87,37 @@ func (s *Service) Create(ctx context.Context, id uuid.UUID, ownerID uuid.UUID, s
 	return tenant, nil
 }
 
+func (s *Service) CreateWithoutOwner(ctx context.Context, id uuid.UUID, slug string) (Tenant, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateWithoutOwner")
+	defer span.End()
+	logger := internal.WithContext(traceCtx, s.logger)
+
+	tenant, err := s.query.Create(traceCtx, CreateParams{
+		ID:         id,
+		DbStrategy: DbStrategyShared,
+		OwnerID:    pgtype.UUID{Valid: false},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "tenants", "id", id.String(), logger, "create tenant by id")
+		span.RecordError(err)
+		return Tenant{}, err
+	}
+	logger.Info("tenant created", zap.String("Tenant_id", tenant.ID.String()), zap.String("db_strategy", string(tenant.DbStrategy)))
+
+	history, err := s.query.CreateSlugHistory(traceCtx, CreateSlugHistoryParams{
+		Slug:  slug,
+		OrgID: pgtype.UUID{Bytes: id, Valid: true},
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create history")
+		span.RecordError(err)
+		return Tenant{}, err
+	}
+	logger.Info("history created", zap.String("Slug", slug), zap.Int32("history_id", history.ID))
+
+	return tenant, nil
+}
+
 func (s *Service) Update(ctx context.Context, id uuid.UUID, slug string, dbStrategy DbStrategy) (Tenant, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
