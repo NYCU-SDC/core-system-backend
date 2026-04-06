@@ -152,13 +152,13 @@ func main() {
 
 	tenantService := tenant.NewService(logger, dbPool)
 	unitService := unit.NewService(logger, dbPool, tenantService)
-	
+
 	//Resource handler wiring for generic file deletion
 	answerQueries := answer.New(dbPool)
 	answerFileHandler := answer.NewFileResourceHandler(logger, answerQueries)
 	fileService := file.NewService(logger, dbPool, answerFileHandler)
 
-	userService := user.NewService(logger, dbPool, fileService, unitService)
+	userService := user.NewService(logger, dbPool, fileService, unitService, unitService)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
 	formService := form.NewService(logger, dbPool)
@@ -170,7 +170,7 @@ func main() {
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
-	setupService, err := setup.NewService(logger, dbPool, cfg.SetupPath, unitService)
+	setupService, err := setup.NewService(logger, dbPool, cfg.SetupPath, cfg.SetupData, unitService)
 	if err != nil {
 		logger.Fatal("Failed to load setup config", zap.Error(err))
 	}
