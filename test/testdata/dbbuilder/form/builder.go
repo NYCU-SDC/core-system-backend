@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
@@ -38,6 +39,10 @@ func (b Builder) Create(opts ...Option) form.CreateRow {
 	}
 	for _, opt := range opts {
 		opt(p)
+	}
+
+	if p.CreatedBy == uuid.Nil {
+		p.CreatedBy = p.LastEditor
 	}
 
 	preview := pgtype.Text{Valid: false}
@@ -75,6 +80,7 @@ func (b Builder) Create(opts ...Option) form.CreateRow {
 		Description:            pgtype.Text{String: p.Description, Valid: p.Description != ""},
 		PreviewMessage:         preview,
 		UnitID:                 p.UnitID,
+		CreatedBy:              p.CreatedBy,
 		LastEditor:             p.LastEditor,
 		Deadline:               p.Deadline,
 		PublishTime:            p.PublishTime,

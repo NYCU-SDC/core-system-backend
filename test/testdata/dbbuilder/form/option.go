@@ -2,6 +2,7 @@ package formbuilder
 
 import (
 	"NYCU-SDC/core-system-backend/internal/form"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -20,6 +21,7 @@ type FactoryParams struct {
 	Description            string
 	PreviewMessage         *string
 	UnitID                 pgtype.UUID
+	CreatedBy              uuid.UUID
 	LastEditor             uuid.UUID
 	Deadline               pgtype.Timestamptz
 	PublishTime            pgtype.Timestamptz
@@ -67,4 +69,10 @@ func WithGoogleSheetUrl(url string) Option {
 
 func WithVisibility(v form.Visibility) Option {
 	return func(p *FactoryParams) { p.Visibility = v }
+}
+
+func WithCreatedBy(userID uuid.UUID) Option {
+	return func(p *FactoryParams) {
+		p.CreatedBy = userID
+	}
 }

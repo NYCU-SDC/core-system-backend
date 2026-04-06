@@ -155,6 +155,11 @@ jobs:
                       "env_name": "DEFAULT_ORG_ROLES"
                     },
                     {
+                      "path": "/",
+                      "secret_name": "SETUP_YAML",
+                      "env_name": "SETUP_YAML"
+                    },
+                    {
                       "path": "/google-oauth",
                       "secret_name": "CLIENT_ID",
                       "env_name": "GOOGLE_OAUTH_CLIENT_ID"

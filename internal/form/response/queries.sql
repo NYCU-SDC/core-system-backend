@@ -11,10 +11,10 @@ WHERE id = $1 AND form_id = $2;
 SELECT form_id FROM form_responses
 WHERE id = $1;
 
--- name: ListByFormID :many
+-- name: ListByFormIDAndSubmittedBy :many
 SELECT * FROM form_responses
-WHERE form_id = $1
-ORDER BY created_at ASC;
+WHERE form_id = $1 AND submitted_by = $2
+ORDER BY submitted_at DESC NULLS LAST;
 
 -- name: ListBySubmittedBy :many
 SELECT * FROM form_responses

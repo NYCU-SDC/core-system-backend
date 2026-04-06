@@ -134,13 +134,14 @@ func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []sh
 }
 
 func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form.UserForm, error) {
-	ctx, span := s.tracer.Start(ctx, "ListFormsOfUser")
+	traceCtx, span := s.tracer.Start(ctx, "ListFormsOfUser")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
 	// Collect all responses of the user to determine form statuses
-	responses, err := s.responseStore.ListBySubmittedBy(ctx, userID)
+	responses, err := s.responseStore.ListBySubmittedBy(traceCtx, userID)
 	if err != nil {
+		logger.Error("failed to list responses by submitted by", zap.Error(err))
 		span.RecordError(err)
 		return []form.UserForm{}, err
 	}
@@ -159,6 +160,7 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 	forms, err := s.formStore.List(ctx, form.StatusPublished, form.VisibilityPublic, true)
 	if err != nil {
 		logger.Error("failed to list forms", zap.Error(err))
+		span.RecordError(err)
 		return []form.UserForm{}, err
 	}
 	for _, f := range forms {
@@ -180,6 +182,7 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 		completedForms, err := s.formStore.GetByIDs(ctx, missingCompletedIDs)
 		if err != nil {
 			logger.Error("failed to get completed forms by ids", zap.Error(err))
+			span.RecordError(err)
 			return []form.UserForm{}, err
 		}
 		for _, f := range completedForms {
