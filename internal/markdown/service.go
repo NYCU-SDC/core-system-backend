@@ -65,6 +65,8 @@ func Process(raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
 	}
 
 	p := bluemonday.UGCPolicy()
+	// Needed for in-document links like "#section".
+	p.AllowRelativeURLs(true)
 	cleanHTML = p.Sanitize(rawHTML)
 
 	canonicalJSON, err = json.Marshal(root)

@@ -194,6 +194,16 @@ func TestProcess(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
+			name: "hash link",
+			raw:  []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"#hash"}}],"text":"jump"}]}]}`),
+			validate: func(t *testing.T, _ []byte, docHTML string) {
+				t.Helper()
+				require.Contains(t, docHTML, `href="#hash"`)
+				require.Contains(t, docHTML, ">jump</a>")
+			},
+			expectedErr: nil,
+		},
+		{
 			name: "horizontal rule and hard break",
 			raw:  []byte(`{"type":"doc","content":[{"type":"horizontal_rule"},{"type":"paragraph","content":[{"type":"text","text":"a"},{"type":"hard_break"},{"type":"text","text":"b"}]}]}`),
 			validate: func(t *testing.T, _ []byte, docHTML string) {

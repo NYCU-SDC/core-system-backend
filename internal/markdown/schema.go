@@ -233,11 +233,25 @@ func validateLinkMark(m pm.Mark) error {
 		return fmt.Errorf("%w: link href required", internal.ErrInvalidDocumentLink)
 	}
 
+	if isHashHref(href) {
+		// Fragment-only hrefs are useful for in-document navigation (e.g. TOC links).
+		// These should not open new tabs.
+		if target != "" {
+			return fmt.Errorf("%w: hash links cannot set target", internal.ErrInvalidDocumentLink)
+		}
+
+		return nil
+	}
+
 	if isMailtoHref(href) {
 		return validateMailtoLink(href, target)
 	}
 
 	return validateWebLink(href, target)
+}
+
+func isHashHref(href string) bool {
+	return strings.HasPrefix(href, "#")
 }
 
 func isMailtoHref(href string) bool {
