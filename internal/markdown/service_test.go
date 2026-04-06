@@ -10,29 +10,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProcessAPIInput_plainString(t *testing.T) {
+func TestProcessRequest_plainString(t *testing.T) {
 	t.Parallel()
-	j, h, err := ProcessAPIInput([]byte(`"Hello world"`))
+	j, h, err := ProcessRequest([]byte(`"Hello world"`))
 	require.NoError(t, err)
 	require.Contains(t, string(j), `"type":"doc"`)
 	require.Contains(t, string(j), "Hello world")
 	require.Contains(t, h, "Hello world")
 
-	j2, _, err := ProcessAPIInput([]byte(`""`))
+	j2, _, err := ProcessRequest([]byte(`""`))
 	require.NoError(t, err)
 	require.Contains(t, string(j2), `"type":"doc"`)
 }
 
-func TestProcessAPIInput_malformedJSONString(t *testing.T) {
+func TestProcessRequest_malformedJSONString(t *testing.T) {
 	t.Parallel()
-	_, _, err := ProcessAPIInput([]byte(`"unclosed`))
+	_, _, err := ProcessRequest([]byte(`"unclosed`))
 	require.ErrorIs(t, err, internal.ErrInvalidDocumentJSON)
 }
 
-func TestProcessAPIInput_proseMirrorObject(t *testing.T) {
+func TestProcessRequest_proseMirrorObject(t *testing.T) {
 	t.Parallel()
 	raw := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x"}]}]}`)
-	j1, h1, err := ProcessAPIInput(raw)
+	j1, h1, err := ProcessRequest(raw)
 	require.NoError(t, err)
 	j2, h2, err := Process(raw)
 	require.NoError(t, err)

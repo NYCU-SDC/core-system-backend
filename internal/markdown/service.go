@@ -15,9 +15,9 @@ import (
 	pm "github.com/karitham/prosemirror"
 )
 
-// ProcessAPIInput validates rich text from HTTP APIs. It accepts canonical ProseMirror JSON
+// ProcessRequest validates rich text from HTTP APIs. It accepts canonical ProseMirror JSON
 // (object root) or a JSON-encoded plain string, which is converted to a single paragraph.
-func ProcessAPIInput(raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
+func ProcessRequest(raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
 		return Process(raw)

@@ -748,7 +748,7 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 		Title:  pgtype.Text{String: req.Title, Valid: true},
 	}
 	if req.Description != nil {
-		j, htmlStr, err := markdown.ProcessAPIInput([]byte(*req.Description))
+		j, htmlStr, err := markdown.ProcessRequest([]byte(*req.Description))
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return

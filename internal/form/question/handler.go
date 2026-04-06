@@ -273,7 +273,7 @@ func (h *Handler) AddHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	descJSON, descHTML, err := markdown.ProcessAPIInput(req.Description)
+	descJSON, descHTML, err := markdown.ProcessRequest(req.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -339,7 +339,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	descJSON, descHTML, err := markdown.ProcessAPIInput(req.Description)
+	descJSON, descHTML, err := markdown.ProcessRequest(req.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
