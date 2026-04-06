@@ -137,7 +137,8 @@ func validateNode(n pm.Node) error {
 	// CheckContent on them would always error. Validate their attrs (if any) and marks.
 	if n.IsLeaf() {
 		if n.Type.Name == NodeVariable {
-			if err := validateVariableAttrs(n.Attrs); err != nil {
+			err := validateVariableAttrs(n.Attrs)
+			if err != nil {
 				return err
 			}
 		}
@@ -149,13 +150,15 @@ func validateNode(n pm.Node) error {
 	}
 
 	if n.Type.Name == NodeHeading {
-		if err := validateHeadingLevel(n.Attrs); err != nil {
+		err := validateHeadingLevel(n.Attrs)
+		if err != nil {
 			return err
 		}
 	}
 
 	if n.Type.Name == NodeVariable {
-		if err := validateVariableAttrs(n.Attrs); err != nil {
+		err := validateVariableAttrs(n.Attrs)
+		if err != nil {
 			return err
 		}
 	}
@@ -176,7 +179,8 @@ func validateNode(n pm.Node) error {
 func validateNodeMarks(marks []pm.Mark) error {
 	for _, mark := range marks {
 		if mark.Type.Name == MarkLink {
-			if err := validateLinkMark(mark); err != nil {
+			err := validateLinkMark(mark)
+			if err != nil {
 				return err
 			}
 		}
