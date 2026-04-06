@@ -12,7 +12,6 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -258,12 +257,13 @@ func (s *Service) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 		if !exist {
 			sectionMap[sectionID] = &SectionWithAnswerableList{
 				Section: Section{
-					ID:          sectionID,
-					FormID:      row.FormID,
-					Title:       row.Title,
-					Description: row.Description,
-					CreatedAt:   row.CreatedAt,
-					UpdatedAt:   row.UpdatedAt,
+					ID:              sectionID,
+					FormID:          row.FormID,
+					Title:           row.Title,
+					DescriptionJson: row.DescriptionJson,
+					DescriptionHtml: row.DescriptionHtml,
+					CreatedAt:       row.CreatedAt,
+					UpdatedAt:       row.UpdatedAt,
 				},
 				AnswerableList: []Answerable{},
 			}
@@ -271,18 +271,23 @@ func (s *Service) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 
 		// Check if question exists
 		if row.ID.Valid {
+			qHTML := ""
+			if row.QuestionDescriptionHtml.Valid {
+				qHTML = row.QuestionDescriptionHtml.String
+			}
 			q := Question{
-				ID:          row.ID.Bytes,
-				SectionID:   sectionID,
-				Required:    row.Required.Bool,
-				Type:        row.Type.QuestionType,
-				Title:       row.QuestionTitle,
-				Description: row.QuestionDescription,
-				Metadata:    row.Metadata,
-				Order:       row.Order.Int32,
-				SourceID:    row.SourceID,
-				CreatedAt:   row.QuestionCreatedAt,
-				UpdatedAt:   row.QuestionUpdatedAt,
+				ID:              row.ID.Bytes,
+				SectionID:       sectionID,
+				Required:        row.Required.Bool,
+				Type:            row.Type.QuestionType,
+				Title:           row.QuestionTitle,
+				DescriptionJson: row.QuestionDescriptionJson,
+				DescriptionHtml: qHTML,
+				Metadata:        row.Metadata,
+				Order:           row.Order.Int32,
+				SourceID:        row.SourceID,
+				CreatedAt:       row.QuestionCreatedAt,
+				UpdatedAt:       row.QuestionUpdatedAt,
 			}
 			answerable, err := NewAnswerable(q, row.FormID)
 			if err != nil {
@@ -361,18 +366,23 @@ func (s *Service) GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID
 	for _, row := range list {
 		// Check if question exists
 		if row.ID.Valid {
+			qHTML := ""
+			if row.QuestionDescriptionHtml.Valid {
+				qHTML = row.QuestionDescriptionHtml.String
+			}
 			q := Question{
-				ID:          row.ID.Bytes,
-				SectionID:   row.SectionID,
-				Required:    row.Required.Bool,
-				Type:        row.Type.QuestionType,
-				Title:       row.QuestionTitle,
-				Description: row.QuestionDescription,
-				Metadata:    row.Metadata,
-				Order:       row.Order.Int32,
-				SourceID:    row.SourceID,
-				CreatedAt:   row.QuestionCreatedAt,
-				UpdatedAt:   row.QuestionUpdatedAt,
+				ID:              row.ID.Bytes,
+				SectionID:       row.SectionID,
+				Required:        row.Required.Bool,
+				Type:            row.Type.QuestionType,
+				Title:           row.QuestionTitle,
+				DescriptionJson: row.QuestionDescriptionJson,
+				DescriptionHtml: qHTML,
+				Metadata:        row.Metadata,
+				Order:           row.Order.Int32,
+				SourceID:        row.SourceID,
+				CreatedAt:       row.QuestionCreatedAt,
+				UpdatedAt:       row.QuestionUpdatedAt,
 			}
 			answerable, err := NewAnswerable(q, row.FormID)
 			if err != nil {
@@ -388,17 +398,12 @@ func (s *Service) GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID
 	return answerableMap, nil
 }
 
-func (s *Service) UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (Section, error) {
+func (s *Service) UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error) {
 	ctx, span := s.tracer.Start(ctx, "UpdateSection")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	section, err := s.queries.UpdateSection(ctx, UpdateSectionParams{
-		ID:          sectionID,
-		Title:       pgtype.Text{String: title, Valid: true},
-		Description: pgtype.Text{String: description, Valid: len(description) > 0},
-		FormID:      formID,
-	})
+	section, err := s.queries.UpdateSection(ctx, arg)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update section")
 		span.RecordError(err)
