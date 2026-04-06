@@ -26,20 +26,9 @@ services:
       NYCU_OAUTH_CLIENT_SECRET: "dummy"
       VERSION: "ci"
       ALLOW_ORIGINS: "*"
-      SETUP_YAML: |
-        organizations:
-          - name: SDC
-            slug: SDC
-        users:
-          - id: 4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e
-            name: John Doe
-            username: qa_user
-            email: qa@example.com
-            roles:
-              - admin
-              - user
-            organization_roles:
-              SDC: admin
+      DEFAULT_GLOBAL_ROLES: "admin,user"
+      DEFAULT_ORG_ROLES: "admin,member"
+      SETUP_YAML: "b3JnYW5pemF0aW9uczoKICAtIG5hbWU6ICJTREMiCiAgICBzbHVnOiAiU0RDIgp1c2VyczoKICAtIGlkOiAiNGViMWIxZTItN2JkNS00YjA4LWIzYjUtMmQzZTA0NTk1MTZlIgogICAgbmFtZTogIkpvaG4gRG9lIgogICAgdXNlcm5hbWU6ICJxYV91c2VyIgogICAgZW1haWw6ICJxYUBleGFtcGxlLmNvbSIKICAgIGdsb2JhbF9yb2xlOgogICAgICAtIGFkbWluCiAgICAgIC0gdXNlcgogICAgb3JnX21lbWJlcjoKICAgICAgLSBzbHVnOiAiU0RDIgogICAgICAgIG9yZ19yb2xlOiBhZG1pbgogICAgYWxsb3dlZF9vbmJvYXJkaW5nOiB0cnVlCg=="
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/healthz"]
       interval: 5s
