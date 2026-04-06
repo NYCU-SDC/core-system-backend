@@ -220,10 +220,8 @@ jobs:
       - name: Pull backend image for QA
         run: docker pull ${BACKEND_IMAGE}
 
-      - name: Start QA backend stack and seed DB
-        run: | 
-          docker compose -f .deploy/ci/compose.yaml up -d --wait
-          docker compose -f .deploy/ci/compose.yaml run --rm db-seed
+      - name: Start QA backend stack
+        run: docker compose -f .deploy/ci/compose.yaml up -d --wait
 
       - name: Checkout API scenarios repo
         uses: actions/checkout@v4
