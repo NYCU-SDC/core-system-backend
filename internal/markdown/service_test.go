@@ -204,6 +204,32 @@ func TestProcess(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
+			name: "top-level hard break is normalized into paragraph",
+			raw:  []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"a"}]},{"type":"hard_break"},{"type":"paragraph","content":[{"type":"text","text":"b"}]}]}`),
+			validate: func(t *testing.T, docJSON []byte, docHTML string) {
+				t.Helper()
+				require.Contains(t, docHTML, "<br")
+				require.Contains(t, docHTML, "a")
+				require.Contains(t, docHTML, "b")
+				require.Contains(t, string(docJSON), `"type":"paragraph"`)
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "variable node renders placeholder span",
+			raw:  []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"var: "},{"type":"variable","attrs":{"name":"VAR_TEST"}}]}]}`),
+			validate: func(t *testing.T, _ []byte, docHTML string) {
+				t.Helper()
+				require.Contains(t, docHTML, "{{VAR_TEST}}")
+			},
+			expectedErr: nil,
+		},
+		{
+			name:        "rejects image node",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"before"}]},{"type":"image","attrs":{"src":"https://placehold.co/300x200.png","alt":"x"}},{"type":"paragraph","content":[{"type":"text","text":"after"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentNode,
+		},
+		{
 			name: "blockquote",
 			raw:  []byte(`{"type":"doc","content":[{"type":"blockquote","content":[{"type":"paragraph","content":[{"type":"text","text":"quoted"}]}]}]}`),
 			validate: func(t *testing.T, _ []byte, docHTML string) {

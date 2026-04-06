@@ -17,6 +17,8 @@ func htmlRenderConfig() *pmgo.Config {
 		After:  "</code></pre>",
 	}
 
+	cfg.NodeRenderers[NodeVariable] = variableNodeOption{}
+
 	cfg.MarkRenderers[MarkBold] = pmgo.SimpleOption{
 		Before: "<strong>",
 		After:  "</strong>",
@@ -39,6 +41,21 @@ func htmlRenderConfig() *pmgo.Config {
 }
 
 type linkMarkOption struct{}
+
+type variableNodeOption struct{}
+
+func (variableNodeOption) RenderBefore(_ int, attrs map[string]interface{}) string {
+	name, _ := attrs["name"].(string)
+	name = html.EscapeString(name)
+	// Render as visible placeholder text to keep it copyable and searchable in HTML.
+	// Avoid attributes: the sanitizer strips unknown attrs (e.g. data-*), and we don't
+	// currently need rich metadata for variables in the HTML.
+	return `{{` + name + `}}`
+}
+
+func (variableNodeOption) RenderAfter(_ int, _ map[string]interface{}) string {
+	return ""
+}
 
 func (linkMarkOption) RenderBefore(_ int, attrs map[string]interface{}) string {
 	href := ""

@@ -52,6 +52,8 @@ func Process(raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
 		return nil, "", fmt.Errorf("%w: root type must be doc", internal.ErrInvalidDocumentRoot)
 	}
 
+	root = normalizeDoc(root)
+
 	err = validateNode(root)
 	if err != nil {
 		return nil, "", err
@@ -71,6 +73,50 @@ func Process(raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
 	}
 
 	return canonicalJSON, cleanHTML, nil
+}
+
+// normalizeDoc coerces editor payloads into a schema-valid doc without losing block structure.
+// Today we accept (but may not render) some nodes like image; we also prevent top-level inline
+// nodes (hard_break, text, variable) from invalidating the document by wrapping them into paragraphs.
+func normalizeDoc(root pm.Node) pm.Node {
+	if root.Type.Name != NodeDoc || root.IsLeaf() {
+		return root
+	}
+
+	var out []pm.Node
+	var inlineBuf []pm.Node
+
+	flushInline := func() {
+		if len(inlineBuf) == 0 {
+			return
+		}
+		p := Schema.Nodes[NodeParagraph]
+		para, err := p.Create(nil, nil, inlineBuf...)
+		if err == nil {
+			out = append(out, para)
+		}
+		inlineBuf = nil
+	}
+
+	for _, child := range root.Content.Content {
+		switch child.Type.Name {
+		case NodeHardBreak, NodeText, NodeVariable:
+			// Wrap consecutive inline nodes into a single paragraph.
+			inlineBuf = append(inlineBuf, child)
+			continue
+		default:
+			flushInline()
+			out = append(out, child)
+		}
+	}
+	flushInline()
+
+	docType := Schema.Nodes[NodeDoc]
+	normalized, err := docType.Create(nil, nil, out...)
+	if err != nil {
+		return root
+	}
+	return normalized
 }
 
 // PlainText extracts visible text from a valid ProseMirror JSON document.

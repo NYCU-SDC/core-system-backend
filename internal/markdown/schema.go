@@ -23,6 +23,7 @@ const (
 	NodeCodeBlock      = "code_block"
 	NodeHorizontalRule = "horizontal_rule"
 	NodeHardBreak      = "hard_break"
+	NodeVariable       = "variable"
 	NodeText           = "text"
 )
 
@@ -100,6 +101,13 @@ var Schema = pm.Must(pm.NewSchema(pm.SchemaSpec{
 			Group:  "inline",
 			Inline: true,
 		},
+		NodeVariable: {
+			Group:  "inline",
+			Inline: true,
+			Attrs: map[string]pm.Attribute{
+				"name": {},
+			},
+		},
 		NodeText: {
 			Group: "inline",
 		},
@@ -124,10 +132,15 @@ var Schema = pm.Must(pm.NewSchema(pm.SchemaSpec{
 // Schema-level unknown types are already caught during JSON unmarshal.
 // This function enforces content expressions, heading level range, and link mark attr constraints.
 func validateNode(n pm.Node) error {
-	// Leaf nodes (text, hard_break, horizontal_rule) carry no children —
+	// Leaf nodes (text, hard_break, horizontal_rule, variable) carry no children —
 	// their ContentMatch is the zero value with ValidEnd=false, so calling
-	// CheckContent on them would always error. Only validate their marks.
+	// CheckContent on them would always error. Validate their attrs (if any) and marks.
 	if n.IsLeaf() {
+		if n.Type.Name == NodeVariable {
+			if err := validateVariableAttrs(n.Attrs); err != nil {
+				return err
+			}
+		}
 		return validateNodeMarks(n.Marks)
 	}
 
@@ -137,6 +150,12 @@ func validateNode(n pm.Node) error {
 
 	if n.Type.Name == NodeHeading {
 		if err := validateHeadingLevel(n.Attrs); err != nil {
+			return err
+		}
+	}
+
+	if n.Type.Name == NodeVariable {
+		if err := validateVariableAttrs(n.Attrs); err != nil {
 			return err
 		}
 	}
@@ -177,6 +196,14 @@ func validateHeadingLevel(attrs map[string]any) error {
 		return fmt.Errorf("%w: heading level must be 1-6, got %d", internal.ErrInvalidDocumentHeading, level)
 	}
 
+	return nil
+}
+
+func validateVariableAttrs(attrs map[string]any) error {
+	name, _ := attrs["name"].(string)
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("%w: variable requires name attr", internal.ErrInvalidDocumentNode)
+	}
 	return nil
 }
 
