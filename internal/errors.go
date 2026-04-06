@@ -143,6 +143,16 @@ var (
 	ErrInvalidFileType    = errors.New("file type is not allowed")
 	ErrCoverImageTooLarge = errors.New("cover image exceeds maximum size")
 	ErrInvalidImageFormat = errors.New("image format is invalid")
+
+	// Markdown document errors (ProseMirror JSON validation and rendering).
+	ErrInvalidDocumentJSON    = errors.New("malformed rich text JSON")
+	ErrInvalidDocumentRoot    = errors.New("rich text root must be a doc node")
+	ErrInvalidDocumentNode    = errors.New("invalid rich text node structure")
+	ErrInvalidDocumentHeading = errors.New("invalid heading in rich text")
+	ErrInvalidDocumentLink    = errors.New("invalid link in rich text")
+	ErrInvalidDocumentMark    = errors.New("disallowed mark in rich text")
+	ErrInvalidDocumentMarshal = errors.New("failed to canonicalize rich text JSON")
+	ErrInvalidDocumentRender  = errors.New("cannot render rich text node")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -363,6 +373,23 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid offset parameter")
 	case errors.Is(err, ErrInvalidFileType):
 		return problem.NewValidateProblem("file type is not allowed")
+	// Markdown document errors (ProseMirror JSON validation and rendering).
+	case errors.Is(err, ErrInvalidDocumentJSON):
+		return problem.NewValidateProblem("malformed rich text JSON")
+	case errors.Is(err, ErrInvalidDocumentRoot):
+		return problem.NewValidateProblem("rich text root must be a doc node")
+	case errors.Is(err, ErrInvalidDocumentNode):
+		return problem.NewValidateProblem("invalid rich text node structure")
+	case errors.Is(err, ErrInvalidDocumentHeading):
+		return problem.NewValidateProblem("invalid heading in rich text")
+	case errors.Is(err, ErrInvalidDocumentLink):
+		return problem.NewValidateProblem("invalid link in rich text")
+	case errors.Is(err, ErrInvalidDocumentMark):
+		return problem.NewValidateProblem("disallowed mark in rich text")
+	case errors.Is(err, ErrInvalidDocumentMarshal):
+		return problem.NewValidateProblem("failed to canonicalize rich text JSON")
+	case errors.Is(err, ErrInvalidDocumentRender):
+		return problem.NewValidateProblem("cannot render rich text node")
 	}
 	return problem.Problem{}
 }
