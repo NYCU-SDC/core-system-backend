@@ -387,9 +387,9 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrInvalidDocumentMark):
 		return problem.NewValidateProblem("disallowed mark in rich text")
 	case errors.Is(err, ErrInvalidDocumentMarshal):
-		return problem.NewValidateProblem("failed to canonicalize rich text JSON")
+		return problem.NewInternalServerProblem("failed to canonicalize rich text JSON")
 	case errors.Is(err, ErrInvalidDocumentRender):
-		return problem.NewValidateProblem("cannot render rich text node")
+		return problem.NewInternalServerProblem("cannot render rich text node")
 	}
 	return problem.Problem{}
 }
