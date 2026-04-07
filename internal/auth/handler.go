@@ -300,7 +300,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		q.Set("name", result.ExistingName)
 		q.Set("oauthProvider", result.ExistingProvider)
 		q.Set("email", email)
-		redirectURL := "/link?" + q.Encode()
+		redirectURL := "/link-account?" + q.Encode()
 
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
