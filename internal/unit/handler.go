@@ -23,7 +23,7 @@ import (
 )
 
 type Store interface {
-	CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
+	CreateOrganizationWithUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
 	CreateOrganization(ctx context.Context, name string, description string, slug string) (Unit, error)
 	CreateUnitWithUserID(ctx context.Context, name string, description string, parentID uuid.UUID, UserID uuid.UUID, metadata []byte) (Unit, error)
 	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
@@ -210,7 +210,8 @@ func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
 
 	var req Request
 
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
 		return
 	}
@@ -223,23 +224,23 @@ func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
 
 	orgSlug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
 		return
 	}
 
 	_, orgID, err := h.tenantStore.GetSlugStatus(traceCtx, orgSlug)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org ID by slug: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
 		return
 	}
 
-	User, ok := user.GetFromContext(traceCtx)
+	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("no user found in request context"), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
 		return
 	}
 
-	createdUnit, err := h.store.CreateUnitWithUserID(traceCtx, req.Name, req.Description, orgID, User.ID, metadataBytes)
+	createdUnit, err := h.store.CreateUnitWithUserID(traceCtx, req.Name, req.Description, orgID, currentUser.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), logger)
 		return
@@ -255,14 +256,15 @@ func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 
 	var req Request
 
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
 		return
 	}
 
 	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to marshal metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMetadata, logger)
 		return
 	}
 
@@ -273,13 +275,13 @@ func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	User, ok := user.GetFromContext(traceCtx)
+	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("no user found in request context"), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
 		return
 	}
 
-	createdUnit, err := h.store.CreateUnitWithUserID(traceCtx, req.Name, req.Description, unitID, User.ID, metadataBytes)
+	createdUnit, err := h.store.CreateUnitWithUserID(traceCtx, req.Name, req.Description, unitID, currentUser.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), logger)
 		return
@@ -296,19 +298,19 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	var req OrgRequest
 
 	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
 		return
 	}
 
 	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to marshal metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidMetadata, logger)
 		return
 	}
 
 	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("no user found in request context"), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
 		return
 	}
 
@@ -318,7 +320,7 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdOrg, err := h.store.CreateOrganizationWithCurrentUserID(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
+	createdOrg, err := h.store.CreateOrganizationWithUserID(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create org: %w", err), logger)
 		return

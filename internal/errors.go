@@ -82,6 +82,7 @@ var (
 	ErrInvalidMemberID    = errors.New("invalid member id")
 	ErrInvalidRequestBody = errors.New("invalid request body")
 	ErrInvalidRole        = errors.New("invalid role")
+	ErrInvalidMetadata    = errors.New("failed to marshal metadata")
 
 	// Inbox Errors
 	ErrInvalidIsReadParameter     = errors.New("invalid isRead parameter")
@@ -232,6 +233,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid request body")
 	case errors.Is(err, ErrInvalidRole):
 		return problem.NewValidateProblem("invalid role value")
+	case errors.Is(err, ErrInvalidMetadata):
+		return problem.NewValidateProblem("failed to marshal metadata")
 
 	// Form Errors
 	case errors.Is(err, ErrFormNotFound):
