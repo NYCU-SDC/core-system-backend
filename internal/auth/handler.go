@@ -296,14 +296,11 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		}
 		h.setLinkCookie(w, baseURL.Host, linkToken)
 
-		redirectURL := redirectTo
-		if redirectURL == "" {
-			q := url.Values{}
-			q.Set("name", result.ExistingName)
-			q.Set("oauthProvider", result.ExistingProvider)
-			q.Set("email", email)
-			redirectURL = "/link?" + q.Encode()
-		}
+		q := url.Values{}
+		q.Set("name", result.ExistingName)
+		q.Set("oauthProvider", result.ExistingProvider)
+		q.Set("email", email)
+		redirectURL := "/link?" + q.Encode()
 
 		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return
