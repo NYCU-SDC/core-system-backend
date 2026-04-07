@@ -222,8 +222,9 @@ type Store interface {
 }
 
 type Handler struct {
-	logger *zap.Logger
-	tracer trace.Tracer
+	logger   *zap.Logger
+	tracer   trace.Tracer
+	markdown *markdown.Service
 
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
@@ -240,6 +241,7 @@ func NewHandler(
 	return &Handler{
 		logger:        logger,
 		tracer:        otel.Tracer("question/handler"),
+		markdown:      markdown.NewService(logger),
 		validator:     validator,
 		problemWriter: problemWriter,
 		store:         store,
@@ -273,7 +275,7 @@ func (h *Handler) AddHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	descJSON, descHTML, err := markdown.ProcessRequest(req.Description)
+	descJSON, descHTML, err := h.markdown.ProcessRequest(traceCtx, req.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -339,7 +341,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	descJSON, descHTML, err := markdown.ProcessRequest(req.Description)
+	descJSON, descHTML, err := h.markdown.ProcessRequest(traceCtx, req.Description)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

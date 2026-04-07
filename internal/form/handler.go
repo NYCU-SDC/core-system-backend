@@ -196,6 +196,16 @@ type questionStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 }
 
+type FileStore interface {
+	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
+	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
+}
+
+type MarkdownStore interface {
+	ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error)
+	PreviewSnippet(ctx context.Context, raw []byte, maxRunes int) (string, error)
+}
+
 type Handler struct {
 	logger *zap.Logger
 	tracer trace.Tracer
@@ -206,12 +216,8 @@ type Handler struct {
 	store         Store
 	tenantStore   tenantStore
 	questionStore questionStore
-	fileService   FileService
-}
-
-type FileService interface {
-	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
-	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
+	fileStore     FileStore
+	markdownStore MarkdownStore
 }
 
 func NewHandler(
@@ -221,7 +227,8 @@ func NewHandler(
 	store Store,
 	tenantStore tenantStore,
 	questionStore questionStore,
-	fileService FileService,
+	fileStore FileStore,
+	markdownStore MarkdownStore,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -231,7 +238,8 @@ func NewHandler(
 		store:         store,
 		tenantStore:   tenantStore,
 		questionStore: questionStore,
-		fileService:   fileService,
+		fileStore:     fileStore,
+		markdownStore: markdownStore,
 	}
 }
 
@@ -586,7 +594,7 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	}()
 
 	// Save to file service with WebP validation (system upload, no user attribution)
-	savedFile, err := h.fileService.SaveFile(
+	savedFile, err := h.fileStore.SaveFile(
 		traceCtx,
 		fileData,
 		header.Filename,
@@ -748,7 +756,7 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 		Title:  pgtype.Text{String: req.Title, Valid: true},
 	}
 	if req.Description != nil {
-		j, htmlStr, err := markdown.ProcessRequest([]byte(*req.Description))
+		j, htmlStr, err := h.markdownStore.ProcessRequest(traceCtx, []byte(*req.Description))
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return

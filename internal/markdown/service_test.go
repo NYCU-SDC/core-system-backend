@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -8,10 +9,16 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
+
+func newTestService() *Service {
+	return NewService(zap.NewNop())
+}
 
 func TestProcessRequest(t *testing.T) {
 	t.Parallel()
+	md := newTestService()
 
 	testCases := []struct {
 		name        string
@@ -47,7 +54,7 @@ func TestProcessRequest(t *testing.T) {
 			raw:  []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x"}]}]}`),
 			validate: func(t *testing.T, raw []byte, docJSON []byte, docHTML string) {
 				t.Helper()
-				j2, h2, err := Process(raw)
+				j2, h2, err := md.Process(context.Background(), raw)
 				require.NoError(t, err)
 				require.Equal(t, string(j2), string(docJSON))
 				require.Equal(t, h2, docHTML)
@@ -58,7 +65,7 @@ func TestProcessRequest(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			docJSON, docHTML, err := ProcessRequest(tc.raw)
+			docJSON, docHTML, err := md.ProcessRequest(context.Background(), tc.raw)
 			if tc.expectedErr != nil {
 				require.ErrorIs(t, err, tc.expectedErr)
 				return
@@ -71,6 +78,7 @@ func TestProcessRequest(t *testing.T) {
 
 func TestProcess(t *testing.T) {
 	t.Parallel()
+	md := newTestService()
 	testCases := []struct {
 		name        string
 		raw         []byte
@@ -298,7 +306,7 @@ func TestProcess(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			docJSON, docHTML, err := Process(tc.raw)
+			docJSON, docHTML, err := md.Process(context.Background(), tc.raw)
 			if tc.expectedErr != nil {
 				require.ErrorIs(t, err, tc.expectedErr)
 				return
@@ -311,6 +319,7 @@ func TestProcess(t *testing.T) {
 
 func TestPlainText(t *testing.T) {
 	t.Parallel()
+	md := newTestService()
 	testCases := []struct {
 		name        string
 		raw         []byte
@@ -375,7 +384,7 @@ func TestPlainText(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s, err := PlainText(tc.raw)
+			s, err := md.PlainText(context.Background(), tc.raw)
 			require.Equal(t, tc.expected, s)
 			require.ErrorIs(t, err, tc.expectedErr)
 		})
@@ -384,6 +393,7 @@ func TestPlainText(t *testing.T) {
 
 func TestPreviewSnippet(t *testing.T) {
 	t.Parallel()
+	md := newTestService()
 	testCases := []struct {
 		name          string
 		raw           []byte
@@ -429,7 +439,7 @@ func TestPreviewSnippet(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s, err := PreviewSnippet(tc.raw, tc.maxRunes)
+			s, err := md.PreviewSnippet(context.Background(), tc.raw, tc.maxRunes)
 			require.Len(t, []rune(s), tc.expectedRunes)
 			require.ErrorIs(t, err, tc.expectedErr)
 		})
@@ -438,6 +448,7 @@ func TestPreviewSnippet(t *testing.T) {
 
 func TestEmptyDocContent(t *testing.T) {
 	t.Parallel()
-	_, _, err := Process([]byte(`{"type":"doc","content":[]}`))
+	md := newTestService()
+	_, _, err := md.Process(context.Background(), []byte(`{"type":"doc","content":[]}`))
 	t.Logf("err=%v", err)
 }

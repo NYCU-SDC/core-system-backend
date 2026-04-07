@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type Builder struct {
@@ -76,7 +77,8 @@ func (b Builder) Create(opts ...Option) form.CreateRow {
 		}
 	}
 
-	descJSON, descHTML, err := markdown.FromPlaintext(p.Description)
+	md := markdown.NewService(zap.NewNop())
+	descJSON, descHTML, err := md.FromPlaintext(context.Background(), p.Description)
 	require.NoError(b.t, err)
 
 	formRow, err := queries.Create(context.Background(), form.CreateParams{

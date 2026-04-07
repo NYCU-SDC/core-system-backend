@@ -1,6 +1,7 @@
 package form
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -11,11 +12,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestToResponse_proseMirrorAndHTML(t *testing.T) {
 	doc := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hi"}]}]}`)
-	canonical, html, err := markdown.Process(doc)
+	md := markdown.NewService(zap.NewNop())
+	canonical, html, err := md.Process(context.Background(), doc)
 	require.NoError(t, err)
 
 	f := Form{

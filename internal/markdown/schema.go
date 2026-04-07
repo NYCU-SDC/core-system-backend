@@ -184,7 +184,7 @@ func validateNodeMarks(marks []pm.Mark) error {
 		if mark.Type.Name == MarkLink {
 			err := validateLinkMark(mark)
 			if err != nil {
-				return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentMark, err)
+				return err
 			}
 		}
 	}
@@ -233,14 +233,14 @@ func validateLinkMark(m pm.Mark) error {
 	target, _ := m.Attrs["target"].(string)
 
 	if href == "" {
-		return fmt.Errorf("%w: link href required", internal.ErrInvalidDocumentMark)
+		return fmt.Errorf("%w: link href required", internal.ErrInvalidDocumentLink)
 	}
 
 	if isHashHref(href) {
 		// Fragment-only hrefs are useful for in-document navigation (e.g. TOC links).
 		// These should not open new tabs.
 		if target != "" {
-			return fmt.Errorf("%w: hash links cannot set target", internal.ErrInvalidDocumentMark)
+			return fmt.Errorf("%w: hash links cannot set target", internal.ErrInvalidDocumentLink)
 		}
 
 		return nil

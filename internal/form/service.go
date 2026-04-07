@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"NYCU-SDC/core-system-backend/internal"
-	"NYCU-SDC/core-system-backend/internal/markdown"
 
 	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	"github.com/jackc/pgx/v5"
@@ -70,16 +69,18 @@ type formFields struct {
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger        *zap.Logger
+	queries       Querier
+	tracer        trace.Tracer
+	markdownStore MarkdownStore
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, markdownStore MarkdownStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("forms/service"),
+		logger:        logger,
+		queries:       New(db),
+		tracer:        otel.Tracer("forms/service"),
+		markdownStore: markdownStore,
 	}
 }
 
@@ -96,7 +97,7 @@ func visibilityFromAPIFormat(v string) Visibility {
 	}
 }
 
-func buildFormFieldsFromRequest(request Request) (formFields, error) {
+func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore, request Request) (formFields, error) {
 	form := formFields{}
 
 	if request.Deadline != nil {
@@ -111,7 +112,7 @@ func buildFormFieldsFromRequest(request Request) (formFields, error) {
 		form.publishTime = pgtype.Timestamptz{Valid: false}
 	}
 
-	descJSON, descHTML, err := markdown.ProcessRequest([]byte(request.Description))
+	descJSON, descHTML, err := markdownStore.ProcessRequest(ctx, []byte(request.Description))
 	if err != nil {
 		return formFields{}, err
 	}
@@ -120,7 +121,7 @@ func buildFormFieldsFromRequest(request Request) (formFields, error) {
 
 	preview := request.PreviewMessage
 	if preview == "" {
-		snip, err := markdown.PreviewSnippet(descJSON, 25)
+		snip, err := markdownStore.PreviewSnippet(ctx, descJSON, 25)
 		if err != nil {
 			return formFields{}, err
 		}
@@ -153,7 +154,7 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	fields, err := buildFormFieldsFromRequest(request)
+	fields, err := buildFormFieldsFromRequest(ctx, s.markdownStore, request)
 	if err != nil {
 		span.RecordError(err)
 		return CreateRow{}, err
@@ -201,7 +202,7 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 	}
 
 	if request.Description != nil {
-		j, h, err := markdown.ProcessRequest([]byte(*request.Description))
+		j, h, err := s.markdownStore.ProcessRequest(ctx, []byte(*request.Description))
 		if err != nil {
 			span.RecordError(err)
 			return PatchRow{}, err
