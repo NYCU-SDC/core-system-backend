@@ -35,13 +35,13 @@ func NewService(logger *zap.Logger) *Service {
 // ProcessRequest validates rich text from HTTP APIs. It accepts canonical ProseMirror JSON
 // (object root) or a JSON-encoded plain string, which is converted to a single paragraph.
 func (s *Service) ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
-	ctx, span := s.tracer.Start(ctx, "ProcessRequest")
+	traceCtx, span := s.tracer.Start(ctx, "ProcessRequest")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
-		return s.Process(ctx, raw)
+		return s.Process(traceCtx, raw)
 	}
 
 	if raw[0] == '"' {
@@ -54,17 +54,17 @@ func (s *Service) ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON
 			return nil, "", wrapped
 		}
 
-		return s.FromPlaintext(ctx, plain)
+		return s.FromPlaintext(traceCtx, plain)
 	}
 
-	return s.Process(ctx, raw)
+	return s.Process(traceCtx, raw)
 }
 
 // Process validates a ProseMirror JSON document, renders HTML, sanitizes it, and returns canonical JSON.
 func (s *Service) Process(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
-	ctx, span := s.tracer.Start(ctx, "Process")
+	traceCtx, span := s.tracer.Start(ctx, "Process")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
 		return []byte(EmptyDocumentJSON), "", nil
@@ -164,31 +164,33 @@ func normalizeDoc(root pm.Node) pm.Node {
 
 // PlainText extracts visible text from a valid ProseMirror JSON document.
 func (s *Service) PlainText(ctx context.Context, raw []byte) (string, error) {
-	ctx, span := s.tracer.Start(ctx, "PlainText")
+	traceCtx, span := s.tracer.Start(ctx, "PlainText")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
 		return "", nil
 	}
 
 	var root pm.Node
-	if err := json.Unmarshal(raw, &root); err != nil {
+	err := json.Unmarshal(raw, &root)
+	if err != nil {
 		wrapped := wrapUnmarshalErr(err)
-		logger.Warn("invalid rich text JSON", zap.Error(wrapped))
+		logger.Error("invalid rich text JSON", zap.Error(wrapped))
 		span.RecordError(wrapped)
 		return "", wrapped
 	}
 
 	if root.Type.Name != NodeDoc {
 		err := fmt.Errorf("%w: root type must be doc", internal.ErrInvalidDocumentRoot)
-		logger.Warn("invalid rich text root", zap.Error(err))
+		logger.Error("invalid rich text root", zap.Error(err))
 		span.RecordError(err)
 		return "", err
 	}
 
-	if err := validateNode(root); err != nil {
-		logger.Warn("rich text schema validation failed", zap.Error(err))
+	err = validateNode(root)
+	if err != nil {
+		logger.Error("rich text schema validation failed", zap.Error(err))
 		span.RecordError(err)
 		return "", err
 	}
@@ -201,9 +203,9 @@ func (s *Service) PlainText(ctx context.Context, raw []byte) (string, error) {
 
 // FromPlaintext builds a minimal ProseMirror document from plain text.
 func (s *Service) FromPlaintext(ctx context.Context, plain string) (canonicalJSON []byte, html string, err error) {
-	ctx, span := s.tracer.Start(ctx, "FromPlaintext")
+	traceCtx, span := s.tracer.Start(ctx, "FromPlaintext")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	textJSON, err := json.Marshal(plain)
 	if err != nil {
@@ -215,15 +217,15 @@ func (s *Service) FromPlaintext(ctx context.Context, plain string) (canonicalJSO
 	raw := fmt.Sprintf(`{"type":%q,"content":[{"type":%q,"content":[{"type":%q,"text":%s}]}]}`,
 		NodeDoc, NodeParagraph, NodeText, textJSON)
 
-	return s.Process(ctx, []byte(raw))
+	return s.Process(traceCtx, []byte(raw))
 }
 
 // PreviewSnippet returns the first maxRunes runes of plain text from a ProseMirror JSON payload.
 func (s *Service) PreviewSnippet(ctx context.Context, raw []byte, maxRunes int) (string, error) {
-	ctx, span := s.tracer.Start(ctx, "PreviewSnippet")
+	traceCtx, span := s.tracer.Start(ctx, "PreviewSnippet")
 	defer span.End()
 
-	pt, err := s.PlainText(ctx, raw)
+	pt, err := s.PlainText(traceCtx, raw)
 	if err != nil {
 		span.RecordError(err)
 		return "", err
