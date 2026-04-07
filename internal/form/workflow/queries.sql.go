@@ -200,7 +200,11 @@ new_node AS (
     SELECT jsonb_build_object(
         'id', node_id.id,
         'label', 'New ' || initcap($3::text),
-        'type', $3::node_type
+        'type', $3::node_type,
+        'payload', jsonb_build_object(
+            'x', COALESCE($4::int, 0),
+            'y', COALESCE($5::int, 0)
+        )
     ) AS node
     FROM node_id
 ),
@@ -240,6 +244,8 @@ type CreateNodeParams struct {
 	FormID     uuid.UUID
 	LastEditor uuid.UUID
 	Type       NodeType
+	PayloadX   int32
+	PayloadY   int32
 }
 
 type CreateNodeRow struct {
@@ -250,7 +256,13 @@ type CreateNodeRow struct {
 }
 
 func (q *Queries) CreateNode(ctx context.Context, arg CreateNodeParams) (CreateNodeRow, error) {
-	row := q.db.QueryRow(ctx, createNode, arg.FormID, arg.LastEditor, arg.Type)
+	row := q.db.QueryRow(ctx, createNode,
+		arg.FormID,
+		arg.LastEditor,
+		arg.Type,
+		arg.PayloadX,
+		arg.PayloadY,
+	)
 	var i CreateNodeRow
 	err := row.Scan(
 		&i.NodeID,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"NYCU-SDC/core-system-backend/internal"
 
@@ -29,6 +30,16 @@ type Validator interface {
 	Validate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore QuestionStore) error
 	ValidateNodeIDsUnchanged(ctx context.Context, currentWorkflow, newWorkflow []byte) error
 	ValidateUpdateNodeIDs(ctx context.Context, currentWorkflow []byte, newWorkflow []byte) error
+}
+
+// NodePayload is the canonical shape for workflow node payloads.
+// It is shared by the validator and other workflow code.
+type NodePayload struct {
+	// Use pointers so `validate:"required"` can distinguish between:
+	// - field missing/null => nil pointer (invalid)
+	// - valid value 0 => non-nil pointer with value 0 (valid)
+	X *int `json:"x" validate:"required"`
+	Y *int `json:"y" validate:"required"`
 }
 
 type Service struct {
@@ -154,7 +165,7 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 	return WorkflowVersion(row), nil
 }
 
-func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, userID uuid.UUID) (CreateNodeRow, error) {
+func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, payload NodePayload, userID uuid.UUID) (CreateNodeRow, error) {
 	methodName := "CreateNode"
 	ctx, span := s.tracer.Start(ctx, methodName)
 	defer span.End()
@@ -171,10 +182,25 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		return CreateNodeRow{}, err
 	}
 
+	// Payload coordinates are required by workflow node creation.
+	// We must validate before dereferencing pointers to avoid panics.
+	if payload.X == nil || payload.Y == nil {
+		err := fmt.Errorf("%w: payload.x and payload.y are required", internal.ErrWorkflowNodePayloadInvalid)
+		span.RecordError(err)
+		return CreateNodeRow{}, err
+	}
+	if *payload.X < math.MinInt32 || *payload.X > math.MaxInt32 || *payload.Y < math.MinInt32 || *payload.Y > math.MaxInt32 {
+		err := fmt.Errorf("%w: payload.x and payload.y must be int32", internal.ErrWorkflowNodePayloadInvalid)
+		span.RecordError(err)
+		return CreateNodeRow{}, err
+	}
+
 	createdRow, err := s.queries.CreateNode(ctx, CreateNodeParams{
 		FormID:     formID,
 		LastEditor: userID,
 		Type:       nodeType,
+		PayloadX:   int32(*payload.X),
+		PayloadY:   int32(*payload.Y),
 	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "create node")

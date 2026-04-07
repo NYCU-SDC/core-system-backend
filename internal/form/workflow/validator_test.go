@@ -8,34 +8,113 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/question"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
 
-// TestActivate_InvalidNodeReferences tests that validateGraphConnectivity catches invalid node references
-func TestActivate_InvalidNodeReferences(t *testing.T) {
+func createWorkflow_SimpleValid_WithoutNodePayload(t *testing.T) []byte {
+	t.Helper()
+
+	startID := uuid.New()
+	endID := uuid.New()
+
+	workflowJSON, err := json.Marshal([]map[string]interface{}{
+		{
+			"id":    startID.String(),
+			"type":  "start",
+			"label": "Start",
+			"next":  endID.String(),
+		},
+		{
+			"id":    endID.String(),
+			"type":  "end",
+			"label": "End",
+		},
+	})
+	require.NoError(t, err)
+	return workflowJSON
+}
+
+// TestActivate tests that Activate performs strict workflow validation.
+func TestActivate(t *testing.T) {
 	t.Parallel()
 
 	type testCase struct {
 		name         string
 		workflowJSON []byte
+		expectedErr  bool
 	}
 
 	testCases := []testCase{
 		{
 			name:         "node references non-existent node ID in next field",
 			workflowJSON: createWorkflow_InvalidNextRef(t),
+			expectedErr:  true,
 		},
 		{
 			name:         "condition node references non-existent node ID in nextTrue field",
 			workflowJSON: createWorkflow_InvalidNextTrueRef(t),
+			expectedErr:  true,
 		},
 		{
 			name:         "condition node references non-existent node ID in nextFalse field",
 			workflowJSON: createWorkflow_InvalidNextFalseRef(t),
+			expectedErr:  true,
 		},
 		{
 			name:         "condition node references non-existent nodes in both nextTrue and nextFalse",
 			workflowJSON: createWorkflow_InvalidConditionRefs(t),
+			expectedErr:  true,
+		},
+		{
+			name:         "valid payload object",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1, "y": 2}),
+			expectedErr:  false,
+		},
+		{
+			name:         "missing payload field",
+			workflowJSON: createWorkflow_SimpleValid_WithoutNodePayload(t),
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload type (string)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, "not-an-object"),
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload shape (missing y)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1}),
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload shape (x not integer)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1.5, "y": 2}),
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload shape (x float form 1.0)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1.0"), "y": json.Number("2")}),
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload shape (x float form 1e0)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1e0"), "y": json.Number("2")}),
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload shape (x out of int32 range)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 2147483648, "y": 2}),
+			expectedErr:  true,
+		},
+		{
+			name:         "invalid payload shape (y out of int32 range)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1, "y": -2147483649}),
+			expectedErr:  true,
+		},
+		{
+			name:         "valid payload shape (int32 boundaries)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 2147483647, "y": -2147483648}),
+			expectedErr:  false,
 		},
 	}
 
@@ -49,9 +128,65 @@ func TestActivate_InvalidNodeReferences(t *testing.T) {
 
 			err := validator.Activate(ctx, formID, tc.workflowJSON, nil)
 
-			require.Error(t, err, "expected validation error")
+			if tc.expectedErr {
+				require.Error(t, err, "expected validation error")
+				return
+			}
+			require.NoError(t, err, "expected validation to pass")
 		})
 	}
+}
+
+// TestValidateConditionSectionOrder_ConditionBranchTraversalWithMissingSiblingBranch tests that Validate detects when a condition
+// references a section that comes after it in the graph traversal.
+func TestValidateConditionSectionOrder_ConditionBranchTraversalWithMissingSiblingBranch(t *testing.T) {
+	t.Parallel()
+
+	formID := uuid.New()
+	startID := uuid.New()
+	conditionAID := uuid.New()
+	conditionBID := uuid.New()
+	sectionID := uuid.New()
+	endID := uuid.New()
+	questionID := uuid.New()
+
+	answerable, err := question.NewAnswerable(question.Question{
+		ID:        questionID,
+		SectionID: sectionID,
+		Required:  false,
+		Type:      question.QuestionTypeShortText,
+		Title:     pgtype.Text{String: "Q1", Valid: true},
+		Metadata:  []byte("{}"),
+		Order:     1,
+	}, formID)
+	require.NoError(t, err)
+
+	store := &mockQuestionStore{
+		questions: map[uuid.UUID]question.Answerable{
+			questionID: answerable,
+		},
+	}
+
+	nodes := []map[string]interface{}{
+		{"id": startID.String(), "type": "start", "label": "Start", "next": conditionAID.String()},
+		{"id": conditionAID.String(), "type": "condition", "label": "Condition A", "nextTrue": conditionBID.String()},
+		{
+			"id":        conditionBID.String(),
+			"type":      "condition",
+			"label":     "Condition B",
+			"nextTrue":  endID.String(),
+			"nextFalse": endID.String(),
+			"conditionRule": map[string]interface{}{
+				"question": questionID.String(),
+			},
+		},
+		{"id": sectionID.String(), "type": "section", "label": "Section"},
+		{"id": endID.String(), "type": "end", "label": "End"},
+	}
+
+	err = validateConditionSectionOrder(context.Background(), formID, nodes, store)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), conditionBID.String())
 }
 
 // TestActivate_ConditionRuleValidation tests strict condition rule validation
@@ -526,6 +661,32 @@ func TestValidate(t *testing.T) {
 			name: "invalid workflow - condition rule with non-existent question",
 			setup: func() ([]byte, QuestionStore) {
 				return createWorkflow_ConditionRuleWithEmptyStore(t, uuid.New().String())
+			},
+			expectedErr: true,
+		},
+		{
+			name:        "invalid workflow - invalid node payload type (number)",
+			setup:       func() ([]byte, QuestionStore) { return createWorkflow_SimpleValid_WithNodePayload(t, 123), nil },
+			expectedErr: true,
+		},
+		{
+			name: "invalid workflow - invalid node payload shape (missing y)",
+			setup: func() ([]byte, QuestionStore) {
+				return createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1}), nil
+			},
+			expectedErr: true,
+		},
+		{
+			name: "invalid workflow - invalid node payload shape (x not integer)",
+			setup: func() ([]byte, QuestionStore) {
+				return createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1.5, "y": 2}), nil
+			},
+			expectedErr: true,
+		},
+		{
+			name: "invalid workflow - missing node payload field",
+			setup: func() ([]byte, QuestionStore) {
+				return createWorkflow_SimpleValid_WithoutNodePayload(t), nil
 			},
 			expectedErr: true,
 		},

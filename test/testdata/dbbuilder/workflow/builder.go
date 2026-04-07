@@ -71,15 +71,17 @@ func (b Builder) CreateStartEndWorkflow() ([]byte, uuid.UUID, uuid.UUID) {
 
 	workflowJSON, err := json.Marshal([]map[string]interface{}{
 		{
-			"id":    startID.String(),
-			"type":  "start",
-			"label": "Start",
-			"next":  endID.String(),
+			"id":      startID.String(),
+			"type":    "start",
+			"label":   "Start",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0, "y": 0},
 		},
 		{
-			"id":    endID.String(),
-			"type":  "end",
-			"label": "End",
+			"id":      endID.String(),
+			"type":    "end",
+			"label":   "End",
+			"payload": map[string]interface{}{"x": 0, "y": 0},
 		},
 	})
 	require.NoError(b.t, err)
@@ -96,21 +98,24 @@ func (b Builder) CreateStartSectionEndWorkflow() ([]byte, uuid.UUID, uuid.UUID, 
 
 	workflowJSON, err := json.Marshal([]map[string]interface{}{
 		{
-			"id":    startID.String(),
-			"type":  "start",
-			"label": "Start",
-			"next":  sectionID.String(),
+			"id":      startID.String(),
+			"type":    "start",
+			"label":   "Start",
+			"next":    sectionID.String(),
+			"payload": map[string]interface{}{"x": 0, "y": 0},
 		},
 		{
-			"id":    sectionID.String(),
-			"type":  "section",
-			"label": "Section",
-			"next":  endID.String(),
+			"id":      sectionID.String(),
+			"type":    "section",
+			"label":   "Section",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0, "y": 0},
 		},
 		{
-			"id":    endID.String(),
-			"type":  "end",
-			"label": "End",
+			"id":      endID.String(),
+			"type":    "end",
+			"label":   "End",
+			"payload": map[string]interface{}{"x": 0, "y": 0},
 		},
 	})
 	require.NoError(b.t, err)
@@ -127,10 +132,11 @@ func (b Builder) CreateStartConditionEndWorkflow() ([]byte, uuid.UUID, uuid.UUID
 
 	workflowJSON, err := json.Marshal([]map[string]interface{}{
 		{
-			"id":    startID.String(),
-			"type":  "start",
-			"label": "Start",
-			"next":  conditionID.String(),
+			"id":      startID.String(),
+			"type":    "start",
+			"label":   "Start",
+			"next":    conditionID.String(),
+			"payload": map[string]interface{}{"x": 0, "y": 0},
 		},
 		{
 			"id":        conditionID.String(),
@@ -138,11 +144,13 @@ func (b Builder) CreateStartConditionEndWorkflow() ([]byte, uuid.UUID, uuid.UUID
 			"label":     "Condition",
 			"nextTrue":  endID.String(),
 			"nextFalse": endID.String(),
+			"payload":   map[string]interface{}{"x": 0, "y": 0},
 		},
 		{
-			"id":    endID.String(),
-			"type":  "end",
-			"label": "End",
+			"id":      endID.String(),
+			"type":    "end",
+			"label":   "End",
+			"payload": map[string]interface{}{"x": 0, "y": 0},
 		},
 	})
 	require.NoError(b.t, err)
