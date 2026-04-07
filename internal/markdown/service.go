@@ -133,10 +133,10 @@ func normalizeDoc(root pm.Node) pm.Node {
 		if len(inlineBuf) == 0 {
 			return
 		}
-		p := Schema.Nodes[NodeParagraph]
-		para, err := p.Create(nil, nil, inlineBuf...)
+		paragraphType := Schema.Nodes[NodeParagraph]
+		paragraph, err := paragraphType.Create(nil, nil, inlineBuf...)
 		if err == nil {
-			out = append(out, para)
+			out = append(out, paragraph)
 		}
 		inlineBuf = nil
 	}
