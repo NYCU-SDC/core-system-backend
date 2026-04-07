@@ -86,7 +86,7 @@ func (s *Service) Process(ctx context.Context, raw []byte) (canonicalJSON []byte
 		return nil, "", err
 	}
 
-	root = normalizeDoc(root)
+	root = s.normalizeDoc(traceCtx, root)
 
 	err = validateNode(root)
 	if err != nil {
@@ -95,9 +95,10 @@ func (s *Service) Process(ctx context.Context, raw []byte) (canonicalJSON []byte
 		return nil, "", err
 	}
 
-	rawHTML, err := renderHTML(root)
+	rawHTML, err := s.renderHTML(traceCtx, root)
 	if err != nil {
-		logger.Error("rich text render failed", zap.Error(err))
+		err := fmt.Errorf("%w: render: %w", internal.ErrInvalidDocumentRender, err)
+		logger.Error("failed to render", zap.Error(err))
 		span.RecordError(err)
 		return nil, "", err
 	}
@@ -121,7 +122,11 @@ func (s *Service) Process(ctx context.Context, raw []byte) (canonicalJSON []byte
 // normalizeDoc coerces editor payloads into a schema-valid doc without losing block structure.
 // Today we accept (but may not render) some nodes like image; we also prevent top-level inline
 // nodes (hard_break, text, variable) from invalidating the document by wrapping them into paragraphs.
-func normalizeDoc(root pm.Node) pm.Node {
+func (s *Service) normalizeDoc(ctx context.Context, root pm.Node) pm.Node {
+	traceCtx, span := s.tracer.Start(ctx, "normalizeDoc")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
 	if root.Type.Name != NodeDoc || root.IsLeaf() {
 		return root
 	}
@@ -135,9 +140,13 @@ func normalizeDoc(root pm.Node) pm.Node {
 		}
 		paragraphType := Schema.Nodes[NodeParagraph]
 		paragraph, err := paragraphType.Create(nil, nil, inlineBuf...)
-		if err == nil {
-			out = append(out, paragraph)
+		if err != nil {
+			logger.Error("failed to create paragraph", zap.Error(err))
+			span.RecordError(err)
+			return
 		}
+
+		out = append(out, paragraph)
 		inlineBuf = nil
 	}
 
@@ -157,6 +166,8 @@ func normalizeDoc(root pm.Node) pm.Node {
 	docType := Schema.Nodes[NodeDoc]
 	normalized, err := docType.Create(nil, nil, out...)
 	if err != nil {
+		logger.Error("failed to create doc", zap.Error(err))
+		span.RecordError(err)
 		return root
 	}
 	return normalized
