@@ -145,14 +145,15 @@ var (
 	ErrInvalidImageFormat = errors.New("image format is invalid")
 
 	// Markdown document errors (ProseMirror JSON validation and rendering).
-	ErrInvalidDocumentJSON    = errors.New("malformed rich text JSON")
-	ErrInvalidDocumentRoot    = errors.New("rich text root must be a doc node")
-	ErrInvalidDocumentNode    = errors.New("invalid rich text node structure")
-	ErrInvalidDocumentHeading = errors.New("invalid heading in rich text")
-	ErrInvalidDocumentLink    = errors.New("invalid link in rich text")
-	ErrInvalidDocumentMark    = errors.New("disallowed mark in rich text")
-	ErrInvalidDocumentMarshal = errors.New("failed to canonicalize rich text JSON")
-	ErrInvalidDocumentRender  = errors.New("cannot render rich text node")
+	ErrInvalidDocumentJSON          = errors.New("malformed rich text JSON")
+	ErrInvalidDocumentRoot          = errors.New("rich text root must be a doc node")
+	ErrInvalidDocumentNode          = errors.New("invalid rich text node structure")
+	ErrInvalidDocumentHeading       = errors.New("invalid heading in rich text")
+	ErrInvalidDocumentLink          = errors.New("invalid link in rich text")
+	ErrInvalidDocumentMark          = errors.New("disallowed mark in rich text")
+	ErrInvalidDocumentVariableAttrs = errors.New("invalid variable attributes in rich text")
+	ErrInvalidDocumentMarshal       = errors.New("failed to canonicalize rich text JSON")
+	ErrInvalidDocumentRender        = errors.New("cannot render rich text node")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -390,6 +391,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewInternalServerProblem("failed to canonicalize rich text JSON")
 	case errors.Is(err, ErrInvalidDocumentRender):
 		return problem.NewInternalServerProblem("cannot render rich text node")
+	case errors.Is(err, ErrInvalidDocumentHeading):
+		return problem.NewValidateProblem("invalid heading in rich text")
+	case errors.Is(err, ErrInvalidDocumentVariableAttrs):
+		return problem.NewValidateProblem("invalid variable attributes in rich text")
 	}
 	return problem.Problem{}
 }

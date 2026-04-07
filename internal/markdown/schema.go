@@ -139,37 +139,40 @@ func validateNode(n pm.Node) error {
 		if n.Type.Name == NodeVariable {
 			err := validateVariableAttrs(n.Attrs)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 			}
 		}
 		return validateNodeMarks(n.Marks)
 	}
 
-	if err := n.Type.CheckContent(n.Content); err != nil {
+	err := n.Type.CheckContent(n.Content)
+	if err != nil {
 		return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 	}
 
 	if n.Type.Name == NodeHeading {
 		err := validateHeadingLevel(n.Attrs)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 		}
 	}
 
 	if n.Type.Name == NodeVariable {
 		err := validateVariableAttrs(n.Attrs)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 		}
 	}
 
-	if err := validateNodeMarks(n.Marks); err != nil {
-		return err
+	err = validateNodeMarks(n.Marks)
+	if err != nil {
+		return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 	}
 
 	for _, child := range n.Content.Content {
-		if err := validateNode(child); err != nil {
-			return err
+		err = validateNode(child)
+		if err != nil {
+			return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 		}
 	}
 
@@ -181,7 +184,7 @@ func validateNodeMarks(marks []pm.Mark) error {
 		if mark.Type.Name == MarkLink {
 			err := validateLinkMark(mark)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentMark, err)
 			}
 		}
 	}
@@ -192,7 +195,7 @@ func validateNodeMarks(marks []pm.Mark) error {
 func validateHeadingLevel(attrs map[string]any) error {
 	v, ok := attrs["level"]
 	if !ok {
-		return fmt.Errorf("%w: heading requires level attr", internal.ErrInvalidDocumentHeading)
+		return fmt.Errorf("%w: heading requires level attribute", internal.ErrInvalidDocumentHeading)
 	}
 
 	level := toInt(v)
@@ -206,7 +209,7 @@ func validateHeadingLevel(attrs map[string]any) error {
 func validateVariableAttrs(attrs map[string]any) error {
 	name, _ := attrs["name"].(string)
 	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("%w: variable requires name attr", internal.ErrInvalidDocumentNode)
+		return fmt.Errorf("%w: variable requires name attribute", internal.ErrInvalidDocumentVariableAttrs)
 	}
 	return nil
 }
@@ -230,14 +233,14 @@ func validateLinkMark(m pm.Mark) error {
 	target, _ := m.Attrs["target"].(string)
 
 	if href == "" {
-		return fmt.Errorf("%w: link href required", internal.ErrInvalidDocumentLink)
+		return fmt.Errorf("%w: link href required", internal.ErrInvalidDocumentMark)
 	}
 
 	if isHashHref(href) {
 		// Fragment-only hrefs are useful for in-document navigation (e.g. TOC links).
 		// These should not open new tabs.
 		if target != "" {
-			return fmt.Errorf("%w: hash links cannot set target", internal.ErrInvalidDocumentLink)
+			return fmt.Errorf("%w: hash links cannot set target", internal.ErrInvalidDocumentMark)
 		}
 
 		return nil
