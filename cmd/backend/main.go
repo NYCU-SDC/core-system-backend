@@ -171,6 +171,7 @@ func main() {
 	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService, formService, userService)
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
+
 	setupService, err := setup.NewService(logger, dbPool, cfg.SetupPath, cfg.SetupData, unitService)
 	if err != nil {
 		logger.Fatal("Failed to load setup config", zap.Error(err))
