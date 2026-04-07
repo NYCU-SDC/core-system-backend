@@ -147,10 +147,10 @@ func TestUnitService_Create(t *testing.T) {
 
 			var result unit.Unit
 			if params.unitType == unit.TypeOrg {
-				result, err = unitService.CreateOrganizationWithCurrentUserID(ctx, params.name, params.description, params.slug, params.ownerID, params.metadata)
+				result, err = unitService.CreateOrganizationWithUserID(ctx, params.name, params.description, params.slug, params.ownerID, params.metadata)
 				require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			} else {
-				result, err = unitService.CreateUnit(ctx, params.name, params.description, params.parentUnitID, params.metadata)
+				result, err = unitService.CreateUnitWithUserID(ctx, params.name, params.description, params.parentUnitID, params.ownerID, params.metadata)
 				require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			}
 
