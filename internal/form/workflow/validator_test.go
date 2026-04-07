@@ -87,33 +87,18 @@ func TestActivate(t *testing.T) {
 			expectedErr:  true,
 		},
 		{
-			name:         "invalid payload shape (x not integer)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1.5, "y": 2}),
+			name:         "invalid payload shape (x out of float64 range)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1e1000"), "y": json.Number("2")}),
 			expectedErr:  true,
 		},
 		{
-			name:         "invalid payload shape (x float form 1.0)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1.0"), "y": json.Number("2")}),
+			name:         "invalid payload shape (y out of float64 range)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1"), "y": json.Number("1e1000")}),
 			expectedErr:  true,
 		},
 		{
-			name:         "invalid payload shape (x float form 1e0)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1e0"), "y": json.Number("2")}),
-			expectedErr:  true,
-		},
-		{
-			name:         "invalid payload shape (x out of int32 range)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 2147483648, "y": 2}),
-			expectedErr:  true,
-		},
-		{
-			name:         "invalid payload shape (y out of int32 range)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1, "y": -2147483649}),
-			expectedErr:  true,
-		},
-		{
-			name:         "valid payload shape (int32 boundaries)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 2147483647, "y": -2147483648}),
+			name:         "valid payload shape (float64 max value)",
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1.7976931348623157e+308"), "y": json.Number("2")}),
 			expectedErr:  false,
 		},
 	}
@@ -673,13 +658,6 @@ func TestValidate(t *testing.T) {
 			name: "invalid workflow - invalid node payload shape (missing y)",
 			setup: func() ([]byte, QuestionStore) {
 				return createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1}), nil
-			},
-			expectedErr: true,
-		},
-		{
-			name: "invalid workflow - invalid node payload shape (x not integer)",
-			setup: func() ([]byte, QuestionStore) {
-				return createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1.5, "y": 2}), nil
 			},
 			expectedErr: true,
 		},

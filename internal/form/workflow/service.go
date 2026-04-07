@@ -38,8 +38,8 @@ type NodePayload struct {
 	// Use pointers so `validate:"required"` can distinguish between:
 	// - field missing/null => nil pointer (invalid)
 	// - valid value 0 => non-nil pointer with value 0 (valid)
-	X *int `json:"x" validate:"required"`
-	Y *int `json:"y" validate:"required"`
+	X *float64 `json:"x" validate:"required"`
+	Y *float64 `json:"y" validate:"required"`
 }
 
 type Service struct {
@@ -189,7 +189,7 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		span.RecordError(err)
 		return CreateNodeRow{}, err
 	}
-	if *payload.X < math.MinInt32 || *payload.X > math.MaxInt32 || *payload.Y < math.MinInt32 || *payload.Y > math.MaxInt32 {
+	if *payload.X > math.MaxFloat64 || *payload.Y > math.MaxFloat64 {
 		err := fmt.Errorf("%w: payload.x and payload.y must be int32", internal.ErrWorkflowNodePayloadInvalid)
 		span.RecordError(err)
 		return CreateNodeRow{}, err
@@ -199,8 +199,8 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		FormID:     formID,
 		LastEditor: userID,
 		Type:       nodeType,
-		PayloadX:   int32(*payload.X),
-		PayloadY:   int32(*payload.Y),
+		PayloadX:   float64(*payload.X),
+		PayloadY:   float64(*payload.Y),
 	})
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "workflow", "formId", formID.String(), logger, "create node")

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 
@@ -330,20 +331,8 @@ func payloadCoordValidationErrors(
 		return payloadErrs
 	}
 
-	s := n.String()
-	if strings.ContainsAny(s, ".eE") {
-		payloadErrs = append(payloadErrs, fmt.Errorf(
-			"%w: %s '%s' has invalid payload: %s",
-			internal.ErrWorkflowNodePayloadInvalid,
-			nodeType,
-			nodeID,
-			invalidMsg,
-		))
-		return payloadErrs
-	}
-
-	i64, err := n.Int64()
-	if err != nil || i64 < -2147483648 || i64 > 2147483647 {
+	f64, err := n.Float64()
+	if err != nil || f64 > math.MaxFloat64 {
 		payloadErrs = append(payloadErrs, fmt.Errorf(
 			"%w: %s '%s' has invalid payload: %s",
 			internal.ErrWorkflowNodePayloadInvalid,
@@ -378,8 +367,8 @@ func validatePayloadField(node map[string]interface{}, nodeType string, nodeID s
 		return fmt.Errorf("%w: %s '%s' has invalid payload: payload must be a JSON object", internal.ErrWorkflowNodePayloadInvalid, nodeType, nodeID)
 	}
 
-	payloadErrs := payloadCoordValidationErrors(payloadObj, "x", nodeType, nodeID, "missing payload.x", "payload.x must be an int32")
-	payloadErrs = append(payloadErrs, payloadCoordValidationErrors(payloadObj, "y", nodeType, nodeID, "missing payload.y", "payload.y must be an int32")...)
+	payloadErrs := payloadCoordValidationErrors(payloadObj, "x", nodeType, nodeID, "missing payload.x", "payload.x must be an float64")
+	payloadErrs = append(payloadErrs, payloadCoordValidationErrors(payloadObj, "y", nodeType, nodeID, "missing payload.y", "payload.y must be an float64")...)
 
 	if len(payloadErrs) > 0 {
 		return errors.Join(payloadErrs...)

@@ -202,8 +202,8 @@ new_node AS (
         'label', 'New ' || initcap($3::text),
         'type', $3::node_type,
         'payload', jsonb_build_object(
-            'x', COALESCE($4::int, 0),
-            'y', COALESCE($5::int, 0)
+            'x', COALESCE($4::float, 0),
+            'y', COALESCE($5::float, 0)
         )
     ) AS node
     FROM node_id
@@ -244,8 +244,8 @@ type CreateNodeParams struct {
 	FormID     uuid.UUID
 	LastEditor uuid.UUID
 	Type       NodeType
-	PayloadX   int32
-	PayloadY   int32
+	PayloadX   float64
+	PayloadY   float64
 }
 
 type CreateNodeRow struct {
