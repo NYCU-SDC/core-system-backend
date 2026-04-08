@@ -33,11 +33,11 @@ type JWTIssuer interface {
 	New(ctx context.Context, user user.User) (string, error)
 	NewState(ctx context.Context, service, environment, callbackURL, redirectURL string) (string, error)
 	NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string) (string, error)
-	NewLinkToken(ctx context.Context, provider, providerID, existingProvider, existingProviderID, userID string) (string, error)
+	NewLinkToken(ctx context.Context, provider, providerID, existingProvider, existingProviderID, redirectURL, userID string) (string, error)
 	Parse(ctx context.Context, tokenString string) (user.User, error)
 	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
 	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
-	ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, existingProvider, existingProviderID string, userID uuid.UUID, err error)
+	ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, existingProvider, existingProviderID, redirectURL string, userID uuid.UUID, err error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
 }
@@ -289,7 +289,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 	// Do not issue access tokens yet; set a linking cookie and
 	// redirect to the binding confirmation page.
 	if result.ExistingProvider != "" {
-		linkToken, err := h.jwtIssuer.NewLinkToken(traceCtx, auth.Provider, auth.ProviderID, result.ExistingProvider, result.ExistingProviderID, result.UserID.String())
+		linkToken, err := h.jwtIssuer.NewLinkToken(traceCtx, auth.Provider, auth.ProviderID, result.ExistingProvider, result.ExistingProviderID, redirectTo, result.UserID.String())
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
 			return
@@ -535,7 +535,7 @@ func (h *Handler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, providerID, existingProvider, existingProviderID, userID, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
+	provider, providerID, existingProvider, existingProviderID, redirectURL, userID, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
 		return
@@ -558,7 +558,15 @@ func (h *Handler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 
 	h.setAccessAndRefreshCookies(w, baseURL.Host, accessTokenID, refreshTokenID)
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	if redirectURL == "" {
+		if h.environment == "snapshot" || h.environment == "no-env" {
+			redirectURL = "/api/users/me"
+		} else {
+			redirectURL = "/"
+		}
+	}
+
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // LinkAccountAbort aborts the merge process and logout user
@@ -574,9 +582,35 @@ func (h *Handler) LinkAccountAbort(w http.ResponseWriter, r *http.Request) {
 	}
 	domain := baseURL.Host
 
+	linkTokenCookie, err := r.Cookie(LinkTokenCookieName)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrMissingAuthHeader, logger)
+		return
+	}
+
+	linkTokenStr := linkTokenCookie.Value
+	if linkTokenStr == "" {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrMissingAuthHeader, logger)
+		return
+	}
+
+	_, _, _, _, redirectURL, _, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
+		return
+	}
+
 	h.clearLinkCookie(w, domain)
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	if redirectURL == "" {
+		if h.environment == "snapshot" || h.environment == "no-env" {
+			redirectURL = "/api/users/me"
+		} else {
+			redirectURL = "/"
+		}
+	}
+
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 // setAccessAndRefreshCookies sets the access/refresh cookies with HTTP-only and secure flags
