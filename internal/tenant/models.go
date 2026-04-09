@@ -514,6 +514,15 @@ type FormCover struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
+type FormHighlight struct {
+	ID           uuid.UUID
+	FormID       uuid.UUID
+	QuestionID   uuid.UUID
+	DisplayTitle pgtype.Text
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
 type FormResponse struct {
 	ID          uuid.UUID
 	FormID      uuid.UUID
