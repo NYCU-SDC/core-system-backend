@@ -155,7 +155,7 @@ var (
 	ErrInvalidDocumentTooLarge      = errors.New("rich text exceeds maximum size")
 	ErrInvalidDocumentMarshal       = errors.New("failed to canonicalize rich text JSON")
 	ErrInvalidDocumentRender        = errors.New("cannot render rich text node")
-  
+
 	// Internal Handler Errors
 	ErrFailedToGetSlugFromContext = errors.New("failed to get org slug from context")
 )
@@ -360,7 +360,7 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid offset parameter")
 	case errors.Is(err, ErrInvalidFileType):
 		return problem.NewValidateProblem("file type is not allowed")
-    
+
 	// Markdown document errors (ProseMirror JSON validation and rendering).
 	case errors.Is(err, ErrInvalidDocumentJSON):
 		return problem.NewValidateProblem("malformed rich text JSON")
@@ -381,7 +381,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrInvalidDocumentVariableAttrs):
 		return problem.NewValidateProblem("invalid variable attributes in rich text")
 	case errors.Is(err, ErrInvalidDocumentTooLarge):
-		return problem.NewValidateProblem("rich text exceeds maximum size (max 64KB)")
+		return problem.NewValidateProblem("rich text exceeds size limits")
 
 	// Internal Handler Errors
 	case errors.Is(err, ErrFailedToGetSlugFromContext):

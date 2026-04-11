@@ -1,10 +1,14 @@
 package markdown
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"net/mail"
 	"net/url"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"NYCU-SDC/core-system-backend/internal"
 
@@ -130,30 +134,65 @@ var Schema = pm.Must(pm.NewSchema(pm.SchemaSpec{
 	},
 }))
 
+type validationState struct {
+	nodeCount int
+	textRunes int
+}
+
+// validateDocument validates the doc tree, aggregate limits, and field rules.
+func validateDocument(root pm.Node) error {
+	st := &validationState{}
+	return validateNode(st, root, 1)
+}
+
 // validateNode recursively validates a karitham Node against our schema rules.
 // Schema-level unknown types are already caught during JSON unmarshal.
-// This function enforces content expressions, heading level range, and link mark attr constraints.
-func validateNode(n pm.Node) error {
+// This function enforces content expressions, heading level range, link mark attr constraints,
+// and document size limits.
+func validateNode(st *validationState, n pm.Node, depth int) error {
+	err := validateDocumentDepthExceeded(depth)
+	if err != nil {
+		return err
+	}
+
+	st.nodeCount++
+	err = validateDocumentNodeCountExceeded(st.nodeCount)
+	if err != nil {
+		return err
+	}
+
 	// Leaf nodes (text, hard_break, horizontal_rule, variable) carry no children —
 	// their ContentMatch is the zero value with ValidEnd=false, so calling
 	// CheckContent on them would always error. Validate their attrs (if any) and marks.
 	if n.IsLeaf() {
+		if n.Type.Name == NodeText {
+			err = validateTextLeaf(st, n.Text)
+			if err != nil {
+				return err
+			}
+		}
 		if n.Type.Name == NodeVariable {
-			err := validateVariableAttrs(n.Attrs)
+			err = validateVariableAttrs(n.Attrs)
 			if err != nil {
 				return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 			}
 		}
-		return validateNodeMarks(n.Marks)
+
+		err = validateNodeMarks(n.Marks)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 
-	err := n.Type.CheckContent(n.Content)
+	err = n.Type.CheckContent(n.Content)
 	if err != nil {
 		return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 	}
 
 	if n.Type.Name == NodeHeading {
-		err := validateHeadingLevel(n.Attrs)
+		err = validateHeadingLevel(n.Attrs)
 		if err != nil {
 			return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 		}
@@ -165,15 +204,38 @@ func validateNode(n pm.Node) error {
 	}
 
 	for _, child := range n.Content.Content {
-		err = validateNode(child)
+		err = validateNode(st, child, depth+1)
 		if err != nil {
-			return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
+			return wrapValidateNodeChildError(err)
 		}
 	}
 
 	return nil
 }
 
+// validateTextLeaf validates a text node's UTF-8 runes against size limits.
+func validateTextLeaf(st *validationState, text string) error {
+	err := validateTextContainsNUL(text)
+	if err != nil {
+		return err
+	}
+
+	r := utf8.RuneCountInString(text)
+	err = validateTextLeafTooLong(r)
+	if err != nil {
+		return err
+	}
+
+	err = validateTotalTextBudgetExceeded(st.textRunes, r)
+	if err != nil {
+		return err
+	}
+	st.textRunes += r
+
+	return nil
+}
+
+// validateNodeMarks validates a node marks.
 func validateNodeMarks(marks []pm.Mark) error {
 	for _, mark := range marks {
 		switch mark.Type.Name {
@@ -192,59 +254,74 @@ func validateNodeMarks(marks []pm.Mark) error {
 	return nil
 }
 
+// validateHeadingLevel validates a heading level.
 func validateHeadingLevel(attrs map[string]any) error {
 	v, ok := attrs["level"]
 	if !ok {
-		return fmt.Errorf("%w: heading requires level attribute", internal.ErrInvalidDocumentHeading)
+		return fmt.Errorf("%w: heading level required", internal.ErrInvalidDocumentHeading)
 	}
 
-	level, ok := toInt(v)
-	if !ok {
-		return fmt.Errorf("%w: heading level must be an integer", internal.ErrInvalidDocumentHeading)
-	}
-	if level < 1 || level > 6 {
-		return fmt.Errorf("%w: heading level must be 1-6, got %d", internal.ErrInvalidDocumentHeading, level)
-	}
-
-	return nil
+	_, err := parseHeadingLevel(v)
+	return err
 }
 
+// validateVariableAttrs validates a variable attrs.
 func validateVariableAttrs(attrs map[string]any) error {
 	name, _ := attrs["name"].(string)
-	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("%w: variable requires name attribute", internal.ErrInvalidDocumentVariableAttrs)
+	if name == "" {
+		return fmt.Errorf("%w: variable name required", internal.ErrInvalidDocumentVariableAttrs)
 	}
+
+	err := validateVariableNameContainsNUL(name)
+	if err != nil {
+		return err
+	}
+
+	err = validateVariableNameTooLong(name)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range name {
+		err = validateVariableNameRuneInvalid(r)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
-// toInt converts a JSON-decoded number (float64 or int) to int, rejecting non-integers.
-func toInt(v any) (int, bool) {
-	switch x := v.(type) {
-	case float64:
-		if x != math.Trunc(x) {
-			return 0, false
-		}
-		return int(x), true
-	case int:
-		return x, true
-	case int64:
-		return int(x), true
-	default:
-		return 0, false
-	}
-}
-
+// validateLinkMark validates a link mark.
 func validateLinkMark(m pm.Mark) error {
 	href, _ := m.Attrs["href"].(string)
 	target, _ := m.Attrs["target"].(string)
+	title, _ := m.Attrs["title"].(string)
+
+	href = strings.TrimSpace(href)
+	target = strings.TrimSpace(target)
+	title = strings.TrimSpace(title)
 
 	if href == "" {
 		return fmt.Errorf("%w: link href required", internal.ErrInvalidDocumentLink)
 	}
 
+	err := validateLinkContainsNUL(href, title)
+	if err != nil {
+		return err
+	}
+
+	err = validateLinkHrefTooLong(href)
+	if err != nil {
+		return err
+	}
+
+	err = validateLinkTitleTooLong(title)
+	if err != nil {
+		return err
+	}
+
 	if isHashHref(href) {
-		// Fragment-only hrefs are useful for in-document navigation (e.g. TOC links).
-		// These should not open new tabs.
 		if target != "" {
 			return fmt.Errorf("%w: hash links cannot set target", internal.ErrInvalidDocumentLink)
 		}
@@ -253,49 +330,273 @@ func validateLinkMark(m pm.Mark) error {
 	}
 
 	if isMailtoHref(href) {
-		return validateMailtoLink(href, target)
+		err = validateMailtoLink(href, target)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 
-	return validateWebLink(href, target)
+	err = validateWebLink(href, target)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
+// isHashHref reports whether href is a fragment-only link (starts with "#") after trimming in validateLinkMark.
 func isHashHref(href string) bool {
 	return strings.HasPrefix(href, "#")
 }
 
+// isMailtoHref reports whether href begins with the mailto: prefix, case-insensitive.
 func isMailtoHref(href string) bool {
 	return len(href) >= len(schemeMailtoPrefix) &&
 		strings.EqualFold(href[:len(schemeMailtoPrefix)], schemeMailtoPrefix)
 }
 
+// validateMailtoLink validates a mailto: link href and target.
 func validateMailtoLink(href, target string) error {
-	addr := href[len(schemeMailtoPrefix):]
-	if !strings.Contains(addr, "@") {
+	u, parseErr := url.Parse(href)
+	if parseErr != nil || u == nil {
 		return fmt.Errorf("%w: invalid mailto link", internal.ErrInvalidDocumentLink)
 	}
 
-	return validateLinkTarget(target)
-}
-
-func validateWebLink(href, target string) error {
-	u, err := url.Parse(href)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return fmt.Errorf("%w: link href must be absolute URL", internal.ErrInvalidDocumentLink)
+	if !isMailtoScheme(u.Scheme) {
+		return fmt.Errorf("%w: invalid mailto link", internal.ErrInvalidDocumentLink)
 	}
 
-	switch strings.ToLower(u.Scheme) {
-	case schemeHTTP, schemeHTTPS:
-	default:
-		return fmt.Errorf("%w: link scheme not allowed", internal.ErrInvalidDocumentLink)
+	addrPart := u.Opaque
+	if addrPart == "" {
+		addrPart = strings.TrimPrefix(u.Path, "/")
 	}
 
-	return validateLinkTarget(target)
-}
+	idx := strings.IndexByte(addrPart, '?')
+	if idx >= 0 {
+		addrPart = addrPart[:idx]
+	}
 
-func validateLinkTarget(target string) error {
-	if target != "" && target != LinkTargetBlank {
-		return fmt.Errorf("%w: link target not allowed", internal.ErrInvalidDocumentLink)
+	// validate mailto address part is not empty
+	addrPart = strings.TrimSpace(addrPart)
+	if addrPart == "" {
+		return fmt.Errorf("%w: invalid mailto link", internal.ErrInvalidDocumentLink)
+	}
+
+	// validate mailto address list is invalid
+	_, err := mail.ParseAddressList(addrPart)
+	if err != nil {
+		return fmt.Errorf("%w: invalid mailto link", internal.ErrInvalidDocumentLink)
+	}
+
+	// validate link target is disallowed
+	err = validateLinkTargetDisallowed(target)
+	if err != nil {
+		return err
 	}
 
 	return nil
+}
+
+// validateWebLink validates a web link href and target.
+func validateWebLink(href, target string) error {
+	u, parseErr := url.Parse(href)
+	if parseErr != nil || u == nil {
+		return fmt.Errorf("%w: invalid web link", internal.ErrInvalidDocumentLink)
+	}
+
+	err := validateWebLinkNotAbsoluteURL(u)
+	if err != nil {
+		return err
+	}
+
+	err = validateWebURLSchemeDisallowed(u.Scheme)
+	if err != nil {
+		return err
+	}
+
+	err = validateLinkTargetDisallowed(target)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateTextContainsNUL validates a text node contains NUL.
+func validateTextContainsNUL(s string) error {
+	if !strings.ContainsRune(s, '\x00') {
+		return nil
+	}
+
+	return fmt.Errorf("%w: text contains NUL", internal.ErrInvalidDocumentNode)
+}
+
+// validateVariableNameContainsNUL validates a variable name contains NUL.
+func validateVariableNameContainsNUL(s string) error {
+	if !strings.ContainsRune(s, '\x00') {
+		return nil
+	}
+
+	return fmt.Errorf("%w: variable name contains NUL", internal.ErrInvalidDocumentVariableAttrs)
+}
+
+// validateLinkContainsNUL validates a link href and title contains NUL.
+func validateLinkContainsNUL(href, title string) error {
+	if !strings.ContainsRune(href, '\x00') && !strings.ContainsRune(title, '\x00') {
+		return nil
+	}
+
+	return fmt.Errorf("%w: link contains NUL", internal.ErrInvalidDocumentLink)
+}
+
+// validateVariableNameTooLong validates a variable name is too long.
+func validateVariableNameTooLong(name string) error {
+	if utf8.RuneCountInString(name) <= MaxVariableNameRunes {
+		return nil
+	}
+
+	return fmt.Errorf("%w: variable name too long", internal.ErrInvalidDocumentVariableAttrs)
+}
+
+// validateLinkHrefTooLong validates a link href is too long.
+func validateLinkHrefTooLong(href string) error {
+	if utf8.RuneCountInString(href) <= MaxLinkHrefRunes {
+		return nil
+	}
+	return fmt.Errorf("%w: link href too long", internal.ErrInvalidDocumentLink)
+}
+
+// validateLinkTitleTooLong validates a link title is too long.
+func validateLinkTitleTooLong(title string) error {
+	if utf8.RuneCountInString(title) <= MaxLinkTitleRunes {
+		return nil
+	}
+
+	return fmt.Errorf("%w: link title too long", internal.ErrInvalidDocumentLink)
+}
+
+// validateWebLinkNotAbsoluteURL validates a web link is not an absolute URL.
+func validateWebLinkNotAbsoluteURL(u *url.URL) error {
+	if u.Scheme != "" && u.Host != "" {
+		return nil
+	}
+
+	return fmt.Errorf("%w: link href must be absolute URL", internal.ErrInvalidDocumentLink)
+}
+
+// parseHeadingLevel parses attrs["level"] from JSON (float64, int, or int64) into a valid heading level 1-6.
+// It rejects non-numeric types, NaN/Inf, and non-integer floats.
+func parseHeadingLevel(v any) (int, error) {
+	inRange := func(level int) bool { return level >= 1 && level <= 6 }
+
+	switch x := v.(type) {
+	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			return 0, fmt.Errorf("%w: heading level must be an integer 1-6", internal.ErrInvalidDocumentHeading)
+		}
+		if x != math.Trunc(x) {
+			return 0, fmt.Errorf("%w: heading level must be an integer 1-6", internal.ErrInvalidDocumentHeading)
+		}
+		if !inRange(int(x)) {
+			return 0, fmt.Errorf("%w: heading level must be 1-6, got %d", internal.ErrInvalidDocumentHeading, int(x))
+		}
+		return int(x), nil
+	case int:
+		if !inRange(x) {
+			return 0, fmt.Errorf("%w: heading level must be 1-6, got %d", internal.ErrInvalidDocumentHeading, x)
+		}
+		return x, nil
+	case int64:
+		level := int(x)
+		if level < 1 || level > 6 {
+			return 0, fmt.Errorf("%w: heading level must be 1-6, got %d", internal.ErrInvalidDocumentHeading, level)
+		}
+		return level, nil
+	default:
+		return 0, fmt.Errorf("%w: heading level must be a number", internal.ErrInvalidDocumentHeading)
+	}
+}
+
+// validateVariableNameRuneInvalid validates a variable name rune is invalid.
+func validateVariableNameRuneInvalid(r rune) error {
+	if unicode.IsControl(r) || unicode.IsSpace(r) {
+		return fmt.Errorf("%w: variable name contains invalid characters", internal.ErrInvalidDocumentVariableAttrs)
+	}
+
+	return nil
+}
+
+// validateWebURLSchemeDisallowed validates a web URL scheme is disallowed.
+func validateWebURLSchemeDisallowed(scheme string) error {
+	s := strings.ToLower(scheme)
+	if s == schemeHTTP || s == schemeHTTPS {
+		return nil
+	}
+
+	return fmt.Errorf("%w: link scheme not allowed", internal.ErrInvalidDocumentLink)
+}
+
+// isMailtoScheme reports whether scheme is a non-empty mailto scheme, case-insensitive.
+func isMailtoScheme(scheme string) bool {
+	if scheme == "" {
+		return false
+	}
+
+	return strings.EqualFold(scheme, strings.TrimSuffix(schemeMailtoPrefix, ":"))
+}
+
+// validateLinkTargetDisallowed validates a link target is disallowed.
+func validateLinkTargetDisallowed(target string) error {
+	if target == "" || target == LinkTargetBlank {
+		return nil
+	}
+
+	return fmt.Errorf("%w: link target not allowed", internal.ErrInvalidDocumentLink)
+}
+
+// validateDocumentDepthExceeded validates a document depth is exceeded.
+func validateDocumentDepthExceeded(depth int) error {
+	if depth <= MaxRichTextDepth {
+		return nil
+	}
+
+	return fmt.Errorf("%w: document tree too deep", internal.ErrInvalidDocumentTooLarge)
+}
+
+// validateDocumentNodeCountExceeded validates a document node count is exceeded.
+func validateDocumentNodeCountExceeded(count int) error {
+	if count <= MaxRichTextNodeCount {
+		return nil
+	}
+
+	return fmt.Errorf("%w: too many nodes", internal.ErrInvalidDocumentTooLarge)
+}
+
+// validateTextLeafTooLong validates a text leaf is too long.
+func validateTextLeafTooLong(runeCount int) error {
+	if runeCount <= MaxRichTextLeafRunes {
+		return nil
+	}
+
+	return fmt.Errorf("%w: text node too long", internal.ErrInvalidDocumentTooLarge)
+}
+
+// validateTotalTextBudgetExceeded returns ErrInvalidDocumentTooLarge if currentTotal+additional exceeds MaxRichTextTotalRunes; otherwise nil.
+func validateTotalTextBudgetExceeded(currentTotal, additional int) error {
+	if currentTotal+additional <= MaxRichTextTotalRunes {
+		return nil
+	}
+
+	return fmt.Errorf("%w: total text too long", internal.ErrInvalidDocumentTooLarge)
+}
+
+// wrapValidateNodeChildError preserves ErrInvalidDocumentTooLarge from child validation; otherwise wraps with ErrInvalidDocumentNode.
+func wrapValidateNodeChildError(err error) error {
+	if errors.Is(err, internal.ErrInvalidDocumentTooLarge) {
+		return err
+	}
+
+	return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
 }

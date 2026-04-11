@@ -25,20 +25,11 @@ type Service struct {
 	tracer trace.Tracer
 }
 
-const maxRichTextBytes = 64 * 1024
-
 func NewService(logger *zap.Logger) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("markdown/service"),
 	}
-}
-
-func checkRichTextSize(raw []byte) error {
-	if len(raw) > maxRichTextBytes {
-		return internal.ErrInvalidDocumentTooLarge
-	}
-	return nil
 }
 
 // ProcessAPIText validates rich text from HTTP APIs.
@@ -54,9 +45,8 @@ func (s *Service) ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON
 		return s.ProcessProseMirrorJSON(traceCtx, raw)
 	}
 
-	err = checkRichTextSize(raw)
-	if err != nil {
-		logger.Warn("rich text payload too large", zap.Error(err))
+	if err := rejectIfRichTextJSONTooLarge(raw); err != nil {
+		logger.Warn("rich text JSON payload too large", zap.Error(err))
 		span.RecordError(err)
 		return nil, "", err
 	}
@@ -84,13 +74,13 @@ func (s *Service) ProcessProseMirrorJSON(ctx context.Context, raw []byte) (canon
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
 		return []byte(EmptyDocumentJSON), "", nil
 	}
 
-	err = checkRichTextSize(bytes.TrimSpace(raw))
-	if err != nil {
-		logger.Warn("rich text payload too large", zap.Error(err))
+	if err := rejectIfRichTextJSONTooLarge(raw); err != nil {
+		logger.Warn("rich text JSON payload too large", zap.Error(err))
 		span.RecordError(err)
 		return nil, "", err
 	}
@@ -119,7 +109,7 @@ func (s *Service) ProcessProseMirrorJSON(ctx context.Context, raw []byte) (canon
 		return nil, "", wrapped
 	}
 
-	err = validateNode(root)
+	err = validateDocument(root)
 	if err != nil {
 		logger.Error("rich text schema validation failed", zap.Error(err))
 		span.RecordError(err)
@@ -246,15 +236,14 @@ func (s *Service) PlainText(ctx context.Context, raw []byte) (string, error) {
 		return "", nil
 	}
 
-	err := checkRichTextSize(trimmed)
-	if err != nil {
-		logger.Warn("rich text payload too large", zap.Error(err))
+	if err := rejectIfRichTextJSONTooLarge(trimmed); err != nil {
+		logger.Warn("rich text JSON payload too large", zap.Error(err))
 		span.RecordError(err)
 		return "", err
 	}
 
 	var root pm.Node
-	err = json.Unmarshal(raw, &root)
+	err := json.Unmarshal(trimmed, &root)
 	if err != nil {
 		wrapped := wrapUnmarshalErr(err)
 		logger.Error("invalid rich text JSON", zap.Error(wrapped))
@@ -277,7 +266,7 @@ func (s *Service) PlainText(ctx context.Context, raw []byte) (string, error) {
 		return "", wrapped
 	}
 
-	err = validateNode(root)
+	err = validateDocument(root)
 	if err != nil {
 		logger.Error("rich text schema validation failed", zap.Error(err))
 		span.RecordError(err)
@@ -341,4 +330,12 @@ func wrapUnmarshalErr(err error) error {
 	}
 
 	return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
+}
+
+func rejectIfRichTextJSONTooLarge(raw []byte) error {
+	if len(raw) > MaxRichTextJSONBytes {
+		return fmt.Errorf("%w: JSON payload too large", internal.ErrInvalidDocumentTooLarge)
+	}
+
+	return nil
 }
