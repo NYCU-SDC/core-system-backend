@@ -354,6 +354,46 @@ func TestProcess(t *testing.T) {
 			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", MaxRichTextLeafRunes+1) + `"}]}]}`),
 			expectedErr: internal.ErrInvalidDocumentTooLarge,
 		},
+		{
+			name:        "rejects hash link with target",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"#section","target":"_blank"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects empty variable name",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"variable","attrs":{"name":""}}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentVariableAttrs,
+		},
+		{
+			name:        "rejects variable name over max runes",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"variable","attrs":{"name":"` + strings.Repeat("v", MaxVariableNameRunes+1) + `"}}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentVariableAttrs,
+		},
+		{
+			name:        "rejects NUL in variable name",
+			raw:         []byte("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"variable\",\"attrs\":{\"name\":\"x\\u0000y\"}}]}]}"),
+			expectedErr: internal.ErrInvalidDocumentVariableAttrs,
+		},
+		{
+			name:        "rejects NUL in link title",
+			raw:         []byte("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"marks\":[{\"type\":\"link\",\"attrs\":{\"href\":\"https://example.com\",\"title\":\"a\\u0000b\"}}],\"text\":\"x\"}]}]}"),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects javascript link scheme",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"javascript:alert(1)"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects web link without host",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"https://"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects heading level null",
+			raw:         []byte(`{"type":"doc","content":[{"type":"heading","attrs":{"level":null},"content":[{"type":"text","text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentHeading,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
