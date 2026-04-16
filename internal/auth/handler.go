@@ -37,7 +37,7 @@ type JWTIssuer interface {
 	Parse(ctx context.Context, tokenString string) (user.User, error)
 	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
 	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
-	ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, existingProvider, existingProviderID, redirectURL string, userID uuid.UUID, err error)
+	ParseLinkToken(ctx context.Context, tokenString string) (*jwt.LinkClaims, error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
 }
@@ -535,14 +535,20 @@ func (h *Handler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	provider, providerID, existingProvider, existingProviderID, redirectURL, userID, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
+	linkClaims, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
+		return
+	}
+
+	userID, err := uuid.Parse(linkClaims.UserID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
 		return
 	}
 
 	// Link the new provider to the existing account.
-	err = h.userStore.CreateAuth(traceCtx, userID, provider, providerID, existingProvider, existingProviderID)
+	err = h.userStore.CreateAuth(traceCtx, userID, linkClaims.Provider, linkClaims.ProviderID, linkClaims.ExistingProvider, linkClaims.ExistingProviderID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -558,7 +564,8 @@ func (h *Handler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 
 	h.setAccessAndRefreshCookies(w, baseURL.Host, accessTokenID, refreshTokenID)
 
-	if redirectURL == "" {
+	var redirectURL string
+	if linkClaims.RedirectURL == "" {
 		if h.environment == "snapshot" || h.environment == "no-env" {
 			redirectURL = "/api/users/me"
 		} else {
@@ -594,7 +601,7 @@ func (h *Handler) LinkAccountAbort(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _, _, _, redirectURL, _, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
+	linkClaims, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
 		return
@@ -602,7 +609,8 @@ func (h *Handler) LinkAccountAbort(w http.ResponseWriter, r *http.Request) {
 
 	h.clearLinkCookie(w, domain)
 
-	if redirectURL == "" {
+	var redirectURL string
+	if linkClaims.RedirectURL == "" {
 		if h.environment == "snapshot" || h.environment == "no-env" {
 			redirectURL = "/api/users/me"
 		} else {
