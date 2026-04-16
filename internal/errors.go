@@ -94,6 +94,7 @@ var (
 	ErrFormNotFound       = errors.New("form not found")
 	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
 	ErrFormDeadlinePassed = errors.New("form deadline has passed")
+	ErrArchivedForm       = errors.New("archived form should not accept new response")
 
 	// Question Errors
 	ErrQuestionNotFound           = errors.New("question not found")
@@ -250,6 +251,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("cover image exceeds maximum size (max 2MB)")
 	case errors.Is(err, ErrInvalidImageFormat):
 		return problem.NewValidateProblem("image format is invalid")
+	case errors.Is(err, ErrArchivedForm):
+		return problem.NewBadRequestProblem("archived form should not accept new response")
 
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):

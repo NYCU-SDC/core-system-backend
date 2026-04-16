@@ -2,6 +2,29 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT TRUE,
+    expiration_date TIMESTAMPTZ NOT NULL
+);CREATE TYPE db_strategy AS ENUM ('shared', 'isolated');
+
+CREATE TABLE IF NOT EXISTS tenants
+(
+    id UUID PRIMARY KEY REFERENCES units(id) ON DELETE CASCADE,
+    db_strategy db_strategy NOT NULL,
+    owner_id UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS slug_history
+(
+    id SERIAL PRIMARY KEY,
+    slug TEXT NOT NULL,
+    org_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at TIMESTAMPTZ DEFAULT null
+);CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TYPE unit_type AS ENUM ('organization', 'unit');
 
 CREATE TABLE IF NOT EXISTS units (
@@ -26,27 +49,29 @@ CREATE TABLE IF NOT EXISTS unit_members (
     role unit_role NOT NULL DEFAULT 'member',
     PRIMARY KEY (unit_id, member_id)
 );
--- Node type enum for workflow nodes
-CREATE TYPE node_type AS ENUM(
-    'section',
-    'end',
-    'start',
-    'condition'
+CREATE TABLE IF NOT EXISTS answers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    response_id UUID NOT NULL REFERENCES form_responses(id) ON DELETE CASCADE,
+    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    value JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(response_id, question_id)
+);
+CREATE TYPE response_progress AS ENUM (
+    'draft',
+    'submitted'
 );
 
-CREATE TABLE IF NOT EXISTS workflow_versions (
+CREATE TABLE IF NOT EXISTS form_responses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
-    last_editor UUID NOT NULL REFERENCES users(id),
-    is_active BOOLEAN NOT NULL DEFAULT false,
-    workflow JSONB NOT NULL DEFAULT '[]'::JSONB,
+    submitted_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    submitted_at TIMESTAMPTZ DEFAULT NULL,
+    progress response_progress NOT NULL DEFAULT 'draft',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE INDEX idx_workflow_versions_is_active ON workflow_versions(form_id, is_active) WHERE is_active = true;
-
-CREATE INDEX idx_workflow_versions_latest ON workflow_versions(form_id, updated_at DESC);
 CREATE TYPE status AS ENUM(
     'draft',
     'published',
@@ -99,15 +124,6 @@ CREATE TABLE IF NOT EXISTS sections (
 
 CREATE INDEX idx_sections_form_id ON sections(form_id);
 
-CREATE TABLE IF NOT EXISTS answers (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    response_id UUID NOT NULL REFERENCES form_responses(id) ON DELETE CASCADE,
-    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
-    value JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(response_id, question_id)
-);
 CREATE TYPE question_type AS ENUM(
     'short_text',
     'long_text',
@@ -136,81 +152,28 @@ CREATE TABLE IF NOT EXISTS questions(
     source_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);CREATE TYPE response_progress AS ENUM (
-    'draft',
-    'submitted'
+);-- Node type enum for workflow nodes
+CREATE TYPE node_type AS ENUM(
+    'section',
+    'end',
+    'start',
+    'condition'
 );
 
-CREATE TABLE IF NOT EXISTS form_responses (
+CREATE TABLE IF NOT EXISTS workflow_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
-    submitted_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    submitted_at TIMESTAMPTZ DEFAULT NULL,
-    progress response_progress NOT NULL DEFAULT 'draft',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TYPE db_strategy AS ENUM ('shared', 'isolated');
-
-CREATE TABLE IF NOT EXISTS tenants
-(
-    id UUID PRIMARY KEY REFERENCES units(id) ON DELETE CASCADE,
-    db_strategy db_strategy NOT NULL,
-    owner_id UUID REFERENCES users(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS slug_history
-(
-    id SERIAL PRIMARY KEY,
-    slug TEXT NOT NULL,
-    org_id UUID REFERENCES units(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    ended_at TIMESTAMPTZ DEFAULT null
-);CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255),
-    username VARCHAR(255) UNIQUE,
-    avatar_url VARCHAR(512),
-    role VARCHAR(255)[] NOT NULL DEFAULT '{"user"}',
-    is_onboarded BOOLEAN NOT NULL DEFAULT false,
+    last_editor UUID NOT NULL REFERENCES users(id),
+    is_active BOOLEAN NOT NULL DEFAULT false,
+    workflow JSONB NOT NULL DEFAULT '[]'::JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS auth (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    provider VARCHAR(255) NOT NULL,
-    provider_id VARCHAR(255) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(provider, provider_id)
-);
+CREATE INDEX idx_workflow_versions_is_active ON workflow_versions(form_id, is_active) WHERE is_active = true;
 
-CREATE TABLE IF NOT EXISTS user_emails (
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    value VARCHAR(255) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(user_id, value)
-);
-
-CREATE OR REPLACE VIEW users_with_emails AS
-SELECT 
-    u.id,
-    u.name,
-    u.username,
-    u.avatar_url,
-    u.role,
-    u.is_onboarded,
-    u.created_at,
-    u.updated_at,
-    COALESCE(array_agg(e.value) FILTER (WHERE e.value IS NOT NULL), ARRAY[]::text[]) as emails
-FROM users u
-LEFT JOIN user_emails e ON u.id = e.user_id
-GROUP BY u.id, u.name, u.username, u.avatar_url, u.role, u.is_onboarded, u.created_at, u.updated_at;CREATE TYPE content_type AS ENUM(
+CREATE INDEX idx_workflow_versions_latest ON workflow_versions(form_id, updated_at DESC);
+CREATE TYPE content_type AS ENUM(
     'text',
     'form'
 );
@@ -266,9 +229,46 @@ CREATE INDEX IF NOT EXISTS idx_file_attachments_file_id ON file_attachments(file
 CREATE INDEX IF NOT EXISTS idx_file_attachments_resource ON file_attachments(resource_type, resource_id);
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS refresh_tokens (
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255),
+    username VARCHAR(255) UNIQUE,
+    avatar_url VARCHAR(512),
+    role VARCHAR(255)[] NOT NULL DEFAULT '{"user"}',
+    is_onboarded BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS auth (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    is_active BOOLEAN DEFAULT TRUE,
-    expiration_date TIMESTAMPTZ NOT NULL
+    provider VARCHAR(255) NOT NULL,
+    provider_id VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(provider, provider_id)
 );
+
+CREATE TABLE IF NOT EXISTS user_emails (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    value VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, value)
+);
+
+CREATE OR REPLACE VIEW users_with_emails AS
+SELECT 
+    u.id,
+    u.name,
+    u.username,
+    u.avatar_url,
+    u.role,
+    u.is_onboarded,
+    u.created_at,
+    u.updated_at,
+    COALESCE(array_agg(e.value) FILTER (WHERE e.value IS NOT NULL), ARRAY[]::text[]) as emails
+FROM users u
+LEFT JOIN user_emails e ON u.id = e.user_id
+GROUP BY u.id, u.name, u.username, u.avatar_url, u.role, u.is_onboarded, u.created_at, u.updated_at;

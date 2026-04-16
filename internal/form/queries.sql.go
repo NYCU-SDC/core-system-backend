@@ -401,6 +401,19 @@ func (q *Queries) GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID
 	return form_id, err
 }
 
+const getStatus = `-- name: GetStatus :one
+SELECT status
+FROM forms
+WHERE id = $1
+`
+
+func (q *Queries) GetStatus(ctx context.Context, id uuid.UUID) (Status, error) {
+	row := q.db.QueryRow(ctx, getStatus, id)
+	var status Status
+	err := row.Scan(&status)
+	return status, err
+}
+
 const getUnitIDByID = `-- name: GetUnitIDByID :one
 SELECT unit_id
 FROM forms

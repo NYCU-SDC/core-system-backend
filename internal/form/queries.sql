@@ -166,6 +166,11 @@ WHERE f.unit_id = $1
 AND (f.status <> 'archived' OR sqlc.narg(include_archived)::boolean IS TRUE)
 ORDER BY f.updated_at DESC;
 
+-- name: GetStatus :one
+SELECT status
+FROM forms
+WHERE id = $1;
+
 -- name: SetStatus :one
 UPDATE forms
 SET status = $2, last_editor = $3, updated_at = now()

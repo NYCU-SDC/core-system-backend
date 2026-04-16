@@ -344,7 +344,8 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/cover", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(formHandler.UploadCoverImageHandler))
 
 	// Form Operations
-	mux.Handle("POST /api/forms/{formId}/archive", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(formHandler.ArchiveHandler))
+	mux.Handle("POST /api/forms/{formId}/unarchive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.UnarchiveHandler))
+	mux.Handle("POST /api/forms/{formId}/archive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.ArchiveHandler))
 	mux.Handle("POST /api/forms/{formId}/publish", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(publishHandler.PublishForm))
 
 	// Section Management

@@ -27,6 +27,7 @@ type Querier interface {
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error)
 	List(ctx context.Context, arg ListParams) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
+	GetStatus(ctx context.Context, id uuid.UUID) (Status, error)
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
@@ -492,4 +493,23 @@ func (s *Service) GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID
 	}
 
 	return formID, nil
+}
+
+// Archived check if the form is archived, which should not allow any response
+func (s *Service) Archived(ctx context.Context, id uuid.UUID) error {
+	ctx, span := s.tracer.Start(ctx, "Archived")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	status, err := s.queries.GetStatus(ctx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get status")
+		return err
+	}
+
+	if status == StatusArchived {
+		return internal.ErrArchivedForm
+	}
+
+	return nil
 }
