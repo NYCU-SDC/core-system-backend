@@ -496,7 +496,7 @@ func (s *Service) GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID
 }
 
 // Archived check if the form is archived, which should not allow any response
-func (s *Service) Archived(ctx context.Context, id uuid.UUID) error {
+func (s *Service) Archived(ctx context.Context, id uuid.UUID) (bool, error) {
 	ctx, span := s.tracer.Start(ctx, "Archived")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -504,12 +504,8 @@ func (s *Service) Archived(ctx context.Context, id uuid.UUID) error {
 	status, err := s.queries.GetStatus(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get status")
-		return err
+		return false, err
 	}
 
-	if status == StatusArchived {
-		return internal.ErrArchivedForm
-	}
-
-	return nil
+	return status == StatusArchived, nil
 }

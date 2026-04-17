@@ -41,11 +41,13 @@ var (
 	ErrNotFound             = errors.New("not found")
 
 	// Resolver Error
-	ErrMissingSlug      = errors.New("slug not provided")
-	ErrMissingSectionID = errors.New("missing section id")
-	ErrInvalidSectionID = errors.New("invalid section id")
-	ErrMissingFormID    = errors.New("missing form id")
-	ErrInvalidFormID    = errors.New("invalid form id")
+	ErrMissingSlug       = errors.New("slug not provided")
+	ErrMissingSectionID  = errors.New("missing section id")
+	ErrInvalidSectionID  = errors.New("invalid section id")
+	ErrMissingFormID     = errors.New("missing form id")
+	ErrInvalidFormID     = errors.New("invalid form id")
+	ErrMissingResponseID = errors.New("missing response id")
+	ErrInvalidResponseID = errors.New("invalid response id")
 
 	// JWT Authentication Errors
 	ErrMissingAuthHeader       = errors.New("missing access token")
