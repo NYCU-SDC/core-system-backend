@@ -347,19 +347,19 @@ func TestPlainText(t *testing.T) {
 		{
 			name:        "multiple blocks concatenated",
 			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"p1"}]},{"type":"paragraph","content":[{"type":"text","text":"p2"}]}]}`),
-			expected:    "p1p2",
+			expected:    "p1\np2",
 			expectedErr: nil,
 		},
 		{
 			name:        "heading and list",
 			raw:         []byte(`{"type":"doc","content":[{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"H"}]},{"type":"bullet_list","content":[{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"i"}]}]}]}]}`),
-			expected:    "Hi",
+			expected:    "H\ni",
 			expectedErr: nil,
 		},
 		{
-			name:        "hard break is not a visible character",
+			name:        "hard break becomes newline",
 			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"a"},{"type":"hard_break"},{"type":"text","text":"b"}]}]}`),
-			expected:    "ab",
+			expected:    "a\nb",
 			expectedErr: nil,
 		},
 		{

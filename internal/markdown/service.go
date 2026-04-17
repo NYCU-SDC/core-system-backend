@@ -223,6 +223,8 @@ func (s *Service) PlainText(ctx context.Context, raw []byte) (string, error) {
 		return "", err
 	}
 
+	root = s.normalizeDoc(traceCtx, root)
+
 	err = validateNode(root)
 	if err != nil {
 		logger.Error("rich text schema validation failed", zap.Error(err))

@@ -16,14 +16,41 @@ import (
 )
 
 // collectText recursively extracts plain text from a karitham node tree.
+//
+// It is intentionally minimal but should preserve user-visible separation:
+// - hard breaks become "\n"
+// - block siblings are separated by "\n"
 func collectText(n pm.Node, b *strings.Builder) {
 	if n.Type.Name == NodeText {
 		b.WriteString(n.Text)
 		return
 	}
 
-	for _, child := range n.Content.Content {
+	if n.Type.Name == NodeHardBreak {
+		b.WriteByte('\n')
+		return
+	}
+
+	children := n.Content.Content
+	if len(children) == 0 {
+		return
+	}
+
+	// Insert newlines between block-ish siblings to avoid "p1p2" and similar joins.
+	for i, child := range children {
+		if i > 0 && isBlockLike(child) && b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") {
+			b.WriteByte('\n')
+		}
 		collectText(child, b)
+	}
+}
+
+func isBlockLike(n pm.Node) bool {
+	switch n.Type.Name {
+	case NodeParagraph, NodeHeading, NodeBlockquote, NodeListItem, NodeBulletList, NodeOrderedList, NodeCodeBlock:
+		return true
+	default:
+		return false
 	}
 }
 
