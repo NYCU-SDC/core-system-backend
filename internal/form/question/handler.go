@@ -69,10 +69,7 @@ type SectionResponse struct {
 }
 
 func ToSection(section Section) SectionPayload {
-	desc := json.RawMessage(section.DescriptionJson)
-	if len(desc) == 0 {
-		desc = json.RawMessage(markdown.EmptyDocumentJSON)
-	}
+	desc := markdown.DefaultDescriptionJSON(section.DescriptionJson)
 	return SectionPayload{
 		ID:              section.ID,
 		FormID:          section.FormID,
@@ -87,10 +84,7 @@ func ToSection(section Section) SectionPayload {
 func ToResponse(answerable Answerable) (Response, error) {
 	q := answerable.Question()
 
-	desc := json.RawMessage(q.DescriptionJson)
-	if len(desc) == 0 {
-		desc = json.RawMessage(markdown.EmptyDocumentJSON)
-	}
+	desc := markdown.DefaultDescriptionJSON(q.DescriptionJson)
 	response := Response{
 		ID:              q.ID,
 		SectionID:       q.SectionID,
@@ -237,11 +231,12 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	store Store,
+	markdown *markdown.Service,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
 		tracer:        otel.Tracer("question/handler"),
-		markdown:      markdown.NewService(logger),
+		markdown:      markdown,
 		validator:     validator,
 		problemWriter: problemWriter,
 		store:         store,

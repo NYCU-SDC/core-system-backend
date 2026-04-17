@@ -139,10 +139,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		publishTime = nil
 	}
 
-	desc := json.RawMessage(form.DescriptionJson)
-	if len(desc) == 0 {
-		desc = json.RawMessage(markdown.EmptyDocumentJSON)
-	}
+	desc := markdown.DefaultDescriptionJSON(form.DescriptionJson)
 	return Response{
 		ID:              form.ID.String(),
 		Title:           form.Title,
@@ -771,10 +768,7 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secDesc := json.RawMessage(section.DescriptionJson)
-	if len(secDesc) == 0 {
-		secDesc = json.RawMessage(markdown.EmptyDocumentJSON)
-	}
+	secDesc := markdown.DefaultDescriptionJSON(section.DescriptionJson)
 	response := SectionResponse{
 		ID:              section.ID.String(),
 		FormID:          section.FormID.String(),

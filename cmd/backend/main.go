@@ -187,7 +187,7 @@ func main() {
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
 	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService, fileService, markdownService)
-	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
+	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService, markdownService)
 	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService, jwtService, cfg.GoogleOauth.ClientID, cfg.GoogleOauth.ClientSecret, cfg.GitHubOauth.ClientID, cfg.GitHubOauth.ClientSecret, cfg.BaseURL, cfg.OauthProxyBaseURL)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, submitService, tenantService, userService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
