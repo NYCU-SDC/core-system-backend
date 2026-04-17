@@ -141,7 +141,7 @@ func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore
 	}
 
 	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
-	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""}
+	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetURL, Valid: request.GoogleSheetURL != ""}
 	form.messageAfterSubmission = request.MessageAfterSubmission
 	form.visibility = visibilityFromAPIFormat(request.Visibility)
 	form.title = request.Title
@@ -227,8 +227,8 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.MessageAfterSubmission = pgtype.Text{String: *request.MessageAfterSubmission, Valid: true}
 	}
 
-	if request.GoogleSheetUrl != nil {
-		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetUrl, Valid: true}
+	if request.GoogleSheetURL != nil {
+		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetURL, Valid: true}
 	}
 
 	if request.Visibility != nil {

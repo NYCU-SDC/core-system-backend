@@ -39,9 +39,9 @@ type Request struct {
 	Deadline               *time.Time       `json:"deadline"`
 	PublishTime            *time.Time       `json:"publishTime"`
 	MessageAfterSubmission string           `json:"messageAfterSubmission"`
-	GoogleSheetUrl         string           `json:"googleSheetUrl"`
+	GoogleSheetURL         string           `json:"googleSheetUrl"`
 	Visibility             string           `json:"visibility" validate:"required,oneof=PUBLIC PRIVATE"`
-	CoverImageUrl          string           `json:"coverImageUrl"`
+	CoverImageURL          string           `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
 }
 
@@ -52,9 +52,9 @@ type PatchRequest struct {
 	Deadline               *time.Time       `json:"deadline"`
 	PublishTime            *time.Time       `json:"publishTime"`
 	MessageAfterSubmission *string          `json:"messageAfterSubmission" validate:"omitempty"`
-	GoogleSheetUrl         *string          `json:"googleSheetUrl"`
+	GoogleSheetURL         *string          `json:"googleSheetUrl"`
 	Visibility             *string          `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
-	CoverImageUrl          *string          `json:"coverImageUrl"`
+	CoverImageURL          *string          `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
 }
 
@@ -62,7 +62,7 @@ type Response struct {
 	ID                     string               `json:"id"`
 	Title                  string               `json:"title"`
 	Description            json.RawMessage      `json:"description"`
-	DescriptionHtml        string               `json:"descriptionHtml,omitempty"`
+	DescriptionHTML        string               `json:"descriptionHtml,omitempty"`
 	PreviewMessage         string               `json:"previewMessage"`
 	Status                 string               `json:"status"`
 	UnitID                 string               `json:"unitId"`
@@ -72,9 +72,9 @@ type Response struct {
 	UpdatedAt              time.Time            `json:"updatedAt"`
 	PublishTime            *time.Time           `json:"publishTime"`
 	MessageAfterSubmission string               `json:"messageAfterSubmission"`
-	GoogleSheetUrl         string               `json:"googleSheetUrl"`
+	GoogleSheetURL         string               `json:"googleSheetUrl"`
 	Visibility             string               `json:"visibility"`
-	CoverImageUrl          string               `json:"coverImageUrl"`
+	CoverImageURL          string               `json:"coverImageUrl"`
 	Dressing               DressingRequest      `json:"dressing"`
 }
 
@@ -92,7 +92,7 @@ type SectionResponse struct {
 	FormID          string          `json:"formId"`
 	Title           string          `json:"title"`
 	Description     json.RawMessage `json:"description,omitempty"`
-	DescriptionHtml string          `json:"descriptionHtml,omitempty"`
+	DescriptionHTML string          `json:"descriptionHtml,omitempty"`
 }
 
 // statusToUppercase converts database status format (lowercase) to API format (uppercase).
@@ -147,7 +147,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		ID:              form.ID.String(),
 		Title:           form.Title,
 		Description:     desc,
-		DescriptionHtml: form.DescriptionHtml,
+		DescriptionHTML: form.DescriptionHtml,
 		PreviewMessage:  form.PreviewMessage.String,
 		Status:          statusToUppercase(form.Status),
 		UnitID:          form.UnitID.String(),
@@ -163,9 +163,9 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		UpdatedAt:              form.UpdatedAt.Time,
 		MessageAfterSubmission: form.MessageAfterSubmission,
 		Visibility:             VisibilityToUppercase(form.Visibility),
-		GoogleSheetUrl:         form.GoogleSheetUrl.String,
+		GoogleSheetURL:         form.GoogleSheetUrl.String,
 		PublishTime:            publishTime,
-		CoverImageUrl:          form.CoverImageUrl.String,
+		CoverImageURL:          form.CoverImageUrl.String,
 		Dressing: DressingRequest{
 			Color:        form.DressingColor.String,
 			HeaderFont:   form.DressingHeaderFont.String,
@@ -780,7 +780,7 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 		FormID:          section.FormID.String(),
 		Title:           section.Title.String,
 		Description:     secDesc,
-		DescriptionHtml: section.DescriptionHtml,
+		DescriptionHTML: section.DescriptionHtml,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)

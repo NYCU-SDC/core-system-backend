@@ -45,6 +45,6 @@ func TestToResponse_proseMirrorAndHTML(t *testing.T) {
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(resp.Description, &decoded))
 	require.Equal(t, "doc", decoded["type"])
-	require.NotEmpty(t, resp.DescriptionHtml)
+	require.NotEmpty(t, resp.DescriptionHTML)
 	require.Equal(t, "pv", resp.PreviewMessage)
 }
