@@ -226,12 +226,20 @@ func (s *Service) PlainText(ctx context.Context, raw []byte) (string, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
 		return "", nil
 	}
 
+	err := checkRichTextSize(trimmed)
+	if err != nil {
+		logger.Warn("rich text payload too large", zap.Error(err))
+		span.RecordError(err)
+		return "", err
+	}
+
 	var root pm.Node
-	err := json.Unmarshal(raw, &root)
+	err = json.Unmarshal(raw, &root)
 	if err != nil {
 		wrapped := wrapUnmarshalErr(err)
 		logger.Error("invalid rich text JSON", zap.Error(wrapped))

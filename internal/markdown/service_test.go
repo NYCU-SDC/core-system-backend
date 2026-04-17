@@ -386,6 +386,12 @@ func TestPlainText(t *testing.T) {
 			expected:    "",
 			expectedErr: internal.ErrInvalidDocumentRoot,
 		},
+		{
+			name:        "rejects oversized payload",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", maxRichTextBytes) + `"}]}]}`),
+			expected:    "",
+			expectedErr: internal.ErrInvalidDocumentTooLarge,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -448,13 +454,24 @@ func TestPreviewSnippet(t *testing.T) {
 			maxRunes:    10,
 			expectedErr: internal.ErrInvalidDocumentJSON,
 		},
+		{
+			name:        "propagates PlainText oversized error",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", maxRichTextBytes) + `"}]}]}`),
+			maxRunes:    10,
+			expectedErr: internal.ErrInvalidDocumentTooLarge,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			s, err := md.PreviewSnippet(context.Background(), tc.raw, tc.maxRunes)
+			if tc.expectedErr != nil {
+				require.Empty(t, s)
+				require.ErrorIs(t, err, tc.expectedErr)
+				return
+			}
 			require.Len(t, []rune(s), tc.expectedRunes)
-			require.ErrorIs(t, err, tc.expectedErr)
+			require.NoError(t, err)
 		})
 	}
 }
