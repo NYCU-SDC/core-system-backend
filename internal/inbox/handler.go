@@ -96,10 +96,10 @@ func (h *Handler) mapToResponse(ctx context.Context, message ListRow) (Response,
 	traceCtx, span := h.tracer.Start(ctx, "mapToResponse")
 	defer span.End()
 
-	previewMessage := h.extractStringField(traceCtx, message.PreviewMessage)
-	title := h.extractStringField(traceCtx, message.Title)
-	orgName := h.extractStringField(traceCtx, message.OrgName)
-	unitName := h.extractStringField(traceCtx, message.UnitName)
+	previewMessage := h.extractStringField(traceCtx, "previewMessage", message.PreviewMessage)
+	title := h.extractStringField(traceCtx, "title", message.Title)
+	orgName := h.extractStringField(traceCtx, "orgName", message.OrgName)
+	unitName := h.extractStringField(traceCtx, "unitName", message.UnitName)
 
 	return Response{
 		ID: message.ID.String(),
@@ -123,11 +123,11 @@ func (h *Handler) mapToResponse(ctx context.Context, message ListRow) (Response,
 	}, nil
 }
 
-// extractStringField extracts a string field from the database result
-func (h *Handler) extractStringField(ctx context.Context, field interface{}) string {
+// extractStringField extracts a string field from the database result.
+// fieldName is used in traces and logs only; field values are never logged to avoid PII in observability.
+func (h *Handler) extractStringField(ctx context.Context, fieldName string, field interface{}) string {
 	traceCtx, span := h.tracer.Start(ctx, "extractStringField", trace.WithAttributes(
-		attribute.String("field", fmt.Sprintf("%v", field)),
-		attribute.String("field_type", fmt.Sprintf("%T", field)),
+		attribute.String("field", fieldName),
 	))
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
@@ -136,13 +136,12 @@ func (h *Handler) extractStringField(ctx context.Context, field interface{}) str
 		fieldStr, ok := field.(string)
 		if ok {
 			return fieldStr
-		} else {
-			logutil.WithContext(traceCtx, logger).Warn("field type mismatch",
-				zap.String("field_type", fmt.Sprintf("%T", field)),
-				zap.String("field", fmt.Sprintf("%v", field)),
-			)
-			return ""
 		}
+		logutil.WithContext(traceCtx, logger).Warn("field type mismatch",
+			zap.String("field", fieldName),
+			zap.String("field_type", fmt.Sprintf("%T", field)),
+		)
+		return ""
 	}
 	return ""
 }
@@ -283,10 +282,10 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	previewMessage := h.extractStringField(traceCtx, message.PreviewMessage)
-	title := h.extractStringField(traceCtx, message.Title)
-	orgName := h.extractStringField(traceCtx, message.OrgName)
-	unitName := h.extractStringField(traceCtx, message.UnitName)
+	previewMessage := h.extractStringField(traceCtx, "previewMessage", message.PreviewMessage)
+	title := h.extractStringField(traceCtx, "title", message.Title)
+	orgName := h.extractStringField(traceCtx, "orgName", message.OrgName)
+	unitName := h.extractStringField(traceCtx, "unitName", message.UnitName)
 
 	response := ResponseDetail{
 		ID: message.ID.String(),
@@ -348,10 +347,10 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	previewMessage := h.extractStringField(traceCtx, message.PreviewMessage)
-	title := h.extractStringField(traceCtx, message.Title)
-	orgName := h.extractStringField(traceCtx, message.OrgName)
-	unitName := h.extractStringField(traceCtx, message.UnitName)
+	previewMessage := h.extractStringField(traceCtx, "previewMessage", message.PreviewMessage)
+	title := h.extractStringField(traceCtx, "title", message.Title)
+	orgName := h.extractStringField(traceCtx, "orgName", message.OrgName)
+	unitName := h.extractStringField(traceCtx, "unitName", message.UnitName)
 
 	response := Response{
 		ID: message.ID.String(),
