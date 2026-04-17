@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"strings"
 
@@ -47,7 +48,7 @@ const (
 )
 
 // EmptyDocumentJSON is the canonical empty ProseMirror doc.
-const EmptyDocumentJSON = `{"type":"` + NodeDoc + `","content":[]}`
+const EmptyDocumentJSON = `{"type":"` + NodeDoc + `","content":[{"type":"` + NodeParagraph + `"}]}`
 
 // noMarks is a sentinel used in NodeSpec.Marks to mean "no marks allowed".
 var noMarks = ""
@@ -157,13 +158,6 @@ func validateNode(n pm.Node) error {
 		}
 	}
 
-	if n.Type.Name == NodeVariable {
-		err := validateVariableAttrs(n.Attrs)
-		if err != nil {
-			return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
-		}
-	}
-
 	err = validateNodeMarks(n.Marks)
 	if err != nil {
 		return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
@@ -198,7 +192,10 @@ func validateHeadingLevel(attrs map[string]any) error {
 		return fmt.Errorf("%w: heading requires level attribute", internal.ErrInvalidDocumentHeading)
 	}
 
-	level := toInt(v)
+	level, ok := toInt(v)
+	if !ok {
+		return fmt.Errorf("%w: heading level must be an integer", internal.ErrInvalidDocumentHeading)
+	}
 	if level < 1 || level > 6 {
 		return fmt.Errorf("%w: heading level must be 1-6, got %d", internal.ErrInvalidDocumentHeading, level)
 	}
@@ -214,17 +211,20 @@ func validateVariableAttrs(attrs map[string]any) error {
 	return nil
 }
 
-// toInt converts a JSON-decoded number (float64 or int) to int.
-func toInt(v any) int {
+// toInt converts a JSON-decoded number (float64 or int) to int, rejecting non-integers.
+func toInt(v any) (int, bool) {
 	switch x := v.(type) {
 	case float64:
-		return int(x)
+		if x != math.Trunc(x) {
+			return 0, false
+		}
+		return int(x), true
 	case int:
-		return x
+		return x, true
 	case int64:
-		return int(x)
+		return int(x), true
 	default:
-		return 0
+		return 0, false
 	}
 }
 

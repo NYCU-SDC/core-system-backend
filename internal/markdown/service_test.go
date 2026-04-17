@@ -120,12 +120,7 @@ func TestProcess(t *testing.T) {
 			raw:  []byte(`{"type":"doc","content":[]}`),
 			validate: func(t *testing.T, docJSON []byte, docHTML string) {
 				t.Helper()
-				var doc map[string]any
-				err := json.Unmarshal(docJSON, &doc)
-				require.NoError(t, err)
-				require.Equal(t, "doc", doc["type"])
-				c, ok := doc["content"].([]any)
-				require.True(t, !ok || len(c) == 0, "empty doc should omit or empty content")
+				require.JSONEq(t, EmptyDocumentJSON, string(docJSON))
 				require.Equal(t, "", docHTML)
 			},
 			expectedErr: nil,
@@ -275,6 +270,11 @@ func TestProcess(t *testing.T) {
 		{
 			name:        "rejects heading level out of range",
 			raw:         []byte(`{"type":"doc","content":[{"type":"heading","attrs":{"level":9},"content":[{"type":"text","text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentHeading,
+		},
+		{
+			name:        "rejects non-integer heading level",
+			raw:         []byte(`{"type":"doc","content":[{"type":"heading","attrs":{"level":1.5},"content":[{"type":"text","text":"x"}]}]}`),
 			expectedErr: internal.ErrInvalidDocumentHeading,
 		},
 		{
@@ -450,5 +450,5 @@ func TestEmptyDocContent(t *testing.T) {
 	t.Parallel()
 	md := newTestService()
 	_, _, err := md.Process(context.Background(), []byte(`{"type":"doc","content":[]}`))
-	t.Logf("err=%v", err)
+	require.NoError(t, err)
 }

@@ -95,6 +95,18 @@ func (s *Service) Process(ctx context.Context, raw []byte) (canonicalJSON []byte
 		return nil, "", err
 	}
 
+	canonicalJSON, err = json.Marshal(root)
+	if err != nil {
+		err = fmt.Errorf("%w: %w", internal.ErrInvalidDocumentMarshal, err)
+		logger.Error("rich text canonicalization failed", zap.Error(err))
+		span.RecordError(err)
+		return nil, "", err
+	}
+
+	if isVisiblyEmptyDoc(root) {
+		return canonicalJSON, "", nil
+	}
+
 	rawHTML, err := s.renderHTML(traceCtx, root)
 	if err != nil {
 		err := fmt.Errorf("%w: render: %w", internal.ErrInvalidDocumentRender, err)
@@ -108,15 +120,23 @@ func (s *Service) Process(ctx context.Context, raw []byte) (canonicalJSON []byte
 	p.AllowRelativeURLs(true)
 	cleanHTML = p.Sanitize(rawHTML)
 
-	canonicalJSON, err = json.Marshal(root)
-	if err != nil {
-		err = fmt.Errorf("%w: %w", internal.ErrInvalidDocumentMarshal, err)
-		logger.Error("rich text canonicalization failed", zap.Error(err))
-		span.RecordError(err)
-		return nil, "", err
+	return canonicalJSON, cleanHTML, nil
+}
+
+func isVisiblyEmptyDoc(root pm.Node) bool {
+	if root.Type.Name != NodeDoc {
+		return false
+	}
+	children := root.Content.Content
+	if len(children) != 1 {
+		return false
 	}
 
-	return canonicalJSON, cleanHTML, nil
+	p := children[0]
+	if p.Type.Name != NodeParagraph {
+		return false
+	}
+	return len(p.Content.Content) == 0
 }
 
 // normalizeDoc coerces editor payloads into a schema-valid doc without losing block structure.
@@ -162,6 +182,10 @@ func (s *Service) normalizeDoc(ctx context.Context, root pm.Node) pm.Node {
 		}
 	}
 	flushInline()
+
+	if len(out) == 0 {
+		out = append(out, pm.Node{Type: Schema.Nodes[NodeParagraph]})
+	}
 
 	docType := Schema.Nodes[NodeDoc]
 	normalized, err := docType.Create(nil, nil, out...)
