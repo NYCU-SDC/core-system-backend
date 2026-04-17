@@ -152,6 +152,7 @@ var (
 	ErrInvalidDocumentLink          = errors.New("invalid link in rich text")
 	ErrInvalidDocumentMark          = errors.New("disallowed mark in rich text")
 	ErrInvalidDocumentVariableAttrs = errors.New("invalid variable attributes in rich text")
+	ErrInvalidDocumentTooLarge      = errors.New("rich text exceeds maximum size")
 	ErrInvalidDocumentMarshal       = errors.New("failed to canonicalize rich text JSON")
 	ErrInvalidDocumentRender        = errors.New("cannot render rich text node")
 )
@@ -393,6 +394,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewInternalServerProblem("cannot render rich text node")
 	case errors.Is(err, ErrInvalidDocumentVariableAttrs):
 		return problem.NewValidateProblem("invalid variable attributes in rich text")
+	case errors.Is(err, ErrInvalidDocumentTooLarge):
+		return problem.NewValidateProblem("rich text exceeds maximum size (max 64KB)")
 	}
 	return problem.Problem{}
 }

@@ -363,6 +363,12 @@ func TestPlainText(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
+			name:        "variable node becomes placeholder",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"var: "},{"type":"variable","attrs":{"name":"VAR_TEST"}}]}]}`),
+			expected:    "var: {{VAR_TEST}}",
+			expectedErr: nil,
+		},
+		{
 			name:        "invalid JSON",
 			raw:         []byte(`not json`),
 			expected:    "",
@@ -430,6 +436,13 @@ func TestPreviewSnippet(t *testing.T) {
 			expectedErr:   nil,
 		},
 		{
+			name:          "variable placeholders contribute runes",
+			raw:           []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x"},{"type":"variable","attrs":{"name":"A"}}]}]}`),
+			maxRunes:      2,
+			expectedRunes: 2,
+			expectedErr:   nil,
+		},
+		{
 			name:        "propagates PlainText JSON error",
 			raw:         []byte(`not json`),
 			maxRunes:    10,
@@ -451,4 +464,26 @@ func TestEmptyDocContent(t *testing.T) {
 	md := newTestService()
 	_, _, err := md.Process(context.Background(), []byte(`{"type":"doc","content":[]}`))
 	require.NoError(t, err)
+}
+
+func TestTooLargeProcessRejected(t *testing.T) {
+	t.Parallel()
+	md := newTestService()
+
+	raw := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", maxRichTextBytes) + `"}]}]}`)
+
+	_, _, err := md.Process(context.Background(), raw)
+	require.ErrorIs(t, err, internal.ErrInvalidDocumentTooLarge)
+}
+
+func TestTooLargeProcessRequestRejected(t *testing.T) {
+	t.Parallel()
+	md := newTestService()
+
+	plain := strings.Repeat("x", maxRichTextBytes)
+	raw, err := json.Marshal(plain)
+	require.NoError(t, err)
+
+	_, _, err = md.ProcessRequest(context.Background(), raw)
+	require.ErrorIs(t, err, internal.ErrInvalidDocumentTooLarge)
 }

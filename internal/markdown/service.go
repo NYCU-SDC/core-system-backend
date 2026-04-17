@@ -25,11 +25,20 @@ type Service struct {
 	tracer trace.Tracer
 }
 
+const maxRichTextBytes = 64 * 1024
+
 func NewService(logger *zap.Logger) *Service {
 	return &Service{
 		logger: logger,
 		tracer: otel.Tracer("markdown/service"),
 	}
+}
+
+func checkRichTextSize(raw []byte) error {
+	if len(raw) > maxRichTextBytes {
+		return internal.ErrInvalidDocumentTooLarge
+	}
+	return nil
 }
 
 // ProcessRequest validates rich text from HTTP APIs. It accepts canonical ProseMirror JSON
@@ -42,6 +51,13 @@ func (s *Service) ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
 		return s.Process(traceCtx, raw)
+	}
+
+	err = checkRichTextSize(raw)
+	if err != nil {
+		logger.Warn("rich text payload too large", zap.Error(err))
+		span.RecordError(err)
+		return nil, "", err
 	}
 
 	if raw[0] == '"' {
@@ -68,6 +84,13 @@ func (s *Service) Process(ctx context.Context, raw []byte) (canonicalJSON []byte
 
 	if len(bytes.TrimSpace(raw)) == 0 || string(bytes.TrimSpace(raw)) == "null" {
 		return []byte(EmptyDocumentJSON), "", nil
+	}
+
+	err = checkRichTextSize(bytes.TrimSpace(raw))
+	if err != nil {
+		logger.Warn("rich text payload too large", zap.Error(err))
+		span.RecordError(err)
+		return nil, "", err
 	}
 
 	var root pm.Node
