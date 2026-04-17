@@ -313,13 +313,13 @@ func (s *Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 // List returns all forms matching the given filters.
 // Pass an empty string for status or visibility to skip that filter.
 // Set excludeExpired to true to exclude forms whose deadline has already passed (i.e. deadline >= now()).
-func (s *Service) List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error) {
+func (s *Service) List(ctx context.Context, status []Status, visibility Visibility, excludeExpired bool) ([]ListRow, error) {
 	ctx, span := s.tracer.Start(ctx, "ListForms")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
 	params := ListParams{
-		Status:     NullStatus{Status: status, Valid: status != ""},
+		Status:     status,
 		Visibility: NullVisibility{Visibility: visibility, Valid: visibility != ""},
 	}
 

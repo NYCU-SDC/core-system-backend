@@ -454,14 +454,14 @@ FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
-WHERE ($1::status IS NULL OR f.status = $1::status)
+WHERE ($1::status[] IS NULL OR f.status = ANY($1::status[]))
 AND ($2::visibility IS NULL OR f.visibility = $2::visibility)
 AND ($3::timestamptz IS NULL OR f.deadline >= $3::timestamptz)
 ORDER BY f.updated_at DESC
 `
 
 type ListParams struct {
-	Status        NullStatus
+	Status        []Status
 	Visibility    NullVisibility
 	DeadlineAfter pgtype.Timestamptz
 }
@@ -556,13 +556,13 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.unit_id = $1
-AND (f.status <> 'archived' OR $2::boolean IS TRUE)
+AND f.status = ANY($2::status[])
 ORDER BY f.updated_at DESC
 `
 
 type ListByUnitParams struct {
-	UnitID          pgtype.UUID
-	IncludeArchived pgtype.Bool
+	UnitID pgtype.UUID
+	Status []Status
 }
 
 type ListByUnitRow struct {
@@ -595,7 +595,7 @@ type ListByUnitRow struct {
 }
 
 func (q *Queries) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error) {
-	rows, err := q.db.Query(ctx, listByUnit, arg.UnitID, arg.IncludeArchived)
+	rows, err := q.db.Query(ctx, listByUnit, arg.UnitID, arg.Status)
 	if err != nil {
 		return nil, err
 	}

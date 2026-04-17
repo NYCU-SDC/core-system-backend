@@ -24,6 +24,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/setup"
 	"NYCU-SDC/core-system-backend/internal/tenant"
 	"NYCU-SDC/core-system-backend/internal/unit"
+	"github.com/jackc/pgx/v5"
 
 	"NYCU-SDC/core-system-backend/internal/trace"
 	"NYCU-SDC/core-system-backend/internal/user"
@@ -479,6 +480,28 @@ func initDatabasePool(databaseURL string) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, err
+	}
+
+	// pgx does not know about custom Postgres enum types by default.
+	// AfterConnect runs on every new connection in the pool, loading each
+	// custom type (and its array variant, prefixed with "_") from pg_type so
+	// pgx can encode/decode values correctly (e.g. []Status in queries).
+	poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		typeNames := []string{"status", "visibility"}
+		for _, typeName := range typeNames {
+			dt, err := conn.LoadType(ctx, typeName)
+			if err != nil {
+				return fmt.Errorf("load type %q: %w", typeName, err)
+			}
+			conn.TypeMap().RegisterType(dt)
+
+			dt, err = conn.LoadType(ctx, "_"+typeName)
+			if err != nil {
+				return fmt.Errorf("load array type %q: %w", typeName, err)
+			}
+			conn.TypeMap().RegisterType(dt)
+		}
+		return nil
 	}
 
 	dbPool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)

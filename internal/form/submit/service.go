@@ -30,7 +30,7 @@ type QuestionStore interface {
 
 type FormStore interface {
 	GetByID(ctx context.Context, id uuid.UUID) (form.GetByIDRow, error)
-	List(ctx context.Context, status form.Status, visibility form.Visibility, excludeExpired bool) ([]form.ListRow, error)
+	List(ctx context.Context, status []form.Status, visibility form.Visibility, excludeExpired bool) ([]form.ListRow, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]form.GetByIDsRow, error)
 }
 
@@ -157,7 +157,7 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 	}
 
 	allForms := make(map[uuid.UUID]form.ListRow)
-	forms, err := s.formStore.List(ctx, form.StatusPublished, form.VisibilityPublic, true)
+	forms, err := s.formStore.List(ctx, []form.Status{form.StatusPublished}, form.VisibilityPublic, true)
 	if err != nil {
 		logger.Error("failed to list forms", zap.Error(err))
 		span.RecordError(err)

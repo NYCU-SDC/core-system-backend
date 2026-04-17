@@ -171,7 +171,7 @@ type Store interface {
 	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
-	List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error)
+	List(ctx context.Context, status []Status, visibility Visibility, excludeExpired bool) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
 	UploadCoverImage(ctx context.Context, id uuid.UUID, data []byte, coverImageURL string) error
@@ -366,7 +366,23 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	forms, err := h.store.List(traceCtx, "", "", false)
+	var status []Status
+	statusStr := r.URL.Query()["status"]
+	if len(statusStr) == 0 {
+		status = []Status{StatusDraft, StatusPublished}
+	} else {
+		for _, s := range statusStr {
+			parseStatus, err := ParseStatus(s)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, err, logger)
+				return
+			}
+
+			status = append(status, parseStatus)
+		}
+	}
+
+	forms, err := h.store.List(traceCtx, status, "", false)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -476,6 +492,22 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	var status []Status
+	statusStr := r.URL.Query()["status"]
+	if len(statusStr) == 0 {
+		status = []Status{StatusDraft, StatusPublished}
+	} else {
+		for _, s := range statusStr {
+			parseStatus, err := ParseStatus(s)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, err, logger)
+				return
+			}
+
+			status = append(status, parseStatus)
+		}
+	}
+
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
@@ -490,6 +522,7 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 
 	forms, err := h.store.ListByUnit(traceCtx, ListByUnitParams{
 		UnitID: pgtype.UUID{Bytes: orgID, Valid: true},
+		Status: status,
 	})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -806,4 +839,17 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func ParseStatus(status string) (Status, error) {
+	switch status {
+	case "DRAFT":
+		return StatusDraft, nil
+	case "PUBLISHED":
+		return StatusPublished, nil
+	case "ARCHIVED":
+		return StatusArchived, nil
+	default:
+		return "", internal.ErrInvalidStatus
+	}
 }
