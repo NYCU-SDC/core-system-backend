@@ -160,7 +160,7 @@ func validateNode(n pm.Node) error {
 
 	err = validateNodeMarks(n.Marks)
 	if err != nil {
-		return fmt.Errorf("%w: %w", internal.ErrInvalidDocumentNode, err)
+		return err
 	}
 
 	for _, child := range n.Content.Content {
@@ -175,6 +175,11 @@ func validateNode(n pm.Node) error {
 
 func validateNodeMarks(marks []pm.Mark) error {
 	for _, mark := range marks {
+		switch mark.Type.Name {
+		case MarkBold, MarkItalic, MarkUnderline, MarkStrike, MarkCode, MarkLink:
+		default:
+			return fmt.Errorf("%w: unknown mark type %q", internal.ErrInvalidDocumentMark, mark.Type.Name)
+		}
 		if mark.Type.Name == MarkLink {
 			err := validateLinkMark(mark)
 			if err != nil {
