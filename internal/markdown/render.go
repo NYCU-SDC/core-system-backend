@@ -31,6 +31,14 @@ func collectText(n pm.Node, b *strings.Builder) {
 		return
 	}
 
+	if n.Type.Name == NodeVariable {
+		name, _ := n.Attrs["name"].(string)
+		b.WriteString("{{")
+		b.WriteString(name)
+		b.WriteString("}}")
+		return
+	}
+
 	children := n.Content.Content
 	if len(children) == 0 {
 		return
