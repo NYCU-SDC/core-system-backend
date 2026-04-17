@@ -391,8 +391,6 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewInternalServerProblem("failed to canonicalize rich text JSON")
 	case errors.Is(err, ErrInvalidDocumentRender):
 		return problem.NewInternalServerProblem("cannot render rich text node")
-	case errors.Is(err, ErrInvalidDocumentHeading):
-		return problem.NewValidateProblem("invalid heading in rich text")
 	case errors.Is(err, ErrInvalidDocumentVariableAttrs):
 		return problem.NewValidateProblem("invalid variable attributes in rich text")
 	}
