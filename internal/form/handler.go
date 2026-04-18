@@ -7,6 +7,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/internal/user"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -46,16 +47,16 @@ type Request struct {
 }
 
 type PatchRequest struct {
-	Title                  *string          `json:"title" validate:"omitempty"`
-	Description            *json.RawMessage `json:"description"`
-	PreviewMessage         *string          `json:"previewMessage"`
-	Deadline               *time.Time       `json:"deadline"`
-	PublishTime            *time.Time       `json:"publishTime"`
-	MessageAfterSubmission *string          `json:"messageAfterSubmission" validate:"omitempty"`
-	GoogleSheetURL         *string          `json:"googleSheetUrl"`
-	Visibility             *string          `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
-	CoverImageURL          *string          `json:"coverImageUrl"`
-	Dressing               *DressingRequest `json:"dressing"`
+	Title                  *string            `json:"title" validate:"omitempty"`
+	Description            OptionalRawMessage `json:"description"`
+	PreviewMessage         *string            `json:"previewMessage"`
+	Deadline               *time.Time         `json:"deadline"`
+	PublishTime            *time.Time         `json:"publishTime"`
+	MessageAfterSubmission *string            `json:"messageAfterSubmission" validate:"omitempty"`
+	GoogleSheetURL         *string            `json:"googleSheetUrl"`
+	Visibility             *string            `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
+	CoverImageURL          *string            `json:"coverImageUrl"`
+	Dressing               *DressingRequest   `json:"dressing"`
 }
 
 type Response struct {
@@ -83,8 +84,8 @@ type CoverUploadResponse struct {
 }
 
 type SectionRequest struct {
-	Title       string           `json:"title" validate:"required"`
-	Description *json.RawMessage `json:"description"`
+	Title       string             `json:"title" validate:"required"`
+	Description OptionalRawMessage `json:"description"`
 }
 
 type SectionResponse struct {
@@ -93,6 +94,27 @@ type SectionResponse struct {
 	Title           string          `json:"title"`
 	Description     json.RawMessage `json:"description,omitempty"`
 	DescriptionHTML string          `json:"descriptionHtml,omitempty"`
+}
+
+// OptionalRawMessage allows PATCH payloads to distinguish:
+// - field absent: Set=false (no change)
+// - field present as null: Set=true, Value=nil (clear)
+// - field present as JSON object/string/etc: Set=true, Value=<raw bytes>
+type OptionalRawMessage struct {
+	Set   bool
+	Value json.RawMessage
+}
+
+func (o *OptionalRawMessage) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	trimmed := bytes.TrimSpace(b)
+	if bytes.Equal(trimmed, []byte("null")) {
+		o.Value = nil
+		return nil
+	}
+
+	o.Value = append(o.Value[:0], trimmed...)
+	return nil
 }
 
 // statusToUppercase converts database status format (lowercase) to API format (uppercase).
@@ -752,8 +774,8 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 		FormID: formID,
 		Title:  pgtype.Text{String: req.Title, Valid: true},
 	}
-	if req.Description != nil {
-		j, htmlStr, err := h.markdownStore.ProcessAPIText(traceCtx, []byte(*req.Description))
+	if req.Description.Set {
+		j, htmlStr, err := h.markdownStore.ProcessAPIText(traceCtx, req.Description.Value)
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return

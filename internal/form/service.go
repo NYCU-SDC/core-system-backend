@@ -201,8 +201,8 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.Title = pgtype.Text{String: *request.Title, Valid: true}
 	}
 
-	if request.Description != nil {
-		descJSON, descHTML, err := s.markdownStore.ProcessAPIText(ctx, []byte(*request.Description))
+	if request.Description.Set {
+		descJSON, descHTML, err := s.markdownStore.ProcessAPIText(ctx, request.Description.Value)
 		if err != nil {
 			span.RecordError(err)
 			return PatchRow{}, err
