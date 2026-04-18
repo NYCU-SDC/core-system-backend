@@ -233,7 +233,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrInvalidEmailFormat):
 		return problem.NewValidateProblem("invalid email format")
 	case errors.Is(err, ErrMemberEmailNotFound):
-		return problem.NewBadRequestProblem("member email not found")
+		return problem.NewNotFoundProblem("member email not found")
 	case errors.Is(err, ErrCannotRemoveLastAdmin):
 		return problem.NewValidateProblem("cannot remove the last admin of the unit")
 	case errors.Is(err, ErrMissingUnitID):
