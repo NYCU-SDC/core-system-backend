@@ -59,7 +59,6 @@ var (
 	ErrEmailAlreadyExists   = errors.New("email already exists")
 	ErrUserOnboarded        = errors.New("user already onboarded")
 	ErrUsernameConflict     = errors.New("user name already taken")
-	ErrDatabaseError        = errors.New("database error")
 	ErrUserNotInAllowedList = errors.New("user not in allowed onboarding list")
 
 	// OAuth Email Errors
@@ -211,8 +210,6 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("user already onboarded")
 	case errors.Is(err, ErrUsernameConflict):
 		return problem.NewValidateProblem("username already taken")
-	case errors.Is(err, ErrDatabaseError):
-		return problem.NewBadRequestProblem("database error")
 	case errors.Is(err, ErrUserNotInAllowedList):
 		return problem.NewForbiddenProblem("user not in allowed onboarding list")
 

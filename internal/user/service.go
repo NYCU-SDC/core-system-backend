@@ -356,14 +356,14 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
-		return User{}, internal.ErrDatabaseError
+		return User{}, err
 	}
 
 	userEmails, err := s.GetEmailsByID(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user emails by id")
 		span.RecordError(err)
-		return User{}, internal.ErrDatabaseError
+		return User{}, err
 	}
 	isAllowed := false
 	for _, userEmail := range userEmails {
@@ -402,7 +402,7 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 			return User{}, internal.ErrUsernameConflict
 		}
 		span.RecordError(err)
-		return User{}, internal.ErrDatabaseError
+		return User{}, err
 	}
 	return user, nil
 }
