@@ -117,7 +117,13 @@ func (s *Service) ProcessProseMirrorJSON(ctx context.Context, raw []byte) (canon
 		return nil, "", err
 	}
 
-	root = s.normalizeDoc(traceCtx, root)
+	root, err = s.normalizeDoc(traceCtx, root)
+	if err != nil {
+		wrapped := fmt.Errorf("%w: normalize: %w", internal.ErrInvalidDocumentNode, err)
+		logger.Error("rich text normalization failed", zap.Error(wrapped))
+		span.RecordError(wrapped)
+		return nil, "", wrapped
+	}
 
 	err = validateNode(root)
 	if err != nil {
@@ -173,32 +179,33 @@ func isVisiblyEmptyDoc(root pm.Node) bool {
 // normalizeDoc coerces editor payloads into a schema-valid doc without losing block structure.
 // Today we accept (but may not render) some nodes like image; we also prevent top-level inline
 // nodes (hard_break, text, variable) from invalidating the document by wrapping them into paragraphs.
-func (s *Service) normalizeDoc(ctx context.Context, root pm.Node) pm.Node {
+func (s *Service) normalizeDoc(ctx context.Context, root pm.Node) (pm.Node, error) {
 	traceCtx, span := s.tracer.Start(ctx, "normalizeDoc")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	if root.Type.Name != NodeDoc || root.IsLeaf() {
-		return root
+		return root, nil
 	}
 
 	var out []pm.Node
 	var inlineBuf []pm.Node
 
-	flushInline := func() {
+	flushInline := func() error {
 		if len(inlineBuf) == 0 {
-			return
+			return nil
 		}
 		paragraphType := Schema.Nodes[NodeParagraph]
 		paragraph, err := paragraphType.Create(nil, nil, inlineBuf...)
 		if err != nil {
 			logger.Error("failed to create paragraph", zap.Error(err))
 			span.RecordError(err)
-			return
+			return fmt.Errorf("%w: create paragraph: %w", internal.ErrInvalidDocumentNode, err)
 		}
 
 		out = append(out, paragraph)
 		inlineBuf = nil
+		return nil
 	}
 
 	for _, child := range root.Content.Content {
@@ -208,11 +215,17 @@ func (s *Service) normalizeDoc(ctx context.Context, root pm.Node) pm.Node {
 			inlineBuf = append(inlineBuf, child)
 			continue
 		default:
-			flushInline()
+			err := flushInline()
+			if err != nil {
+				return root, err
+			}
 			out = append(out, child)
 		}
 	}
-	flushInline()
+	err := flushInline()
+	if err != nil {
+		return root, err
+	}
 
 	if len(out) == 0 {
 		out = append(out, pm.Node{Type: Schema.Nodes[NodeParagraph]})
@@ -223,9 +236,9 @@ func (s *Service) normalizeDoc(ctx context.Context, root pm.Node) pm.Node {
 	if err != nil {
 		logger.Error("failed to create doc", zap.Error(err))
 		span.RecordError(err)
-		return root
+		return root, fmt.Errorf("%w: create doc: %w", internal.ErrInvalidDocumentNode, err)
 	}
-	return normalized
+	return normalized, nil
 }
 
 // PlainText extracts visible text from a valid ProseMirror JSON document.
@@ -262,7 +275,13 @@ func (s *Service) PlainText(ctx context.Context, raw []byte) (string, error) {
 		return "", err
 	}
 
-	root = s.normalizeDoc(traceCtx, root)
+	root, err = s.normalizeDoc(traceCtx, root)
+	if err != nil {
+		wrapped := fmt.Errorf("%w: normalize: %w", internal.ErrInvalidDocumentNode, err)
+		logger.Error("rich text normalization failed", zap.Error(wrapped))
+		span.RecordError(wrapped)
+		return "", wrapped
+	}
 
 	err = validateNode(root)
 	if err != nil {
