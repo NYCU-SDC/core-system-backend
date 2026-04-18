@@ -75,6 +75,11 @@ type Service struct {
 	markdownStore MarkdownStore
 }
 
+type MarkdownStore interface {
+	ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error)
+	PreviewSnippet(ctx context.Context, raw []byte, maxRunes int) (string, error)
+}
+
 func NewService(logger *zap.Logger, db DBTX, markdownStore MarkdownStore) *Service {
 	return &Service{
 		logger:        logger,
