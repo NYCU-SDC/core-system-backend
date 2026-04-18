@@ -76,12 +76,13 @@ var (
 	ErrMemberEmailNotFound   = errors.New("member email not found")
 	ErrCannotRemoveLastAdmin = errors.New("cannot remove the last admin of the unit")
 
-	ErrMissingUnitID      = errors.New("missing unit id")
-	ErrInvalidUnitID      = errors.New("invalid unit id")
-	ErrMissingMemberID    = errors.New("missing member id")
-	ErrInvalidMemberID    = errors.New("invalid member id")
-	ErrInvalidRequestBody = errors.New("invalid request body")
-	ErrInvalidRole        = errors.New("invalid role")
+	ErrMissingUnitID         = errors.New("missing unit id")
+	ErrInvalidUnitID         = errors.New("invalid unit id")
+	ErrMissingMemberID       = errors.New("missing member id")
+	ErrInvalidMemberID       = errors.New("invalid member id")
+	ErrInvalidRequestBody    = errors.New("invalid request body")
+	ErrInvalidRole           = errors.New("invalid role")
+	ErrFailToMarshalMetadata = errors.New("failed to marshal metadata")
 
 	// Inbox Errors
 	ErrInvalidIsReadParameter     = errors.New("invalid isRead parameter")
@@ -144,6 +145,9 @@ var (
 	ErrInvalidFileType    = errors.New("file type is not allowed")
 	ErrCoverImageTooLarge = errors.New("cover image exceeds maximum size")
 	ErrInvalidImageFormat = errors.New("image format is invalid")
+
+	// Internal Handler Errors
+	ErrFailedToGetSlugFromContext = errors.New("failed to get org slug from context")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -240,6 +244,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid request body")
 	case errors.Is(err, ErrInvalidRole):
 		return problem.NewValidateProblem("invalid role value")
+	case errors.Is(err, ErrFailToMarshalMetadata):
+		return problem.NewInternalServerProblem("failed to marshal metadata")
 
 	// Form Errors
 	case errors.Is(err, ErrFormNotFound):
@@ -366,6 +372,11 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid offset parameter")
 	case errors.Is(err, ErrInvalidFileType):
 		return problem.NewValidateProblem("file type is not allowed")
+
+	// Internal Handler Errors
+	case errors.Is(err, ErrFailedToGetSlugFromContext):
+		return problem.NewInternalServerProblem("failed to get org slug from context")
 	}
+
 	return problem.Problem{}
 }
