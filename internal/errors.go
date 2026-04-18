@@ -75,12 +75,13 @@ var (
 	ErrMemberEmailNotFound   = errors.New("member email not found")
 	ErrCannotRemoveLastAdmin = errors.New("cannot remove the last admin of the unit")
 
-	ErrMissingUnitID      = errors.New("missing unit id")
-	ErrInvalidUnitID      = errors.New("invalid unit id")
-	ErrMissingMemberID    = errors.New("missing member id")
-	ErrInvalidMemberID    = errors.New("invalid member id")
-	ErrInvalidRequestBody = errors.New("invalid request body")
-	ErrInvalidRole        = errors.New("invalid role")
+	ErrMissingUnitID         = errors.New("missing unit id")
+	ErrInvalidUnitID         = errors.New("invalid unit id")
+	ErrMissingMemberID       = errors.New("missing member id")
+	ErrInvalidMemberID       = errors.New("invalid member id")
+	ErrInvalidRequestBody    = errors.New("invalid request body")
+	ErrInvalidRole           = errors.New("invalid role")
+	ErrFailToMarshalMetadata = errors.New("failed to marshal metadata")
 
 	// Inbox Errors
 	ErrInvalidIsReadParameter     = errors.New("invalid isRead parameter")
@@ -128,6 +129,7 @@ var (
 	ErrUnmarshalDBWorkflow           = errors.New("failed to unmarshal database workflow")
 	ErrWorkflowNodeNotFound          = errors.New("node not found in current workflow")
 	ErrMarshalMergedWorkflow         = errors.New("failed to marshal merged workflow")
+	ErrWorkflowNodePayloadInvalid    = errors.New("invalid workflow node payload")
 
 	// File Errors
 	ErrFileNotFound       = errors.New("file not found")
@@ -153,6 +155,9 @@ var (
 	ErrInvalidDocumentTooLarge      = errors.New("rich text exceeds maximum size")
 	ErrInvalidDocumentMarshal       = errors.New("failed to canonicalize rich text JSON")
 	ErrInvalidDocumentRender        = errors.New("cannot render rich text node")
+  
+	// Internal Handler Errors
+	ErrFailedToGetSlugFromContext = errors.New("failed to get org slug from context")
 )
 
 func NewProblemWriter() *problem.HttpWriter {
@@ -247,6 +252,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid request body")
 	case errors.Is(err, ErrInvalidRole):
 		return problem.NewValidateProblem("invalid role value")
+	case errors.Is(err, ErrFailToMarshalMetadata):
+		return problem.NewInternalServerProblem("failed to marshal metadata")
 
 	// Form Errors
 	case errors.Is(err, ErrFormNotFound):
@@ -329,6 +336,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewInternalServerProblem("failed to unmarshal database workflow")
 	case errors.Is(err, ErrWorkflowNodeNotFound):
 		return problem.NewValidateProblem("node not found in current workflow, please create it first using CreateNode API")
+	case errors.Is(err, ErrWorkflowNodePayloadInvalid):
+		return problem.NewValidateProblem("invalid workflow node payload")
 	case errors.Is(err, ErrMarshalMergedWorkflow):
 		return problem.NewInternalServerProblem("failed to marshal merged workflow")
 
@@ -351,6 +360,7 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid offset parameter")
 	case errors.Is(err, ErrInvalidFileType):
 		return problem.NewValidateProblem("file type is not allowed")
+    
 	// Markdown document errors (ProseMirror JSON validation and rendering).
 	case errors.Is(err, ErrInvalidDocumentJSON):
 		return problem.NewValidateProblem("malformed rich text JSON")
@@ -372,6 +382,11 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("invalid variable attributes in rich text")
 	case errors.Is(err, ErrInvalidDocumentTooLarge):
 		return problem.NewValidateProblem("rich text exceeds maximum size (max 64KB)")
+
+	// Internal Handler Errors
+	case errors.Is(err, ErrFailedToGetSlugFromContext):
+		return problem.NewInternalServerProblem("failed to get org slug from context")
 	}
+
 	return problem.Problem{}
 }

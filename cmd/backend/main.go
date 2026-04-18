@@ -267,6 +267,9 @@ func main() {
 	mux.Handle("GET /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 	mux.Handle("POST /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 
+	mux.Handle("POST /api/auth/link", basicMiddleware.HandlerFunc(authHandler.LinkAccount))
+	mux.Handle("POST /api/auth/link/abort", basicMiddleware.HandlerFunc(authHandler.LinkAccountAbort))
+
 	// JWT refresh
 	// ----------------------
 	mux.Handle("POST /api/auth/refresh", basicMiddleware.HandlerFunc(authHandler.RefreshToken))
@@ -294,7 +297,6 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.ListOrgSubUnits))
 	mux.Handle("GET /api/orgs/{slug}/unit-ids", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.ListOrgSubUnitIDs))
-	mux.Handle("POST /api/orgs/relations", authMiddleware.HandlerFunc(unitHandler.AddParentChild))
 
 	// Organization Membership
 	// ----------------------
@@ -310,7 +312,8 @@ func main() {
 	// Unit Management
 	// ----------------------
 	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, unitResolver)).HandlerFunc(unitHandler.GetUnitByID))
-	mux.Handle("POST /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.CreateUnit))
+	mux.Handle("POST /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.CreateOrgUnit))
+	mux.Handle("POST /api/units/{unitId}/units", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.CreateUnit))
 	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.UpdateUnit))
 	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.DeleteUnit))
 

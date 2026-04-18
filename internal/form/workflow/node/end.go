@@ -31,9 +31,10 @@ func (n *EndNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[st
 // validateFieldNames validates that the node only contains valid field names
 func (n *EndNode) validateFieldNames(nodeID string) error {
 	validFields := map[string]bool{
-		"id":    true,
-		"type":  true,
-		"label": true,
+		"id":      true,
+		"type":    true,
+		"label":   true,
+		"payload": true,
 	}
 
 	var invalidFields []string
