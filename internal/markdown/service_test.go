@@ -55,7 +55,7 @@ func TestProcessAPIText(t *testing.T) {
 			raw:  []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"x"}]}]}`),
 			validate: func(t *testing.T, raw []byte, docJSON []byte, docHTML string) {
 				t.Helper()
-				j2, h2, err := md.Process(context.Background(), raw)
+				j2, h2, err := md.ProcessProseMirrorJSON(context.Background(), raw)
 				require.NoError(t, err)
 				require.Equal(t, string(j2), string(docJSON))
 				require.Equal(t, h2, docHTML)
@@ -307,7 +307,7 @@ func TestProcess(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			docJSON, docHTML, err := md.Process(context.Background(), tc.raw)
+			docJSON, docHTML, err := md.ProcessProseMirrorJSON(context.Background(), tc.raw)
 			if tc.expectedErr != nil {
 				require.ErrorIs(t, err, tc.expectedErr)
 				return
@@ -480,7 +480,7 @@ func TestPreviewSnippet(t *testing.T) {
 func TestEmptyDocContent(t *testing.T) {
 	t.Parallel()
 	md := newTestService()
-	_, _, err := md.Process(context.Background(), []byte(`{"type":"doc","content":[]}`))
+	_, _, err := md.ProcessProseMirrorJSON(context.Background(), []byte(`{"type":"doc","content":[]}`))
 	require.NoError(t, err)
 }
 
@@ -490,7 +490,7 @@ func TestTooLargeProcessRejected(t *testing.T) {
 
 	raw := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", maxRichTextBytes) + `"}]}]}`)
 
-	_, _, err := md.Process(context.Background(), raw)
+	_, _, err := md.ProcessProseMirrorJSON(context.Background(), raw)
 	require.ErrorIs(t, err, internal.ErrInvalidDocumentTooLarge)
 }
 
@@ -502,6 +502,6 @@ func TestTooLargeProcessRequestRejected(t *testing.T) {
 	raw, err := json.Marshal(plain)
 	require.NoError(t, err)
 
-	_, _, err = md.ProcessRequest(context.Background(), raw)
+	_, _, err = md.ProcessAPIText(context.Background(), raw)
 	require.ErrorIs(t, err, internal.ErrInvalidDocumentTooLarge)
 }

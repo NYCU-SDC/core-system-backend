@@ -51,7 +51,7 @@ func (s *Service) ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON
 
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
-		return s.Process(traceCtx, raw)
+		return s.ProcessProseMirrorJSON(traceCtx, raw)
 	}
 
 	err = checkRichTextSize(raw)
@@ -71,10 +71,10 @@ func (s *Service) ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON
 			return nil, "", wrapped
 		}
 
-		return s.FromMarkdown(traceCtx, markdown)
+		return s.ProcessMarkdownString(traceCtx, markdown)
 	}
 
-	return s.Process(traceCtx, raw)
+	return s.ProcessProseMirrorJSON(traceCtx, raw)
 }
 
 // ProcessRequest is kept for compatibility with older call sites.
@@ -84,9 +84,9 @@ func (s *Service) ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON
 	return s.ProcessAPIText(ctx, raw)
 }
 
-// Process validates a ProseMirror JSON document, renders HTML, sanitizes it, and returns canonical JSON.
-func (s *Service) Process(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
-	traceCtx, span := s.tracer.Start(ctx, "Process")
+// ProcessProseMirrorJSON validates a ProseMirror JSON document, renders HTML, sanitizes it, and returns canonical JSON.
+func (s *Service) ProcessProseMirrorJSON(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
+	traceCtx, span := s.tracer.Start(ctx, "ProcessProseMirrorJSON")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
@@ -293,18 +293,17 @@ func (s *Service) FromPlaintext(ctx context.Context, plain string) (canonicalJSO
 	raw := fmt.Sprintf(`{"type":%q,"content":[{"type":%q,"content":[{"type":%q,"text":%s}]}]}`,
 		NodeDoc, NodeParagraph, NodeText, textJSON)
 
-	return s.Process(traceCtx, []byte(raw))
+	return s.ProcessProseMirrorJSON(traceCtx, []byte(raw))
 }
 
-// FromMarkdown builds a minimal ProseMirror document from Markdown source.
-// This is used for API payloads where the rich text field is provided as a JSON string.
-func (s *Service) FromMarkdown(ctx context.Context, source string) (canonicalJSON []byte, html string, err error) {
-	traceCtx, span := s.tracer.Start(ctx, "FromMarkdown")
+// ProcessMarkdownString builds a minimal ProseMirror document from Markdown source, then validates/renders it.
+func (s *Service) ProcessMarkdownString(ctx context.Context, source string) (canonicalJSON []byte, html string, err error) {
+	traceCtx, span := s.tracer.Start(ctx, "ProcessMarkdownString")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	if strings.TrimSpace(source) == "" {
-		return s.Process(traceCtx, nil)
+		return s.ProcessProseMirrorJSON(traceCtx, nil)
 	}
 
 	err = checkRichTextSize([]byte(source))
@@ -322,7 +321,7 @@ func (s *Service) FromMarkdown(ctx context.Context, source string) (canonicalJSO
 		return nil, "", err
 	}
 
-	return s.Process(traceCtx, raw)
+	return s.ProcessProseMirrorJSON(traceCtx, raw)
 }
 
 // PreviewSnippet returns the first maxRunes runes of plain text from a ProseMirror JSON payload.

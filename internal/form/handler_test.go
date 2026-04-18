@@ -18,7 +18,7 @@ import (
 func TestToResponse_proseMirrorAndHTML(t *testing.T) {
 	doc := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hi"}]}]}`)
 	md := markdown.NewService(zap.NewNop())
-	canonical, html, err := md.Process(context.Background(), doc)
+	canonical, html, err := md.ProcessProseMirrorJSON(context.Background(), doc)
 	require.NoError(t, err)
 
 	f := Form{
