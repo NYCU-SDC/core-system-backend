@@ -27,13 +27,14 @@ func TestProcessRequest(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "JSON-encoded plain string",
-			raw:  []byte(`"Hello world"`),
+			name: "JSON-encoded Markdown string",
+			raw:  []byte(`"Hello **world**"`),
 			validate: func(t *testing.T, _ []byte, docJSON []byte, docHTML string) {
 				t.Helper()
 				require.Contains(t, string(docJSON), `"type":"doc"`)
-				require.Contains(t, string(docJSON), "Hello world")
-				require.Contains(t, docHTML, "Hello world")
+				require.Contains(t, string(docJSON), "Hello ")
+				require.Contains(t, docHTML, "Hello ")
+				require.Contains(t, docHTML, "<strong>world</strong>")
 			},
 		},
 		{
