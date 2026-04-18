@@ -296,36 +296,21 @@ func ErrorHandler(err error) problem.Problem {
 
 	// Submit Errors
 	case errors.Is(err, ErrResponseNotComplete{}):
-		return problem.NewValidateProblem(err.Error())
+		return problem.NewValidateProblem("response is not complete")
 
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
 	case errors.Is(err, ErrAnswerSectionSkipped):
-		return problem.NewValidateProblemWithErrors(
-			"cannot answer questions in a section that is skipped by the form workflow",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("cannot answer questions in a section that is skipped by the form workflow")
 	case errors.Is(err, ErrWorkflowMergeInvalidQuestionID):
-		return problem.NewValidateProblemWithErrors(
-			"invalid question id",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("invalid question id")
 	case errors.Is(err, ErrWorkflowMergeQuestionNotInForm):
-		return problem.NewValidateProblemWithErrors(
-			"question does not belong to this form",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("question does not belong to this form")
 	case errors.Is(err, ErrWorkflowMergeAnswerValueInvalid):
-		return problem.NewValidateProblemWithErrors(
-			"invalid answer value for workflow resolution",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("invalid answer value for workflow resolution")
 	case errors.Is(err, ErrWorkflowMergeAnswerEncodeFailed):
-		return problem.NewValidateProblemWithErrors(
-			"failed to encode answer for workflow resolution",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("failed to encode answer for workflow resolution")
 
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowNotFound):
@@ -339,7 +324,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrMarshalWorkflow):
 		return problem.NewInternalServerProblem("failed to marshal workflow")
 	case errors.Is(err, ErrUnmarshalAPIWorkflow):
-		return problem.NewBadRequestProblem("failed to unmarshal API workflow")
+		return problem.NewValidateProblem("failed to unmarshal API workflow")
 	case errors.Is(err, ErrUnmarshalDBWorkflow):
 		return problem.NewInternalServerProblem("failed to unmarshal database workflow")
 	case errors.Is(err, ErrWorkflowNodeNotFound):
