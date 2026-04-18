@@ -199,7 +199,7 @@ type FileStore interface {
 }
 
 type MarkdownStore interface {
-	ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error)
+	ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error)
 	PreviewSnippet(ctx context.Context, raw []byte, maxRunes int) (string, error)
 }
 
@@ -753,7 +753,7 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 		Title:  pgtype.Text{String: req.Title, Valid: true},
 	}
 	if req.Description != nil {
-		j, htmlStr, err := h.markdownStore.ProcessRequest(traceCtx, []byte(*req.Description))
+		j, htmlStr, err := h.markdownStore.ProcessAPIText(traceCtx, []byte(*req.Description))
 		if err != nil {
 			h.problemWriter.WriteError(traceCtx, w, err, logger)
 			return

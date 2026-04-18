@@ -4,6 +4,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/test/integration"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	workflowbuilder "NYCU-SDC/core-system-backend/test/testdata/dbbuilder/workflow"
@@ -374,7 +375,7 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 			}
 
 			// Create question service to satisfy QuestionStore interface
-			questionService := question.NewService(logger, db, nil)
+			questionService := question.NewService(logger, db, nil, markdown.NewService(logger))
 
 			// Create workflow service with real dependencies
 			workflowService := workflow.NewService(logger, db, questionService)

@@ -41,11 +41,11 @@ func checkRichTextSize(raw []byte) error {
 	return nil
 }
 
-// ProcessRequest validates rich text from HTTP APIs. It accepts canonical ProseMirror JSON
+// ProcessAPIText validates rich text from HTTP APIs. It accepts canonical ProseMirror JSON
 // (object root) or a JSON-encoded Markdown string, which is parsed to a ProseMirror doc before
 // validation and HTML rendering.
-func (s *Service) ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
-	traceCtx, span := s.tracer.Start(ctx, "ProcessRequest")
+func (s *Service) ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
+	traceCtx, span := s.tracer.Start(ctx, "ProcessAPIText")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
@@ -75,6 +75,13 @@ func (s *Service) ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON
 	}
 
 	return s.Process(traceCtx, raw)
+}
+
+// ProcessRequest is kept for compatibility with older call sites.
+//
+// Deprecated: use ProcessAPIText.
+func (s *Service) ProcessRequest(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
+	return s.ProcessAPIText(ctx, raw)
 }
 
 // Process validates a ProseMirror JSON document, renders HTML, sanitizes it, and returns canonical JSON.

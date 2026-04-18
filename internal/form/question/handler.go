@@ -209,16 +209,15 @@ func ToResponse(answerable Answerable) (Response, error) {
 }
 
 type Store interface {
-	Create(ctx context.Context, input CreateParams) (Answerable, error)
-	Update(ctx context.Context, input UpdateParams, order int32) (Answerable, error)
+	Create(ctx context.Context, input CreateInput) (Answerable, error)
+	Update(ctx context.Context, input UpdateInput, order int32) (Answerable, error)
 	DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error)
 }
 
 type Handler struct {
-	logger   *zap.Logger
-	tracer   trace.Tracer
-	markdown *markdown.Service
+	logger *zap.Logger
+	tracer trace.Tracer
 
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
@@ -231,12 +230,10 @@ func NewHandler(
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
 	store Store,
-	markdown *markdown.Service,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
 		tracer:        otel.Tracer("question/handler"),
-		markdown:      markdown,
 		validator:     validator,
 		problemWriter: problemWriter,
 		store:         store,
@@ -270,21 +267,15 @@ func (h *Handler) AddHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	descJSON, descHTML, err := h.markdown.ProcessRequest(traceCtx, req.Description)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-	request := CreateParams{
-		SectionID:       sectionID,
-		Required:        *req.Required,
-		Type:            QuestionType(req.Type),
-		Title:           pgtype.Text{String: req.Title, Valid: true},
-		DescriptionJson: descJSON,
-		DescriptionHtml: descHTML,
-		Order:           req.Order,
-		Metadata:        metadata,
-		SourceID:        pgtype.UUID{Bytes: req.SourceID, Valid: req.SourceID != uuid.Nil},
+	request := CreateInput{
+		SectionID:   sectionID,
+		Required:    *req.Required,
+		Type:        QuestionType(req.Type),
+		Title:       pgtype.Text{String: req.Title, Valid: true},
+		Description: req.Description,
+		Order:       req.Order,
+		Metadata:    metadata,
+		SourceID:    pgtype.UUID{Bytes: req.SourceID, Valid: req.SourceID != uuid.Nil},
 	}
 
 	createdQuestion, err := h.store.Create(r.Context(), request)
@@ -336,21 +327,15 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	descJSON, descHTML, err := h.markdown.ProcessRequest(traceCtx, req.Description)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-	request := UpdateParams{
-		ID:              id,
-		SectionID:       sectionID,
-		Required:        *req.Required,
-		Type:            QuestionType(req.Type),
-		Title:           pgtype.Text{String: req.Title, Valid: true},
-		DescriptionJson: descJSON,
-		DescriptionHtml: descHTML,
-		Metadata:        metadata,
-		SourceID:        pgtype.UUID{Bytes: req.SourceID, Valid: req.SourceID != uuid.Nil},
+	request := UpdateInput{
+		ID:          id,
+		SectionID:   sectionID,
+		Required:    *req.Required,
+		Type:        QuestionType(req.Type),
+		Title:       pgtype.Text{String: req.Title, Valid: true},
+		Description: req.Description,
+		Metadata:    metadata,
+		SourceID:    pgtype.UUID{Bytes: req.SourceID, Valid: req.SourceID != uuid.Nil},
 	}
 
 	updatedQuestion, err := h.store.Update(traceCtx, request, req.Order)

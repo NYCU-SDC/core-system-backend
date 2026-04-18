@@ -112,7 +112,7 @@ func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore
 		form.publishTime = pgtype.Timestamptz{Valid: false}
 	}
 
-	descJSON, descHTML, err := markdownStore.ProcessRequest(ctx, []byte(request.Description))
+	descJSON, descHTML, err := markdownStore.ProcessAPIText(ctx, []byte(request.Description))
 	if err != nil {
 		return formFields{}, err
 	}
@@ -202,13 +202,13 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 	}
 
 	if request.Description != nil {
-		j, h, err := s.markdownStore.ProcessRequest(ctx, []byte(*request.Description))
+		descJSON, descHTML, err := s.markdownStore.ProcessAPIText(ctx, []byte(*request.Description))
 		if err != nil {
 			span.RecordError(err)
 			return PatchRow{}, err
 		}
-		params.DescriptionJson = j
-		params.DescriptionHtml = pgtype.Text{String: h, Valid: true}
+		params.DescriptionJson = descJSON
+		params.DescriptionHtml = pgtype.Text{String: descHTML, Valid: true}
 	}
 
 	if request.PreviewMessage != nil {

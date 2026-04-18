@@ -16,7 +16,7 @@ func newTestService() *Service {
 	return NewService(zap.NewNop())
 }
 
-func TestProcessRequest(t *testing.T) {
+func TestProcessAPIText(t *testing.T) {
 	t.Parallel()
 	md := newTestService()
 
@@ -66,7 +66,7 @@ func TestProcessRequest(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			docJSON, docHTML, err := md.ProcessRequest(context.Background(), tc.raw)
+			docJSON, docHTML, err := md.ProcessAPIText(context.Background(), tc.raw)
 			if tc.expectedErr != nil {
 				require.ErrorIs(t, err, tc.expectedErr)
 				return
