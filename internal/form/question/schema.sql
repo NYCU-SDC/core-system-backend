@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS questions(
     required BOOLEAN NOT NULL,
     type question_type NOT NULL,
     title TEXT,
-    description_json JSONB NOT NULL DEFAULT '{"type":"doc","content":[]}'::jsonb,
+    description_json JSONB NOT NULL DEFAULT '{"type":"doc","content":[{"type":"paragraph"}]}'::jsonb,
     description_html TEXT NOT NULL DEFAULT '',
     metadata JSONB DEFAULT '{}'::JSONB,
     "order" INTEGER NOT NULL,

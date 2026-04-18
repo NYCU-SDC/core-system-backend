@@ -335,7 +335,7 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 					Required:        false,
 					Type:            question.QuestionTypeSingleChoice,
 					Title:           pgtype.Text{String: "Q", Valid: true},
-					DescriptionJson: []byte(`{"type":"doc","content":[]}`),
+					DescriptionJson: []byte(`{"type":"doc","content":[{"type":"paragraph"}]}`),
 					DescriptionHtml: "",
 					Metadata:        metadata,
 					Order:           1,

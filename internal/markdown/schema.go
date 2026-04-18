@@ -47,7 +47,8 @@ const (
 	LinkTargetBlank = "_blank"
 )
 
-// EmptyDocumentJSON is the canonical empty ProseMirror doc.
+// EmptyDocumentJSON is the canonical empty ProseMirror doc: one empty paragraph, satisfying NodeDoc's "block+"
+// content rule (see Schema.Nodes[NodeDoc]) and matching DB defaults for description_json.
 const EmptyDocumentJSON = `{"type":"` + NodeDoc + `","content":[{"type":"` + NodeParagraph + `"}]}`
 
 // noMarks is a sentinel used in NodeSpec.Marks to mean "no marks allowed".
