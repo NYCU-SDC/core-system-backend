@@ -41,9 +41,9 @@ func checkRichTextSize(raw []byte) error {
 	return nil
 }
 
-// ProcessAPIText validates rich text from HTTP APIs. It accepts canonical ProseMirror JSON
-// (object root) or a JSON-encoded Markdown string, which is parsed to a ProseMirror doc before
-// validation and HTML rendering.
+// ProcessAPIText validates rich text from HTTP APIs.
+//
+// Contract: payloads must be canonical ProseMirror JSON (object root), or empty/null.
 func (s *Service) ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error) {
 	traceCtx, span := s.tracer.Start(ctx, "ProcessAPIText")
 	defer span.End()
@@ -62,16 +62,10 @@ func (s *Service) ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON
 	}
 
 	if raw[0] == '"' {
-		var markdown string
-		err = json.Unmarshal(raw, &markdown)
-		if err != nil {
-			wrapped := wrapUnmarshalErr(err)
-			logger.Error("invalid rich text JSON string", zap.Error(wrapped))
-			span.RecordError(wrapped)
-			return nil, "", wrapped
-		}
-
-		return s.ProcessMarkdownString(traceCtx, markdown)
+		err := fmt.Errorf("%w: expected JSON object", internal.ErrInvalidDocumentJSON)
+		logger.Warn("invalid rich text payload type (string)", zap.Error(err))
+		span.RecordError(err)
+		return nil, "", err
 	}
 
 	return s.ProcessProseMirrorJSON(traceCtx, raw)
@@ -313,34 +307,6 @@ func (s *Service) FromPlaintext(ctx context.Context, plain string) (canonicalJSO
 		NodeDoc, NodeParagraph, NodeText, textJSON)
 
 	return s.ProcessProseMirrorJSON(traceCtx, []byte(raw))
-}
-
-// ProcessMarkdownString builds a minimal ProseMirror document from Markdown source, then validates/renders it.
-func (s *Service) ProcessMarkdownString(ctx context.Context, source string) (canonicalJSON []byte, html string, err error) {
-	traceCtx, span := s.tracer.Start(ctx, "ProcessMarkdownString")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	if strings.TrimSpace(source) == "" {
-		return s.ProcessProseMirrorJSON(traceCtx, nil)
-	}
-
-	err = checkRichTextSize([]byte(source))
-	if err != nil {
-		logger.Warn("rich text payload too large", zap.Error(err))
-		span.RecordError(err)
-		return nil, "", err
-	}
-
-	doc := docFromMarkdown(source)
-	raw, err := json.Marshal(doc)
-	if err != nil {
-		logger.Error("failed to marshal markdown doc", zap.Error(err))
-		span.RecordError(err)
-		return nil, "", err
-	}
-
-	return s.ProcessProseMirrorJSON(traceCtx, raw)
 }
 
 // PreviewSnippet returns the first maxRunes runes of plain text from a ProseMirror JSON payload.

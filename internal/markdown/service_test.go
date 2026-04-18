@@ -27,23 +27,14 @@ func TestProcessAPIText(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "JSON-encoded Markdown string",
-			raw:  []byte(`"Hello **world**"`),
-			validate: func(t *testing.T, _ []byte, docJSON []byte, docHTML string) {
-				t.Helper()
-				require.Contains(t, string(docJSON), `"type":"doc"`)
-				require.Contains(t, string(docJSON), "Hello ")
-				require.Contains(t, docHTML, "Hello ")
-				require.Contains(t, docHTML, "<strong>world</strong>")
-			},
+			name:        "JSON-encoded string is rejected (no Markdown support)",
+			raw:         []byte(`"Hello **world**"`),
+			expectedErr: internal.ErrInvalidDocumentJSON,
 		},
 		{
-			name: "empty JSON string",
-			raw:  []byte(`""`),
-			validate: func(t *testing.T, _ []byte, docJSON []byte, _ string) {
-				t.Helper()
-				require.Contains(t, string(docJSON), `"type":"doc"`)
-			},
+			name:        "empty JSON string is rejected",
+			raw:         []byte(`""`),
+			expectedErr: internal.ErrInvalidDocumentJSON,
 		},
 		{
 			name:        "malformed JSON string",

@@ -17,7 +17,6 @@ require (
 	github.com/nicksrandall/prosemirror-go v0.0.0-20170601171447-b0778c4954c7
 	github.com/ory/dockertest/v3 v3.12.0
 	github.com/stretchr/testify v1.11.1
-	github.com/yuin/goldmark v1.8.2
 	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.37.0
 	go.opentelemetry.io/otel/sdk v1.40.0
