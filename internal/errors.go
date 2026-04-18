@@ -334,10 +334,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
 	case errors.Is(err, ErrWorkflowResolveSectionsFailed):
-		return problem.NewValidateProblemWithErrors(
-			"failed to resolve workflow sections",
-			[]string{err.Error()},
-		)
+		return problem.NewInternalServerProblem("failed to resolve workflow sections")
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
 	case errors.Is(err, ErrUnmarshalWorkflow):
