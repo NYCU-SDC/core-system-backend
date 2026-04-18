@@ -32,6 +32,7 @@ func docFromMarkdown(source string) pm.Node {
 				blocks = append(blocks, pm.Node{Type: Schema.Nodes[NodeParagraph]})
 				continue
 			}
+
 			blocks = append(blocks, pm.Node{
 				Type:    Schema.Nodes[NodeParagraph],
 				Content: pm.Fragment{Content: inlines},
@@ -72,6 +73,7 @@ func docFromMarkdown(source string) pm.Node {
 			if txt == "" {
 				continue
 			}
+
 			blocks = append(blocks, pm.Node{
 				Type: Schema.Nodes[NodeParagraph],
 				Content: pm.Fragment{Content: []pm.Node{
@@ -95,6 +97,7 @@ func inlineNodesFromMarkdown(parent ast.Node, src []byte, marks []pm.Mark) []pm.
 		if s == "" {
 			return
 		}
+
 		out = append(out, pm.Node{
 			Type:  Schema.Nodes[NodeText],
 			Text:  s,
@@ -193,34 +196,54 @@ func inlineNodesFromMarkdown(parent ast.Node, src []byte, marks []pm.Mark) []pm.
 
 func extractPlainText(n ast.Node, src []byte) string {
 	var b strings.Builder
-	err := ast.Walk(n, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
-		if !entering {
-			return ast.WalkContinue, nil
-		}
-		switch node.Kind() {
-		case ast.KindText:
-			t := node.(*ast.Text)
-			b.Write(t.Segment.Value(src))
-			if t.HardLineBreak() || t.SoftLineBreak() {
-				b.WriteByte('\n')
-			}
-		case ast.KindString:
-			s := node.(*ast.String)
-			b.Write(s.Value)
-		}
-		return ast.WalkContinue, nil
-	})
+	err := writePlainText(&b, n, src)
 	if err != nil {
 		return ""
 	}
+
 	return b.String()
+}
+
+type plainTextVisitor struct {
+	builder *strings.Builder
+	src     []byte
+}
+
+func (visitor *plainTextVisitor) Visit(node ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		return ast.WalkContinue, nil
+	}
+
+	switch node.Kind() {
+	case ast.KindText:
+		t := node.(*ast.Text)
+		visitor.builder.Write(t.Segment.Value(visitor.src))
+		if t.HardLineBreak() || t.SoftLineBreak() {
+			visitor.builder.WriteByte('\n')
+		}
+	case ast.KindString:
+		s := node.(*ast.String)
+		visitor.builder.Write(s.Value)
+	}
+
+	return ast.WalkContinue, nil
+}
+
+func writePlainText(b *strings.Builder, n ast.Node, src []byte) error {
+	v := plainTextVisitor{
+		builder: b,
+		src:     src,
+	}
+	return ast.Walk(n, v.Visit)
 }
 
 func cloneMarks(in []pm.Mark) []pm.Mark {
 	if len(in) == 0 {
 		return nil
 	}
+
 	out := make([]pm.Mark, len(in))
 	copy(out, in)
+
 	return out
 }
