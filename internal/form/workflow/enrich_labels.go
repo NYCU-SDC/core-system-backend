@@ -41,7 +41,7 @@ func (s *Service) EnrichWorkflowResponse(
 	var nodes []map[string]interface{}
 	err = json.Unmarshal(workflowJSON, &nodes)
 	if err != nil {
-		return workflowJSON, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
+		return workflowJSON, fmt.Errorf("%w: %w", internal.ErrUnmarshalDBWorkflow, err)
 	}
 
 	for i := range nodes {

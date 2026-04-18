@@ -123,7 +123,6 @@ var (
 	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
 	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
 	ErrWorkflowNotActive             = errors.New("workflow is not active")
-	ErrUnmarshalWorkflow             = errors.New("failed to unmarshal workflow")
 	ErrMarshalWorkflow               = errors.New("failed to marshal workflow")
 	ErrUnmarshalAPIWorkflow          = errors.New("failed to unmarshal API workflow")
 	ErrUnmarshalDBWorkflow           = errors.New("failed to unmarshal database workflow")
@@ -337,8 +336,6 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewInternalServerProblem("failed to resolve workflow sections")
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
-	case errors.Is(err, ErrUnmarshalWorkflow):
-		return problem.NewBadRequestProblem("failed to unmarshal workflow")
 	case errors.Is(err, ErrMarshalWorkflow):
 		return problem.NewInternalServerProblem("failed to marshal workflow")
 	case errors.Is(err, ErrUnmarshalAPIWorkflow):
