@@ -158,7 +158,20 @@ func inlineNodesFromMarkdown(parent ast.Node, src []byte, marks []pm.Mark) []pm.
 			})
 		case ast.KindCodeSpan:
 			cs := n.(*ast.CodeSpan)
-			txt := string(cs.Text(src))
+			var b strings.Builder
+			for c := cs.FirstChild(); c != nil; c = c.NextSibling() {
+				switch c.Kind() {
+				case ast.KindText:
+					t := c.(*ast.Text)
+					b.Write(t.Value(src))
+				case ast.KindString:
+					s := c.(*ast.String)
+					b.Write(s.Value)
+				default:
+					b.WriteString(extractPlainText(c, src))
+				}
+			}
+			txt := b.String()
 			nextMarks := append(marks, pm.Mark{Type: Schema.Marks[MarkCode]})
 			out = append(out, pm.Node{
 				Type:  Schema.Nodes[NodeText],
@@ -180,7 +193,7 @@ func inlineNodesFromMarkdown(parent ast.Node, src []byte, marks []pm.Mark) []pm.
 
 func extractPlainText(n ast.Node, src []byte) string {
 	var b strings.Builder
-	ast.Walk(n, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+	err := ast.Walk(n, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -197,6 +210,9 @@ func extractPlainText(n ast.Node, src []byte) string {
 		}
 		return ast.WalkContinue, nil
 	})
+	if err != nil {
+		return ""
+	}
 	return b.String()
 }
 
