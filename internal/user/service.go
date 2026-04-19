@@ -183,19 +183,31 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	// Different provider, same email → binding confirmation required
 	if email != "" {
 		existingUser, err := s.queries.GetWithEarliestProviderByEmail(traceCtx, email)
+		// Does not create a new user if the user has been initialized
+		if !existingUser.Provider.Valid {
+			logger.Info("User has been initialized",
+				zap.String("name", name),
+				zap.String("email", email))
+			return FindOrCreateResult{
+				UserID:             existingUser.ID,
+				ExistingName:       existingUser.Name.String,
+				ExistingProvider:   existingUser.Provider.String,
+				ExistingProviderID: existingUser.ProviderID.String,
+			}, nil
+		}
 		if err == nil {
 			// Found a user with the same email under a different provider
 			logger.Info("Email already exists under different provider, binding confirmation required",
 				zap.String("name", existingUser.Name.String),
 				zap.String("email", email),
-				zap.String("existing_provider", existingUser.Provider),
+				zap.String("existing_provider", existingUser.Provider.String),
 				zap.String("new_provider", oauthProvider),
 			)
 			return FindOrCreateResult{
 				UserID:             existingUser.ID,
 				ExistingName:       existingUser.Name.String,
-				ExistingProvider:   existingUser.Provider,
-				ExistingProviderID: existingUser.ProviderID,
+				ExistingProvider:   existingUser.Provider.String,
+				ExistingProviderID: existingUser.ProviderID.String,
 			}, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -428,6 +440,18 @@ func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, pr
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	if existingProvider == "" && existingProviderID == "" {
+		_, err := s.queries.CreateAuth(traceCtx, CreateAuthParams{
+			UserID:     userID,
+			Provider:   provider,
+			ProviderID: providerID,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create auth")
+			span.RecordError(err)
+			return err
+		}
+	}
 	// Verify the target user actually owns the claimed existing auth entry.
 	ownerID, err := s.queries.GetIDByAuth(traceCtx, GetIDByAuthParams{
 		Provider:   existingProvider,

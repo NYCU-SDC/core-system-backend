@@ -195,7 +195,7 @@ const getWithEarliestProviderByEmail = `-- name: GetWithEarliestProviderByEmail 
 SELECT u.id, u.name, a.provider, a.provider_id
 FROM user_emails e
          JOIN users u ON e.user_id = u.id
-         JOIN auth a ON a.user_id = u.id
+         LEFT JOIN auth a ON a.user_id = u.id
 WHERE e.value = $1
 ORDER BY a.created_at ASC
     LIMIT 1
@@ -204,8 +204,8 @@ ORDER BY a.created_at ASC
 type GetWithEarliestProviderByEmailRow struct {
 	ID         uuid.UUID
 	Name       pgtype.Text
-	Provider   string
-	ProviderID string
+	Provider   pgtype.Text
+	ProviderID pgtype.Text
 }
 
 func (q *Queries) GetWithEarliestProviderByEmail(ctx context.Context, value string) (GetWithEarliestProviderByEmailRow, error) {

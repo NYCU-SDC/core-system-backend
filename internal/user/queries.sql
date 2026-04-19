@@ -10,7 +10,7 @@ SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);
 SELECT u.id, u.name, a.provider, a.provider_id
 FROM user_emails e
          JOIN users u ON e.user_id = u.id
-         JOIN auth a ON a.user_id = u.id
+         LEFT JOIN auth a ON a.user_id = u.id
 WHERE e.value = $1
 ORDER BY a.created_at ASC
     LIMIT 1;
