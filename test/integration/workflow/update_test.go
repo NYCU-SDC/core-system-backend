@@ -15,22 +15,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWorkflowService_Update(t *testing.T) {
-	type Params struct {
-		formID       uuid.UUID
-		userID       uuid.UUID
-		workflowJSON []byte
-		versionID    uuid.UUID // Used to track version IDs for validation
-	}
+type Params struct {
+	formID       uuid.UUID
+	userID       uuid.UUID
+	workflowJSON []byte
+	versionID    uuid.UUID
+}
 
-	type testCase struct {
-		name        string
-		params      Params
-		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context
-		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error)
-		expectedErr bool
-	}
+type testCase struct {
+	name        string
+	params      Params
+	setup       func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context
+	validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error)
+	expectedErr bool
+}
 
+// TestWorkflow_Update exercises sqlc workflow queries.Update (persistence path without Service validation).
+func TestWorkflow_Update(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:   "Update creates first workflow version when none exists",
