@@ -5,7 +5,7 @@ import (
 )
 
 // ToQuestion converts GetByIDRow to Question
-func (r GetByIDRow) ToQuestion() Question {
+func (r GetRow) ToQuestion() Question {
 	return Question{
 		ID:          r.ID,
 		SectionID:   r.SectionID,
