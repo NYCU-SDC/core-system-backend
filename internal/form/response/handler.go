@@ -110,9 +110,45 @@ func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter
 	}
 }
 
-// List lists responses for a form submitted by the current user
+// List lists all responses for a form (requires org member permission)
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "List")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formIDStr := r.PathValue("formId")
+	formID, err := handlerutil.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	// Return all responses for the form
+	allResponses, err := h.store.ListByFormID(traceCtx, formID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	listResponse := ListResponse{
+		FormID:        formID.String(),
+		ResponseJSONs: make([]Response, 0, len(allResponses)),
+	}
+	for _, currentResponse := range allResponses {
+		listResponse.ResponseJSONs = append(listResponse.ResponseJSONs, Response{
+			ID:          currentResponse.ID.String(),
+			SubmittedBy: currentResponse.SubmittedBy.String(),
+			CreatedAt:   currentResponse.CreatedAt.Time,
+			UpdatedAt:   currentResponse.UpdatedAt.Time,
+		})
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, listResponse)
+}
+
+// ListMe lists responses for a form submitted by the current user
+func (h *Handler) ListMe(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListMe")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
