@@ -17,8 +17,8 @@ type Querier interface {
 	CreateUserInboxBulk(ctx context.Context, arg CreateUserInboxBulkParams) ([]UserInboxMessage, error)
 	List(ctx context.Context, arg ListParams) ([]ListRow, error)
 	ListCount(ctx context.Context, arg ListCountParams) (int64, error)
-	GetByID(ctx context.Context, arg GetByIDParams) (GetByIDRow, error)
-	UpdateByID(ctx context.Context, arg UpdateByIDParams) (UpdateByIDRow, error)
+	Get(ctx context.Context, arg GetParams) (GetRow, error)
+	Update(ctx context.Context, arg UpdateParams) (UpdateRow, error)
 }
 
 type Service struct {
@@ -168,30 +168,30 @@ func (s *Service) Count(ctx context.Context, userID uuid.UUID, filter *FilterReq
 	return total, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (GetByIDRow, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetByID")
+func (s *Service) Get(ctx context.Context, id uuid.UUID, userID uuid.UUID) (GetRow, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	message, err := s.queries.GetByID(traceCtx, GetByIDParams{
+	message, err := s.queries.Get(traceCtx, GetParams{
 		UserInboxMessageID: id,
 		UserID:             userID,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get the full inbox_message by id")
 		span.RecordError(err)
-		return GetByIDRow{}, err
+		return GetRow{}, err
 	}
 
 	return message, err
 }
 
-func (s *Service) UpdateByID(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg UserInboxMessageFilter) (UpdateByIDRow, error) {
-	traceCtx, span := s.tracer.Start(ctx, "UpdateByID")
+func (s *Service) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg UserInboxMessageFilter) (UpdateRow, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	message, err := s.queries.UpdateByID(traceCtx, UpdateByIDParams{
+	message, err := s.queries.Update(traceCtx, UpdateParams{
 		ID:         id,
 		UserID:     userID,
 		IsRead:     arg.IsRead,
@@ -201,7 +201,7 @@ func (s *Service) UpdateByID(ctx context.Context, id uuid.UUID, userID uuid.UUID
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update user_inbox_message by id")
 		span.RecordError(err)
-		return UpdateByIDRow{}, err
+		return UpdateRow{}, err
 	}
 
 	return message, err

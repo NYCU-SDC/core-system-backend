@@ -26,8 +26,8 @@ import (
 type Store interface {
 	List(ctx context.Context, userID uuid.UUID, filter *FilterRequest, page int, size int) ([]ListRow, error)
 	Count(ctx context.Context, userID uuid.UUID, filter *FilterRequest) (int64, error)
-	GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (GetByIDRow, error)
-	UpdateByID(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg UserInboxMessageFilter) (UpdateByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID, userID uuid.UUID) (GetRow, error)
+	Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg UserInboxMessageFilter) (UpdateRow, error)
 }
 
 type UserInboxMessageFilter struct {
@@ -154,7 +154,7 @@ func (h *Handler) GetMessageContent(ctx context.Context, contentType ContentType
 
 	switch contentType {
 	case ContentTypeForm:
-		currentForm, err := h.formStore.GetByID(traceCtx, contentID)
+		currentForm, err := h.formStore.Get(traceCtx, contentID)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "get form by id")
 			span.RecordError(err)
@@ -255,7 +255,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.store.GetByID(traceCtx, id, currentUser.ID)
+	message, err := h.store.Get(traceCtx, id, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -327,7 +327,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.store.UpdateByID(traceCtx, id, currentUser.ID, UserInboxMessageFilter{
+	message, err := h.store.Update(traceCtx, id, currentUser.ID, UserInboxMessageFilter{
 		IsRead:     req.IsRead,
 		IsStarred:  req.IsStarred,
 		IsArchived: req.IsArchived,

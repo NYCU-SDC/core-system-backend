@@ -26,7 +26,7 @@ type Store interface {
 	CreateOrganizationWithUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
 	CreateOrganization(ctx context.Context, name string, description string, slug string) (Unit, error)
 	CreateUnitWithUserID(ctx context.Context, name string, description string, parentID uuid.UUID, UserID uuid.UUID, metadata []byte) (Unit, error)
-	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
+	Get(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
 	ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID) ([]Organization, error)
 	UpdateOrg(ctx context.Context, originalSlug string, slug string, name string, description string, dbStrategy string, metadata []byte) (Unit, error)
@@ -38,7 +38,7 @@ type Store interface {
 	AddMember(ctx context.Context, unitType Type, id uuid.UUID, username string) (AddMemberRow, error)
 	ListMembers(ctx context.Context, id uuid.UUID) ([]user.Profile, error)
 	RemoveMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) error
-	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error)
+	GetOrganizationWithSlug(ctx context.Context, id uuid.UUID) (Organization, error)
 	UpdateUnitMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, newRole UnitRole) error
 	SlugExists(ctx context.Context, slug string) (bool, error)
 }
@@ -329,8 +329,8 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, convertOrgResponse(createdOrg, req.Slug))
 }
 
-func (h *Handler) GetUnitByID(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetUnitByID")
+func (h *Handler) GetUnit(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetUnit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -341,7 +341,7 @@ func (h *Handler) GetUnitByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	unit, err := h.store.GetByID(traceCtx, id, TypeUnit)
+	unit, err := h.store.Get(traceCtx, id, TypeUnit)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get unit by ID: %w", err), logger)
 		return
@@ -367,7 +367,7 @@ func (h *Handler) GetOrgByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgWithSlug, err := h.store.GetOrganizationByIDWithSlug(traceCtx, orgID)
+	orgWithSlug, err := h.store.GetOrganizationWithSlug(traceCtx, orgID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get organization by ID with slug: %w", err), logger)
 		return

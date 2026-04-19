@@ -20,7 +20,7 @@ import (
 
 type Querier interface {
 	Get(ctx context.Context, arg GetParams) (FormResponse, error)
-	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	Create(ctx context.Context, arg CreateParams) (FormResponse, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 	ExistsByFormIDAndSubmittedBy(ctx context.Context, arg ExistsByFormIDAndSubmittedByParams) (bool, error)
@@ -39,7 +39,7 @@ type AnswerStore interface {
 }
 
 type UserStore interface {
-	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
@@ -139,7 +139,7 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.userStore.ExistsByID(traceCtx, userID)
+	exists, err := s.userStore.Exists(traceCtx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check user exists")
 		span.RecordError(err)
@@ -177,7 +177,7 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.userStore.ExistsByID(traceCtx, userID)
+	exists, err := s.userStore.Exists(traceCtx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check user exists")
 		span.RecordError(err)
@@ -352,12 +352,12 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	return response, result, nil
 }
 
-func (s Service) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetFormIDByID")
+func (s Service) GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetFormID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	formID, err := s.queries.GetFormIDByID(traceCtx, id)
+	formID, err := s.queries.GetFormID(traceCtx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return uuid.Nil, internal.ErrResponseNotFound
@@ -377,7 +377,7 @@ func (s Service) GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, e
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	formID, err := s.queries.GetFormIDByID(traceCtx, id)
+	formID, err := s.queries.GetFormID(traceCtx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return uuid.Nil, internal.ErrResponseNotFound
@@ -400,14 +400,14 @@ func (s Service) GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, e
 	return response.SubmittedBy, nil
 }
 
-// GetByID retrieves a form response by its ID alone (without requiring the formID).
+// Get retrieves a form response by its ID alone (without requiring the formID).
 // This is a lightweight lookup used for ownership checks.
 func (s Service) GetByID(ctx context.Context, id uuid.UUID) (FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetByID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	formID, err := s.queries.GetFormIDByID(traceCtx, id)
+	formID, err := s.queries.GetFormID(traceCtx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return FormResponse{}, internal.ErrResponseNotFound

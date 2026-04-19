@@ -4,7 +4,7 @@ import (
 	"regexp"
 )
 
-// ToQuestion converts GetByIDRow to Question
+// ToQuestion converts GetRow to Question
 func (r GetRow) ToQuestion() Question {
 	return Question{
 		ID:          r.ID,
