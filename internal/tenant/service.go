@@ -24,7 +24,7 @@ type Querier interface {
 	GetSlugStatus(ctx context.Context, slug string) (pgtype.UUID, error)
 	GetSlugHistory(ctx context.Context, slug string) ([]GetSlugHistoryRow, error)
 	CreateSlugHistory(ctx context.Context, arg CreateSlugHistoryParams) (SlugHistory, error)
-	UpdateSlugHistory(ctx context.Context, arg UpdateSlugHistoryParams) ([]pgtype.UUID, error)
+	UpsertSlugHistory(ctx context.Context, arg UpsertSlugHistoryParams) ([]pgtype.UUID, error)
 }
 
 type Service struct {
@@ -134,12 +134,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, slug string, dbStrat
 	}
 	logger.Info("tenant updated", zap.String("tenant_id", tenant.ID.String()), zap.String("db_strategy", string(tenant.DbStrategy)), zap.String("slug", slug))
 
-	_, err = s.query.UpdateSlugHistory(traceCtx, UpdateSlugHistoryParams{
+	_, err = s.query.UpsertSlugHistory(traceCtx, UpsertSlugHistoryParams{
 		Slug:  slug,
 		OrgID: pgtype.UUID{Bytes: tenant.ID, Valid: true},
 	})
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "slug_history", "org_id", tenant.ID.String(), logger, "update slug history by org id")
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "slug_history", "org_id", tenant.ID.String(), logger, "upsert slug history by org id")
 		span.RecordError(err)
 		return Tenant{}, err
 	}
