@@ -158,7 +158,7 @@ func main() {
 	answerFileHandler := answer.NewFileResourceHandler(logger, answerQueries)
 	fileService := file.NewService(logger, dbPool, answerFileHandler)
 
-	userService := user.NewService(logger, dbPool, fileService, unitService, unitService)
+	userService := user.NewService(logger, dbPool, fileService, unitService, unitService, nil)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
 	formService := form.NewService(logger, dbPool)
@@ -178,6 +178,7 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to setup", zap.Error(err))
 	}
+	userService.SetOnboardingChecker(setupService)
 	// ============================================
 	// Handler
 	// ============================================
