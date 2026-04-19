@@ -170,7 +170,7 @@ type Store interface {
 	Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error)
 	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID) (GetRow, error)
 	List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
@@ -184,7 +184,7 @@ type tenantStore interface {
 
 type questionStore interface {
 	UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (question.Section, error)
-	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	Get(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 }
 
 type Handler struct {
@@ -202,7 +202,7 @@ type Handler struct {
 
 type FileService interface {
 	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
-	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
+	Get(ctx context.Context, id uuid.UUID) (file.File, error)
 }
 
 func NewHandler(
@@ -322,7 +322,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.GetByID(traceCtx, id)
+	currentForm, err := h.store.Get(traceCtx, id)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -642,7 +642,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.GetByID(traceCtx, id)
+	currentForm, err := h.store.Get(traceCtx, id)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
