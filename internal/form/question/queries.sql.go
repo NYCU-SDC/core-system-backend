@@ -113,7 +113,7 @@ func (q *Queries) DeleteAndReorder(ctx context.Context, arg DeleteAndReorderPara
 	return err
 }
 
-const getByID = `-- name: GetByID :one
+const get = `-- name: Get :one
 SELECT 
     q.id,
     q.section_id,
@@ -132,7 +132,7 @@ JOIN sections s ON q.section_id = s.id
 WHERE q.id = $1
 `
 
-type GetByIDRow struct {
+type GetRow struct {
 	ID          uuid.UUID
 	SectionID   uuid.UUID
 	Required    bool
@@ -147,9 +147,9 @@ type GetByIDRow struct {
 	FormID      uuid.UUID
 }
 
-func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error) {
-	row := q.db.QueryRow(ctx, getByID, id)
-	var i GetByIDRow
+func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
+	row := q.db.QueryRow(ctx, get, id)
+	var i GetRow
 	err := row.Scan(
 		&i.ID,
 		&i.SectionID,
@@ -314,26 +314,26 @@ func (q *Queries) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 	return items, nil
 }
 
-const listTypesByIDs = `-- name: ListTypesByIDs :many
+const listTypes = `-- name: ListTypes :many
 SELECT id, type
 FROM questions
 WHERE id = ANY($1::uuid[])
 `
 
-type ListTypesByIDsRow struct {
+type ListTypesRow struct {
 	ID   uuid.UUID
 	Type QuestionType
 }
 
-func (q *Queries) ListTypesByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]ListTypesByIDsRow, error) {
-	rows, err := q.db.Query(ctx, listTypesByIDs, dollar_1)
+func (q *Queries) ListTypes(ctx context.Context, dollar_1 []uuid.UUID) ([]ListTypesRow, error) {
+	rows, err := q.db.Query(ctx, listTypes, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListTypesByIDsRow
+	var items []ListTypesRow
 	for rows.Next() {
-		var i ListTypesByIDsRow
+		var i ListTypesRow
 		if err := rows.Scan(&i.ID, &i.Type); err != nil {
 			return nil, err
 		}

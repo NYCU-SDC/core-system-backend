@@ -193,7 +193,7 @@ func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 	return exists, err
 }
 
-const getByID = `-- name: GetByID :one
+const get = `-- name: Get :one
 SELECT 
     f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
@@ -209,7 +209,7 @@ LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.id = $1
 `
 
-type GetByIDRow struct {
+type GetRow struct {
 	ID                     uuid.UUID
 	Title                  string
 	Description            pgtype.Text
@@ -238,9 +238,9 @@ type GetByIDRow struct {
 	LastEditorEmail        interface{}
 }
 
-func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error) {
-	row := q.db.QueryRow(ctx, getByID, id)
-	var i GetByIDRow
+func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
+	row := q.db.QueryRow(ctx, get, id)
+	var i GetRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -272,98 +272,6 @@ func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	return i, err
 }
 
-const getByIDs = `-- name: GetByIDs :many
-SELECT
-    f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
-    u.name as unit_name,
-    o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
-FROM forms f
-LEFT JOIN units u ON f.unit_id = u.id
-LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
-WHERE f.id = ANY($1::uuid[])
-`
-
-type GetByIDsRow struct {
-	ID                     uuid.UUID
-	Title                  string
-	Description            pgtype.Text
-	PreviewMessage         pgtype.Text
-	MessageAfterSubmission string
-	Status                 Status
-	UnitID                 pgtype.UUID
-	CreatedBy              uuid.UUID
-	LastEditor             uuid.UUID
-	Deadline               pgtype.Timestamptz
-	CreatedAt              pgtype.Timestamptz
-	UpdatedAt              pgtype.Timestamptz
-	Visibility             Visibility
-	GoogleSheetUrl         pgtype.Text
-	PublishTime            pgtype.Timestamptz
-	CoverImageUrl          pgtype.Text
-	DressingColor          pgtype.Text
-	DressingHeaderFont     pgtype.Text
-	DressingQuestionFont   pgtype.Text
-	DressingTextFont       pgtype.Text
-	UnitName               pgtype.Text
-	OrgName                pgtype.Text
-	LastEditorName         pgtype.Text
-	LastEditorUsername     pgtype.Text
-	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
-}
-
-func (q *Queries) GetByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetByIDsRow, error) {
-	rows, err := q.db.Query(ctx, getByIDs, dollar_1)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetByIDsRow
-	for rows.Next() {
-		var i GetByIDsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.PreviewMessage,
-			&i.MessageAfterSubmission,
-			&i.Status,
-			&i.UnitID,
-			&i.CreatedBy,
-			&i.LastEditor,
-			&i.Deadline,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.Visibility,
-			&i.GoogleSheetUrl,
-			&i.PublishTime,
-			&i.CoverImageUrl,
-			&i.DressingColor,
-			&i.DressingHeaderFont,
-			&i.DressingQuestionFont,
-			&i.DressingTextFont,
-			&i.UnitName,
-			&i.OrgName,
-			&i.LastEditorName,
-			&i.LastEditorUsername,
-			&i.LastEditorAvatarUrl,
-			&i.LastEditorEmail,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getCoverImage = `-- name: GetCoverImage :one
 SELECT image_data FROM form_covers WHERE form_id = $1
 `
@@ -375,14 +283,14 @@ func (q *Queries) GetCoverImage(ctx context.Context, formID uuid.UUID) ([]byte, 
 	return image_data, err
 }
 
-const getCreatorByID = `-- name: GetCreatorByID :one
+const getCreator = `-- name: GetCreator :one
 SELECT created_by
 FROM forms
 WHERE id = $1
 `
 
-func (q *Queries) GetCreatorByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getCreatorByID, id)
+func (q *Queries) GetCreator(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getCreator, id)
 	var created_by uuid.UUID
 	err := row.Scan(&created_by)
 	return created_by, err
@@ -401,14 +309,14 @@ func (q *Queries) GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID
 	return form_id, err
 }
 
-const getUnitIDByID = `-- name: GetUnitIDByID :one
+const getUnitID = `-- name: GetUnitID :one
 SELECT unit_id
 FROM forms
 WHERE id = $1
 `
 
-func (q *Queries) GetUnitIDByID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, getUnitIDByID, id)
+func (q *Queries) GetUnitID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getUnitID, id)
 	var unit_id pgtype.UUID
 	err := row.Scan(&unit_id)
 	return unit_id, err
