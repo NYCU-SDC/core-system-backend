@@ -23,7 +23,7 @@ type Querier interface {
 	Create(ctx context.Context, params CreateParams) (CreateRow, error)
 	Patch(ctx context.Context, params PatchParams) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	GetByID(ctx context.Context, id uuid.UUID) (GetRow, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error)
 	List(ctx context.Context, arg ListParams) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
@@ -259,7 +259,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error) {
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetRow, error) {
 	ctx, span := s.tracer.Start(ctx, "GetFormByID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -268,11 +268,11 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			span.RecordError(internal.ErrFormNotFound)
-			return GetByIDRow{}, internal.ErrFormNotFound
+			return GetRow{}, internal.ErrFormNotFound
 		}
 		err = databaseutil.WrapDBError(err, logger, "get form by id")
 		span.RecordError(err)
-		return GetByIDRow{}, err
+		return GetRow{}, err
 	}
 
 	return currentForm, nil
