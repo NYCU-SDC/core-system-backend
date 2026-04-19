@@ -54,14 +54,15 @@ type FileOperator interface {
 type onboardingChecker interface {
 	AllowedOnboarding(email string) bool
 }
+
 type Service struct {
-	logger       *zap.Logger
-	queries      Querier
-	tracer       trace.Tracer
-	fileOperator FileOperator
-	orgWriter    OrgMemberWriter
-	orgResolver  OrgSlugResolver
-  onboardingChecker onboardingChecker
+	logger            *zap.Logger
+	queries           Querier
+	tracer            trace.Tracer
+	fileOperator      FileOperator
+	orgWriter         OrgMemberWriter
+	orgResolver       OrgSlugResolver
+	onboardingChecker onboardingChecker
 }
 
 type Profile struct {
@@ -85,15 +86,20 @@ type OrgSlugResolver interface {
 	GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter, orgResolver OrgSlugResolver) *Service {
+func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter, orgResolver OrgSlugResolver, onboardingChecker onboardingChecker) *Service {
 	return &Service{
-		logger:       logger,
-		queries:      New(db),
-		tracer:       otel.Tracer("user/service"),
-		fileOperator: fileOperator,
-		orgWriter:    orgWriter,
-		orgResolver:  orgResolver,
+		logger:            logger,
+		queries:           New(db),
+		tracer:            otel.Tracer("user/service"),
+		fileOperator:      fileOperator,
+		orgWriter:         orgWriter,
+		orgResolver:       orgResolver,
+		onboardingChecker: onboardingChecker,
 	}
+}
+
+func (s *Service) SetOnboardingChecker(checker onboardingChecker) {
+	s.onboardingChecker = checker
 }
 
 func (s *Service) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
@@ -308,15 +314,10 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	return FindOrCreateResult{UserID: newUser.ID}, nil
 }
 
-type OrgMember struct {
-	Slug    string `yaml:"slug"`
-	OrgRole string `yaml:"org_role"`
-}
-
 func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalRole []string) (uuid.UUID, error) {
-	traceCtx, span := s.tracer.Start(ctx, "InitialFindOrCreate")
+	traceCtx, span := s.tracer.Start(ctx, "FindOrCreateByEmail")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
 	id, err := s.queries.GetIDByEmail(traceCtx, email)
 	if err != nil && err != pgx.ErrNoRows {
@@ -326,7 +327,7 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 	}
 
 	if id != uuid.Nil {
-		logger.Debug("Updated existing user", zap.String("user_id", id.String()))
+		logger.Debug("Found existing user", zap.String("user_id", id.String()))
 		return id, nil
 	}
 

@@ -2,28 +2,41 @@ package setup
 
 import (
 	"NYCU-SDC/core-system-backend/internal/unit"
-	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
 
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
 type Service struct {
 	logger                *zap.Logger
+	tracer                trace.Tracer
 	db                    *pgxpool.Pool
 	config                SetupConfig
 	allowedOnboardingList AllowedOnboardingList
-	unitService           *unit.Service
-	userService           *user.Service
+	unitService           UnitService
+	userService           UserService
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, setupData string, unitService *unit.Service, userService *user.Service) (*Service, error) {
+type UnitService interface {
+	SlugExists(ctx context.Context, slug string) (bool, error)
+	CreateOrganization(ctx context.Context, name string, description string, slug string) (unit.Unit, error)
+}
+
+type UserService interface {
+	FindOrCreateByEmail(ctx context.Context, email string, globalRole []string) (uuid.UUID, error)
+}
+
+func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, setupData string, unitService UnitService, userService UserService) (*Service, error) {
 	var config SetupConfig
 
 	data, err := os.ReadFile(setupPath)
@@ -59,6 +72,7 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, setupDat
 
 	service := &Service{
 		logger:                logger,
+		tracer:                otel.Tracer("setup"),
 		db:                    db,
 		config:                config,
 		allowedOnboardingList: allowedList,
@@ -66,12 +80,16 @@ func NewService(logger *zap.Logger, db *pgxpool.Pool, setupPath string, setupDat
 		userService:           userService,
 	}
 
-	logger.Info("NewService proccess done", zap.Int("allowed_onboarding_count", len(allowedList)))
+	logger.Info("NewService process done", zap.Int("allowed_onboarding_count", len(allowedList)))
 
 	return service, nil
 }
 
 func (s *Service) Setup(ctx context.Context) error {
+	traceCtx, span := s.tracer.Start(ctx, "ExistsByID")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
 	adminCount := make(map[string]int)
 	for _, user := range s.config.Users {
 		for _, member := range user.OrgMember {
@@ -83,7 +101,7 @@ func (s *Service) Setup(ctx context.Context) error {
 
 	for _, org := range s.config.Organizations {
 		if adminCount[org.Slug] < 1 {
-			s.logger.Error("The organization does not have the admin role", zap.String("org_name", org.Name))
+			logger.Error("The organization does not have the admin role", zap.String("org_name", org.Name))
 			return fmt.Errorf("the organization %s does not have the admin role", org.Name)
 		}
 	}
@@ -91,27 +109,27 @@ func (s *Service) Setup(ctx context.Context) error {
 	for _, org := range s.config.Organizations {
 		exist, err := s.unitService.SlugExists(ctx, org.Slug)
 		if err != nil {
-			s.logger.Error("Failed to check if the organization exists", zap.Error(err))
+			logger.Error("Failed to check if the organization exists", zap.Error(err))
 			return err
 		}
 		if !exist {
 			_, err := s.unitService.CreateOrganization(ctx, org.Name, org.Description, org.Slug)
 			if err != nil {
-				s.logger.Error("Failed to initialize organization", zap.String("org_name", org.Name), zap.Error(err))
+				logger.Error("Failed to initialize organization", zap.String("org_name", org.Name), zap.Error(err))
 				return err
 			}
 		}
 	}
-	s.logger.Info("Successfully initialized organizations")
+	logger.Info("Successfully initialized organizations")
 
 	for _, user := range s.config.Users {
 		_, err := s.userService.FindOrCreateByEmail(ctx, user.Email, user.GlobalRole)
 		if err != nil {
-			s.logger.Error("Failed to find or create user", zap.String("email", user.Email), zap.Error(err))
+			logger.Error("Failed to find or create user", zap.String("email", user.Email), zap.Error(err))
 			return err
 		}
 	}
-	s.logger.Info("Successfully initialized users")
+	logger.Info("Successfully initialized users")
 
 	return nil
 }
