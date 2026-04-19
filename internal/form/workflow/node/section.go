@@ -31,12 +31,6 @@ func (n *SectionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap ma
 		return fmt.Errorf("section node '%s' must have a 'next' field", nodeID)
 	}
 
-	// Validate that next node exists
-	_, exists := nodeMap[next]
-	if !exists {
-		return fmt.Errorf("section node '%s' references non-existent node '%s' in next", nodeID, next)
-	}
-
 	return nil
 }
 

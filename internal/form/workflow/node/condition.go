@@ -42,15 +42,6 @@ func (n *ConditionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap 
 		return fmt.Errorf("condition node '%s' must have a 'nextFalse' field", nodeID)
 	}
 
-	// Validate that nextTrue and nextFalse nodes exist
-	_, exists := nodeMap[nextTrue]
-	if !exists {
-		return fmt.Errorf("condition node '%s' references non-existent node '%s' in nextTrue", nodeID, nextTrue)
-	}
-	if _, exists := nodeMap[nextFalse]; !exists {
-		return fmt.Errorf("condition node '%s' references non-existent node '%s' in nextFalse", nodeID, nextFalse)
-	}
-
 	// Validate conditionRule
 	conditionRuleRaw, ok := n.node["conditionRule"]
 	if !ok {

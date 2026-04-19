@@ -95,7 +95,8 @@ func NewValidator() Validator {
 // - Array structure
 // - Node structure and required fields
 // - Valid node types
-// - Reachability (all nodes are reachable)
+// - Graph references (next, nextTrue, nextFalse point to existing nodes)
+// - Reachability (all nodes are reachable from the start node)
 // - Condition rule question IDs exist and types match
 // Returns all validation errors if validation fails
 func (v workflowValidator) Activate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore QuestionStore) error {
@@ -120,9 +121,14 @@ func (v workflowValidator) Activate(ctx context.Context, formID uuid.UUID, workf
 	}
 
 	if nodeMap != nil {
-		err := validateReachability(nodes, nodeMap)
+		err := validateGraphReferences(nodes, nodeMap)
 		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("reachability validation failed: %w", err))
+			validationErrors = append(validationErrors, fmt.Errorf("graph validation failed: %w", err))
+		} else {
+			err := validateReachability(nodes, nodeMap)
+			if err != nil {
+				validationErrors = append(validationErrors, fmt.Errorf("reachability validation failed: %w", err))
+			}
 		}
 	}
 
@@ -155,9 +161,9 @@ func (v workflowValidator) Validate(ctx context.Context, formID uuid.UUID, workf
 	}
 
 	if nodeMap != nil {
-		err := validateReference(nodes, nodeMap)
+		err := validateGraphReferences(nodes, nodeMap)
 		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("graph references validation failed: %w", err))
+			validationErrors = append(validationErrors, fmt.Errorf("graph validation failed: %w", err))
 		}
 
 		// Validate that condition nodes reference sections visited before them (section = question's section, resolved from question ID)
@@ -476,22 +482,12 @@ func validateRequiredNodeTypes(startNodeCount, endNodeCount int) []error {
 	return validationErrors
 }
 
-// validateReachability checks if all nodes in the workflow are reachable
-// It ensures:
-// - All node references (next, nextTrue, nextFalse) point to valid nodes
-// - All nodes can be reached from entry points (start nodes or first node)
-// - No orphaned nodes exist
+// validateReachability checks that every node is reachable from the start node via BFS.
+// Call validateGraphReferences first so every edge target is known to exist in nodeMap.
 func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
-	// First validate references
-	err := validateReference(nodes, nodeMap)
-	if err != nil {
-		return err
-	}
-
-	// Build graph for reachability validation
 	graph := make(map[string][]string)
 
-	// Build adjacency list and validate references
+	// Build adjacency list from next / nextTrue / nextFalse
 	for _, node := range nodes {
 		nodeID, _ := node["id"].(string)
 		nodeType, _ := node["type"].(string)
@@ -570,8 +566,9 @@ func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map
 	return nil
 }
 
-// validateReferences validates that any explicit reference fields point to nodes that exist.
-func validateReference(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
+// validateGraphReferences ensures next, nextTrue, and nextFalse reference existing node IDs.
+// This is the single place for edge-target existence checks (Activate and Validate both use it).
+func validateGraphReferences(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
 	var referenceErrors []error
 
 	for _, node := range nodes {
