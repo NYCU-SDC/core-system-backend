@@ -98,7 +98,7 @@ LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;
 -- name: Delete :exec
 DELETE FROM forms WHERE id = $1;
 
--- name: GetByID :one
+-- name: Get :one
 SELECT 
     f.*,
     u.name as unit_name,
@@ -112,21 +112,6 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.id = $1;
-
--- name: GetByIDs :many
-SELECT
-    f.*,
-    u.name as unit_name,
-    o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
-FROM forms f
-LEFT JOIN units u ON f.unit_id = u.id
-LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
-WHERE f.id = ANY($1::uuid[]);
 
 -- name: Exists :one
 SELECT EXISTS(SELECT 1 FROM forms WHERE id = $1);
@@ -190,7 +175,7 @@ RETURNING id;
 -- name: GetCoverImage :one
 SELECT image_data FROM form_covers WHERE form_id = $1;
 
--- name: GetUnitIDByID :one
+-- name: GetUnitID :one
 SELECT unit_id
 FROM forms
 WHERE id = $1;
@@ -201,7 +186,7 @@ FROM sections s
 JOIN forms f ON s.form_id = f.id
 WHERE s.id = $1;
 
--- name: GetCreatorByID :one
+-- name: GetCreator :one
 SELECT created_by
 FROM forms
 WHERE id = $1;

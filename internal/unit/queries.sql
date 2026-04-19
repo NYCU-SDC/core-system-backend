@@ -3,7 +3,7 @@ INSERT INTO units (name, org_id, description, metadata, type, parent_id)
 VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *;
 
--- name: GetByID :one
+-- name: Get :one
 SELECT * FROM units WHERE id = $1;
 
 -- name: GetAllOrganizations :many
@@ -21,7 +21,7 @@ WHERE u.type = 'organization'
     AND um.member_id = $1
     AND sh.ended_at IS NULL;
 
--- name: GetOrganizationByIDWithSlug :one
+-- name: GetOrganizationWithSlug :one
 SELECT u.*, sh.slug
 FROM units u
 LEFT JOIN slug_history sh ON sh.org_id = u.id

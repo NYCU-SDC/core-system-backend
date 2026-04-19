@@ -8,7 +8,7 @@ INSERT INTO user_inbox_messages (user_id, message_id)
 SELECT unnest(@user_ids::uuid[]), @message_id::uuid
 RETURNING *;
 
--- name: GetByID :one
+-- name: Get :one
 SELECT 
     uim.*,
     im.*,
@@ -66,7 +66,7 @@ WHERE uim.user_id = @user_id
     OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || @search::text || '%'
   ));
 
--- name: UpdateByID :one
+-- name: Update :one
 UPDATE user_inbox_messages AS uim
 SET is_read = @is_read, is_starred = @is_starred, is_archived = @is_archived
 FROM inbox_message AS im
