@@ -29,9 +29,8 @@ type QuestionStore interface {
 }
 
 type FormStore interface {
-	GetByID(ctx context.Context, id uuid.UUID) (form.GetByIDRow, error)
+	GetByID(ctx context.Context, id uuid.UUID) (form.GetRow, error)
 	List(ctx context.Context, status form.Status, visibility form.Visibility, excludeExpired bool) ([]form.ListRow, error)
-	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]form.GetByIDsRow, error)
 }
 
 type FormResponseStore interface {
