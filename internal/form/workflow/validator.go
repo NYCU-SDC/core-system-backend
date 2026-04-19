@@ -29,7 +29,7 @@ var nodeIDPatternTemplates = []string{
 	node.TypeSection + " node '%s'",
 	node.TypeCondition + " node '%s'",
 	node.TypeEnd + " node '%s'",
-	// Generic node pattern: "node 'uuid' is unreachable"
+	// Generic node pattern: "node 'uuid' ..."
 	"node '%s'",
 	// Duplicate node ID pattern: "duplicate node id 'uuid'"
 	"duplicate node id '%s'",
@@ -96,7 +96,6 @@ func NewValidator() Validator {
 // - Node structure and required fields
 // - Valid node types
 // - Graph references (next, nextTrue, nextFalse point to existing nodes)
-// - Reachability (all nodes are reachable from the start node)
 // - Condition rule question IDs exist and types match
 // Returns all validation errors if validation fails
 func (v workflowValidator) Activate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore QuestionStore) error {
@@ -124,11 +123,6 @@ func (v workflowValidator) Activate(ctx context.Context, formID uuid.UUID, workf
 		err := validateGraphReferences(nodes, nodeMap)
 		if err != nil {
 			validationErrors = append(validationErrors, fmt.Errorf("graph validation failed: %w", err))
-		} else {
-			err := validateReachability(nodes, nodeMap)
-			if err != nil {
-				validationErrors = append(validationErrors, fmt.Errorf("reachability validation failed: %w", err))
-			}
 		}
 	}
 
@@ -482,9 +476,12 @@ func validateRequiredNodeTypes(startNodeCount, endNodeCount int) []error {
 	return validationErrors
 }
 
-// validateReachability checks that every node is reachable from the start node via BFS.
-// Call validateGraphReferences first so every edge target is known to exist in nodeMap.
-func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
+// validateReachabilityWarning checks that every node is reachable from the start node via BFS.
+// It returns an error listing unreachable node IDs. This is used for non-blocking validation
+// surfaces (e.g. GetValidationInfo) after we stopped enforcing reachability on Activate.
+//
+// Caller should run validateGraphReferences first so every edge target is known to exist in nodeMap.
+func validateReachabilityWarning(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
 	graph := make(map[string][]string)
 
 	// Build adjacency list from next / nextTrue / nextFalse
@@ -528,8 +525,11 @@ func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map
 			break
 		}
 	}
+	if startNodeID == "" {
+		return nil
+	}
 
-	// BFS traversal from the start node to ensure all nodes are reachable
+	// BFS traversal from the start node
 	visited := make(map[string]bool)
 	queue := make([]string, 0)
 

@@ -178,17 +178,30 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			name:   "unreachable nodes",
+			name:   "orphan node (no incoming edges) activates successfully",
 			params: Params{},
 			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
-				data := builder.SetupTestData("validate-unreachable-org", "validate-unreachable-unit")
+				data := builder.SetupTestData("validate-orphan-activate-org", "validate-orphan-activate-unit")
 				params.formID = data.FormRow.ID
 				params.userID = data.User
 				params.workflowJSON = builder.CreateWorkflowWithUnreachableNode()
 				return context.Background()
 			},
-			expectedErr: true,
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+				require.NoError(t, err, "should not return error for workflow with orphan section")
+				require.NotEqual(t, uuid.Nil, result.ID, "workflow version ID should be set")
+				require.Equal(t, params.formID, result.FormID, "form ID should match")
+				require.Equal(t, params.userID, result.LastEditor, "last editor should match")
+				require.True(t, result.IsActive, "workflow should be active")
+
+				builder := workflowbuilder.New(t, db)
+				workflowData := builder.ParseWorkflow(result.Workflow)
+				require.True(t, builder.HasNodeType(workflowData, "start"), "workflow should have start node")
+				require.True(t, builder.HasNodeType(workflowData, "section"), "workflow should still contain orphan section node")
+				require.True(t, builder.HasNodeType(workflowData, "end"), "workflow should have end node")
+			},
+			expectedErr: false,
 		},
 		{
 			name:   "invalid node references",

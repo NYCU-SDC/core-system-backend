@@ -284,12 +284,34 @@ func (s *Service) GetValidationInfo(ctx context.Context, formID uuid.UUID, workf
 
 	// Call the validator's Activate method
 	err := s.validator.Activate(ctx, formID, workflow, s.questionStore)
-	if err == nil {
-		// Validation passed
-		return []ValidationInfo{}, nil
+	if err != nil {
+		return parseValidationErrors(err), nil
 	}
 
-	// Parse the validation errors
-	validationInfos := parseValidationErrors(err)
-	return validationInfos, nil
+	// Activation passed; compute warnings that we choose not to block activation on.
+	nodes, parseErr := parseWorkflow(workflow)
+	if parseErr != nil {
+		// Should be unreachable because Activate already parsed successfully, but keep safe.
+		return []ValidationInfo{}, nil
+	}
+	err = validateNodeCount(nodes)
+	if err != nil {
+		return []ValidationInfo{}, nil
+	}
+	_, nodeMap, validationErrors, err := runCommonWorkflowValidation(ctx, formID, nodes, s.questionStore, false)
+	if err != nil || len(validationErrors) > 0 || nodeMap == nil {
+		// If common validation fails, Activate would have failed; don't add warnings.
+		return []ValidationInfo{}, nil
+	}
+	err = validateGraphReferences(nodes, nodeMap)
+	if err != nil {
+		// If graph refs are invalid, Activate would have failed; no warnings.
+		return []ValidationInfo{}, nil
+	}
+	err = validateReachabilityWarning(nodes, nodeMap)
+	if err != nil {
+		return parseValidationErrors(fmt.Errorf("reachability validation failed: %w", err)), nil
+	}
+
+	return []ValidationInfo{}, nil
 }
