@@ -44,12 +44,12 @@ type JWTIssuer interface {
 
 type JWTStore interface {
 	InactivateRefreshToken(ctx context.Context, id uuid.UUID) error
-	GetRefreshTokenByID(ctx context.Context, id uuid.UUID) (jwt.RefreshToken, error)
+	GetRefreshToken(ctx context.Context, id uuid.UUID) (jwt.RefreshToken, error)
 }
 
 type UserStore interface {
-	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
-	GetByID(ctx context.Context, id uuid.UUID) (user.UsersWithEmail, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	Get(ctx context.Context, id uuid.UUID) (user.UsersWithEmail, error)
 	FindOrCreate(ctx context.Context, name, username, avatarUrl string, email string, role []string, oauthProvider, oauthProviderID string) (user.FindOrCreateResult, error)
 	CreateAuth(ctx context.Context, userID uuid.UUID, provider, providerID, existingProvider, existingProviderID string) error
 }
@@ -333,7 +333,7 @@ func (h *Handler) generateJWT(ctx context.Context, userID uuid.UUID) (string, st
 	traceCtx, span := h.tracer.Start(ctx, "generateJWT")
 	defer span.End()
 
-	userEntityRow, err := h.userStore.GetByID(traceCtx, userID)
+	userEntityRow, err := h.userStore.Get(traceCtx, userID)
 	if err != nil {
 		return "", "", err
 	}
@@ -491,7 +491,7 @@ func (h *Handler) InternalAPITokenLogin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	exists, err := h.userStore.ExistsByID(traceCtx, uid)
+	exists, err := h.userStore.Exists(traceCtx, uid)
 	if err != nil || !exists {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrUserNotFound, logger)
 		return

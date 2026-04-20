@@ -56,7 +56,7 @@ type tenantStore interface {
 }
 
 type userStore interface {
-	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
+	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
 }
 type Handler struct {
 	logger          *zap.Logger
@@ -152,7 +152,7 @@ type UpdateUnitMemberRoleResponse struct {
 
 // createProfileResponseWithEmails creates a ProfileResponse with emails for a user
 func (h *Handler) createProfileResponseWithEmails(ctx context.Context, logger *zap.Logger, userID uuid.UUID, name, username, avatarURL string) user.ProfileResponse {
-	emails, err := h.userStore.GetEmailsByID(ctx, userID)
+	emails, err := h.userStore.GetEmails(ctx, userID)
 	if err != nil {
 		// Log the error but don't fail the request
 		logger.Warn("failed to get user emails", zap.Error(err), zap.String("user_id", userID.String()))

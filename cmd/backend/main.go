@@ -309,7 +309,7 @@ func main() {
 
 	// Unit Management
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, unitResolver)).HandlerFunc(unitHandler.GetUnitByID))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, unitResolver)).HandlerFunc(unitHandler.GetUnit))
 	mux.Handle("POST /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.CreateOrgUnit))
 	mux.Handle("POST /api/units/{unitId}/units", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.CreateUnit))
 	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.UpdateUnit))
@@ -393,7 +393,7 @@ func main() {
 	// File Management
 	// ----------------------
 	mux.Handle("GET /api/files/{id}", basicMiddleware.HandlerFunc(fileHandler.Download))
-	mux.Handle("GET /api/files/{id}/info", authMiddleware.HandlerFunc(fileHandler.GetByID))
+	mux.Handle("GET /api/files/{id}/info", authMiddleware.HandlerFunc(fileHandler.Get))
 
 	// Todo: Admin only endpoint
 	mux.Handle("GET /api/files", authMiddleware.HandlerFunc(fileHandler.List))
