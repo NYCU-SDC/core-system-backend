@@ -346,7 +346,7 @@ func TestInboxService_List(t *testing.T) {
 	}
 }
 
-func TestInboxService_UpdateByID(t *testing.T) {
+func TestInboxService_Update(t *testing.T) {
 	type Params struct {
 		messageID uuid.UUID
 		userID    uuid.UUID
@@ -356,7 +356,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 		name        string
 		params      Params
 		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context
-		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateByIDRow)
+		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateRow)
 		expectedErr bool
 	}{
 		{
@@ -389,7 +389,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateByIDRow) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateRow) {
 				require.Equal(t, params.expected.IsRead, result.IsRead)
 				require.Equal(t, params.expected.IsStarred, result.IsStarred)
 				require.Equal(t, params.expected.IsArchived, result.IsArchived)
@@ -427,7 +427,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateByIDRow) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateRow) {
 				require.Equal(t, params.expected.IsRead, result.IsRead)
 				require.Equal(t, params.expected.IsStarred, result.IsStarred)
 				require.Equal(t, params.expected.IsArchived, result.IsArchived)
@@ -465,7 +465,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateByIDRow) {
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateRow) {
 				require.Equal(t, params.expected.IsRead, result.IsRead)
 				require.Equal(t, params.expected.IsStarred, result.IsStarred)
 				require.Equal(t, params.expected.IsArchived, result.IsArchived)
@@ -551,7 +551,7 @@ func TestInboxService_UpdateByID(t *testing.T) {
 
 			service := inbox.NewService(logger, db)
 
-			result, err := service.UpdateByID(ctx, params.messageID, params.userID, params.expected)
+			result, err := service.Update(ctx, params.messageID, params.userID, params.expected)
 			require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 
 			if tc.validate != nil {

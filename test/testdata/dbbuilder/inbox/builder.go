@@ -74,10 +74,10 @@ func (b Builder) GetUserInboxMessages(userID uuid.UUID) []inbox.ListRow {
 	return messages
 }
 
-// GetUserInboxMessageByID retrieves a specific user inbox message directly from the database
-func (b Builder) GetUserInboxMessageByID(messageID, userID uuid.UUID) inbox.GetByIDRow {
+// GetUserInboxMessage retrieves a specific user inbox message directly from the database
+func (b Builder) GetUserInboxMessage(messageID, userID uuid.UUID) inbox.GetRow {
 	queries := b.Queries()
-	message, err := queries.GetByID(context.Background(), inbox.GetByIDParams{
+	message, err := queries.Get(context.Background(), inbox.GetParams{
 		UserInboxMessageID: messageID,
 		UserID:             userID,
 	})
@@ -86,9 +86,9 @@ func (b Builder) GetUserInboxMessageByID(messageID, userID uuid.UUID) inbox.GetB
 }
 
 // UpdateUserInboxMessage updates a user inbox message directly in the database
-func (b Builder) UpdateUserInboxMessage(messageID, userID uuid.UUID, filter inbox.UserInboxMessageFilter) inbox.UpdateByIDRow {
+func (b Builder) UpdateUserInboxMessage(messageID, userID uuid.UUID, filter inbox.UserInboxMessageFilter) inbox.UpdateRow {
 	queries := b.Queries()
-	message, err := queries.UpdateByID(context.Background(), inbox.UpdateByIDParams{
+	message, err := queries.Update(context.Background(), inbox.UpdateParams{
 		ID:         messageID,
 		UserID:     userID,
 		IsRead:     filter.IsRead,
