@@ -37,7 +37,7 @@ type JWTIssuer interface {
 	Parse(ctx context.Context, tokenString string) (user.User, error)
 	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
 	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
-	ParseLinkToken(ctx context.Context, tokenString string) (*jwt.LinkClaims, error)
+	ParseLinkToken(ctx context.Context, tokenString string) (*jwt.LinkClaims, uuid.UUID, error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
 }
@@ -535,13 +535,7 @@ func (h *Handler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	linkClaims, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
-		return
-	}
-
-	userID, err := uuid.Parse(linkClaims.UserID)
+	linkClaims, userID, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
 		return
@@ -564,8 +558,8 @@ func (h *Handler) LinkAccount(w http.ResponseWriter, r *http.Request) {
 
 	h.setAccessAndRefreshCookies(w, baseURL.Host, accessTokenID, refreshTokenID)
 
-	var redirectURL string
-	if linkClaims.RedirectURL == "" {
+	redirectURL := linkClaims.RedirectURL
+	if redirectURL == "" {
 		if h.environment == "snapshot" || h.environment == "no-env" {
 			redirectURL = "/api/users/me"
 		} else {
@@ -601,7 +595,7 @@ func (h *Handler) LinkAccountAbort(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	linkClaims, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
+	linkClaims, _, err := h.jwtIssuer.ParseLinkToken(traceCtx, linkTokenStr)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidAuthHeaderFormat, logger)
 		return
@@ -609,8 +603,8 @@ func (h *Handler) LinkAccountAbort(w http.ResponseWriter, r *http.Request) {
 
 	h.clearLinkCookie(w, domain)
 
-	var redirectURL string
-	if linkClaims.RedirectURL == "" {
+	redirectURL := linkClaims.RedirectURL
+	if redirectURL == "" {
 		if h.environment == "snapshot" || h.environment == "no-env" {
 			redirectURL = "/api/users/me"
 		} else {
