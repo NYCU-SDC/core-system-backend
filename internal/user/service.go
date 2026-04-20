@@ -180,20 +180,35 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		return FindOrCreateResult{UserID: existingUserID}, nil
 	}
 
-	// Different provider, same email → binding confirmation required
+	// Same email as an existing user: either first OAuth for a pre-provisioned user,
+	// or different provider, same email → binding confirmation required
 	if email != "" {
 		existingUser, err := s.queries.GetWithEarliestProviderByEmail(traceCtx, email)
-		// Does not create a new user if the user has been initialized
-		if !existingUser.Provider.Valid {
-			logger.Info("User has been initialized",
-				zap.String("name", name),
-				zap.String("email", email))
-			return FindOrCreateResult{
-				UserID:             existingUser.ID,
-				ExistingName:       existingUser.Name.String,
-				ExistingProvider:   existingUser.Provider.String,
-				ExistingProviderID: existingUser.ProviderID.String,
-			}, nil
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				err = databaseutil.WrapDBError(err, logger, "check user existence by email")
+				span.RecordError(err)
+				return FindOrCreateResult{}, err
+			}
+			// No user with this email — fall through to create a new user below.
+		} else {
+			// Does not create a new user if the user has been initialized
+			if !existingUser.Provider.Valid {
+				logger.Info("User has been initialized",
+					zap.String("name", name),
+					zap.String("email", email))
+				_, err = s.queries.CreateAuth(traceCtx, CreateAuthParams{
+					UserID:     existingUser.ID,
+					Provider:   oauthProvider,
+					ProviderID: oauthProviderID,
+				})
+				if err != nil {
+					err = databaseutil.WrapDBError(err, logger, "create auth for pre-provisioned user")
+					span.RecordError(err)
+					return FindOrCreateResult{}, err
+				}
+				return FindOrCreateResult{UserID: existingUser.ID}, nil
+			}
 		}
 		if err == nil {
 			// Found a user with the same email under a different provider
@@ -209,11 +224,6 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 				ExistingProvider:   existingUser.Provider.String,
 				ExistingProviderID: existingUser.ProviderID.String,
 			}, nil
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			err = databaseutil.WrapDBError(err, logger, "check user existence by email")
-			span.RecordError(err)
-			return FindOrCreateResult{}, err
 		}
 	}
 
@@ -368,7 +378,7 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 
 	logger.Info("Final global roles for new user", zap.Strings("roles", finalRoles))
 
-	newUser, err := s.queries.Create(traceCtx, CreateParams{Role: finalRoles})
+	newUser, err := s.queries.Create(traceCtx, CreateParams{AvatarUrl: pgtype.Text{"", true}, Role: finalRoles})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create user")
 		span.RecordError(err)
