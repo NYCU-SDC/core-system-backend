@@ -81,6 +81,7 @@ type CreateResponse struct {
 
 type Store interface {
 	Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUID, userID uuid.UUID) ([]FormResponse, error)
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
