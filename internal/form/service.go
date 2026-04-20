@@ -24,6 +24,7 @@ type Querier interface {
 	Patch(ctx context.Context, params PatchParams) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	Get(ctx context.Context, id uuid.UUID) (GetRow, error)
+	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error)
 	List(ctx context.Context, arg ListParams) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
@@ -275,6 +276,21 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
 	}
 
 	return currentForm, nil
+}
+
+func (s *Service) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error) {
+	ctx, span := s.tracer.Start(ctx, "GetFormsByIDs")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	forms, err := s.queries.GetByIDs(ctx, ids)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get forms by ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return forms, nil
 }
 
 // Exists reports whether a form with the given ID exists (so response package can use *form.Service as FormStore without form importing response).

@@ -272,6 +272,98 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
 	return i, err
 }
 
+const getByIDs = `-- name: GetByIDs :many
+SELECT
+    f.id, f.title, f.description, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
+    u.name as unit_name,
+    o.name as org_name,
+    usr.name as last_editor_name,
+    usr.username as last_editor_username,
+    usr.avatar_url as last_editor_avatar_url,
+    usr.emails as last_editor_email
+FROM forms f
+         LEFT JOIN units u ON f.unit_id = u.id
+         LEFT JOIN units o ON u.org_id = o.id
+         LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+WHERE f.id = ANY($1::uuid[])
+`
+
+type GetByIDsRow struct {
+	ID                     uuid.UUID
+	Title                  string
+	Description            pgtype.Text
+	PreviewMessage         pgtype.Text
+	MessageAfterSubmission string
+	Status                 Status
+	UnitID                 pgtype.UUID
+	CreatedBy              uuid.UUID
+	LastEditor             uuid.UUID
+	Deadline               pgtype.Timestamptz
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Visibility             Visibility
+	GoogleSheetUrl         pgtype.Text
+	PublishTime            pgtype.Timestamptz
+	CoverImageUrl          pgtype.Text
+	DressingColor          pgtype.Text
+	DressingHeaderFont     pgtype.Text
+	DressingQuestionFont   pgtype.Text
+	DressingTextFont       pgtype.Text
+	UnitName               pgtype.Text
+	OrgName                pgtype.Text
+	LastEditorName         pgtype.Text
+	LastEditorUsername     pgtype.Text
+	LastEditorAvatarUrl    pgtype.Text
+	LastEditorEmail        interface{}
+}
+
+func (q *Queries) GetByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetByIDsRow, error) {
+	rows, err := q.db.Query(ctx, getByIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetByIDsRow
+	for rows.Next() {
+		var i GetByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.PreviewMessage,
+			&i.MessageAfterSubmission,
+			&i.Status,
+			&i.UnitID,
+			&i.CreatedBy,
+			&i.LastEditor,
+			&i.Deadline,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Visibility,
+			&i.GoogleSheetUrl,
+			&i.PublishTime,
+			&i.CoverImageUrl,
+			&i.DressingColor,
+			&i.DressingHeaderFont,
+			&i.DressingQuestionFont,
+			&i.DressingTextFont,
+			&i.UnitName,
+			&i.OrgName,
+			&i.LastEditorName,
+			&i.LastEditorUsername,
+			&i.LastEditorAvatarUrl,
+			&i.LastEditorEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCoverImage = `-- name: GetCoverImage :one
 SELECT image_data FROM form_covers WHERE form_id = $1
 `
