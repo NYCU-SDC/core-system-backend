@@ -16,6 +16,11 @@ SELECT * FROM form_responses
 WHERE form_id = $1 AND submitted_by = $2
 ORDER BY submitted_at DESC NULLS LAST;
 
+-- name: ListByFormID :many
+SELECT * FROM form_responses
+WHERE form_id = $1
+ORDER BY submitted_at DESC NULLS LAST;
+
 -- name: ListBySubmittedBy :many
 SELECT * FROM form_responses
 WHERE submitted_by = $1
