@@ -95,8 +95,8 @@ func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 	}
 }
 
-func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error) {
-	traceCtx, span := s.tracer.Start(ctx, "CreateOrganizationWithCurrentUserID")
+func (s *Service) CreateOrganizationWithUserID(ctx context.Context, name string, description string, slug string, userID uuid.UUID, metadata []byte) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateOrganizationWithUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
@@ -124,8 +124,19 @@ func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name 
 		return Unit{}, err
 	}
 
-	_, err = s.tenantStore.Create(traceCtx, org.ID, currentUserID, slug)
+	_, err = s.tenantStore.Create(traceCtx, org.ID, userID, slug)
 	if err != nil {
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
+	_, err = s.queries.AddUnitMemberWithRole(traceCtx, AddUnitMemberWithRoleParams{
+		UnitID:   org.ID,
+		MemberID: userID,
+		Role:     UnitRoleAdmin,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "add org admin")
 		span.RecordError(err)
 		return Unit{}, err
 	}
@@ -139,22 +150,27 @@ func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name 
 	return org, nil
 }
 
-// CreateUnit creates a new unit or organization
-func (s *Service) CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error) {
-	traceCtx, span := s.tracer.Start(ctx, "CreateUnit")
+func (s *Service) CreateUnitWithUserID(ctx context.Context, name string, description string, parentID uuid.UUID, userID uuid.UUID, metadata []byte) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateUnitWithUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	_, orgID, err := s.tenantStore.GetSlugStatus(traceCtx, slug)
+	parent, err := s.queries.GetByID(ctx, parentID)
 	if err != nil {
-		span.RecordError(err)
 		return Unit{}, err
+	}
+
+	var orgID uuid.UUID
+	if parent.Type == UnitTypeOrganization {
+		orgID = parent.ID
+	} else {
+		orgID = parent.OrgID.Bytes
 	}
 
 	unit, err := s.queries.Create(traceCtx, CreateParams{
 		Name:        pgtype.Text{String: name, Valid: name != ""},
 		OrgID:       pgtype.UUID{Bytes: orgID, Valid: true},
-		ParentID:    pgtype.UUID{Bytes: orgID, Valid: true},
+		ParentID:    pgtype.UUID{Bytes: parentID, Valid: true},
 		Description: pgtype.Text{String: description, Valid: true},
 		Metadata:    metadata,
 		Type:        UnitTypeUnit,
@@ -165,8 +181,20 @@ func (s *Service) CreateUnit(ctx context.Context, name string, description strin
 		return Unit{}, err
 	}
 
+	_, err = s.queries.AddUnitMemberWithRole(traceCtx, AddUnitMemberWithRoleParams{
+		UnitID:   unit.ID,
+		MemberID: userID,
+		Role:     UnitRoleAdmin,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "add unit admin")
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
 	logger.Info(fmt.Sprintf("Created %s", unit.Type),
 		zap.String("unit_id", unit.ID.String()),
+		zap.String("parent_id", parentID.String()),
 		zap.String("org_id", orgID.String()),
 		zap.String("name", unit.Name.String),
 		zap.String("description", unit.Description.String),

@@ -23,7 +23,7 @@ import (
 type Store interface {
 	Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, error)
 	Update(ctx context.Context, formID uuid.UUID, workflow []byte, userID uuid.UUID) (WorkflowVersion, error)
-	CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, userID uuid.UUID) (CreateNodeRow, error)
+	CreateNode(ctx context.Context, formID uuid.UUID, nodeType NodeType, payload NodePayload, userID uuid.UUID) (CreateNodeRow, error)
 	DeleteNode(ctx context.Context, formID uuid.UUID, nodeID uuid.UUID, userID uuid.UUID) ([]byte, error)
 	Activate(ctx context.Context, formID uuid.UUID, userID uuid.UUID, workflow []byte) (WorkflowVersion, error)
 	GetValidationInfo(ctx context.Context, formID uuid.UUID, workflow []byte) ([]ValidationInfo, error)
@@ -187,7 +187,8 @@ func NewHandler(
 }
 
 type createNodeRequest struct {
-	Type string `json:"type" validate:"required,oneof=SECTION CONDITION"`
+	Type    string      `json:"type" validate:"required,oneof=SECTION CONDITION"`
+	Payload NodePayload `json:"payload" validate:"required"`
 }
 
 type createNodeResponse struct {
@@ -365,7 +366,7 @@ func (h *Handler) CreateNodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Convert uppercase request value to lowercase for database storage
 	nodeType := NodeType(strings.ToLower(req.Type))
-	created, err := h.store.CreateNode(traceCtx, formID, nodeType, currentUser.ID)
+	created, err := h.store.CreateNode(traceCtx, formID, nodeType, req.Payload, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
