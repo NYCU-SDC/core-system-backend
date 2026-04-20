@@ -378,7 +378,7 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 
 	logger.Info("Final global roles for new user", zap.Strings("roles", finalRoles))
 
-	newUser, err := s.queries.Create(traceCtx, CreateParams{AvatarUrl: pgtype.Text{"", true}, Role: finalRoles})
+	newUser, err := s.queries.Create(traceCtx, CreateParams{AvatarUrl: pgtype.Text{String: "", Valid: true}, Role: finalRoles})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create user")
 		span.RecordError(err)
