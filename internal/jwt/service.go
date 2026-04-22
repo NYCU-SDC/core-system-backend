@@ -26,7 +26,7 @@ type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (RefreshToken, error)
 	Inactivate(ctx context.Context, id uuid.UUID) (int64, error)
 	Delete(ctx context.Context) (int64, error)
-	GetRefreshTokenByID(ctx context.Context, id uuid.UUID) (RefreshToken, error)
+	GetRefreshToken(ctx context.Context, id uuid.UUID) (RefreshToken, error)
 }
 
 type Service struct {
@@ -559,12 +559,12 @@ func (s Service) DeleteExpiredRefreshTokens(ctx context.Context) (int64, error) 
 	return rowsAffected, nil
 }
 
-func (s Service) GetRefreshTokenByID(ctx context.Context, id uuid.UUID) (RefreshToken, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetRefreshTokenByID")
+func (s Service) GetRefreshToken(ctx context.Context, id uuid.UUID) (RefreshToken, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetRefreshToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	refreshToken, err := s.queries.GetRefreshTokenByID(traceCtx, id)
+	refreshToken, err := s.queries.GetRefreshToken(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get refresh token by id")
 		span.RecordError(err)

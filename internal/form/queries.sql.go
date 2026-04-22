@@ -198,7 +198,7 @@ func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 	return exists, err
 }
 
-const getByID = `-- name: GetByID :one
+const get = `-- name: Get :one
 SELECT 
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
@@ -214,7 +214,7 @@ LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.id = $1
 `
 
-type GetByIDRow struct {
+type GetRow struct {
 	ID                     uuid.UUID
 	Title                  string
 	DescriptionJson        []byte
@@ -244,9 +244,9 @@ type GetByIDRow struct {
 	LastEditorEmail        interface{}
 }
 
-func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error) {
-	row := q.db.QueryRow(ctx, getByID, id)
-	var i GetByIDRow
+func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
+	row := q.db.QueryRow(ctx, get, id)
+	var i GetRow
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
@@ -289,9 +289,9 @@ SELECT
     usr.avatar_url as last_editor_avatar_url,
     usr.emails as last_editor_email
 FROM forms f
-LEFT JOIN units u ON f.unit_id = u.id
-LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+         LEFT JOIN units u ON f.unit_id = u.id
+         LEFT JOIN units o ON u.org_id = o.id
+         LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.id = ANY($1::uuid[])
 `
 
@@ -384,14 +384,14 @@ func (q *Queries) GetCoverImage(ctx context.Context, formID uuid.UUID) ([]byte, 
 	return image_data, err
 }
 
-const getCreatorByID = `-- name: GetCreatorByID :one
+const getCreator = `-- name: GetCreator :one
 SELECT created_by
 FROM forms
 WHERE id = $1
 `
 
-func (q *Queries) GetCreatorByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getCreatorByID, id)
+func (q *Queries) GetCreator(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getCreator, id)
 	var created_by uuid.UUID
 	err := row.Scan(&created_by)
 	return created_by, err
@@ -410,14 +410,14 @@ func (q *Queries) GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID
 	return form_id, err
 }
 
-const getUnitIDByID = `-- name: GetUnitIDByID :one
+const getUnitID = `-- name: GetUnitID :one
 SELECT unit_id
 FROM forms
 WHERE id = $1
 `
 
-func (q *Queries) GetUnitIDByID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, getUnitIDByID, id)
+func (q *Queries) GetUnitID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getUnitID, id)
 	var unit_id pgtype.UUID
 	err := row.Scan(&unit_id)
 	return unit_id, err

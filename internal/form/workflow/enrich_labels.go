@@ -103,7 +103,7 @@ func conditionLabelFromRule(ctx context.Context, node map[string]interface{}, qu
 	}
 
 	// Get question
-	answerable, err := questionStore.GetByID(ctx, questionID)
+	answerable, err := questionStore.Get(ctx, questionID)
 	if err != nil {
 		return fallback
 	}

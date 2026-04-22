@@ -7,7 +7,7 @@ RETURNING *;
 SELECT * FROM form_responses
 WHERE id = $1 AND form_id = $2;
 
--- name: GetFormIDByID :one
+-- name: GetFormID :one
 SELECT form_id FROM form_responses
 WHERE id = $1;
 

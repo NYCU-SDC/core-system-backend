@@ -164,7 +164,7 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (Tenant, error) 
 	return i, err
 }
 
-const updateSlugHistory = `-- name: UpdateSlugHistory :many
+const upsertSlugHistory = `-- name: UpsertSlugHistory :many
 WITH
     -- Select the currently active slug for the org
     current_slug AS (
@@ -195,13 +195,13 @@ WITH
 SELECT org_id FROM new_history
 `
 
-type UpdateSlugHistoryParams struct {
+type UpsertSlugHistoryParams struct {
 	OrgID pgtype.UUID
 	Slug  string
 }
 
-func (q *Queries) UpdateSlugHistory(ctx context.Context, arg UpdateSlugHistoryParams) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, updateSlugHistory, arg.OrgID, arg.Slug)
+func (q *Queries) UpsertSlugHistory(ctx context.Context, arg UpsertSlugHistoryParams) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, upsertSlugHistory, arg.OrgID, arg.Slug)
 	if err != nil {
 		return nil, err
 	}

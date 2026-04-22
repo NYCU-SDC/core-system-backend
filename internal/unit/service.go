@@ -20,10 +20,10 @@ import (
 
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (Unit, error)
-	GetByID(ctx context.Context, id uuid.UUID) (Unit, error)
+	Get(ctx context.Context, id uuid.UUID) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]GetAllOrganizationsRow, error)
 	ListOrganizationsOfUser(ctx context.Context, memberID uuid.UUID) ([]ListOrganizationsOfUserRow, error)
-	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (GetOrganizationByIDWithSlugRow, error)
+	GetOrganizationWithSlug(ctx context.Context, id uuid.UUID) (GetOrganizationWithSlugRow, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
 	Update(ctx context.Context, arg UpdateParams) (Unit, error)
@@ -155,7 +155,7 @@ func (s *Service) CreateUnitWithUserID(ctx context.Context, name string, descrip
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	parent, err := s.queries.GetByID(ctx, parentID)
+	parent, err := s.queries.Get(ctx, parentID)
 	if err != nil {
 		return Unit{}, err
 	}
@@ -310,12 +310,12 @@ func (s *Service) ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID)
 	return result, nil
 }
 
-func (s *Service) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetOrganizationByIDWithSlug")
+func (s *Service) GetOrganizationWithSlug(ctx context.Context, id uuid.UUID) (Organization, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetOrganizationWithSlug")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	r, err := s.queries.GetOrganizationByIDWithSlug(traceCtx, id)
+	r, err := s.queries.GetOrganizationWithSlug(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "organizations", "id", id.String(), logger, "get organization by id with slug")
 		span.RecordError(err)
@@ -338,13 +338,13 @@ func (s *Service) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID)
 	}, nil
 }
 
-// GetByID retrieves a unit by ID
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetByID")
+// Get retrieves a unit by ID
+func (s *Service) Get(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	unit, err := s.queries.GetByID(traceCtx, id)
+	unit, err := s.queries.Get(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "unit", "unitType", unitType.String(), logger, "get by id")
 		span.RecordError(err)

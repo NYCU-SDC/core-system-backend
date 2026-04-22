@@ -24,7 +24,7 @@ import (
 
 type Querier interface {
 	ListByResponseID(ctx context.Context, responseID uuid.UUID) ([]Answer, error)
-	GetByID(ctx context.Context, id uuid.UUID) (Answer, error)
+	Get(ctx context.Context, id uuid.UUID) (Answer, error)
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
 	WithTx(tx pgx.Tx) *Queries

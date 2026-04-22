@@ -99,13 +99,13 @@ func (q *Queries) Get(ctx context.Context, arg GetParams) (FormResponse, error) 
 	return i, err
 }
 
-const getFormIDByID = `-- name: GetFormIDByID :one
+const getFormID = `-- name: GetFormID :one
 SELECT form_id FROM form_responses
 WHERE id = $1
 `
 
-func (q *Queries) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getFormIDByID, id)
+func (q *Queries) GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getFormID, id)
 	var form_id uuid.UUID
 	err := row.Scan(&form_id)
 	return form_id, err

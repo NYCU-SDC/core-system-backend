@@ -29,8 +29,8 @@ type Querier interface {
 	ShiftOrdersForInsert(ctx context.Context, arg ShiftOrdersForInsertParams) error
 	ListSectionsByFormID(ctx context.Context, formID uuid.UUID) ([]Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
-	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
-	ListTypesByIDs(ctx context.Context, ids []uuid.UUID) ([]ListTypesByIDsRow, error)
+	Get(ctx context.Context, id uuid.UUID) (GetRow, error)
+	ListTypes(ctx context.Context, ids []uuid.UUID) ([]ListTypesRow, error)
 	UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error)
 }
 
@@ -382,12 +382,12 @@ func (s *Service) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 	return result, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Answerable, error) {
-	ctx, span := s.tracer.Start(ctx, "GetByID")
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (Answerable, error) {
+	ctx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	row, err := s.queries.GetByID(ctx, id)
+	row, err := s.queries.Get(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get question by id")
 		span.RecordError(err)
@@ -398,14 +398,14 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (Answerable, error)
 	return NewAnswerable(q, row.FormID)
 }
 
-// ListTypesByIDs returns a map of question ID (as string) to QuestionType for the given IDs.
+// ListTypes returns a map of question ID (as string) to QuestionType for the given IDs.
 // This is a batch query to avoid N+1 queries when checking question types for multiple questions.
-func (s *Service) ListTypesByIDs(ctx context.Context, ids []uuid.UUID) (map[string]QuestionType, error) {
-	ctx, span := s.tracer.Start(ctx, "ListTypesByIDs")
+func (s *Service) ListTypes(ctx context.Context, ids []uuid.UUID) (map[string]QuestionType, error) {
+	ctx, span := s.tracer.Start(ctx, "ListTypes")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	rows, err := s.queries.ListTypesByIDs(ctx, ids)
+	rows, err := s.queries.ListTypes(ctx, ids)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list question types by ids")
 		span.RecordError(err)

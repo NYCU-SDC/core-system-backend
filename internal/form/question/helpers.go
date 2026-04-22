@@ -4,8 +4,8 @@ import (
 	"regexp"
 )
 
-// ToQuestion converts GetByIDRow to Question
-func (r GetByIDRow) ToQuestion() Question {
+// ToQuestion converts GetRow to Question
+func (r GetRow) ToQuestion() Question {
 	return Question{
 		ID:              r.ID,
 		SectionID:       r.SectionID,

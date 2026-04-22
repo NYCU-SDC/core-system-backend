@@ -18,14 +18,14 @@ import (
 func TestToResponse_proseMirrorAndHTML(t *testing.T) {
 	doc := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Hi"}]}]}`)
 	md := markdown.NewService(zap.NewNop())
-	canonical, html, err := md.ProcessProseMirrorJSON(context.Background(), doc)
+	canonical, proseMirrorHTML, err := md.ProcessProseMirrorJSON(context.Background(), doc)
 	require.NoError(t, err)
 
 	f := Form{
 		ID:                     uuid.MustParse("11111111-1111-1111-1111-111111111111"),
 		Title:                  "T",
 		DescriptionJson:        canonical,
-		DescriptionHtml:        html,
+		DescriptionHtml:        proseMirrorHTML,
 		PreviewMessage:         pgtype.Text{String: "pv", Valid: true},
 		MessageAfterSubmission: "thanks",
 		Status:                 StatusDraft,

@@ -100,12 +100,12 @@ func (q *Queries) Delete(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const deleteAttachmentByID = `-- name: DeleteAttachmentByID :exec
+const deleteAttachment = `-- name: DeleteAttachment :exec
 DELETE FROM file_attachments WHERE id = $1
 `
 
-func (q *Queries) DeleteAttachmentByID(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteAttachmentByID, id)
+func (q *Queries) DeleteAttachment(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteAttachment, id)
 	return err
 }
 
@@ -117,6 +117,17 @@ WHERE file_id = $1
 func (q *Queries) DeleteAttachmentsByFileID(ctx context.Context, fileID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteAttachmentsByFileID, fileID)
 	return err
+}
+
+const exists = `-- name: Exists :one
+SELECT EXISTS(SELECT 1 FROM files WHERE id = $1)
+`
+
+func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, exists, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const existsAttachmentByFileAndResource = `-- name: ExistsAttachmentByFileAndResource :one
@@ -139,15 +150,24 @@ func (q *Queries) ExistsAttachmentByFileAndResource(ctx context.Context, arg Exi
 	return exists, err
 }
 
-const existsByID = `-- name: ExistsByID :one
-SELECT EXISTS(SELECT 1 FROM files WHERE id = $1)
+const get = `-- name: Get :one
+SELECT id, original_filename, content_type, size, data, uploaded_by, created_at, updated_at FROM files WHERE id = $1
 `
 
-func (q *Queries) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, existsByID, id)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
+func (q *Queries) Get(ctx context.Context, id uuid.UUID) (File, error) {
+	row := q.db.QueryRow(ctx, get, id)
+	var i File
+	err := row.Scan(
+		&i.ID,
+		&i.OriginalFilename,
+		&i.ContentType,
+		&i.Size,
+		&i.Data,
+		&i.UploadedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getAll = `-- name: GetAll :many
@@ -198,6 +218,24 @@ func (q *Queries) GetAll(ctx context.Context, arg GetAllParams) ([]GetAllRow, er
 	return items, nil
 }
 
+const getAttachment = `-- name: GetAttachment :one
+SELECT id, file_id, resource_type, resource_id, created_by, created_at FROM file_attachments WHERE id = $1
+`
+
+func (q *Queries) GetAttachment(ctx context.Context, id uuid.UUID) (FileAttachment, error) {
+	row := q.db.QueryRow(ctx, getAttachment, id)
+	var i FileAttachment
+	err := row.Scan(
+		&i.ID,
+		&i.FileID,
+		&i.ResourceType,
+		&i.ResourceID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getAttachmentByFileAndResource = `-- name: GetAttachmentByFileAndResource :one
 SELECT id, file_id, resource_type, resource_id, created_by, created_at
 FROM file_attachments
@@ -222,44 +260,6 @@ func (q *Queries) GetAttachmentByFileAndResource(ctx context.Context, arg GetAtt
 		&i.ResourceID,
 		&i.CreatedBy,
 		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getAttachmentByID = `-- name: GetAttachmentByID :one
-SELECT id, file_id, resource_type, resource_id, created_by, created_at FROM file_attachments WHERE id = $1
-`
-
-func (q *Queries) GetAttachmentByID(ctx context.Context, id uuid.UUID) (FileAttachment, error) {
-	row := q.db.QueryRow(ctx, getAttachmentByID, id)
-	var i FileAttachment
-	err := row.Scan(
-		&i.ID,
-		&i.FileID,
-		&i.ResourceType,
-		&i.ResourceID,
-		&i.CreatedBy,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getByID = `-- name: GetByID :one
-SELECT id, original_filename, content_type, size, data, uploaded_by, created_at, updated_at FROM files WHERE id = $1
-`
-
-func (q *Queries) GetByID(ctx context.Context, id uuid.UUID) (File, error) {
-	row := q.db.QueryRow(ctx, getByID, id)
-	var i File
-	err := row.Scan(
-		&i.ID,
-		&i.OriginalFilename,
-		&i.ContentType,
-		&i.Size,
-		&i.Data,
-		&i.UploadedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -307,12 +307,12 @@ func (q *Queries) GetByUploadedBy(ctx context.Context, uploadedBy pgtype.UUID) (
 	return items, nil
 }
 
-const getMetadataByID = `-- name: GetMetadataByID :one
+const getMetadata = `-- name: GetMetadata :one
 SELECT id, original_filename, content_type, size, uploaded_by, created_at, updated_at 
 FROM files WHERE id = $1
 `
 
-type GetMetadataByIDRow struct {
+type GetMetadataRow struct {
 	ID               uuid.UUID
 	OriginalFilename string
 	ContentType      string
@@ -322,9 +322,9 @@ type GetMetadataByIDRow struct {
 	UpdatedAt        pgtype.Timestamptz
 }
 
-func (q *Queries) GetMetadataByID(ctx context.Context, id uuid.UUID) (GetMetadataByIDRow, error) {
-	row := q.db.QueryRow(ctx, getMetadataByID, id)
-	var i GetMetadataByIDRow
+func (q *Queries) GetMetadata(ctx context.Context, id uuid.UUID) (GetMetadataRow, error) {
+	row := q.db.QueryRow(ctx, getMetadata, id)
+	var i GetMetadataRow
 	err := row.Scan(
 		&i.ID,
 		&i.OriginalFilename,
@@ -405,15 +405,15 @@ func (q *Queries) ListAttachmentsByResource(ctx context.Context, arg ListAttachm
 	return items, nil
 }
 
-const lockFileByID = `-- name: LockFileByID :one
+const lockFile = `-- name: LockFile :one
 SELECT id
 FROM files
 WHERE id = $1
 FOR UPDATE
 `
 
-func (q *Queries) LockFileByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, lockFileByID, id)
+func (q *Queries) LockFile(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockFile, id)
 	err := row.Scan(&id)
 	return id, err
 }

@@ -109,23 +109,23 @@ func (_c *MockStore_Count_Call) RunAndReturn(run func(ctx context.Context, userI
 	return _c
 }
 
-// GetByID provides a mock function for the type MockStore
-func (_mock *MockStore) GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (inbox.GetByIDRow, error) {
+// Get provides a mock function for the type MockStore
+func (_mock *MockStore) Get(ctx context.Context, id uuid.UUID, userID uuid.UUID) (inbox.GetRow, error) {
 	ret := _mock.Called(ctx, id, userID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetByID")
+		panic("no return value specified for Get")
 	}
 
-	var r0 inbox.GetByIDRow
+	var r0 inbox.GetRow
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) (inbox.GetByIDRow, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) (inbox.GetRow, error)); ok {
 		return returnFunc(ctx, id, userID)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) inbox.GetByIDRow); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID) inbox.GetRow); ok {
 		r0 = returnFunc(ctx, id, userID)
 	} else {
-		r0 = ret.Get(0).(inbox.GetByIDRow)
+		r0 = ret.Get(0).(inbox.GetRow)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID) error); ok {
 		r1 = returnFunc(ctx, id, userID)
@@ -135,20 +135,20 @@ func (_mock *MockStore) GetByID(ctx context.Context, id uuid.UUID, userID uuid.U
 	return r0, r1
 }
 
-// MockStore_GetByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetByID'
-type MockStore_GetByID_Call struct {
+// MockStore_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
+type MockStore_Get_Call struct {
 	*mock.Call
 }
 
-// GetByID is a helper method to define mock.On call
+// Get is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id uuid.UUID
 //   - userID uuid.UUID
-func (_e *MockStore_Expecter) GetByID(ctx interface{}, id interface{}, userID interface{}) *MockStore_GetByID_Call {
-	return &MockStore_GetByID_Call{Call: _e.mock.On("GetByID", ctx, id, userID)}
+func (_e *MockStore_Expecter) Get(ctx interface{}, id interface{}, userID interface{}) *MockStore_Get_Call {
+	return &MockStore_Get_Call{Call: _e.mock.On("GetByID", ctx, id, userID)}
 }
 
-func (_c *MockStore_GetByID_Call) Run(run func(ctx context.Context, id uuid.UUID, userID uuid.UUID)) *MockStore_GetByID_Call {
+func (_c *MockStore_Get_Call) Run(run func(ctx context.Context, id uuid.UUID, userID uuid.UUID)) *MockStore_Get_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -171,12 +171,12 @@ func (_c *MockStore_GetByID_Call) Run(run func(ctx context.Context, id uuid.UUID
 	return _c
 }
 
-func (_c *MockStore_GetByID_Call) Return(getByIDRow inbox.GetByIDRow, err error) *MockStore_GetByID_Call {
-	_c.Call.Return(getByIDRow, err)
+func (_c *MockStore_Get_Call) Return(getRow inbox.GetRow, err error) *MockStore_Get_Call {
+	_c.Call.Return(getRow, err)
 	return _c
 }
 
-func (_c *MockStore_GetByID_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, userID uuid.UUID) (inbox.GetByIDRow, error)) *MockStore_GetByID_Call {
+func (_c *MockStore_Get_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, userID uuid.UUID) (inbox.GetRow, error)) *MockStore_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -267,23 +267,23 @@ func (_c *MockStore_List_Call) RunAndReturn(run func(ctx context.Context, userID
 	return _c
 }
 
-// UpdateByID provides a mock function for the type MockStore
-func (_mock *MockStore) UpdateByID(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg inbox.UserInboxMessageFilter) (inbox.UpdateByIDRow, error) {
+// Update provides a mock function for the type MockStore
+func (_mock *MockStore) Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg inbox.UserInboxMessageFilter) (inbox.UpdateRow, error) {
 	ret := _mock.Called(ctx, id, userID, arg)
 
 	if len(ret) == 0 {
-		panic("no return value specified for UpdateByID")
+		panic("no return value specified for Update")
 	}
 
-	var r0 inbox.UpdateByIDRow
+	var r0 inbox.UpdateRow
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID, inbox.UserInboxMessageFilter) (inbox.UpdateByIDRow, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID, inbox.UserInboxMessageFilter) (inbox.UpdateRow, error)); ok {
 		return returnFunc(ctx, id, userID, arg)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID, inbox.UserInboxMessageFilter) inbox.UpdateByIDRow); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, uuid.UUID, inbox.UserInboxMessageFilter) inbox.UpdateRow); ok {
 		r0 = returnFunc(ctx, id, userID, arg)
 	} else {
-		r0 = ret.Get(0).(inbox.UpdateByIDRow)
+		r0 = ret.Get(0).(inbox.UpdateRow)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, uuid.UUID, uuid.UUID, inbox.UserInboxMessageFilter) error); ok {
 		r1 = returnFunc(ctx, id, userID, arg)
@@ -293,21 +293,21 @@ func (_mock *MockStore) UpdateByID(ctx context.Context, id uuid.UUID, userID uui
 	return r0, r1
 }
 
-// MockStore_UpdateByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateByID'
-type MockStore_UpdateByID_Call struct {
+// MockStore_Update_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Update'
+type MockStore_Update_Call struct {
 	*mock.Call
 }
 
-// UpdateByID is a helper method to define mock.On call
+// Update is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id uuid.UUID
 //   - userID uuid.UUID
 //   - arg inbox.UserInboxMessageFilter
-func (_e *MockStore_Expecter) UpdateByID(ctx interface{}, id interface{}, userID interface{}, arg interface{}) *MockStore_UpdateByID_Call {
-	return &MockStore_UpdateByID_Call{Call: _e.mock.On("UpdateByID", ctx, id, userID, arg)}
+func (_e *MockStore_Expecter) Update(ctx interface{}, id interface{}, userID interface{}, arg interface{}) *MockStore_Update_Call {
+	return &MockStore_Update_Call{Call: _e.mock.On("Update", ctx, id, userID, arg)}
 }
 
-func (_c *MockStore_UpdateByID_Call) Run(run func(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg inbox.UserInboxMessageFilter)) *MockStore_UpdateByID_Call {
+func (_c *MockStore_Update_Call) Run(run func(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg inbox.UserInboxMessageFilter)) *MockStore_Update_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -335,12 +335,12 @@ func (_c *MockStore_UpdateByID_Call) Run(run func(ctx context.Context, id uuid.U
 	return _c
 }
 
-func (_c *MockStore_UpdateByID_Call) Return(updateByIDRow inbox.UpdateByIDRow, err error) *MockStore_UpdateByID_Call {
-	_c.Call.Return(updateByIDRow, err)
+func (_c *MockStore_Update_Call) Return(updateRow inbox.UpdateRow, err error) *MockStore_Update_Call {
+	_c.Call.Return(updateRow, err)
 	return _c
 }
 
-func (_c *MockStore_UpdateByID_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg inbox.UserInboxMessageFilter) (inbox.UpdateByIDRow, error)) *MockStore_UpdateByID_Call {
+func (_c *MockStore_Update_Call) RunAndReturn(run func(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg inbox.UserInboxMessageFilter) (inbox.UpdateRow, error)) *MockStore_Update_Call {
 	_c.Call.Return(run)
 	return _c
 }

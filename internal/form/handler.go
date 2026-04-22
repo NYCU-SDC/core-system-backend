@@ -198,7 +198,7 @@ type Store interface {
 	Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error)
 	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID) (GetRow, error)
 	List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
@@ -212,12 +212,12 @@ type tenantStore interface {
 
 type questionStore interface {
 	UpdateSection(ctx context.Context, arg question.UpdateSectionParams) (question.Section, error)
-	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	Get(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 }
 
 type FileStore interface {
 	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
-	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
+	Get(ctx context.Context, id uuid.UUID) (file.File, error)
 }
 
 type Handler struct {
@@ -292,7 +292,7 @@ func formFromCreateRow(r CreateRow) Form {
 	}
 }
 
-func formFromGetByIDRow(r GetByIDRow) Form {
+func formFromGetRow(r GetRow) Form {
 	return Form{
 		ID:                     r.ID,
 		Title:                  r.Title,
@@ -469,14 +469,14 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.GetByID(traceCtx, id)
+	currentForm, err := h.store.Get(traceCtx, id)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	response := ToResponse(
-		formFromGetByIDRow(currentForm),
+		formFromGetRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
 		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
@@ -706,14 +706,14 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.GetByID(traceCtx, id)
+	currentForm, err := h.store.Get(traceCtx, id)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	response := ToResponse(
-		formFromGetByIDRow(currentForm),
+		formFromGetRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
 		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
