@@ -12,7 +12,7 @@ RETURNING *;
 SELECT 
     uim.*,
     im.*,
-    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
     CASE WHEN im.type = 'form' THEN f.title END AS title,
     CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
     CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
@@ -27,7 +27,7 @@ WHERE uim.id = @user_inbox_message_id AND uim.user_id = @user_id;
 SELECT 
     uim.*,
     im.*,
-    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
     CASE WHEN im.type = 'form' THEN f.title END AS title,
     CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
     CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
@@ -42,8 +42,8 @@ WHERE uim.user_id = @user_id
   AND (uim.is_archived = COALESCE(sqlc.narg(is_archived)::boolean, false))
   AND (@search::text = '' OR @search::text IS NULL OR (
     CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || @search::text || '%'
-    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || @search::text || '%'
-    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || @search::text || '%'
+    OR CASE WHEN im.type = 'form' THEN regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g') ELSE '' END ILIKE '%' || @search::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) ELSE '' END ILIKE '%' || @search::text || '%'
   ))
 LIMIT COALESCE(@page_limit::int, 10)
 OFFSET COALESCE(@page_offset::int, 0);
@@ -62,8 +62,8 @@ WHERE uim.user_id = @user_id
   AND (uim.is_archived = COALESCE(sqlc.narg(is_archived)::boolean, false))
   AND (@search::text = '' OR @search::text IS NULL OR (
     CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || @search::text || '%'
-    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || @search::text || '%'
-    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || @search::text || '%'
+    OR CASE WHEN im.type = 'form' THEN regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g') ELSE '' END ILIKE '%' || @search::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) ELSE '' END ILIKE '%' || @search::text || '%'
   ));
 
 -- name: Update :one
@@ -75,7 +75,7 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 WHERE uim.message_id = im.id AND uim.id = @id AND uim.user_id = @user_id
 RETURNING uim.*, im.*,
-CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
 CASE WHEN im.type = 'form' THEN f.title END AS title,
 CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
 CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name;

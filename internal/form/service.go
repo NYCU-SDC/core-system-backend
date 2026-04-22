@@ -54,7 +54,8 @@ type UserForm struct {
 
 type formFields struct {
 	title                  string
-	description            pgtype.Text
+	descriptionJSON        []byte
+	descriptionHTML        string
 	previewMessage         pgtype.Text
 	deadline               pgtype.Timestamptz
 	publishTime            pgtype.Timestamptz
@@ -68,16 +69,23 @@ type formFields struct {
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger        *zap.Logger
+	queries       Querier
+	tracer        trace.Tracer
+	markdownStore MarkdownStore
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+type MarkdownStore interface {
+	ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error)
+	PreviewSnippet(ctx context.Context, raw []byte, maxRunes int) (string, error)
+}
+
+func NewService(logger *zap.Logger, db DBTX, markdownStore MarkdownStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("forms/service"),
+		logger:        logger,
+		queries:       New(db),
+		tracer:        otel.Tracer("forms/service"),
+		markdownStore: markdownStore,
 	}
 }
 
@@ -94,7 +102,7 @@ func visibilityFromAPIFormat(v string) Visibility {
 	}
 }
 
-func buildFormFieldsFromRequest(request Request) formFields {
+func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore, request Request) (formFields, error) {
 	form := formFields{}
 
 	if request.Deadline != nil {
@@ -109,14 +117,20 @@ func buildFormFieldsFromRequest(request Request) formFields {
 		form.publishTime = pgtype.Timestamptz{Valid: false}
 	}
 
+	descJSON, descHTML, err := markdownStore.ProcessAPIText(ctx, []byte(request.Description))
+	if err != nil {
+		return formFields{}, err
+	}
+	form.descriptionJSON = descJSON
+	form.descriptionHTML = descHTML
+
 	preview := request.PreviewMessage
-	if preview == "" && request.Description != "" {
-		runes := []rune(request.Description)
-		if len(runes) > 25 {
-			preview = string(runes[:25])
-		} else {
-			preview = request.Description
+	if preview == "" {
+		snip, err := markdownStore.PreviewSnippet(ctx, descJSON, 25)
+		if err != nil {
+			return formFields{}, err
 		}
+		preview = snip
 	}
 
 	if request.Dressing != nil {
@@ -131,14 +145,13 @@ func buildFormFieldsFromRequest(request Request) formFields {
 		form.dressingTextFont = pgtype.Text{Valid: false}
 	}
 
-	form.description = pgtype.Text{String: request.Description, Valid: true}
 	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
-	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""}
+	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetURL, Valid: request.GoogleSheetURL != ""}
 	form.messageAfterSubmission = request.MessageAfterSubmission
 	form.visibility = visibilityFromAPIFormat(request.Visibility)
 	form.title = request.Title
 
-	return form
+	return form, nil
 }
 
 func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
@@ -146,11 +159,16 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	fields := buildFormFieldsFromRequest(request)
+	fields, err := buildFormFieldsFromRequest(ctx, s.markdownStore, request)
+	if err != nil {
+		span.RecordError(err)
+		return CreateRow{}, err
+	}
 
 	newForm, err := s.queries.Create(ctx, CreateParams{
 		Title:                  fields.title,
-		Description:            fields.description,
+		DescriptionJson:        fields.descriptionJSON,
+		DescriptionHtml:        fields.descriptionHTML,
 		PreviewMessage:         fields.previewMessage,
 		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
 		CreatedBy:              userID,
@@ -188,8 +206,14 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.Title = pgtype.Text{String: *request.Title, Valid: true}
 	}
 
-	if request.Description != nil {
-		params.Description = pgtype.Text{String: *request.Description, Valid: true}
+	if request.Description.Set {
+		descJSON, descHTML, err := s.markdownStore.ProcessAPIText(ctx, request.Description.Value)
+		if err != nil {
+			span.RecordError(err)
+			return PatchRow{}, err
+		}
+		params.DescriptionJson = descJSON
+		params.DescriptionHtml = pgtype.Text{String: descHTML, Valid: true}
 	}
 
 	if request.PreviewMessage != nil {
@@ -208,8 +232,8 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.MessageAfterSubmission = pgtype.Text{String: *request.MessageAfterSubmission, Valid: true}
 	}
 
-	if request.GoogleSheetUrl != nil {
-		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetUrl, Valid: true}
+	if request.GoogleSheetURL != nil {
+		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetURL, Valid: true}
 	}
 
 	if request.Visibility != nil {

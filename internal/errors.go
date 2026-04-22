@@ -59,7 +59,6 @@ var (
 	ErrEmailAlreadyExists   = errors.New("email already exists")
 	ErrUserOnboarded        = errors.New("user already onboarded")
 	ErrUsernameConflict     = errors.New("user name already taken")
-	ErrDatabaseError        = errors.New("database error")
 	ErrUserNotInAllowedList = errors.New("user not in allowed onboarding list")
 
 	// OAuth Email Errors
@@ -125,7 +124,6 @@ var (
 	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
 	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
 	ErrWorkflowNotActive             = errors.New("workflow is not active")
-	ErrUnmarshalWorkflow             = errors.New("failed to unmarshal workflow")
 	ErrMarshalWorkflow               = errors.New("failed to marshal workflow")
 	ErrUnmarshalAPIWorkflow          = errors.New("failed to unmarshal API workflow")
 	ErrUnmarshalDBWorkflow           = errors.New("failed to unmarshal database workflow")
@@ -146,6 +144,18 @@ var (
 	ErrCoverImageTooLarge = errors.New("cover image exceeds maximum size")
 	ErrInvalidImageFormat = errors.New("image format is invalid")
 
+	// Markdown document errors (ProseMirror JSON validation and rendering).
+	ErrInvalidDocumentJSON          = errors.New("malformed rich text JSON")
+	ErrInvalidDocumentRoot          = errors.New("rich text root must be a doc node")
+	ErrInvalidDocumentNode          = errors.New("invalid rich text node structure")
+	ErrInvalidDocumentHeading       = errors.New("invalid heading in rich text")
+	ErrInvalidDocumentLink          = errors.New("invalid link in rich text")
+	ErrInvalidDocumentMark          = errors.New("disallowed mark in rich text")
+	ErrInvalidDocumentVariableAttrs = errors.New("invalid variable attributes in rich text")
+	ErrInvalidDocumentTooLarge      = errors.New("rich text exceeds maximum size")
+	ErrInvalidDocumentMarshal       = errors.New("failed to canonicalize rich text JSON")
+	ErrInvalidDocumentRender        = errors.New("cannot render rich text node")
+  
 	// Internal Handler Errors
 	ErrFailedToGetSlugFromContext = errors.New("failed to get org slug from context")
 )
@@ -204,8 +214,6 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("user already onboarded")
 	case errors.Is(err, ErrUsernameConflict):
 		return problem.NewValidateProblem("username already taken")
-	case errors.Is(err, ErrDatabaseError):
-		return problem.NewBadRequestProblem("database error")
 	case errors.Is(err, ErrUserNotInAllowedList):
 		return problem.NewForbiddenProblem("user not in allowed onboarding list")
 
@@ -229,7 +237,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrInvalidEmailFormat):
 		return problem.NewValidateProblem("invalid email format")
 	case errors.Is(err, ErrMemberEmailNotFound):
-		return problem.NewBadRequestProblem("member email not found")
+		return problem.NewNotFoundProblem("member email not found")
 	case errors.Is(err, ErrCannotRemoveLastAdmin):
 		return problem.NewValidateProblem("cannot remove the last admin of the unit")
 	case errors.Is(err, ErrMissingUnitID):
@@ -295,36 +303,21 @@ func ErrorHandler(err error) problem.Problem {
 
 	// Submit Errors
 	case errors.Is(err, ErrResponseNotComplete{}):
-		return problem.NewValidateProblem(err.Error())
+		return problem.NewValidateProblem("response is not complete")
 
 	// Validation Errors
 	case errors.Is(err, ErrValidationFailed):
 		return problem.NewValidateProblem("validation failed")
 	case errors.Is(err, ErrAnswerSectionSkipped):
-		return problem.NewValidateProblemWithErrors(
-			"cannot answer questions in a section that is skipped by the form workflow",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("cannot answer questions in a section that is skipped by the form workflow")
 	case errors.Is(err, ErrWorkflowMergeInvalidQuestionID):
-		return problem.NewValidateProblemWithErrors(
-			"invalid question id",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("invalid question id")
 	case errors.Is(err, ErrWorkflowMergeQuestionNotInForm):
-		return problem.NewValidateProblemWithErrors(
-			"question does not belong to this form",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("question does not belong to this form")
 	case errors.Is(err, ErrWorkflowMergeAnswerValueInvalid):
-		return problem.NewValidateProblemWithErrors(
-			"invalid answer value for workflow resolution",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("invalid answer value for workflow resolution")
 	case errors.Is(err, ErrWorkflowMergeAnswerEncodeFailed):
-		return problem.NewValidateProblemWithErrors(
-			"failed to encode answer for workflow resolution",
-			[]string{err.Error()},
-		)
+		return problem.NewValidateProblem("failed to encode answer for workflow resolution")
 
 	// Workflow Errors
 	case errors.Is(err, ErrWorkflowNotFound):
@@ -332,18 +325,13 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrWorkflowValidationFailed):
 		return problem.NewValidateProblem("workflow validation failed")
 	case errors.Is(err, ErrWorkflowResolveSectionsFailed):
-		return problem.NewValidateProblemWithErrors(
-			"failed to resolve workflow sections",
-			[]string{err.Error()},
-		)
+		return problem.NewInternalServerProblem("failed to resolve workflow sections")
 	case errors.Is(err, ErrWorkflowNotActive):
 		return problem.NewValidateProblem("workflow is not active")
-	case errors.Is(err, ErrUnmarshalWorkflow):
-		return problem.NewBadRequestProblem("failed to unmarshal workflow")
 	case errors.Is(err, ErrMarshalWorkflow):
 		return problem.NewInternalServerProblem("failed to marshal workflow")
 	case errors.Is(err, ErrUnmarshalAPIWorkflow):
-		return problem.NewBadRequestProblem("failed to unmarshal API workflow")
+		return problem.NewValidateProblem("failed to unmarshal API workflow")
 	case errors.Is(err, ErrUnmarshalDBWorkflow):
 		return problem.NewInternalServerProblem("failed to unmarshal database workflow")
 	case errors.Is(err, ErrWorkflowNodeNotFound):
@@ -372,6 +360,28 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid offset parameter")
 	case errors.Is(err, ErrInvalidFileType):
 		return problem.NewValidateProblem("file type is not allowed")
+    
+	// Markdown document errors (ProseMirror JSON validation and rendering).
+	case errors.Is(err, ErrInvalidDocumentJSON):
+		return problem.NewValidateProblem("malformed rich text JSON")
+	case errors.Is(err, ErrInvalidDocumentRoot):
+		return problem.NewValidateProblem("rich text root must be a doc node")
+	case errors.Is(err, ErrInvalidDocumentNode):
+		return problem.NewValidateProblem("invalid rich text node structure")
+	case errors.Is(err, ErrInvalidDocumentHeading):
+		return problem.NewValidateProblem("invalid heading in rich text")
+	case errors.Is(err, ErrInvalidDocumentLink):
+		return problem.NewValidateProblem("invalid link in rich text")
+	case errors.Is(err, ErrInvalidDocumentMark):
+		return problem.NewValidateProblem("disallowed mark in rich text")
+	case errors.Is(err, ErrInvalidDocumentMarshal):
+		return problem.NewInternalServerProblem("failed to canonicalize rich text JSON")
+	case errors.Is(err, ErrInvalidDocumentRender):
+		return problem.NewInternalServerProblem("cannot render rich text node")
+	case errors.Is(err, ErrInvalidDocumentVariableAttrs):
+		return problem.NewValidateProblem("invalid variable attributes in rich text")
+	case errors.Is(err, ErrInvalidDocumentTooLarge):
+		return problem.NewValidateProblem("rich text exceeds maximum size (max 64KB)")
 
 	// Internal Handler Errors
 	case errors.Is(err, ErrFailedToGetSlugFromContext):

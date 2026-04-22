@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"fmt"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -36,6 +37,10 @@ type Querier interface {
 // FormStore is used to check form existence for operations that require it (e.g. list sections by form ID).
 type FormStore interface {
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+}
+
+type MarkdownStore interface {
+	ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error)
 }
 
 type Answerable interface {
@@ -70,22 +75,46 @@ type SectionWithAnswerableList struct {
 }
 
 type Service struct {
-	logger    *zap.Logger
-	queries   Querier
-	formStore FormStore
-	tracer    trace.Tracer
+	logger        *zap.Logger
+	queries       Querier
+	formStore     FormStore
+	markdownStore MarkdownStore
+	tracer        trace.Tracer
 }
 
-func NewService(logger *zap.Logger, db DBTX, formStore FormStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, formStore FormStore, markdownStore MarkdownStore) *Service {
 	return &Service{
-		logger:    logger,
-		queries:   New(db),
-		formStore: formStore,
-		tracer:    otel.Tracer("question/service"),
+		logger:        logger,
+		queries:       New(db),
+		formStore:     formStore,
+		markdownStore: markdownStore,
+		tracer:        otel.Tracer("question/service"),
 	}
 }
 
-func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, error) {
+type CreateInput struct {
+	SectionID   uuid.UUID
+	Required    bool
+	Type        QuestionType
+	Title       pgtype.Text
+	Description json.RawMessage
+	Metadata    []byte
+	Order       int32
+	SourceID    pgtype.UUID
+}
+
+type UpdateInput struct {
+	ID          uuid.UUID
+	SectionID   uuid.UUID
+	Required    bool
+	Type        QuestionType
+	Title       pgtype.Text
+	Description json.RawMessage
+	Metadata    []byte
+	SourceID    pgtype.UUID
+}
+
+func (s *Service) Create(ctx context.Context, input CreateInput) (Answerable, error) {
 	ctx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
@@ -98,6 +127,17 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, e
 	}
 	if !exists {
 		return nil, internal.ErrSectionNotFound
+	}
+
+	if s.markdownStore == nil {
+		err := fmt.Errorf("markdown store is not configured")
+		span.RecordError(err)
+		return nil, err
+	}
+	descJSON, descHTML, err := s.markdownStore.ProcessAPIText(ctx, input.Description)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
 	}
 
 	orders, err := s.queries.ListOrderBySectionID(ctx, input.SectionID)
@@ -130,9 +170,17 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, e
 		}
 	}
 
-	createInput := input
-	createInput.Order = effectiveOrder
-	row, err := s.queries.Create(ctx, createInput)
+	row, err := s.queries.Create(ctx, CreateParams{
+		SectionID:       input.SectionID,
+		Required:        input.Required,
+		Type:            input.Type,
+		Title:           input.Title,
+		DescriptionJson: descJSON,
+		DescriptionHtml: descHTML,
+		Metadata:        input.Metadata,
+		Order:           effectiveOrder,
+		SourceID:        input.SourceID,
+	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create question")
 		span.RecordError(err)
@@ -142,12 +190,33 @@ func (s *Service) Create(ctx context.Context, input CreateParams) (Answerable, e
 }
 
 // Update updates question fields and, if order differs from the current order, updates order (clamped to [1, count]).
-func (s *Service) Update(ctx context.Context, input UpdateParams, order int32) (Answerable, error) {
+func (s *Service) Update(ctx context.Context, input UpdateInput, order int32) (Answerable, error) {
 	ctx, span := s.tracer.Start(ctx, "Update")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	row, err := s.queries.Update(ctx, input)
+	if s.markdownStore == nil {
+		err := fmt.Errorf("markdown store is not configured")
+		span.RecordError(err)
+		return nil, err
+	}
+	descJSON, descHTML, err := s.markdownStore.ProcessAPIText(ctx, input.Description)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	row, err := s.queries.Update(ctx, UpdateParams{
+		ID:              input.ID,
+		SectionID:       input.SectionID,
+		Required:        input.Required,
+		Type:            input.Type,
+		Title:           input.Title,
+		DescriptionJson: descJSON,
+		DescriptionHtml: descHTML,
+		Metadata:        input.Metadata,
+		SourceID:        input.SourceID,
+	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update question")
 		span.RecordError(err)
@@ -258,12 +327,13 @@ func (s *Service) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 		if !exist {
 			sectionMap[sectionID] = &SectionWithAnswerableList{
 				Section: Section{
-					ID:          sectionID,
-					FormID:      row.FormID,
-					Title:       row.Title,
-					Description: row.Description,
-					CreatedAt:   row.CreatedAt,
-					UpdatedAt:   row.UpdatedAt,
+					ID:              sectionID,
+					FormID:          row.FormID,
+					Title:           row.Title,
+					DescriptionJson: row.DescriptionJson,
+					DescriptionHtml: row.DescriptionHtml,
+					CreatedAt:       row.CreatedAt,
+					UpdatedAt:       row.UpdatedAt,
 				},
 				AnswerableList: []Answerable{},
 			}
@@ -271,18 +341,23 @@ func (s *Service) ListSectionsWithAnswersByFormID(ctx context.Context, formID uu
 
 		// Check if question exists
 		if row.ID.Valid {
+			qHTML := ""
+			if row.QuestionDescriptionHtml.Valid {
+				qHTML = row.QuestionDescriptionHtml.String
+			}
 			q := Question{
-				ID:          row.ID.Bytes,
-				SectionID:   sectionID,
-				Required:    row.Required.Bool,
-				Type:        row.Type.QuestionType,
-				Title:       row.QuestionTitle,
-				Description: row.QuestionDescription,
-				Metadata:    row.Metadata,
-				Order:       row.Order.Int32,
-				SourceID:    row.SourceID,
-				CreatedAt:   row.QuestionCreatedAt,
-				UpdatedAt:   row.QuestionUpdatedAt,
+				ID:              row.ID.Bytes,
+				SectionID:       sectionID,
+				Required:        row.Required.Bool,
+				Type:            row.Type.QuestionType,
+				Title:           row.QuestionTitle,
+				DescriptionJson: row.QuestionDescriptionJson,
+				DescriptionHtml: qHTML,
+				Metadata:        row.Metadata,
+				Order:           row.Order.Int32,
+				SourceID:        row.SourceID,
+				CreatedAt:       row.QuestionCreatedAt,
+				UpdatedAt:       row.QuestionUpdatedAt,
 			}
 			answerable, err := NewAnswerable(q, row.FormID)
 			if err != nil {
@@ -361,18 +436,23 @@ func (s *Service) GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID
 	for _, row := range list {
 		// Check if question exists
 		if row.ID.Valid {
+			qHTML := ""
+			if row.QuestionDescriptionHtml.Valid {
+				qHTML = row.QuestionDescriptionHtml.String
+			}
 			q := Question{
-				ID:          row.ID.Bytes,
-				SectionID:   row.SectionID,
-				Required:    row.Required.Bool,
-				Type:        row.Type.QuestionType,
-				Title:       row.QuestionTitle,
-				Description: row.QuestionDescription,
-				Metadata:    row.Metadata,
-				Order:       row.Order.Int32,
-				SourceID:    row.SourceID,
-				CreatedAt:   row.QuestionCreatedAt,
-				UpdatedAt:   row.QuestionUpdatedAt,
+				ID:              row.ID.Bytes,
+				SectionID:       row.SectionID,
+				Required:        row.Required.Bool,
+				Type:            row.Type.QuestionType,
+				Title:           row.QuestionTitle,
+				DescriptionJson: row.QuestionDescriptionJson,
+				DescriptionHtml: qHTML,
+				Metadata:        row.Metadata,
+				Order:           row.Order.Int32,
+				SourceID:        row.SourceID,
+				CreatedAt:       row.QuestionCreatedAt,
+				UpdatedAt:       row.QuestionUpdatedAt,
 			}
 			answerable, err := NewAnswerable(q, row.FormID)
 			if err != nil {
@@ -388,17 +468,12 @@ func (s *Service) GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID
 	return answerableMap, nil
 }
 
-func (s *Service) UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (Section, error) {
+func (s *Service) UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error) {
 	ctx, span := s.tracer.Start(ctx, "UpdateSection")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	section, err := s.queries.UpdateSection(ctx, UpdateSectionParams{
-		ID:          sectionID,
-		Title:       pgtype.Text{String: title, Valid: true},
-		Description: pgtype.Text{String: description, Valid: len(description) > 0},
-		FormID:      formID,
-	})
+	section, err := s.queries.UpdateSection(ctx, arg)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "update section")
 		span.RecordError(err)

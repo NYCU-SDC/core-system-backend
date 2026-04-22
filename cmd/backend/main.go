@@ -19,6 +19,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/internal/inbox"
 	"NYCU-SDC/core-system-backend/internal/jwt"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/internal/publish"
 	"NYCU-SDC/core-system-backend/internal/setup"
 	"NYCU-SDC/core-system-backend/internal/tenant"
@@ -161,8 +162,9 @@ func main() {
 	userService := user.NewService(logger, dbPool, fileService, unitService, unitService)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
-	formService := form.NewService(logger, dbPool)
-	questionService := question.NewService(logger, dbPool, formService)
+	markdownService := markdown.NewService(logger)
+	formService := form.NewService(logger, dbPool, markdownService)
+	questionService := question.NewService(logger, dbPool, formService, markdownService)
 	workflowService := workflow.NewService(logger, dbPool, questionService)
 	answerService := answer.NewService(logger, dbPool, questionService, fileService, workflowService)
 	inboxService := inbox.NewService(logger, dbPool)
@@ -184,7 +186,7 @@ func main() {
 
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService, fileService)
+	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService, fileService, markdownService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
 	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService, jwtService, cfg.GoogleOauth.ClientID, cfg.GoogleOauth.ClientSecret, cfg.GitHubOauth.ClientID, cfg.GitHubOauth.ClientSecret, cfg.BaseURL, cfg.OauthProxyBaseURL)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, submitService, tenantService, userService)
@@ -265,8 +267,8 @@ func main() {
 	mux.Handle("GET /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 	mux.Handle("POST /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 
-	mux.Handle("POST /api/auth/link", basicMiddleware.HandlerFunc(authHandler.LinkAccount))
-	mux.Handle("POST /api/auth/link/abort", basicMiddleware.HandlerFunc(authHandler.LinkAccountAbort))
+	mux.Handle("POST /api/auth/link-account", basicMiddleware.HandlerFunc(authHandler.LinkAccount))
+	mux.Handle("POST /api/auth/link-account/abort", basicMiddleware.HandlerFunc(authHandler.LinkAccountAbort))
 
 	// JWT refresh
 	// ----------------------
