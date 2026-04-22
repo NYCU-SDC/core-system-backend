@@ -171,7 +171,7 @@ type Store interface {
 	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
-	List(ctx context.Context, status []Status, visibility Visibility, excludeExpired bool) ([]ListRow, error)
+	List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
 	UploadCoverImage(ctx context.Context, id uuid.UUID, data []byte, coverImageURL string) error
@@ -366,23 +366,7 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	var status []Status
-	statusStr := r.URL.Query()["status"]
-	if len(statusStr) == 0 {
-		status = []Status{StatusDraft, StatusPublished}
-	} else {
-		for _, s := range statusStr {
-			parseStatus, err := ParseStatus(s)
-			if err != nil {
-				h.problemWriter.WriteError(traceCtx, w, err, logger)
-				return
-			}
-
-			status = append(status, parseStatus)
-		}
-	}
-
-	forms, err := h.store.List(traceCtx, status, "", false)
+	forms, err := h.store.List(traceCtx, "", "", false)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
