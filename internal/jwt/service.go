@@ -394,6 +394,9 @@ type LinkClaims struct {
 	// ExistingProviderID is the provider-specific ID already associated with the existing account.
 	ExistingProviderID string
 
+	// RedirectURL preserves the original destination to prevent it from being overwritten by the account-linking flow.
+	RedirectURL string
+
 	jwt.RegisteredClaims
 }
 
@@ -401,7 +404,7 @@ type LinkClaims struct {
 // OAuth identity when it collides with an existing account's email.
 // The token is placed in an HttpOnly cookie so the frontend can later call
 // /api/auth/link to confirm the account merge.
-func (s Service) NewLinkToken(ctx context.Context, provider, providerID, existingProvider, existingProviderID, userID string) (string, error) {
+func (s Service) NewLinkToken(ctx context.Context, provider, providerID, existingProvider, existingProviderID, redirectURL, userID string) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "NewLinkToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -413,6 +416,7 @@ func (s Service) NewLinkToken(ctx context.Context, provider, providerID, existin
 		UserID:             userID,
 		ExistingProvider:   existingProvider,
 		ExistingProviderID: existingProviderID,
+		RedirectURL:        redirectURL,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    Issuer,
 			Subject:   id.String(),
@@ -435,7 +439,7 @@ func (s Service) NewLinkToken(ctx context.Context, provider, providerID, existin
 }
 
 // ParseLinkToken verifies a link token and returns its claims.
-func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provider, providerID, existingProvider, existingProviderID string, userID uuid.UUID, err error) {
+func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (*LinkClaims, uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ParseLinkToken")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -464,20 +468,20 @@ func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (provid
 		default:
 			logger.Error("Failed to parse link token", zap.Error(parseErr))
 		}
-		return "", "", "", "", uuid.UUID{}, parseErr
+		return nil, uuid.UUID{}, parseErr
 	}
 
-	userID, err = uuid.Parse(tokenClaims.UserID)
+	userID, err := uuid.Parse(tokenClaims.UserID)
 	if err != nil {
-		logger.Error("Failed to parse user id from link token", zap.String("user_id", tokenClaims.UserID), zap.Error(err))
-		return "", "", "", "", uuid.UUID{}, err
+		logger.Error("failed to parse user id from link token", zap.String("error", err.Error()))
+		return nil, uuid.UUID{}, err
 	}
 
 	logger.Debug("Successfully parsed link token",
 		zap.String("provider", tokenClaims.Provider),
 		zap.String("existing_provider", tokenClaims.ExistingProvider),
 	)
-	return tokenClaims.Provider, tokenClaims.ProviderID, tokenClaims.ExistingProvider, tokenClaims.ExistingProviderID, userID, nil
+	return tokenClaims, userID, nil
 }
 
 func (s Service) GetUserIDByRefreshToken(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {

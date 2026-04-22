@@ -267,8 +267,8 @@ func main() {
 	mux.Handle("GET /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 	mux.Handle("POST /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 
-	mux.Handle("POST /api/auth/link", basicMiddleware.HandlerFunc(authHandler.LinkAccount))
-	mux.Handle("POST /api/auth/link/abort", basicMiddleware.HandlerFunc(authHandler.LinkAccountAbort))
+	mux.Handle("POST /api/auth/link-account", basicMiddleware.HandlerFunc(authHandler.LinkAccount))
+	mux.Handle("POST /api/auth/link-account/abort", basicMiddleware.HandlerFunc(authHandler.LinkAccountAbort))
 
 	// JWT refresh
 	// ----------------------
@@ -364,7 +364,8 @@ func main() {
 
 	// Response Management
 	// ----------------------
-	mux.Handle("GET /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.List))
+	mux.Handle("GET /api/forms/{formId}/responses", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(responseHandler.List))
+	mux.Handle("GET /api/forms/{formId}/responses/me", authMiddleware.HandlerFunc(responseHandler.ListMe))
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.Create))
 	// --- (Update response is not allowed)
