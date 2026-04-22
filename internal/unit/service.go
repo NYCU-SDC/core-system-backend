@@ -41,7 +41,7 @@ type Querier interface {
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
 	LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error)
-	GetUnitAncestorIDs(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error)
+	GetUnitAncestorIDs(ctx context.Context, unitID uuid.UUID) ([]pgtype.UUID, error)
 
 	WithTx(tx pgx.Tx) *Queries
 }
@@ -696,15 +696,19 @@ func (s *Service) GetUnitAncestorByID(ctx context.Context, unitID uuid.UUID) ([]
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	ids, err := s.queries.GetUnitAncestorIDs(traceCtx, unitID)
+	rows, err := s.queries.GetUnitAncestorIDs(traceCtx, unitID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get unit ancestor by id")
 		span.RecordError(err)
 		return nil, err
 	}
 
-	if ids == nil {
-		ids = []uuid.UUID{}
+	ids := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		if !row.Valid {
+			continue
+		}
+		ids = append(ids, row.Bytes)
 	}
 
 	logger.Info("Get unit ancestor by ID",

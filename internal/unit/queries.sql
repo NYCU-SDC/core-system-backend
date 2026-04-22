@@ -131,16 +131,18 @@ DO UPDATE SET
 RETURNING unit_id, member_id, role;
 
 -- name: GetUnitAncestorIDs :many
-WITH RECURSIVE ancestors(id, parent_id) AS (
-    SELECT u.id, u.parent_id
+WITH RECURSIVE ancestors(ancestor_id) AS (
+    SELECT parent_id
     FROM units u
     WHERE u.id = $1
+      AND u.parent_id IS NOT NULL
 
     UNION
 
-    SELECT u.id, u.parent_id
+    SELECT u.parent_id
     FROM units u
-             INNER JOIN ancestors a ON u.id = a.parent_id
+             JOIN ancestors a ON u.id = a.ancestor_id
+    WHERE u.parent_id IS NOT NULL
 )
-SELECT a.id
-FROM ancestors a;
+SELECT ancestor_id
+FROM ancestors;

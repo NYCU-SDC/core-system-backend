@@ -289,34 +289,36 @@ func (q *Queries) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID)
 }
 
 const getUnitAncestorIDs = `-- name: GetUnitAncestorIDs :many
-WITH RECURSIVE ancestors(id, parent_id) AS (
-    SELECT u.id, u.parent_id
+WITH RECURSIVE ancestors(ancestor_id) AS (
+    SELECT parent_id
     FROM units u
     WHERE u.id = $1
+      AND u.parent_id IS NOT NULL
 
     UNION
 
-    SELECT u.id, u.parent_id
+    SELECT u.parent_id
     FROM units u
-             INNER JOIN ancestors a ON u.id = a.parent_id
+             JOIN ancestors a ON u.id = a.ancestor_id
+    WHERE u.parent_id IS NOT NULL
 )
-SELECT a.id
-FROM ancestors a
+SELECT ancestor_id
+FROM ancestors
 `
 
-func (q *Queries) GetUnitAncestorIDs(ctx context.Context, id uuid.UUID) ([]uuid.UUID, error) {
+func (q *Queries) GetUnitAncestorIDs(ctx context.Context, id uuid.UUID) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, getUnitAncestorIDs, id)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []pgtype.UUID
 	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
+		var ancestor_id pgtype.UUID
+		if err := rows.Scan(&ancestor_id); err != nil {
 			return nil, err
 		}
-		items = append(items, id)
+		items = append(items, ancestor_id)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
