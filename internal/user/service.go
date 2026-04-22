@@ -342,7 +342,7 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	id, err := s.queries.GetIDByEmail(traceCtx, email)
-	if err != nil && err != pgx.ErrNoRows {
+	if !errors.Is(err, pgx.ErrNoRows) {
 		err = databaseutil.WrapDBError(err, logger, "get user id existence by email")
 		span.RecordError(err)
 		return uuid.UUID{}, err
