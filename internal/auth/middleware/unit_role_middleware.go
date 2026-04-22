@@ -21,7 +21,7 @@ import (
 
 type UnitRoleService interface {
 	GetMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID) (unit.UnitRole, error)
-	GetUnitAncestorIDs(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error)
+	GetUnitAncestorByID(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error)
 }
 
 type UnitRoleMiddleware struct {
@@ -82,7 +82,7 @@ func (m *UnitRoleMiddleware) checkRole(
 	}
 
 	// check ancestor admin
-	ancestors, err := m.service.GetUnitAncestorIDs(traceCtx, unitID)
+	ancestors, err := m.service.GetUnitAncestorByID(traceCtx, unitID)
 	if err != nil {
 		logger.Error("failed to get unit ancestors",
 			zap.String("user_id", u.ID.String()),
