@@ -14,7 +14,7 @@ import (
 )
 
 type FormService interface {
-	Archived(ctx context.Context, id uuid.UUID) (bool, error)
+	IsArchived(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type Middleware struct {
@@ -48,7 +48,7 @@ func (m *Middleware) CheckArchived(
 	r *http.Request,
 ) {
 	traceCtx, span := m.tracer.Start(r.Context(), "CheckArchived")
-	span.End()
+	defer span.End()
 	logger := logutil.WithContext(traceCtx, m.logger)
 
 	formID, err := resolver.ResolveFormID(traceCtx, r)
@@ -58,7 +58,7 @@ func (m *Middleware) CheckArchived(
 		return
 	}
 
-	archived, err := m.service.Archived(traceCtx, formID)
+	archived, err := m.service.IsArchived(traceCtx, formID)
 	if err != nil {
 		m.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

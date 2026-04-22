@@ -184,6 +184,11 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("form id is required")
 	case errors.Is(err, ErrInvalidFormID):
 		return problem.NewBadRequestProblem("invalid form id")
+	case errors.Is(err, ErrMissingResponseID):
+		return problem.NewBadRequestProblem("response id is required")
+	case errors.Is(err, ErrInvalidResponseID):
+		return problem.NewBadRequestProblem("invalid response id")
+
 	// JWT Authentication Errors
 	case errors.Is(err, ErrMissingAuthHeader):
 		return problem.NewUnauthorizedProblem("missing access token")

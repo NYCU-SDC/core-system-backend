@@ -700,7 +700,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ArchiveHandler")
+	traceCtx, span := h.tracer.Start(r.Context(), "UnarchiveHandler")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -716,8 +716,6 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
 		return
 	}
-
-	// TODO: some validation before setting draft
 
 	_, err = h.store.SetStatus(traceCtx, id, StatusDraft, currentUser.ID)
 	if err != nil {
