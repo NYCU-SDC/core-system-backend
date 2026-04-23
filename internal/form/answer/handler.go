@@ -546,7 +546,7 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-		// Get formID from responseID (needed by Upsert)
+	// Get formID from responseID (needed by Upsert)
 	formID, err := h.responseStore.GetFormID(traceCtx, responseID)
 	if err != nil {
 		logger.Error("failed to get form ID for response", zap.String("responseID", responseID.String()), zap.Error(err))

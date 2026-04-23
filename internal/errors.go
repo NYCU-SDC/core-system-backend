@@ -41,11 +41,13 @@ var (
 	ErrNotFound             = errors.New("not found")
 
 	// Resolver Error
-	ErrMissingSlug      = errors.New("slug not provided")
-	ErrMissingSectionID = errors.New("missing section id")
-	ErrInvalidSectionID = errors.New("invalid section id")
-	ErrMissingFormID    = errors.New("missing form id")
-	ErrInvalidFormID    = errors.New("invalid form id")
+	ErrMissingSlug       = errors.New("slug not provided")
+	ErrMissingSectionID  = errors.New("missing section id")
+	ErrInvalidSectionID  = errors.New("invalid section id")
+	ErrMissingFormID     = errors.New("missing form id")
+	ErrInvalidFormID     = errors.New("invalid form id")
+	ErrMissingResponseID = errors.New("missing response id")
+	ErrInvalidResponseID = errors.New("invalid response id")
 
 	// JWT Authentication Errors
 	ErrMissingAuthHeader       = errors.New("missing access token")
@@ -94,6 +96,8 @@ var (
 	ErrFormNotFound       = errors.New("form not found")
 	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
 	ErrFormDeadlinePassed = errors.New("form deadline has passed")
+	ErrArchivedForm       = errors.New("archived form should not accept new response")
+	ErrInvalidStatus      = errors.New("invalid form status")
 
 	// Question Errors
 	ErrQuestionNotFound           = errors.New("question not found")
@@ -155,7 +159,7 @@ var (
 	ErrInvalidDocumentTooLarge      = errors.New("rich text exceeds maximum size")
 	ErrInvalidDocumentMarshal       = errors.New("failed to canonicalize rich text JSON")
 	ErrInvalidDocumentRender        = errors.New("cannot render rich text node")
-  
+
 	// Internal Handler Errors
 	ErrFailedToGetSlugFromContext = errors.New("failed to get org slug from context")
 )
@@ -194,6 +198,11 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("form id is required")
 	case errors.Is(err, ErrInvalidFormID):
 		return problem.NewBadRequestProblem("invalid form id")
+	case errors.Is(err, ErrMissingResponseID):
+		return problem.NewBadRequestProblem("response id is required")
+	case errors.Is(err, ErrInvalidResponseID):
+		return problem.NewBadRequestProblem("invalid response id")
+
 	// JWT Authentication Errors
 	case errors.Is(err, ErrMissingAuthHeader):
 		return problem.NewUnauthorizedProblem("missing access token")
@@ -264,6 +273,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("cover image exceeds maximum size (max 2MB)")
 	case errors.Is(err, ErrInvalidImageFormat):
 		return problem.NewValidateProblem("image format is invalid")
+	case errors.Is(err, ErrArchivedForm):
+		return problem.NewBadRequestProblem("archived form should not accept new response")
+	case errors.Is(err, ErrInvalidStatus):
+		return problem.NewValidateProblem("invalid form status")
 
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):
@@ -360,7 +373,7 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("invalid offset parameter")
 	case errors.Is(err, ErrInvalidFileType):
 		return problem.NewValidateProblem("file type is not allowed")
-    
+
 	// Markdown document errors (ProseMirror JSON validation and rendering).
 	case errors.Is(err, ErrInvalidDocumentJSON):
 		return problem.NewValidateProblem("malformed rich text JSON")

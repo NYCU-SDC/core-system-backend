@@ -559,6 +559,22 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
+	var status []Status
+	statusStr := r.URL.Query()["status"]
+	if len(statusStr) == 0 {
+		status = []Status{StatusDraft, StatusPublished}
+	} else {
+		for _, s := range statusStr {
+			parseStatus, err := ParseStatus(s)
+			if err != nil {
+				h.problemWriter.WriteError(traceCtx, w, err, logger)
+				return
+			}
+
+			status = append(status, parseStatus)
+		}
+	}
+
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
@@ -573,6 +589,7 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 
 	forms, err := h.store.ListByUnit(traceCtx, ListByUnitParams{
 		UnitID: pgtype.UUID{Bytes: orgID, Valid: true},
+		Status: status,
 	})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
@@ -723,6 +740,47 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
+func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UnarchiveHandler")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("formId")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	_, err = h.store.SetStatus(traceCtx, id, StatusDraft, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentForm, err := h.store.Get(traceCtx, id)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := ToResponse(
+		formFromGetRow(currentForm),
+		currentForm.UnitName.String,
+		currentForm.OrgName.String,
+		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+	)
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
 func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetFontsHandler")
 	defer span.End()
@@ -793,4 +851,17 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func ParseStatus(status string) (Status, error) {
+	switch status {
+	case "DRAFT":
+		return StatusDraft, nil
+	case "PUBLISHED":
+		return StatusPublished, nil
+	case "ARCHIVED":
+		return StatusArchived, nil
+	default:
+		return "", internal.ErrInvalidStatus
+	}
 }

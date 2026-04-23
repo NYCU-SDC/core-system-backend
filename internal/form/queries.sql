@@ -165,8 +165,13 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.unit_id = $1
-AND (f.status <> 'archived' OR sqlc.narg(include_archived)::boolean IS TRUE)
+AND f.status = ANY(sqlc.arg(status)::status[])
 ORDER BY f.updated_at DESC;
+
+-- name: GetStatus :one
+SELECT status
+FROM forms
+WHERE id = $1;
 
 -- name: SetStatus :one
 UPDATE forms
