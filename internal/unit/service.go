@@ -20,10 +20,10 @@ import (
 
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (Unit, error)
-	GetByID(ctx context.Context, id uuid.UUID) (Unit, error)
+	Get(ctx context.Context, id uuid.UUID) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]GetAllOrganizationsRow, error)
 	ListOrganizationsOfUser(ctx context.Context, memberID uuid.UUID) ([]ListOrganizationsOfUserRow, error)
-	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (GetOrganizationByIDWithSlugRow, error)
+	GetOrganizationWithSlug(ctx context.Context, id uuid.UUID) (GetOrganizationWithSlugRow, error)
 	ListSubUnits(ctx context.Context, parentID pgtype.UUID) ([]Unit, error)
 	ListSubUnitIDs(ctx context.Context, parentID pgtype.UUID) ([]uuid.UUID, error)
 	Update(ctx context.Context, arg UpdateParams) (Unit, error)
@@ -95,8 +95,8 @@ func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 	}
 }
 
-func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error) {
-	traceCtx, span := s.tracer.Start(ctx, "CreateOrganizationWithCurrentUserID")
+func (s *Service) CreateOrganizationWithUserID(ctx context.Context, name string, description string, slug string, userID uuid.UUID, metadata []byte) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateOrganizationWithUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
@@ -124,8 +124,19 @@ func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name 
 		return Unit{}, err
 	}
 
-	_, err = s.tenantStore.Create(traceCtx, org.ID, currentUserID, slug)
+	_, err = s.tenantStore.Create(traceCtx, org.ID, userID, slug)
 	if err != nil {
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
+	_, err = s.queries.AddUnitMemberWithRole(traceCtx, AddUnitMemberWithRoleParams{
+		UnitID:   org.ID,
+		MemberID: userID,
+		Role:     UnitRoleAdmin,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "add org admin")
 		span.RecordError(err)
 		return Unit{}, err
 	}
@@ -139,22 +150,27 @@ func (s *Service) CreateOrganizationWithCurrentUserID(ctx context.Context, name 
 	return org, nil
 }
 
-// CreateUnit creates a new unit or organization
-func (s *Service) CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error) {
-	traceCtx, span := s.tracer.Start(ctx, "CreateUnit")
+func (s *Service) CreateUnitWithUserID(ctx context.Context, name string, description string, parentID uuid.UUID, userID uuid.UUID, metadata []byte) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "CreateUnitWithUserID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	_, orgID, err := s.tenantStore.GetSlugStatus(traceCtx, slug)
+	parent, err := s.queries.Get(ctx, parentID)
 	if err != nil {
-		span.RecordError(err)
 		return Unit{}, err
+	}
+
+	var orgID uuid.UUID
+	if parent.Type == UnitTypeOrganization {
+		orgID = parent.ID
+	} else {
+		orgID = parent.OrgID.Bytes
 	}
 
 	unit, err := s.queries.Create(traceCtx, CreateParams{
 		Name:        pgtype.Text{String: name, Valid: name != ""},
 		OrgID:       pgtype.UUID{Bytes: orgID, Valid: true},
-		ParentID:    pgtype.UUID{Bytes: orgID, Valid: true},
+		ParentID:    pgtype.UUID{Bytes: parentID, Valid: true},
 		Description: pgtype.Text{String: description, Valid: true},
 		Metadata:    metadata,
 		Type:        UnitTypeUnit,
@@ -165,8 +181,20 @@ func (s *Service) CreateUnit(ctx context.Context, name string, description strin
 		return Unit{}, err
 	}
 
+	_, err = s.queries.AddUnitMemberWithRole(traceCtx, AddUnitMemberWithRoleParams{
+		UnitID:   unit.ID,
+		MemberID: userID,
+		Role:     UnitRoleAdmin,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "add unit admin")
+		span.RecordError(err)
+		return Unit{}, err
+	}
+
 	logger.Info(fmt.Sprintf("Created %s", unit.Type),
 		zap.String("unit_id", unit.ID.String()),
+		zap.String("parent_id", parentID.String()),
 		zap.String("org_id", orgID.String()),
 		zap.String("name", unit.Name.String),
 		zap.String("description", unit.Description.String),
@@ -282,12 +310,12 @@ func (s *Service) ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID)
 	return result, nil
 }
 
-func (s *Service) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetOrganizationByIDWithSlug")
+func (s *Service) GetOrganizationWithSlug(ctx context.Context, id uuid.UUID) (Organization, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetOrganizationWithSlug")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	r, err := s.queries.GetOrganizationByIDWithSlug(traceCtx, id)
+	r, err := s.queries.GetOrganizationWithSlug(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "organizations", "id", id.String(), logger, "get organization by id with slug")
 		span.RecordError(err)
@@ -310,13 +338,13 @@ func (s *Service) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID)
 	}, nil
 }
 
-// GetByID retrieves a unit by ID
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetByID")
+// Get retrieves a unit by ID
+func (s *Service) Get(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	unit, err := s.queries.GetByID(traceCtx, id)
+	unit, err := s.queries.Get(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "unit", "unitType", unitType.String(), logger, "get by id")
 		span.RecordError(err)

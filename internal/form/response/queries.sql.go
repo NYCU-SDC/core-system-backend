@@ -99,16 +99,50 @@ func (q *Queries) Get(ctx context.Context, arg GetParams) (FormResponse, error) 
 	return i, err
 }
 
-const getFormIDByID = `-- name: GetFormIDByID :one
+const getFormID = `-- name: GetFormID :one
 SELECT form_id FROM form_responses
 WHERE id = $1
 `
 
-func (q *Queries) GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getFormIDByID, id)
+func (q *Queries) GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getFormID, id)
 	var form_id uuid.UUID
 	err := row.Scan(&form_id)
 	return form_id, err
+}
+
+const listByFormID = `-- name: ListByFormID :many
+SELECT id, form_id, submitted_by, submitted_at, progress, created_at, updated_at FROM form_responses
+WHERE form_id = $1
+ORDER BY submitted_at DESC NULLS LAST
+`
+
+func (q *Queries) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
+	rows, err := q.db.Query(ctx, listByFormID, formID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FormResponse
+	for rows.Next() {
+		var i FormResponse
+		if err := rows.Scan(
+			&i.ID,
+			&i.FormID,
+			&i.SubmittedBy,
+			&i.SubmittedAt,
+			&i.Progress,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listByFormIDAndSubmittedBy = `-- name: ListByFormIDAndSubmittedBy :many

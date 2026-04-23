@@ -17,7 +17,7 @@ import (
 )
 
 type FileReferenceQuerier interface {
-	GetByID(ctx context.Context, id uuid.UUID) (Answer, error)
+	Get(ctx context.Context, id uuid.UUID) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
 }
 
@@ -49,7 +49,7 @@ func (h *FileResourceHandler) RemoveFileReference(ctx context.Context, fileID uu
 		zap.String("answerID", resourceID.String()),
 	)
 
-	answer, err := h.queries.GetByID(traceCtx, resourceID)
+	answer, err := h.queries.Get(traceCtx, resourceID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get answer by id for file reference removal")
 		span.RecordError(err)

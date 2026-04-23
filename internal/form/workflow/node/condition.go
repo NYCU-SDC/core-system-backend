@@ -160,7 +160,7 @@ func (n *ConditionNode) validateConditionRule(ctx context.Context, formID uuid.U
 			return fmt.Errorf("condition node '%s' conditionRule.question '%s' is not a valid UUID", nodeID, rule.Question)
 		}
 
-		answerable, err := questionStore.GetByID(ctx, questionID)
+		answerable, err := questionStore.Get(ctx, questionID)
 		if err != nil {
 			return fmt.Errorf("condition node '%s' references non-existent question '%s' in conditionRule.question", nodeID, rule.Question)
 		}

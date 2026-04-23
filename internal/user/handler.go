@@ -110,7 +110,7 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user emails
-	emails, err := h.service.GetEmailsByID(traceCtx, currentUser.ID)
+	emails, err := h.service.GetEmails(traceCtx, currentUser.ID)
 	if err != nil {
 		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
 		emails = []string{}
@@ -162,7 +162,7 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user emails
-	emails, err := h.service.GetEmailsByID(traceCtx, newUser.ID)
+	emails, err := h.service.GetEmails(traceCtx, newUser.ID)
 	if err != nil {
 		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", newUser.ID.String()))
 		emails = []string{}

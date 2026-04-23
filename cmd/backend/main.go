@@ -20,6 +20,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/internal/inbox"
 	"NYCU-SDC/core-system-backend/internal/jwt"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/internal/publish"
 	"NYCU-SDC/core-system-backend/internal/setup"
 	"NYCU-SDC/core-system-backend/internal/tenant"
@@ -162,8 +163,9 @@ func main() {
 	userService := user.NewService(logger, dbPool, fileService, unitService, unitService)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
-	formService := form.NewService(logger, dbPool)
-	questionService := question.NewService(logger, dbPool, formService)
+	markdownService := markdown.NewService(logger)
+	formService := form.NewService(logger, dbPool, markdownService)
+	questionService := question.NewService(logger, dbPool, formService, markdownService)
 	workflowService := workflow.NewService(logger, dbPool, questionService)
 	answerService := answer.NewService(logger, dbPool, questionService, fileService, workflowService)
 	inboxService := inbox.NewService(logger, dbPool)
@@ -185,7 +187,7 @@ func main() {
 
 	authHandler := auth.NewHandler(logger, validator, problemWriter, userService, jwtService, jwtService, cfg.BaseURL, cfg.OauthProxyBaseURL, Environment, cfg.Dev, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration, cfg.GoogleOauth, cfg.NYCUOauth)
 	userHandler := user.NewHandler(logger, validator, problemWriter, userService)
-	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService, fileService)
+	formHandler := form.NewHandler(logger, validator, problemWriter, formService, tenantService, questionService, fileService, markdownService)
 	questionHandler := question.NewHandler(logger, validator, problemWriter, questionService)
 	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService, jwtService, cfg.GoogleOauth.ClientID, cfg.GoogleOauth.ClientSecret, cfg.GitHubOauth.ClientID, cfg.GitHubOauth.ClientSecret, cfg.BaseURL, cfg.OauthProxyBaseURL)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, submitService, tenantService, userService)
@@ -272,8 +274,8 @@ func main() {
 	mux.Handle("GET /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 	mux.Handle("POST /api/auth/logout", basicMiddleware.HandlerFunc(authHandler.Logout))
 
-	mux.Handle("POST /api/auth/link", basicMiddleware.HandlerFunc(authHandler.LinkAccount))
-	mux.Handle("POST /api/auth/link/abort", basicMiddleware.HandlerFunc(authHandler.LinkAccountAbort))
+	mux.Handle("POST /api/auth/link-account", basicMiddleware.HandlerFunc(authHandler.LinkAccount))
+	mux.Handle("POST /api/auth/link-account/abort", basicMiddleware.HandlerFunc(authHandler.LinkAccountAbort))
 
 	// JWT refresh
 	// ----------------------
@@ -302,7 +304,6 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.ListOrgSubUnits))
 	mux.Handle("GET /api/orgs/{slug}/unit-ids", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.ListOrgSubUnitIDs))
-	mux.Handle("POST /api/orgs/relations", authMiddleware.HandlerFunc(unitHandler.AddParentChild))
 
 	// Organization Membership
 	// ----------------------
@@ -317,8 +318,9 @@ func main() {
 
 	// Unit Management
 	// ----------------------
-	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, unitResolver)).HandlerFunc(unitHandler.GetUnitByID))
-	mux.Handle("POST /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.CreateUnit))
+	mux.Handle("GET /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, unitResolver)).HandlerFunc(unitHandler.GetUnit))
+	mux.Handle("POST /api/orgs/{slug}/units", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.CreateOrgUnit))
+	mux.Handle("POST /api/units/{unitId}/units", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.CreateUnit))
 	mux.Handle("PUT /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, unitResolver)).HandlerFunc(unitHandler.UpdateUnit))
 	mux.Handle("DELETE /api/orgs/{slug}/units/{unitId}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.DeleteUnit))
 
@@ -370,7 +372,8 @@ func main() {
 
 	// Response Management
 	// ----------------------
-	mux.Handle("GET /api/forms/{formId}/responses", authMiddleware.HandlerFunc(responseHandler.List))
+	mux.Handle("GET /api/forms/{formId}/responses", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(responseHandler.List))
+	mux.Handle("GET /api/forms/{formId}/responses/me", authMiddleware.HandlerFunc(responseHandler.ListMe))
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.Append(notArchivedByForm).HandlerFunc(responseHandler.Create))
 	// --- (Update response is not allowed)
@@ -401,7 +404,7 @@ func main() {
 	// File Management
 	// ----------------------
 	mux.Handle("GET /api/files/{id}", basicMiddleware.HandlerFunc(fileHandler.Download))
-	mux.Handle("GET /api/files/{id}/info", authMiddleware.HandlerFunc(fileHandler.GetByID))
+	mux.Handle("GET /api/files/{id}/info", authMiddleware.HandlerFunc(fileHandler.Get))
 
 	// Todo: Admin only endpoint
 	mux.Handle("GET /api/files", authMiddleware.HandlerFunc(fileHandler.List))

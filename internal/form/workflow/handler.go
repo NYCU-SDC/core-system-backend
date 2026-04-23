@@ -77,7 +77,7 @@ func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
 	err := json.Unmarshal(dbWorkflow, &nodes)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalDBWorkflow, err)
 	}
 
 	for i := range nodes {
@@ -154,7 +154,7 @@ func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
 	var nodes []map[string]interface{}
 	err := json.Unmarshal(apiWorkflow, &nodes)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalWorkflow, err)
+		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalAPIWorkflow, err)
 	}
 
 	for i := range nodes {

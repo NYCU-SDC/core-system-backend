@@ -70,12 +70,12 @@ type Store interface {
 }
 
 type QuestionGetter interface {
-	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
-	ListTypesByIDs(ctx context.Context, ids []uuid.UUID) (map[string]question.QuestionType, error)
+	Get(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	ListTypes(ctx context.Context, ids []uuid.UUID) (map[string]question.QuestionType, error)
 }
 
 type ResponseStore interface {
-	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 	// GetSubmittedBy returns the user ID who submitted the response with the given ID.
 	// Used for ownership checks without creating an import cycle with the response package.
@@ -189,7 +189,7 @@ func (h *Handler) GetQuestionResponse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get formID from responseID
-	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
+	formID, err := h.responseStore.GetFormID(traceCtx, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -263,7 +263,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get formID from responseID
-	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
+	formID, err := h.responseStore.GetFormID(traceCtx, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -331,7 +331,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Batch-fetch question types and reject any upload_file questions up front
-	typeMap, err := h.questionStore.ListTypesByIDs(traceCtx, questionIDs)
+	typeMap, err := h.questionStore.ListTypes(traceCtx, questionIDs)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -424,7 +424,7 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Validate that the question exists, is an oauth_connect type, and matches the provider
-	answerable, err := h.questionStore.GetByID(traceCtx, questionID)
+	answerable, err := h.questionStore.Get(traceCtx, questionID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -547,7 +547,7 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get formID from responseID (needed by Upsert)
-	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
+	formID, err := h.responseStore.GetFormID(traceCtx, responseID)
 	if err != nil {
 		logger.Error("failed to get form ID for response", zap.String("responseID", responseID.String()), zap.Error(err))
 		span.RecordError(err)
@@ -613,7 +613,7 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get formID from responseID
-	formID, err := h.responseStore.GetFormIDByID(traceCtx, responseID)
+	formID, err := h.responseStore.GetFormID(traceCtx, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

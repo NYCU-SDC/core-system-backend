@@ -23,10 +23,10 @@ import (
 )
 
 type Store interface {
-	CreateOrganizationWithCurrentUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
+	CreateOrganizationWithUserID(ctx context.Context, name string, description string, slug string, currentUserID uuid.UUID, metadata []byte) (Unit, error)
 	CreateOrganization(ctx context.Context, name string, description string, slug string) (Unit, error)
-	CreateUnit(ctx context.Context, name string, description string, slug string, metadata []byte) (Unit, error)
-	GetByID(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
+	CreateUnitWithUserID(ctx context.Context, name string, description string, parentID uuid.UUID, UserID uuid.UUID, metadata []byte) (Unit, error)
+	Get(ctx context.Context, id uuid.UUID, unitType Type) (Unit, error)
 	GetAllOrganizations(ctx context.Context) ([]Organization, error)
 	ListOrganizationsOfUser(ctx context.Context, userID uuid.UUID) ([]Organization, error)
 	UpdateOrg(ctx context.Context, originalSlug string, slug string, name string, description string, dbStrategy string, metadata []byte) (Unit, error)
@@ -38,7 +38,7 @@ type Store interface {
 	AddMember(ctx context.Context, unitType Type, id uuid.UUID, username string) (AddMemberRow, error)
 	ListMembers(ctx context.Context, id uuid.UUID) ([]user.Profile, error)
 	RemoveMember(ctx context.Context, unitType Type, id uuid.UUID, memberID uuid.UUID) error
-	GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID) (Organization, error)
+	GetOrganizationWithSlug(ctx context.Context, id uuid.UUID) (Organization, error)
 	UpdateUnitMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, newRole UnitRole) error
 	SlugExists(ctx context.Context, slug string) (bool, error)
 }
@@ -56,7 +56,7 @@ type tenantStore interface {
 }
 
 type userStore interface {
-	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
+	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
 }
 type Handler struct {
 	logger          *zap.Logger
@@ -152,7 +152,7 @@ type UpdateUnitMemberRoleResponse struct {
 
 // createProfileResponseWithEmails creates a ProfileResponse with emails for a user
 func (h *Handler) createProfileResponseWithEmails(ctx context.Context, logger *zap.Logger, userID uuid.UUID, name, username, avatarURL string) user.ProfileResponse {
-	emails, err := h.userStore.GetEmailsByID(ctx, userID)
+	emails, err := h.userStore.GetEmails(ctx, userID)
 	if err != nil {
 		// Log the error but don't fail the request
 		logger.Warn("failed to get user emails", zap.Error(err), zap.String("user_id", userID.String()))
@@ -170,7 +170,8 @@ func (h *Handler) createProfileResponseWithEmails(ctx context.Context, logger *z
 
 func convertUnitResponse(u Unit) UnitResponse {
 	var meta map[string]string
-	if err := json.Unmarshal(u.Metadata, &meta); err != nil {
+	err := json.Unmarshal(u.Metadata, &meta)
+	if err != nil {
 		meta = make(map[string]string)
 	}
 
@@ -186,7 +187,8 @@ func convertUnitResponse(u Unit) UnitResponse {
 
 func convertOrgResponse(u Unit, slug string) OrganizationResponse {
 	var meta map[string]string
-	if err := json.Unmarshal(u.Metadata, &meta); err != nil {
+	err := json.Unmarshal(u.Metadata, &meta)
+	if err != nil {
 		meta = make(map[string]string)
 	}
 
@@ -201,19 +203,52 @@ func convertOrgResponse(u Unit, slug string) OrganizationResponse {
 	}
 }
 
-type parentChildResponse struct {
-	ParentID *uuid.UUID `json:"parentId,omitempty"`
-	ChildID  uuid.UUID  `json:"childId"`
-	OrgID    uuid.UUID  `json:"orgId"`
-}
-
-type ParentChildRequest struct {
-	ParentID uuid.UUID `json:"parentId"`
-	ChildID  uuid.UUID `json:"childId" validate:"required"`
-	OrgID    uuid.UUID `json:"orgId" validate:"required"`
-}
-
 var slugPattern = `^[a-zA-Z0-9_-]+$`
+
+func (h *Handler) CreateOrgUnit(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateOrgUnit")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	var req Request
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
+		return
+	}
+
+	metadataBytes, err := json.Marshal(req.Metadata)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailToMarshalMetadata, logger)
+		return
+	}
+
+	orgSlug, err := internal.GetSlugFromContext(traceCtx)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
+		return
+	}
+
+	_, orgID, err := h.tenantStore.GetSlugStatus(traceCtx, orgSlug)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
+		return
+	}
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	createdUnit, err := h.store.CreateUnitWithUserID(traceCtx, req.Name, req.Description, orgID, currentUser.ID, metadataBytes)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, convertUnitResponse(createdUnit))
+}
 
 func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnit")
@@ -221,25 +256,32 @@ func (h *Handler) CreateUnit(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req Request
-
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
 		return
 	}
 
 	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to marshal metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailToMarshalMetadata, logger)
 		return
 	}
 
-	orgSlug, err := internal.GetSlugFromContext(traceCtx)
+	idStr := r.PathValue("unitId")
+	unitID, err := handlerutil.ParseUUID(idStr)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidUnitID, logger)
 		return
 	}
 
-	createdUnit, err := h.store.CreateUnit(traceCtx, req.Name, req.Description, orgSlug, metadataBytes)
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	createdUnit, err := h.store.CreateUnitWithUserID(traceCtx, req.Name, req.Description, unitID, currentUser.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create unit: %w", err), logger)
 		return
@@ -254,21 +296,21 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req OrgRequest
-
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
 		return
 	}
 
 	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to marshal metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailToMarshalMetadata, logger)
 		return
 	}
 
 	currentUser, ok := user.GetFromContext(traceCtx)
 	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("no user found in request context"), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
 		return
 	}
 
@@ -278,7 +320,7 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createdOrg, err := h.store.CreateOrganizationWithCurrentUserID(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
+	createdOrg, err := h.store.CreateOrganizationWithUserID(traceCtx, req.Name, req.Description, req.Slug, currentUser.ID, metadataBytes)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to create org: %w", err), logger)
 		return
@@ -287,8 +329,8 @@ func (h *Handler) CreateOrg(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, convertOrgResponse(createdOrg, req.Slug))
 }
 
-func (h *Handler) GetUnitByID(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetUnitByID")
+func (h *Handler) GetUnit(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetUnit")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -299,7 +341,7 @@ func (h *Handler) GetUnitByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	unit, err := h.store.GetByID(traceCtx, id, TypeUnit)
+	unit, err := h.store.Get(traceCtx, id, TypeUnit)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get unit by ID: %w", err), logger)
 		return
@@ -315,7 +357,7 @@ func (h *Handler) GetOrgByID(w http.ResponseWriter, r *http.Request) {
 
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
 		return
 	}
 
@@ -325,7 +367,7 @@ func (h *Handler) GetOrgByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgWithSlug, err := h.store.GetOrganizationByIDWithSlug(traceCtx, orgID)
+	orgWithSlug, err := h.store.GetOrganizationWithSlug(traceCtx, orgID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get organization by ID with slug: %w", err), logger)
 		return
@@ -399,7 +441,7 @@ func (h *Handler) UpdateUnit(w http.ResponseWriter, r *http.Request) {
 
 	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to marshal metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailToMarshalMetadata, logger)
 		return
 	}
 
@@ -418,20 +460,21 @@ func (h *Handler) UpdateOrg(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req OrgRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
 		return
 	}
 
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
 		return
 	}
 
 	metadataBytes, err := json.Marshal(req.Metadata)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to marshal metadata: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailToMarshalMetadata, logger)
 		return
 	}
 
@@ -453,7 +496,7 @@ func (h *Handler) DeleteOrg(w http.ResponseWriter, r *http.Request) {
 
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
 		return
 	}
 
@@ -494,36 +537,6 @@ func (h *Handler) DeleteUnit(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
 
-func (h *Handler) AddParentChild(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "AddParent")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	var req ParentChildRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
-		return
-	}
-
-	pc, err := h.store.AddParent(traceCtx, req.ParentID, req.ChildID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to add parent-child relationship: %w", err), logger)
-		return
-	}
-
-	var parent *uuid.UUID
-	if req.ParentID != uuid.Nil {
-		pid := req.ParentID
-		parent = &pid
-	}
-	response := parentChildResponse{
-		ParentID: parent,
-		ChildID:  pc.ID,
-		OrgID:    pc.OrgID.Bytes,
-	}
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
-}
-
 func (h *Handler) ListOrgSubUnits(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "ListOrgSubUnits")
 	defer span.End()
@@ -531,7 +544,7 @@ func (h *Handler) ListOrgSubUnits(w http.ResponseWriter, r *http.Request) {
 
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
 		return
 	}
 
@@ -587,7 +600,7 @@ func (h *Handler) ListOrgSubUnitIDs(w http.ResponseWriter, r *http.Request) {
 
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
 		return
 	}
 
@@ -634,7 +647,7 @@ func (h *Handler) AddOrgMember(w http.ResponseWriter, r *http.Request) {
 
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
 		return
 	}
 
@@ -648,7 +661,8 @@ func (h *Handler) AddOrgMember(w http.ResponseWriter, r *http.Request) {
 	var params struct {
 		Email string `json:"email" validate:"required,email"`
 	}
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &params); err != nil {
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &params)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
 		return
 	}
@@ -686,7 +700,8 @@ func (h *Handler) AddUnitMember(w http.ResponseWriter, r *http.Request) {
 	var params struct {
 		Email string `json:"email" validate:"required,email"`
 	}
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &params); err != nil {
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &params)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid request body: %w", err), logger)
 		return
 	}
@@ -710,7 +725,7 @@ func (h *Handler) ListOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
 		return
 	}
 
@@ -768,7 +783,7 @@ func (h *Handler) RemoveOrgMember(w http.ResponseWriter, r *http.Request) {
 
 	slug, err := internal.GetSlugFromContext(traceCtx)
 	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("failed to get org slug from context: %w", err), logger)
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToGetSlugFromContext, logger)
 		return
 	}
 

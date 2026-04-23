@@ -23,7 +23,7 @@ type Querier interface {
 	Create(ctx context.Context, params CreateParams) (CreateRow, error)
 	Patch(ctx context.Context, params PatchParams) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID) (GetRow, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]GetByIDsRow, error)
 	List(ctx context.Context, arg ListParams) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
@@ -31,10 +31,10 @@ type Querier interface {
 	SetStatus(ctx context.Context, arg SetStatusParams) (Form, error)
 	UploadCoverImage(ctx context.Context, arg UploadCoverImageParams) (uuid.UUID, error)
 	GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, error)
-	GetUnitIDByID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
+	GetUnitID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
 	GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (pgtype.UUID, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
-	GetCreatorByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetCreator(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
@@ -55,7 +55,8 @@ type UserForm struct {
 
 type formFields struct {
 	title                  string
-	description            pgtype.Text
+	descriptionJSON        []byte
+	descriptionHTML        string
 	previewMessage         pgtype.Text
 	deadline               pgtype.Timestamptz
 	publishTime            pgtype.Timestamptz
@@ -69,16 +70,23 @@ type formFields struct {
 }
 
 type Service struct {
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	logger        *zap.Logger
+	queries       Querier
+	tracer        trace.Tracer
+	markdownStore MarkdownStore
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+type MarkdownStore interface {
+	ProcessAPIText(ctx context.Context, raw []byte) (canonicalJSON []byte, cleanHTML string, err error)
+	PreviewSnippet(ctx context.Context, raw []byte, maxRunes int) (string, error)
+}
+
+func NewService(logger *zap.Logger, db DBTX, markdownStore MarkdownStore) *Service {
 	return &Service{
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("forms/service"),
+		logger:        logger,
+		queries:       New(db),
+		tracer:        otel.Tracer("forms/service"),
+		markdownStore: markdownStore,
 	}
 }
 
@@ -95,7 +103,7 @@ func visibilityFromAPIFormat(v string) Visibility {
 	}
 }
 
-func buildFormFieldsFromRequest(request Request) formFields {
+func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore, request Request) (formFields, error) {
 	form := formFields{}
 
 	if request.Deadline != nil {
@@ -110,14 +118,20 @@ func buildFormFieldsFromRequest(request Request) formFields {
 		form.publishTime = pgtype.Timestamptz{Valid: false}
 	}
 
+	descJSON, descHTML, err := markdownStore.ProcessAPIText(ctx, []byte(request.Description))
+	if err != nil {
+		return formFields{}, err
+	}
+	form.descriptionJSON = descJSON
+	form.descriptionHTML = descHTML
+
 	preview := request.PreviewMessage
-	if preview == "" && request.Description != "" {
-		runes := []rune(request.Description)
-		if len(runes) > 25 {
-			preview = string(runes[:25])
-		} else {
-			preview = request.Description
+	if preview == "" {
+		snip, err := markdownStore.PreviewSnippet(ctx, descJSON, 25)
+		if err != nil {
+			return formFields{}, err
 		}
+		preview = snip
 	}
 
 	if request.Dressing != nil {
@@ -132,14 +146,13 @@ func buildFormFieldsFromRequest(request Request) formFields {
 		form.dressingTextFont = pgtype.Text{Valid: false}
 	}
 
-	form.description = pgtype.Text{String: request.Description, Valid: true}
 	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
-	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetUrl, Valid: request.GoogleSheetUrl != ""}
+	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetURL, Valid: request.GoogleSheetURL != ""}
 	form.messageAfterSubmission = request.MessageAfterSubmission
 	form.visibility = visibilityFromAPIFormat(request.Visibility)
 	form.title = request.Title
 
-	return form
+	return form, nil
 }
 
 func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
@@ -147,11 +160,16 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	fields := buildFormFieldsFromRequest(request)
+	fields, err := buildFormFieldsFromRequest(ctx, s.markdownStore, request)
+	if err != nil {
+		span.RecordError(err)
+		return CreateRow{}, err
+	}
 
 	newForm, err := s.queries.Create(ctx, CreateParams{
 		Title:                  fields.title,
-		Description:            fields.description,
+		DescriptionJson:        fields.descriptionJSON,
+		DescriptionHtml:        fields.descriptionHTML,
 		PreviewMessage:         fields.previewMessage,
 		UnitID:                 pgtype.UUID{Bytes: unitID, Valid: true},
 		CreatedBy:              userID,
@@ -189,8 +207,14 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.Title = pgtype.Text{String: *request.Title, Valid: true}
 	}
 
-	if request.Description != nil {
-		params.Description = pgtype.Text{String: *request.Description, Valid: true}
+	if request.Description.Set {
+		descJSON, descHTML, err := s.markdownStore.ProcessAPIText(ctx, request.Description.Value)
+		if err != nil {
+			span.RecordError(err)
+			return PatchRow{}, err
+		}
+		params.DescriptionJson = descJSON
+		params.DescriptionHtml = pgtype.Text{String: descHTML, Valid: true}
 	}
 
 	if request.PreviewMessage != nil {
@@ -209,8 +233,8 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.MessageAfterSubmission = pgtype.Text{String: *request.MessageAfterSubmission, Valid: true}
 	}
 
-	if request.GoogleSheetUrl != nil {
-		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetUrl, Valid: true}
+	if request.GoogleSheetURL != nil {
+		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetURL, Valid: true}
 	}
 
 	if request.Visibility != nil {
@@ -260,20 +284,20 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error) {
-	ctx, span := s.tracer.Start(ctx, "GetFormByID")
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
+	ctx, span := s.tracer.Start(ctx, "GetForm")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	currentForm, err := s.queries.GetByID(ctx, id)
+	currentForm, err := s.queries.Get(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			span.RecordError(internal.ErrFormNotFound)
-			return GetByIDRow{}, internal.ErrFormNotFound
+			return GetRow{}, internal.ErrFormNotFound
 		}
 		err = databaseutil.WrapDBError(err, logger, "get form by id")
 		span.RecordError(err)
-		return GetByIDRow{}, err
+		return GetRow{}, err
 	}
 
 	return currentForm, nil
@@ -411,12 +435,12 @@ func (s *Service) GetCoverImage(ctx context.Context, id uuid.UUID) ([]byte, erro
 	return imageData, nil
 }
 
-func (s *Service) GetUnitIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	ctx, span := s.tracer.Start(ctx, "GetUnitIDByFormID")
+func (s *Service) GetUnitID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	ctx, span := s.tracer.Start(ctx, "GetUnitID")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	unitID, err := s.queries.GetUnitIDByID(ctx, id)
+	unitID, err := s.queries.GetUnitID(ctx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get unit id by form id")
 		span.RecordError(err)
@@ -455,12 +479,12 @@ func (s *Service) GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.
 	return unitID.Bytes, nil
 }
 
-func (s *Service) GetCreatorByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
-	ctx, span := s.tracer.Start(ctx, "GetCreatorByFormID")
+func (s *Service) GetCreator(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	ctx, span := s.tracer.Start(ctx, "GetCreator")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	creatorID, err := s.queries.GetCreatorByID(ctx, id)
+	creatorID, err := s.queries.GetCreator(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			span.RecordError(internal.ErrFormNotFound)

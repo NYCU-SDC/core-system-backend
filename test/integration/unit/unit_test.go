@@ -75,7 +75,7 @@ func TestUnitService_Create(t *testing.T) {
 				require.Equal(t, params.description, result.Description.String)
 				require.JSONEq(t, string(params.metadata), string(result.Metadata))
 
-				stored, err := unit.New(db).GetByID(context.Background(), result.ID)
+				stored, err := unit.New(db).Get(context.Background(), result.ID)
 				require.NoError(t, err)
 				require.False(t, stored.OrgID.Valid)
 				require.Equal(t, unit.UnitTypeOrganization, stored.Type)
@@ -147,10 +147,10 @@ func TestUnitService_Create(t *testing.T) {
 
 			var result unit.Unit
 			if params.unitType == unit.TypeOrg {
-				result, err = unitService.CreateOrganizationWithCurrentUserID(ctx, params.name, params.description, params.slug, params.ownerID, params.metadata)
+				result, err = unitService.CreateOrganizationWithUserID(ctx, params.name, params.description, params.slug, params.ownerID, params.metadata)
 				require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			} else {
-				result, err = unitService.CreateUnit(ctx, params.name, params.description, params.slug, params.metadata)
+				result, err = unitService.CreateUnitWithUserID(ctx, params.name, params.description, params.parentUnitID, params.ownerID, params.metadata)
 				require.Equal(t, tc.expectedErr, err != nil, "expected error: %v, got: %v", tc.expectedErr, err)
 			}
 

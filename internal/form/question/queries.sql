@@ -1,7 +1,7 @@
 -- name: Create :one
 WITH inserted AS (
-    INSERT INTO questions (section_id, required, type, title, description, metadata, "order", source_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    INSERT INTO questions (section_id, required, type, title, description_json, description_html, metadata, "order", source_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING *
 )
 SELECT 
@@ -10,7 +10,8 @@ SELECT
     i.required,
     i.type,
     i.title,
-    i.description,
+    i.description_json,
+    i.description_html,
     i.metadata,
     i."order",
     i.source_id,
@@ -23,7 +24,7 @@ JOIN sections s ON i.section_id = s.id;
 -- name: Update :one
 WITH updated AS (
     UPDATE questions
-    SET required = $3, type = $4, title = $5, description = $6, metadata = $7, source_id = $8, updated_at = now()
+    SET required = $3, type = $4, title = $5, description_json = $6, description_html = $7, metadata = $8, source_id = $9, updated_at = now()
     WHERE questions.section_id = $1 AND questions.id = $2
     RETURNING *
 )
@@ -33,7 +34,8 @@ SELECT
     u.required,
     u.type,
     u.title,
-    u.description,
+    u.description_json,
+    u.description_html,
     u.metadata,
     u."order",
     u.source_id,
@@ -75,7 +77,8 @@ SELECT
     u.required,
     u.type,
     u.title,
-    u.description,
+    u.description_json,
+    u.description_html,
     u.metadata,
     u."order",
     u.source_id,
@@ -121,14 +124,16 @@ SELECT
     s.id as section_id,
     s.form_id,
     s.title,
-    s.description,
+    s.description_json,
+    s.description_html,
     s.created_at,
     s.updated_at,
     q.id,
     q.required,
     q.type,
     q.title as question_title,
-    q.description as question_description,
+    q.description_json as question_description_json,
+    q.description_html as question_description_html,
     q.metadata,
     q."order",
     q.source_id,
@@ -141,19 +146,20 @@ ORDER BY
     s.id ASC,
     q."order" ASC;
 
--- name: ListTypesByIDs :many
+-- name: ListTypes :many
 SELECT id, type
 FROM questions
 WHERE id = ANY($1::uuid[]);
 
--- name: GetByID :one
+-- name: Get :one
 SELECT 
     q.id,
     q.section_id,
     q.required,
     q.type,
     q.title,
-    q.description,
+    q.description_json,
+    q.description_html,
     q.metadata,
     q."order",
     q.source_id,
@@ -166,6 +172,9 @@ WHERE q.id = $1;
 
 -- name: UpdateSection :one
 UPDATE sections
-SET title = $2, description = $3, updated_at = now()
-WHERE id = $1 AND form_id = $4
+SET title = sqlc.arg('title'),
+    description_json = COALESCE(sqlc.narg('description_json')::jsonb, sections.description_json),
+    description_html = COALESCE(sqlc.narg('description_html')::text, sections.description_html),
+    updated_at = now()
+WHERE id = sqlc.arg('id') AND form_id = sqlc.arg('form_id')
 RETURNING *;

@@ -3,12 +3,7 @@ SELECT * FROM answers
 WHERE response_id = $1
 ORDER BY created_at ASC;
 
--- name: ListByQuestionIDAndResponseID :one
-SELECT * FROM answers
-WHERE question_id = $1 AND response_id = $2
-ORDER BY created_at ASC;
-
--- name: Get :one
+-- name: GetIDByResponseIDAndQuestionID :one
 SELECT id FROM answers
 WHERE response_id = $1 AND question_id = $2;
 
@@ -62,7 +57,7 @@ RETURNING *;
 DELETE FROM answers
 WHERE response_id = $1;
 
--- name: GetByID :one
+-- name: Get :one
 SELECT id, response_id, question_id, value, created_at, updated_at
 FROM answers
 WHERE id = $1;

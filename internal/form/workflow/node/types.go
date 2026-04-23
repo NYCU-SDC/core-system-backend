@@ -11,7 +11,7 @@ import (
 
 // QuestionStore defines the interface for querying form questions
 type QuestionStore interface {
-	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	Get(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 }
 
 // Validatable defines the interface for node validation

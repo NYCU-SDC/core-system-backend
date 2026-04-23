@@ -77,7 +77,7 @@ type mockQuestionStore struct {
 	questions map[uuid.UUID]question.Answerable
 }
 
-func (m *mockQuestionStore) GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error) {
+func (m *mockQuestionStore) Get(ctx context.Context, id uuid.UUID) (question.Answerable, error) {
 	if q, ok := m.questions[id]; ok {
 		return q, nil
 	}

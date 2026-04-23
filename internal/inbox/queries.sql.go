@@ -76,11 +76,11 @@ func (q *Queries) CreateUserInboxBulk(ctx context.Context, arg CreateUserInboxBu
 	return items, nil
 }
 
-const getByID = `-- name: GetByID :one
+const get = `-- name: Get :one
 SELECT 
     uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived,
     im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
-    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
     CASE WHEN im.type = 'form' THEN f.title END AS title,
     CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
     CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
@@ -92,12 +92,12 @@ LEFT JOIN units o ON u.org_id = o.id
 WHERE uim.id = $1 AND uim.user_id = $2
 `
 
-type GetByIDParams struct {
+type GetParams struct {
 	UserInboxMessageID uuid.UUID
 	UserID             uuid.UUID
 }
 
-type GetByIDRow struct {
+type GetRow struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
 	MessageID      uuid.UUID
@@ -116,9 +116,9 @@ type GetByIDRow struct {
 	UnitName       interface{}
 }
 
-func (q *Queries) GetByID(ctx context.Context, arg GetByIDParams) (GetByIDRow, error) {
-	row := q.db.QueryRow(ctx, getByID, arg.UserInboxMessageID, arg.UserID)
-	var i GetByIDRow
+func (q *Queries) Get(ctx context.Context, arg GetParams) (GetRow, error) {
+	row := q.db.QueryRow(ctx, get, arg.UserInboxMessageID, arg.UserID)
+	var i GetRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -144,7 +144,7 @@ const list = `-- name: List :many
 SELECT 
     uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived,
     im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
-    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+    CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
     CASE WHEN im.type = 'form' THEN f.title END AS title,
     CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
     CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
@@ -159,8 +159,8 @@ WHERE uim.user_id = $1
   AND (uim.is_archived = COALESCE($4::boolean, false))
   AND ($5::text = '' OR $5::text IS NULL OR (
     CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || $5::text || '%'
-    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || $5::text || '%'
-    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g') ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) ELSE '' END ILIKE '%' || $5::text || '%'
   ))
 LIMIT COALESCE($7::int, 10)
 OFFSET COALESCE($6::int, 0)
@@ -254,8 +254,8 @@ WHERE uim.user_id = $1
   AND (uim.is_archived = COALESCE($4::boolean, false))
   AND ($5::text = '' OR $5::text IS NULL OR (
     CASE WHEN im.type = 'form' THEN f.title ELSE '' END ILIKE '%' || $5::text || '%'
-    OR CASE WHEN im.type = 'form' THEN f.description ELSE '' END ILIKE '%' || $5::text || '%'
-    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g') ELSE '' END ILIKE '%' || $5::text || '%'
+    OR CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) ELSE '' END ILIKE '%' || $5::text || '%'
   ))
 `
 
@@ -280,7 +280,7 @@ func (q *Queries) ListCount(ctx context.Context, arg ListCountParams) (int64, er
 	return total, err
 }
 
-const updateByID = `-- name: UpdateByID :one
+const update = `-- name: Update :one
 UPDATE user_inbox_messages AS uim
 SET is_read = $1, is_starred = $2, is_archived = $3
 FROM inbox_message AS im
@@ -289,13 +289,13 @@ LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
 WHERE uim.message_id = im.id AND uim.id = $4 AND uim.user_id = $5
 RETURNING uim.id, uim.user_id, uim.message_id, uim.is_read, uim.is_starred, uim.is_archived, im.id, im.posted_by, im.type, im.content_id, im.created_at, im.updated_at,
-CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(f.description, 25)) END AS preview_message,
+CASE WHEN im.type = 'form' THEN COALESCE(f.preview_message, LEFT(regexp_replace(COALESCE(f.description_html, ''), '<[^>]*>', '', 'g'), 25)) END AS preview_message,
 CASE WHEN im.type = 'form' THEN f.title END AS title,
 CASE WHEN im.type = 'form' THEN COALESCE(o.name, u.name) END AS org_name,
 CASE WHEN im.type = 'form' AND u.type = 'unit' THEN u.name END AS unit_name
 `
 
-type UpdateByIDParams struct {
+type UpdateParams struct {
 	IsRead     bool
 	IsStarred  bool
 	IsArchived bool
@@ -303,7 +303,7 @@ type UpdateByIDParams struct {
 	UserID     uuid.UUID
 }
 
-type UpdateByIDRow struct {
+type UpdateRow struct {
 	ID             uuid.UUID
 	UserID         uuid.UUID
 	MessageID      uuid.UUID
@@ -322,15 +322,15 @@ type UpdateByIDRow struct {
 	UnitName       interface{}
 }
 
-func (q *Queries) UpdateByID(ctx context.Context, arg UpdateByIDParams) (UpdateByIDRow, error) {
-	row := q.db.QueryRow(ctx, updateByID,
+func (q *Queries) Update(ctx context.Context, arg UpdateParams) (UpdateRow, error) {
+	row := q.db.QueryRow(ctx, update,
 		arg.IsRead,
 		arg.IsStarred,
 		arg.IsArchived,
 		arg.ID,
 		arg.UserID,
 	)
-	var i UpdateByIDRow
+	var i UpdateRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,

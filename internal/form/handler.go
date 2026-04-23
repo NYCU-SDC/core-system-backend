@@ -5,8 +5,11 @@ import (
 	"NYCU-SDC/core-system-backend/internal/file"
 	"NYCU-SDC/core-system-backend/internal/form/font"
 	"NYCU-SDC/core-system-backend/internal/form/question"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/internal/user"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,34 +35,35 @@ type DressingRequest struct {
 
 type Request struct {
 	Title                  string           `json:"title" validate:"required"`
-	Description            string           `json:"description"`
+	Description            json.RawMessage  `json:"description"`
 	PreviewMessage         string           `json:"previewMessage"`
 	Deadline               *time.Time       `json:"deadline"`
 	PublishTime            *time.Time       `json:"publishTime"`
 	MessageAfterSubmission string           `json:"messageAfterSubmission"`
-	GoogleSheetUrl         string           `json:"googleSheetUrl"`
+	GoogleSheetURL         string           `json:"googleSheetUrl"`
 	Visibility             string           `json:"visibility" validate:"required,oneof=PUBLIC PRIVATE"`
-	CoverImageUrl          string           `json:"coverImageUrl"`
+	CoverImageURL          string           `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
 }
 
 type PatchRequest struct {
-	Title                  *string          `json:"title" validate:"omitempty"`
-	Description            *string          `json:"description" validate:"omitempty"`
-	PreviewMessage         *string          `json:"previewMessage"`
-	Deadline               *time.Time       `json:"deadline"`
-	PublishTime            *time.Time       `json:"publishTime"`
-	MessageAfterSubmission *string          `json:"messageAfterSubmission" validate:"omitempty"`
-	GoogleSheetUrl         *string          `json:"googleSheetUrl"`
-	Visibility             *string          `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
-	CoverImageUrl          *string          `json:"coverImageUrl"`
-	Dressing               *DressingRequest `json:"dressing"`
+	Title                  *string            `json:"title" validate:"omitempty"`
+	Description            OptionalRawMessage `json:"description"`
+	PreviewMessage         *string            `json:"previewMessage"`
+	Deadline               *time.Time         `json:"deadline"`
+	PublishTime            *time.Time         `json:"publishTime"`
+	MessageAfterSubmission *string            `json:"messageAfterSubmission" validate:"omitempty"`
+	GoogleSheetURL         *string            `json:"googleSheetUrl"`
+	Visibility             *string            `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
+	CoverImageURL          *string            `json:"coverImageUrl"`
+	Dressing               *DressingRequest   `json:"dressing"`
 }
 
 type Response struct {
 	ID                     string               `json:"id"`
 	Title                  string               `json:"title"`
-	Description            string               `json:"description"`
+	Description            json.RawMessage      `json:"description"`
+	DescriptionHTML        string               `json:"descriptionHtml,omitempty"`
 	PreviewMessage         string               `json:"previewMessage"`
 	Status                 string               `json:"status"`
 	UnitID                 string               `json:"unitId"`
@@ -69,9 +73,9 @@ type Response struct {
 	UpdatedAt              time.Time            `json:"updatedAt"`
 	PublishTime            *time.Time           `json:"publishTime"`
 	MessageAfterSubmission string               `json:"messageAfterSubmission"`
-	GoogleSheetUrl         string               `json:"googleSheetUrl"`
+	GoogleSheetURL         string               `json:"googleSheetUrl"`
 	Visibility             string               `json:"visibility"`
-	CoverImageUrl          string               `json:"coverImageUrl"`
+	CoverImageURL          string               `json:"coverImageUrl"`
 	Dressing               DressingRequest      `json:"dressing"`
 }
 
@@ -80,15 +84,37 @@ type CoverUploadResponse struct {
 }
 
 type SectionRequest struct {
-	Title       string  `json:"title" validate:"required"`
-	Description *string `json:"description"`
+	Title       string             `json:"title" validate:"required"`
+	Description OptionalRawMessage `json:"description"`
 }
 
 type SectionResponse struct {
-	ID          string `json:"id"`
-	FormID      string `json:"formId"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
+	ID              string          `json:"id"`
+	FormID          string          `json:"formId"`
+	Title           string          `json:"title"`
+	Description     json.RawMessage `json:"description,omitempty"`
+	DescriptionHTML string          `json:"descriptionHtml,omitempty"`
+}
+
+// OptionalRawMessage allows PATCH payloads to distinguish:
+// - field absent: Set=false (no change)
+// - field present as null: Set=true, Value=nil (clear)
+// - field present as JSON object/string/etc: Set=true, Value=<raw bytes>
+type OptionalRawMessage struct {
+	Set   bool
+	Value json.RawMessage
+}
+
+func (o *OptionalRawMessage) UnmarshalJSON(b []byte) error {
+	o.Set = true
+	trimmed := bytes.TrimSpace(b)
+	if bytes.Equal(trimmed, []byte("null")) {
+		o.Value = nil
+		return nil
+	}
+
+	o.Value = append(o.Value[:0], trimmed...)
+	return nil
 }
 
 // statusToUppercase converts database status format (lowercase) to API format (uppercase).
@@ -135,13 +161,15 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		publishTime = nil
 	}
 
+	desc := markdown.DefaultDescriptionJSON(form.DescriptionJson)
 	return Response{
-		ID:             form.ID.String(),
-		Title:          form.Title,
-		Description:    form.Description.String,
-		PreviewMessage: form.PreviewMessage.String,
-		Status:         statusToUppercase(form.Status),
-		UnitID:         form.UnitID.String(),
+		ID:              form.ID.String(),
+		Title:           form.Title,
+		Description:     desc,
+		DescriptionHTML: form.DescriptionHtml,
+		PreviewMessage:  form.PreviewMessage.String,
+		Status:          statusToUppercase(form.Status),
+		UnitID:          form.UnitID.String(),
 		LastEditor: user.ProfileResponse{
 			ID:        editor.ID,
 			Name:      editor.Name.String,
@@ -154,9 +182,9 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		UpdatedAt:              form.UpdatedAt.Time,
 		MessageAfterSubmission: form.MessageAfterSubmission,
 		Visibility:             VisibilityToUppercase(form.Visibility),
-		GoogleSheetUrl:         form.GoogleSheetUrl.String,
+		GoogleSheetURL:         form.GoogleSheetUrl.String,
 		PublishTime:            publishTime,
-		CoverImageUrl:          form.CoverImageUrl.String,
+		CoverImageURL:          form.CoverImageUrl.String,
 		Dressing: DressingRequest{
 			Color:        form.DressingColor.String,
 			HeaderFont:   form.DressingHeaderFont.String,
@@ -170,7 +198,7 @@ type Store interface {
 	Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error)
 	Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	GetByID(ctx context.Context, id uuid.UUID) (GetByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID) (GetRow, error)
 	List(ctx context.Context, status Status, visibility Visibility, excludeExpired bool) ([]ListRow, error)
 	ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status Status, userID uuid.UUID) (Form, error)
@@ -183,8 +211,13 @@ type tenantStore interface {
 }
 
 type questionStore interface {
-	UpdateSection(ctx context.Context, sectionID uuid.UUID, formID uuid.UUID, title string, description string) (question.Section, error)
-	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	UpdateSection(ctx context.Context, arg question.UpdateSectionParams) (question.Section, error)
+	Get(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+}
+
+type FileStore interface {
+	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
+	Get(ctx context.Context, id uuid.UUID) (file.File, error)
 }
 
 type Handler struct {
@@ -197,12 +230,8 @@ type Handler struct {
 	store         Store
 	tenantStore   tenantStore
 	questionStore questionStore
-	fileService   FileService
-}
-
-type FileService interface {
-	SaveFile(ctx context.Context, fileContent io.Reader, originalFilename, contentType string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
-	GetByID(ctx context.Context, id uuid.UUID) (file.File, error)
+	fileStore     FileStore
+	markdownStore MarkdownStore
 }
 
 func NewHandler(
@@ -212,7 +241,8 @@ func NewHandler(
 	store Store,
 	tenantStore tenantStore,
 	questionStore questionStore,
-	fileService FileService,
+	fileStore FileStore,
+	markdownStore MarkdownStore,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
@@ -222,7 +252,147 @@ func NewHandler(
 		store:         store,
 		tenantStore:   tenantStore,
 		questionStore: questionStore,
-		fileService:   fileService,
+		fileStore:     fileStore,
+		markdownStore: markdownStore,
+	}
+}
+
+func editorFromFormRow(lastEditor uuid.UUID, name pgtype.Text, username pgtype.Text, avatar pgtype.Text) user.User {
+	return user.User{
+		ID:        lastEditor,
+		Name:      name,
+		Username:  username,
+		AvatarUrl: avatar,
+	}
+}
+
+func formFromCreateRow(r CreateRow) Form {
+	return Form{
+		ID:                     r.ID,
+		Title:                  r.Title,
+		DescriptionJson:        r.DescriptionJson,
+		DescriptionHtml:        r.DescriptionHtml,
+		PreviewMessage:         r.PreviewMessage,
+		Status:                 r.Status,
+		UnitID:                 r.UnitID,
+		CreatedBy:              r.CreatedBy,
+		LastEditor:             r.LastEditor,
+		Deadline:               r.Deadline,
+		CreatedAt:              r.CreatedAt,
+		UpdatedAt:              r.UpdatedAt,
+		MessageAfterSubmission: r.MessageAfterSubmission,
+		Visibility:             r.Visibility,
+		GoogleSheetUrl:         r.GoogleSheetUrl,
+		PublishTime:            r.PublishTime,
+		CoverImageUrl:          r.CoverImageUrl,
+		DressingColor:          r.DressingColor,
+		DressingHeaderFont:     r.DressingHeaderFont,
+		DressingQuestionFont:   r.DressingQuestionFont,
+		DressingTextFont:       r.DressingTextFont,
+	}
+}
+
+func formFromGetRow(r GetRow) Form {
+	return Form{
+		ID:                     r.ID,
+		Title:                  r.Title,
+		DescriptionJson:        r.DescriptionJson,
+		DescriptionHtml:        r.DescriptionHtml,
+		PreviewMessage:         r.PreviewMessage,
+		Status:                 r.Status,
+		UnitID:                 r.UnitID,
+		CreatedBy:              r.CreatedBy,
+		LastEditor:             r.LastEditor,
+		Deadline:               r.Deadline,
+		CreatedAt:              r.CreatedAt,
+		UpdatedAt:              r.UpdatedAt,
+		MessageAfterSubmission: r.MessageAfterSubmission,
+		Visibility:             r.Visibility,
+		GoogleSheetUrl:         r.GoogleSheetUrl,
+		PublishTime:            r.PublishTime,
+		CoverImageUrl:          r.CoverImageUrl,
+		DressingColor:          r.DressingColor,
+		DressingHeaderFont:     r.DressingHeaderFont,
+		DressingQuestionFont:   r.DressingQuestionFont,
+		DressingTextFont:       r.DressingTextFont,
+	}
+}
+
+func formFromPatchRow(r PatchRow) Form {
+	return Form{
+		ID:                     r.ID,
+		Title:                  r.Title,
+		DescriptionJson:        r.DescriptionJson,
+		DescriptionHtml:        r.DescriptionHtml,
+		PreviewMessage:         r.PreviewMessage,
+		Status:                 r.Status,
+		UnitID:                 r.UnitID,
+		CreatedBy:              r.CreatedBy,
+		LastEditor:             r.LastEditor,
+		Deadline:               r.Deadline,
+		CreatedAt:              r.CreatedAt,
+		UpdatedAt:              r.UpdatedAt,
+		MessageAfterSubmission: r.MessageAfterSubmission,
+		Visibility:             r.Visibility,
+		GoogleSheetUrl:         r.GoogleSheetUrl,
+		PublishTime:            r.PublishTime,
+		CoverImageUrl:          r.CoverImageUrl,
+		DressingColor:          r.DressingColor,
+		DressingHeaderFont:     r.DressingHeaderFont,
+		DressingQuestionFont:   r.DressingQuestionFont,
+		DressingTextFont:       r.DressingTextFont,
+	}
+}
+
+func formFromListRow(r ListRow) Form {
+	return Form{
+		ID:                     r.ID,
+		Title:                  r.Title,
+		DescriptionJson:        r.DescriptionJson,
+		DescriptionHtml:        r.DescriptionHtml,
+		PreviewMessage:         r.PreviewMessage,
+		Status:                 r.Status,
+		UnitID:                 r.UnitID,
+		CreatedBy:              r.CreatedBy,
+		LastEditor:             r.LastEditor,
+		Deadline:               r.Deadline,
+		CreatedAt:              r.CreatedAt,
+		UpdatedAt:              r.UpdatedAt,
+		MessageAfterSubmission: r.MessageAfterSubmission,
+		Visibility:             r.Visibility,
+		GoogleSheetUrl:         r.GoogleSheetUrl,
+		PublishTime:            r.PublishTime,
+		CoverImageUrl:          r.CoverImageUrl,
+		DressingColor:          r.DressingColor,
+		DressingHeaderFont:     r.DressingHeaderFont,
+		DressingQuestionFont:   r.DressingQuestionFont,
+		DressingTextFont:       r.DressingTextFont,
+	}
+}
+
+func formFromListByUnitRow(r ListByUnitRow) Form {
+	return Form{
+		ID:                     r.ID,
+		Title:                  r.Title,
+		DescriptionJson:        r.DescriptionJson,
+		DescriptionHtml:        r.DescriptionHtml,
+		PreviewMessage:         r.PreviewMessage,
+		Status:                 r.Status,
+		UnitID:                 r.UnitID,
+		CreatedBy:              r.CreatedBy,
+		LastEditor:             r.LastEditor,
+		Deadline:               r.Deadline,
+		CreatedAt:              r.CreatedAt,
+		UpdatedAt:              r.UpdatedAt,
+		MessageAfterSubmission: r.MessageAfterSubmission,
+		Visibility:             r.Visibility,
+		GoogleSheetUrl:         r.GoogleSheetUrl,
+		PublishTime:            r.PublishTime,
+		CoverImageUrl:          r.CoverImageUrl,
+		DressingColor:          r.DressingColor,
+		DressingHeaderFont:     r.DressingHeaderFont,
+		DressingQuestionFont:   r.DressingQuestionFont,
+		DressingTextFont:       r.DressingTextFont,
 	}
 }
 
@@ -256,36 +426,13 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := ToResponse(Form{
-		ID:                     currentForm.ID,
-		Title:                  currentForm.Title,
-		Description:            currentForm.Description,
-		PreviewMessage:         currentForm.PreviewMessage,
-		Status:                 currentForm.Status,
-		UnitID:                 currentForm.UnitID,
-		LastEditor:             currentForm.LastEditor,
-		Deadline:               currentForm.Deadline,
-		CreatedAt:              currentForm.CreatedAt,
-		UpdatedAt:              currentForm.UpdatedAt,
-		MessageAfterSubmission: currentForm.MessageAfterSubmission,
-		Visibility:             currentForm.Visibility,
-		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
-		PublishTime:            currentForm.PublishTime,
-		CoverImageUrl:          currentForm.CoverImageUrl,
-		DressingColor:          currentForm.DressingColor,
-		DressingHeaderFont:     currentForm.DressingHeaderFont,
-		DressingQuestionFont:   currentForm.DressingQuestionFont,
-		DressingTextFont:       currentForm.DressingTextFont,
-	},
+	response := ToResponse(
+		formFromPatchRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
-		user.User{
-			ID:        currentForm.LastEditor,
-			Name:      currentForm.LastEditorName,
-			Username:  currentForm.LastEditorUsername,
-			AvatarUrl: currentForm.LastEditorAvatarUrl,
-		},
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+	)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
@@ -322,42 +469,19 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.GetByID(traceCtx, id)
+	currentForm, err := h.store.Get(traceCtx, id)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	response := ToResponse(Form{
-		ID:                     currentForm.ID,
-		Title:                  currentForm.Title,
-		Description:            currentForm.Description,
-		PreviewMessage:         currentForm.PreviewMessage,
-		Status:                 currentForm.Status,
-		UnitID:                 currentForm.UnitID,
-		LastEditor:             currentForm.LastEditor,
-		Deadline:               currentForm.Deadline,
-		CreatedAt:              currentForm.CreatedAt,
-		UpdatedAt:              currentForm.UpdatedAt,
-		MessageAfterSubmission: currentForm.MessageAfterSubmission,
-		Visibility:             currentForm.Visibility,
-		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
-		PublishTime:            currentForm.PublishTime,
-		CoverImageUrl:          currentForm.CoverImageUrl,
-		DressingColor:          currentForm.DressingColor,
-		DressingHeaderFont:     currentForm.DressingHeaderFont,
-		DressingQuestionFont:   currentForm.DressingQuestionFont,
-		DressingTextFont:       currentForm.DressingTextFont,
-	},
+	response := ToResponse(
+		formFromGetRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
-		user.User{
-			ID:        currentForm.LastEditor,
-			Name:      currentForm.LastEditorName,
-			Username:  currentForm.LastEditorUsername,
-			AvatarUrl: currentForm.LastEditorAvatarUrl,
-		},
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+	)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
@@ -374,31 +498,13 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]Response, 0, len(forms))
 	for _, form := range forms {
-		responses = append(responses, ToResponse(Form{
-			ID:                     form.ID,
-			Title:                  form.Title,
-			Description:            form.Description,
-			PreviewMessage:         form.PreviewMessage,
-			Status:                 form.Status,
-			MessageAfterSubmission: form.MessageAfterSubmission,
-			Visibility:             form.Visibility,
-			GoogleSheetUrl:         form.GoogleSheetUrl,
-			PublishTime:            form.PublishTime,
-			CoverImageUrl:          form.CoverImageUrl,
-			DressingColor:          form.DressingColor,
-			DressingHeaderFont:     form.DressingHeaderFont,
-			DressingQuestionFont:   form.DressingQuestionFont,
-			DressingTextFont:       form.DressingTextFont,
-		},
+		responses = append(responses, ToResponse(
+			formFromListRow(form),
 			form.UnitName.String,
 			form.OrgName.String,
-			user.User{
-				ID:        form.LastEditor,
-				Name:      form.LastEditorName,
-				Username:  form.LastEditorUsername,
-				AvatarUrl: form.LastEditorAvatarUrl,
-			},
-			user.ConvertEmailsToSlice(form.LastEditorEmail)))
+			editorFromFormRow(form.LastEditor, form.LastEditorName, form.LastEditorUsername, form.LastEditorAvatarUrl),
+			user.ConvertEmailsToSlice(form.LastEditorEmail),
+		))
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
 }
@@ -438,36 +544,13 @@ func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	response := ToResponse(Form{
-		ID:                     newForm.ID,
-		Title:                  newForm.Title,
-		Description:            newForm.Description,
-		PreviewMessage:         newForm.PreviewMessage,
-		Status:                 newForm.Status,
-		UnitID:                 newForm.UnitID,
-		LastEditor:             newForm.LastEditor,
-		Deadline:               newForm.Deadline,
-		CreatedAt:              newForm.CreatedAt,
-		UpdatedAt:              newForm.UpdatedAt,
-		MessageAfterSubmission: newForm.MessageAfterSubmission,
-		Visibility:             newForm.Visibility,
-		GoogleSheetUrl:         newForm.GoogleSheetUrl,
-		PublishTime:            newForm.PublishTime,
-		CoverImageUrl:          newForm.CoverImageUrl,
-		DressingColor:          newForm.DressingColor,
-		DressingHeaderFont:     newForm.DressingHeaderFont,
-		DressingQuestionFont:   newForm.DressingQuestionFont,
-		DressingTextFont:       newForm.DressingTextFont,
-	},
+	response := ToResponse(
+		formFromCreateRow(newForm),
 		newForm.UnitName.String,
 		newForm.OrgName.String,
-		user.User{
-			ID:        newForm.LastEditor,
-			Name:      newForm.LastEditorName,
-			Username:  newForm.LastEditorUsername,
-			AvatarUrl: newForm.LastEditorAvatarUrl,
-		},
-		user.ConvertEmailsToSlice(newForm.LastEditorEmail))
+		editorFromFormRow(newForm.LastEditor, newForm.LastEditorName, newForm.LastEditorUsername, newForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(newForm.LastEditorEmail),
+	)
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
 }
 
@@ -515,32 +598,13 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 
 	responses := make([]Response, len(forms))
 	for i, currentForm := range forms {
-		responses[i] = ToResponse(Form{
-			ID:                     currentForm.ID,
-			Title:                  currentForm.Title,
-			Description:            currentForm.Description,
-			PreviewMessage:         currentForm.PreviewMessage,
-			Status:                 currentForm.Status,
-			UnitID:                 currentForm.UnitID,
-			LastEditor:             currentForm.LastEditor,
-			Deadline:               currentForm.Deadline,
-			CreatedAt:              currentForm.CreatedAt,
-			UpdatedAt:              currentForm.UpdatedAt,
-			MessageAfterSubmission: currentForm.MessageAfterSubmission,
-			Visibility:             currentForm.Visibility,
-			GoogleSheetUrl:         currentForm.GoogleSheetUrl,
-			PublishTime:            currentForm.PublishTime,
-			CoverImageUrl:          currentForm.CoverImageUrl,
-			DressingColor:          currentForm.DressingColor,
-			DressingHeaderFont:     currentForm.DressingHeaderFont,
-			DressingQuestionFont:   currentForm.DressingQuestionFont,
-			DressingTextFont:       currentForm.DressingTextFont,
-		}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
-			ID:        currentForm.LastEditor,
-			Name:      currentForm.LastEditorName,
-			Username:  currentForm.LastEditorUsername,
-			AvatarUrl: currentForm.LastEditorAvatarUrl,
-		}, user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+		responses[i] = ToResponse(
+			formFromListByUnitRow(currentForm),
+			currentForm.UnitName.String,
+			currentForm.OrgName.String,
+			editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+			user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		)
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
@@ -583,7 +647,7 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	}()
 
 	// Save to file service with WebP validation (system upload, no user attribution)
-	savedFile, err := h.fileService.SaveFile(
+	savedFile, err := h.fileStore.SaveFile(
 		traceCtx,
 		fileData,
 		header.Filename,
@@ -659,42 +723,19 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.GetByID(traceCtx, id)
+	currentForm, err := h.store.Get(traceCtx, id)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	response := ToResponse(Form{
-		ID:                     currentForm.ID,
-		Title:                  currentForm.Title,
-		Description:            currentForm.Description,
-		PreviewMessage:         currentForm.PreviewMessage,
-		Status:                 currentForm.Status,
-		UnitID:                 currentForm.UnitID,
-		LastEditor:             currentForm.LastEditor,
-		Deadline:               currentForm.Deadline,
-		CreatedAt:              currentForm.CreatedAt,
-		UpdatedAt:              currentForm.UpdatedAt,
-		MessageAfterSubmission: currentForm.MessageAfterSubmission,
-		Visibility:             currentForm.Visibility,
-		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
-		PublishTime:            currentForm.PublishTime,
-		CoverImageUrl:          currentForm.CoverImageUrl,
-		DressingColor:          currentForm.DressingColor,
-		DressingHeaderFont:     currentForm.DressingHeaderFont,
-		DressingQuestionFont:   currentForm.DressingQuestionFont,
-		DressingTextFont:       currentForm.DressingTextFont,
-	},
+	response := ToResponse(
+		formFromGetRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
-		user.User{
-			ID:        currentForm.LastEditor,
-			Name:      currentForm.LastEditorName,
-			Username:  currentForm.LastEditorUsername,
-			AvatarUrl: currentForm.LastEditorAvatarUrl,
-		},
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+	)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -723,42 +764,19 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	currentForm, err := h.store.GetByID(traceCtx, id)
+	currentForm, err := h.store.Get(traceCtx, id)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	response := ToResponse(Form{
-		ID:                     currentForm.ID,
-		Title:                  currentForm.Title,
-		Description:            currentForm.Description,
-		PreviewMessage:         currentForm.PreviewMessage,
-		Status:                 currentForm.Status,
-		UnitID:                 currentForm.UnitID,
-		LastEditor:             currentForm.LastEditor,
-		Deadline:               currentForm.Deadline,
-		CreatedAt:              currentForm.CreatedAt,
-		UpdatedAt:              currentForm.UpdatedAt,
-		MessageAfterSubmission: currentForm.MessageAfterSubmission,
-		Visibility:             currentForm.Visibility,
-		GoogleSheetUrl:         currentForm.GoogleSheetUrl,
-		PublishTime:            currentForm.PublishTime,
-		CoverImageUrl:          currentForm.CoverImageUrl,
-		DressingColor:          currentForm.DressingColor,
-		DressingHeaderFont:     currentForm.DressingHeaderFont,
-		DressingQuestionFont:   currentForm.DressingQuestionFont,
-		DressingTextFont:       currentForm.DressingTextFont,
-	},
+	response := ToResponse(
+		formFromGetRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
-		user.User{
-			ID:        currentForm.LastEditor,
-			Name:      currentForm.LastEditorName,
-			Username:  currentForm.LastEditorUsername,
-			AvatarUrl: currentForm.LastEditorAvatarUrl,
-		},
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+	)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -802,22 +820,34 @@ func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	description := ""
-	if req.Description != nil {
-		description = *req.Description
+	params := question.UpdateSectionParams{
+		ID:     sectionID,
+		FormID: formID,
+		Title:  pgtype.Text{String: req.Title, Valid: true},
+	}
+	if req.Description.Set {
+		j, htmlStr, err := h.markdownStore.ProcessAPIText(traceCtx, req.Description.Value)
+		if err != nil {
+			h.problemWriter.WriteError(traceCtx, w, err, logger)
+			return
+		}
+		params.DescriptionJson = j
+		params.DescriptionHtml = pgtype.Text{String: htmlStr, Valid: true}
 	}
 
-	section, err := h.questionStore.UpdateSection(traceCtx, sectionID, formID, req.Title, description)
+	section, err := h.questionStore.UpdateSection(traceCtx, params)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
+	secDesc := markdown.DefaultDescriptionJSON(section.DescriptionJson)
 	response := SectionResponse{
-		ID:          section.ID.String(),
-		FormID:      section.FormID.String(),
-		Title:       section.Title.String,
-		Description: section.Description.String,
+		ID:              section.ID.String(),
+		FormID:          section.FormID.String(),
+		Title:           section.Title.String,
+		Description:     secDesc,
+		DescriptionHTML: section.DescriptionHtml,
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
