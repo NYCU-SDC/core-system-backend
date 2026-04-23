@@ -129,3 +129,20 @@ VALUES ($1, $2, $3)
 DO UPDATE SET
     role = EXCLUDED.role
 RETURNING unit_id, member_id, role;
+
+-- name: GetUnitAncestorIDs :many
+WITH RECURSIVE ancestors(ancestor_id) AS (
+    SELECT parent_id
+    FROM units u
+    WHERE u.id = $1
+      AND u.parent_id IS NOT NULL
+
+    UNION
+
+    SELECT u.parent_id
+    FROM units u
+             JOIN ancestors a ON u.id = a.ancestor_id
+    WHERE u.parent_id IS NOT NULL
+)
+SELECT ancestor_id
+FROM ancestors;

@@ -288,6 +288,44 @@ func (q *Queries) GetOrganizationWithSlug(ctx context.Context, id uuid.UUID) (Ge
 	return i, err
 }
 
+const getUnitAncestorIDs = `-- name: GetUnitAncestorIDs :many
+WITH RECURSIVE ancestors(ancestor_id) AS (
+    SELECT parent_id
+    FROM units u
+    WHERE u.id = $1
+      AND u.parent_id IS NOT NULL
+
+    UNION
+
+    SELECT u.parent_id
+    FROM units u
+             JOIN ancestors a ON u.id = a.ancestor_id
+    WHERE u.parent_id IS NOT NULL
+)
+SELECT ancestor_id
+FROM ancestors
+`
+
+func (q *Queries) GetUnitAncestorIDs(ctx context.Context, id uuid.UUID) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, getUnitAncestorIDs, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var ancestor_id pgtype.UUID
+		if err := rows.Scan(&ancestor_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ancestor_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMembers = `-- name: ListMembers :many
 SELECT m.member_id,
        m.role,
