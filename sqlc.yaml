@@ -8,6 +8,7 @@ sql:
       go:
         package: "jwt"
         out: "./internal/jwt"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -21,6 +22,7 @@ sql:
       go:
         package: "tenant"
         out: "./internal/tenant"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -34,6 +36,7 @@ sql:
       go:
         package: "unit"
         out: "./internal/unit"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -47,6 +50,7 @@ sql:
       go:
         package: "answer"
         out: "./internal/form/answer"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -60,6 +64,7 @@ sql:
       go:
         package: "response"
         out: "./internal/form/response"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -73,6 +78,7 @@ sql:
       go:
         package: "question"
         out: "./internal/form/question"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -86,6 +92,7 @@ sql:
       go:
         package: "workflow"
         out: "./internal/form/workflow"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -99,6 +106,7 @@ sql:
       go:
         package: "form"
         out: "./internal/form"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -112,6 +120,7 @@ sql:
       go:
         package: "inbox"
         out: "./internal/inbox"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -125,6 +134,7 @@ sql:
       go:
         package: "file"
         out: "./internal/file"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
@@ -138,6 +148,7 @@ sql:
       go:
         package: "user"
         out: "./internal/user"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"

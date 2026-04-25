@@ -75,6 +75,7 @@ find ./internal -type f -name "queries.sql" | while read -r QUERY_FILE; do
       go:
         package: "$PACKAGE_NAME"
         out: "$PACKAGE_DIR"
+        omit_unused_structs: true
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"
