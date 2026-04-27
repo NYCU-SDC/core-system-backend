@@ -159,6 +159,47 @@ func (q *Queries) GetIDByResponseIDAndQuestionID(ctx context.Context, arg GetIDB
 	return id, err
 }
 
+const listAnswersForExport = `-- name: ListAnswersForExport :many
+SELECT a.id, a.response_id, a.question_id, a.value, a.created_at, a.updated_at
+FROM answers a
+JOIN form_responses fr ON a.response_id = fr.id
+WHERE fr.form_id = $1
+  AND fr.progress = 'submitted'
+  AND a.question_id = ANY($2::uuid[])
+`
+
+type ListAnswersForExportParams struct {
+	FormID  uuid.UUID
+	Column2 []uuid.UUID
+}
+
+func (q *Queries) ListAnswersForExport(ctx context.Context, arg ListAnswersForExportParams) ([]Answer, error) {
+	rows, err := q.db.Query(ctx, listAnswersForExport, arg.FormID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Answer
+	for rows.Next() {
+		var i Answer
+		if err := rows.Scan(
+			&i.ID,
+			&i.ResponseID,
+			&i.QuestionID,
+			&i.Value,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listByResponseID = `-- name: ListByResponseID :many
 SELECT id, response_id, question_id, value, created_at, updated_at FROM answers
 WHERE response_id = $1
