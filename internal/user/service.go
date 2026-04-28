@@ -86,7 +86,7 @@ type OrgSlugResolver interface {
 	GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter, orgResolver OrgSlugResolver, onboardingChecker onboardingChecker) *Service {
+func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter, orgResolver OrgSlugResolver, checker onboardingChecker) *Service {
 	return &Service{
 		logger:            logger,
 		queries:           New(db),
@@ -94,12 +94,8 @@ func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWrite
 		fileOperator:      fileOperator,
 		orgWriter:         orgWriter,
 		orgResolver:       orgResolver,
-		onboardingChecker: onboardingChecker,
+		onboardingChecker: checker,
 	}
-}
-
-func (s *Service) SetOnboardingChecker(checker onboardingChecker) {
-	s.onboardingChecker = checker
 }
 
 func (s *Service) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
@@ -342,60 +338,61 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	id, err := s.queries.GetIDByEmail(traceCtx, email)
-	if !errors.Is(err, pgx.ErrNoRows) {
-		err = databaseutil.WrapDBError(err, logger, "get user id existence by email")
-		span.RecordError(err)
-		return uuid.UUID{}, err
-	}
-
-	if id != uuid.Nil {
-		logger.Debug("Found existing user", zap.String("user_id", id.String()))
-		return id, nil
-	}
-
-	logger.Info("User not found, creating new user", zap.String("email", email))
-
-	defaultRoles := DefaultGlobalRoles(email)
-
-	roleSet := map[string]struct{}{}
-
-	for _, r := range globalRole {
-		roleSet[r] = struct{}{}
-	}
-
-	for _, r := range defaultRoles {
-		roleSet[r] = struct{}{}
-	}
-
-	var finalRoles []string
-	for r := range roleSet {
-		finalRoles = append(finalRoles, r)
-	}
-
-	if len(finalRoles) == 0 {
-		finalRoles = []string{"user"}
-	}
-
-	logger.Info("Final global roles for new user", zap.Strings("roles", finalRoles))
-
-	newUser, err := s.queries.Create(traceCtx, CreateParams{AvatarUrl: pgtype.Text{String: "", Valid: true}, Role: finalRoles})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create user")
-		span.RecordError(err)
-		return uuid.UUID{}, err
-	}
-	logger.Info("Created new user", zap.String("user_id", newUser.ID.String()))
+		if !errors.Is(err, pgx.ErrNoRows) {
+			err = databaseutil.WrapDBError(err, logger, "get user id existence by email")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+		// No user with this email
+		logger.Info("User not found, creating new user", zap.String("email", email))
 
-	err = s.queries.CreateEmail(traceCtx, CreateEmailParams{
-		UserID: newUser.ID,
-		Value:  email})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create email")
-		span.RecordError(err)
-		return uuid.UUID{}, err
+		defaultRoles := DefaultGlobalRoles(email)
+
+		roleSet := map[string]struct{}{}
+
+		for _, r := range globalRole {
+			roleSet[r] = struct{}{}
+		}
+
+		for _, r := range defaultRoles {
+			roleSet[r] = struct{}{}
+		}
+
+		var finalRoles []string
+		for r := range roleSet {
+			finalRoles = append(finalRoles, r)
+		}
+
+		if len(finalRoles) == 0 {
+			finalRoles = []string{"user"}
+		}
+
+		logger.Info("Final global roles for new user", zap.Strings("roles", finalRoles))
+
+		newUser, err := s.queries.Create(traceCtx, CreateParams{AvatarUrl: pgtype.Text{String: "", Valid: true}, Role: finalRoles})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create user")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+		logger.Info("Created new user", zap.String("user_id", newUser.ID.String()))
+
+		err = s.queries.CreateEmail(traceCtx, CreateEmailParams{
+			UserID: newUser.ID,
+			Value:  email})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create email")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+
+		return newUser.ID, nil
 	}
 
-	return newUser.ID, nil
+	logger.Debug("Found existing user", zap.String("user_id", id.String()))
+	span.RecordError(err)
+	return id, nil
 }
 
 // downloadAndSaveAvatar downloads an avatar from a URL and saves it to the file service
