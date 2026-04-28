@@ -2,6 +2,7 @@ package formbuilder
 
 import (
 	"NYCU-SDC/core-system-backend/internal/form"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/test/testdata"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	"context"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type Builder struct {
@@ -75,9 +77,14 @@ func (b Builder) Create(opts ...Option) form.CreateRow {
 		}
 	}
 
+	md := markdown.NewService(zap.NewNop())
+	descJSON, descHTML, err := md.FromPlaintext(context.Background(), p.Description)
+	require.NoError(b.t, err)
+
 	formRow, err := queries.Create(context.Background(), form.CreateParams{
 		Title:                  p.Title,
-		Description:            pgtype.Text{String: p.Description, Valid: p.Description != ""},
+		DescriptionJson:        descJSON,
+		DescriptionHtml:        descHTML,
 		PreviewMessage:         preview,
 		UnitID:                 p.UnitID,
 		CreatedBy:              p.CreatedBy,

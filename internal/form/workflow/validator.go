@@ -58,7 +58,7 @@ const (
 // QuestionStore defines the interface for querying form questions and sections.
 // Used for validation (condition rule question IDs), label enrichment (section titles, condition labels).
 type QuestionStore interface {
-	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	Get(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
 }
 
@@ -704,7 +704,7 @@ func validateConditionSectionOrder(ctx context.Context, formID uuid.UUID, nodes 
 			continue
 		}
 
-		answerable, err := questionStore.GetByID(ctx, questionID)
+		answerable, err := questionStore.Get(ctx, questionID)
 		if err != nil {
 			continue
 		}
@@ -812,7 +812,7 @@ func validateDraftConditionQuestion(
 		return fmt.Errorf("condition node '%s' conditionRule.question '%s' is not a valid UUID", nodeID, rule.Question)
 	}
 
-	answerable, err := questionStore.GetByID(ctx, questionID)
+	answerable, err := questionStore.Get(ctx, questionID)
 	if err != nil {
 		return fmt.Errorf("condition node '%s' references non-existent question '%s' in conditionRule.question", nodeID, rule.Question)
 	}

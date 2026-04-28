@@ -75,7 +75,7 @@ func TestUnitService_Create(t *testing.T) {
 				require.Equal(t, params.description, result.Description.String)
 				require.JSONEq(t, string(params.metadata), string(result.Metadata))
 
-				stored, err := unit.New(db).GetByID(context.Background(), result.ID)
+				stored, err := unit.New(db).Get(context.Background(), result.ID)
 				require.NoError(t, err)
 				require.False(t, stored.OrgID.Valid)
 				require.Equal(t, unit.UnitTypeOrganization, stored.Type)

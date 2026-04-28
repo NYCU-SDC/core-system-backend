@@ -24,7 +24,7 @@ type Distributor interface {
 }
 
 type FormStore interface {
-	GetByID(ctx context.Context, id uuid.UUID) (form.GetByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID) (form.GetRow, error)
 	SetStatus(ctx context.Context, id uuid.UUID, status form.Status, userID uuid.UUID) (form.Form, error)
 }
 
@@ -109,7 +109,7 @@ func (s *Service) PublishForm(ctx context.Context, formID uuid.UUID, editor uuid
 	logger := logutil.WithContext(ctx, s.logger)
 
 	// check form existence and status
-	targetForm, err := s.store.GetByID(ctx, formID)
+	targetForm, err := s.store.Get(ctx, formID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, internal.ErrFormNotFound) {
 			span.RecordError(internal.ErrFormNotFound)

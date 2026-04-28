@@ -31,14 +31,14 @@ func (u User) GetID() uuid.UUID {
 }
 
 type Querier interface {
-	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
-	GetByID(ctx context.Context, id uuid.UUID) (UsersWithEmail, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	Get(ctx context.Context, id uuid.UUID) (UsersWithEmail, error)
 	GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.UUID, error)
 	ExistsByAuth(ctx context.Context, arg ExistsByAuthParams) (bool, error)
 	Create(ctx context.Context, arg CreateParams) (User, error)
 	CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, error)
 	Update(ctx context.Context, arg UpdateParams) (User, error)
-	GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error)
+	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
 	CreateEmail(ctx context.Context, arg CreateEmailParams) error
 	GetIDByEmail(ctx context.Context, value string) (uuid.UUID, error)
 	GetWithEarliestProviderByEmail(ctx context.Context, value string) (GetWithEarliestProviderByEmailRow, error)
@@ -98,12 +98,12 @@ func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWrite
 	}
 }
 
-func (s *Service) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
-	traceCtx, span := s.tracer.Start(ctx, "ExistsByID")
+func (s *Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Exists")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.queries.ExistsByID(traceCtx, id)
+	exists, err := s.queries.Exists(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
@@ -112,12 +112,12 @@ func (s *Service) ExistsByID(ctx context.Context, id uuid.UUID) (bool, error) {
 	return exists, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (UsersWithEmail, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetByID")
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (UsersWithEmail, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	user, err := s.queries.GetByID(traceCtx, id)
+	user, err := s.queries.Get(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
@@ -520,12 +520,12 @@ func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email strin
 	return nil
 }
 
-func (s *Service) GetEmailsByID(ctx context.Context, userID uuid.UUID) ([]string, error) {
+func (s *Service) GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetEmailsByID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	emails, err := s.queries.GetEmailsByID(traceCtx, userID)
+	emails, err := s.queries.GetEmails(traceCtx, userID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get emails by user id")
 		span.RecordError(err)
@@ -541,18 +541,18 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	userInfo, err := s.queries.GetByID(traceCtx, id)
+	userInfo, err := s.queries.Get(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
-		return User{}, internal.ErrDatabaseError
+		return User{}, err
 	}
 
-	userEmails, err := s.GetEmailsByID(traceCtx, id)
+	userEmails, err := s.GetEmails(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user emails by id")
 		span.RecordError(err)
-		return User{}, internal.ErrDatabaseError
+		return User{}, err
 	}
 	isAllowed := false
 	for _, userEmail := range userEmails {
@@ -591,7 +591,7 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 			return User{}, internal.ErrUsernameConflict
 		}
 		span.RecordError(err)
-		return User{}, internal.ErrDatabaseError
+		return User{}, err
 	}
 	return user, nil
 }

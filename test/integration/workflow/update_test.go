@@ -3,6 +3,7 @@ package workflow
 import (
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/test/integration"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	workflowbuilder "NYCU-SDC/core-system-backend/test/testdata/dbbuilder/workflow"
@@ -349,7 +350,7 @@ func TestWorkflowService_Update_NoNewVersionWhenOnlyLabelsChange(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	questionService := question.NewService(logger, db, nil)
+	questionService := question.NewService(logger, db, nil, markdown.NewService(logger))
 	workflowService := workflow.NewService(logger, db, questionService)
 
 	result, err := workflowService.Update(ctx, data.FormRow.ID, labelOnlyWorkflow, data.User)
