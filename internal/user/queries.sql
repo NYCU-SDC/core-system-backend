@@ -45,3 +45,6 @@ ON CONFLICT (user_id, value) DO NOTHING;
 
 -- name: GetEmails :many
 SELECT user_emails.value as email FROM user_emails WHERE user_id = $1;
+
+-- name: GetIDByEmail :one
+SELECT user_id FROM user_emails WHERE value = $1;
