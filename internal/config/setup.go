@@ -39,7 +39,9 @@ type SetupImpl struct {
 	AllowedOnboardingList AllowedOnboardingList
 }
 
-func (s *SetupImpl) GetAllowedOnboardingList(logger *zap.Logger, config SetupConfig, setupPath string, setupData string) (AllowedOnboardingList, error) {
+func (s *SetupImpl) LoadSetupConfig(logger *zap.Logger, setupPath string, setupData string) error {
+	var cfg SetupConfig
+
 	data, err := os.ReadFile(setupPath)
 	if err != nil {
 		if setupData != "" {
@@ -47,7 +49,7 @@ func (s *SetupImpl) GetAllowedOnboardingList(logger *zap.Logger, config SetupCon
 			decoded, decErr := base64.StdEncoding.DecodeString(setupData)
 			if decErr != nil {
 				logger.Error("Failed to base64 decode SETUP_YAML", zap.Error(decErr))
-				return nil, fmt.Errorf("failed to base64 decode SETUP_YAML: %w", decErr)
+				return fmt.Errorf("failed to base64 decode SETUP_YAML: %w", decErr)
 			}
 			data = decoded
 		} else {
@@ -57,15 +59,16 @@ func (s *SetupImpl) GetAllowedOnboardingList(logger *zap.Logger, config SetupCon
 	}
 
 	if data != nil {
-		err = yaml.Unmarshal(data, &config)
+		err = yaml.Unmarshal(data, &cfg)
 		if err != nil {
 			logger.Error("Failed to parse setup config", zap.Error(err))
-			return nil, fmt.Errorf("failed to parse setup config: %w", err)
+			return fmt.Errorf("failed to parse setup config: %w", err)
 		}
+		s.Config = cfg
 	}
 
 	allowedList := make(AllowedOnboardingList)
-	for _, user := range config.Users {
+	for _, user := range cfg.Users {
 		if user.AllowedOnboarding {
 			allowedList[strings.ToLower(user.Email)] = struct{}{}
 		}
@@ -73,7 +76,7 @@ func (s *SetupImpl) GetAllowedOnboardingList(logger *zap.Logger, config SetupCon
 
 	s.AllowedOnboardingList = allowedList
 
-	return allowedList, nil
+	return nil
 }
 
 func (s *SetupImpl) AllowedOnboarding(email string) bool {

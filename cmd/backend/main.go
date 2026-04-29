@@ -161,7 +161,7 @@ func main() {
 	fileService := file.NewService(logger, dbPool, answerFileHandler)
 
 	setupImpl := config.SetupImpl{}
-	_, err = setupImpl.GetAllowedOnboardingList(logger, config.SetupConfig{}, cfg.SetupPath, cfg.SetupData)
+	err = setupImpl.LoadSetupConfig(logger, cfg.SetupPath, cfg.SetupData)
 	if err != nil {
 		logger.Fatal("Failed to initialize allowed onboarding list", zap.Error(err))
 	}
