@@ -8,7 +8,6 @@ import (
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -17,7 +16,6 @@ import (
 type Service struct {
 	logger      *zap.Logger
 	tracer      trace.Tracer
-	db          *pgxpool.Pool
 	setupImpl   config2.SetupImpl
 	unitService UnitService
 	userService UserService
@@ -32,11 +30,10 @@ type UserService interface {
 	FindOrCreateByEmail(ctx context.Context, email string, globalRole []string) (uuid.UUID, error)
 }
 
-func NewService(logger *zap.Logger, db *pgxpool.Pool, setupImpl config2.SetupImpl, unitService UnitService, userService UserService) *Service {
+func NewService(logger *zap.Logger, setupImpl config2.SetupImpl, unitService UnitService, userService UserService) *Service {
 	service := &Service{
 		logger:      logger,
 		tracer:      otel.Tracer("setup"),
-		db:          db,
 		setupImpl:   setupImpl,
 		unitService: unitService,
 		userService: userService,

@@ -391,7 +391,6 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 	}
 
 	logger.Debug("Found existing user", zap.String("user_id", id.String()))
-	span.RecordError(err)
 	return id, nil
 }
 

@@ -179,7 +179,7 @@ func main() {
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
-	setupService := setup.NewService(logger, dbPool, setupImpl, unitService, userService)
+	setupService := setup.NewService(logger, setupImpl, unitService, userService)
 	err = setupService.Setup(context.Background())
 	if err != nil {
 		logger.Fatal("Failed to setup", zap.Error(err))
