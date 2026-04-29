@@ -74,7 +74,8 @@ func (h *Handler) Put(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req setRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

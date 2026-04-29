@@ -92,7 +92,20 @@ func (s *Service) Get(ctx context.Context, formID uuid.UUID) (Response, error) {
 		return Response{}, err
 	}
 
-	return s.buildResponse(traceCtx, formID, highlightRow.QuestionID, highlightRow.DisplayTitle)
+	questionRow, err := s.queries.GetQuestionByFormIDAndQuestionID(traceCtx, GetQuestionByFormIDAndQuestionIDParams{
+		FormID: formID,
+		ID:     highlightRow.QuestionID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return emptyResponse(), nil
+	}
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get highlighted question")
+		span.RecordError(err)
+		return Response{}, err
+	}
+
+	return s.buildResponse(traceCtx, questionRow, highlightRow.DisplayTitle)
 }
 
 func (s *Service) Set(ctx context.Context, formID uuid.UUID, req Request) (Response, error) {
@@ -151,26 +164,13 @@ func (s *Service) Set(ctx context.Context, formID uuid.UUID, req Request) (Respo
 		return Response{}, err
 	}
 
-	return s.buildResponse(traceCtx, formID, highlightRow.QuestionID, highlightRow.DisplayTitle)
+	return s.buildResponse(traceCtx, questionRow, highlightRow.DisplayTitle)
 }
 
-func (s *Service) buildResponse(ctx context.Context, formID, questionID uuid.UUID, storedDisplayTitle pgtype.Text) (Response, error) {
+func (s *Service) buildResponse(ctx context.Context, questionRow GetQuestionByFormIDAndQuestionIDRow, storedDisplayTitle pgtype.Text) (Response, error) {
 	traceCtx, span := s.tracer.Start(ctx, "buildResponse")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
-
-	questionRow, err := s.queries.GetQuestionByFormIDAndQuestionID(traceCtx, GetQuestionByFormIDAndQuestionIDParams{
-		FormID: formID,
-		ID:     questionID,
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return emptyResponse(), nil
-	}
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get highlighted question")
-		span.RecordError(err)
-		return Response{}, err
-	}
 
 	choices, err := question.ExtractChoices(questionRow.Metadata)
 	if err != nil {
@@ -178,7 +178,7 @@ func (s *Service) buildResponse(ctx context.Context, formID, questionID uuid.UUI
 		return Response{}, err
 	}
 
-	answerValues, err := s.queries.ListAnswerValuesByQuestionID(traceCtx, questionID)
+	answerValues, err := s.queries.ListAnswerValuesByQuestionID(traceCtx, questionRow.ID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list highlight answer values")
 		span.RecordError(err)
@@ -198,9 +198,9 @@ func (s *Service) buildResponse(ctx context.Context, formID, questionID uuid.UUI
 	}
 
 	return Response{
-		QuestionID:    &questionID,
-		QuestionTitle: stringPtr(questionTitle),
-		DisplayTitle:  stringPtr(displayTitle),
+		QuestionID:    &questionRow.ID,
+		QuestionTitle: &questionTitle,
+		DisplayTitle:  &displayTitle,
 		Choices:       choiceStats,
 	}, nil
 }
@@ -277,8 +277,4 @@ func countChoices(questionType question.QuestionType, choices []question.Choice,
 	}
 
 	return stats, nil
-}
-
-func stringPtr(value string) *string {
-	return &value
 }
