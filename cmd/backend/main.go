@@ -160,7 +160,13 @@ func main() {
 	answerFileHandler := answer.NewFileResourceHandler(logger, answerQueries)
 	fileService := file.NewService(logger, dbPool, answerFileHandler)
 
-	userService := user.NewService(logger, dbPool, fileService, unitService, unitService)
+	setupImpl := config.SetupImpl{}
+	err = setupImpl.LoadSetupConfig(logger, cfg.SetupPath, cfg.SetupData)
+	if err != nil {
+		logger.Fatal("Failed to initialize allowed onboarding list", zap.Error(err))
+	}
+
+	userService := user.NewService(logger, dbPool, fileService, unitService, unitService, &setupImpl)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
 	markdownService := markdown.NewService(logger)
@@ -173,10 +179,7 @@ func main() {
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
-	setupService, err := setup.NewService(logger, dbPool, cfg.SetupPath, cfg.SetupData, unitService)
-	if err != nil {
-		logger.Fatal("Failed to load setup config", zap.Error(err))
-	}
+	setupService := setup.NewService(logger, setupImpl, unitService, userService)
 	err = setupService.Setup(context.Background())
 	if err != nil {
 		logger.Fatal("Failed to setup", zap.Error(err))

@@ -40,6 +40,7 @@ type Querier interface {
 	Update(ctx context.Context, arg UpdateParams) (User, error)
 	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
 	CreateEmail(ctx context.Context, arg CreateEmailParams) error
+	GetIDByEmail(ctx context.Context, value string) (uuid.UUID, error)
 	GetWithEarliestProviderByEmail(ctx context.Context, value string) (GetWithEarliestProviderByEmailRow, error)
 }
 
@@ -50,13 +51,18 @@ type FileOperator interface {
 	DownloadFromURL(ctx context.Context, url string, filename string, uploadedBy *uuid.UUID, opts ...file.ValidatorOption) (file.File, error)
 }
 
+type onboardingChecker interface {
+	AllowedOnboarding(email string) bool
+}
+
 type Service struct {
-	logger       *zap.Logger
-	queries      Querier
-	tracer       trace.Tracer
-	fileOperator FileOperator
-	orgWriter    OrgMemberWriter
-	orgResolver  OrgSlugResolver
+	logger            *zap.Logger
+	queries           Querier
+	tracer            trace.Tracer
+	fileOperator      FileOperator
+	orgWriter         OrgMemberWriter
+	orgResolver       OrgSlugResolver
+	onboardingChecker onboardingChecker
 }
 
 type Profile struct {
@@ -80,14 +86,15 @@ type OrgSlugResolver interface {
 	GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error)
 }
 
-func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter, orgResolver OrgSlugResolver) *Service {
+func NewService(logger *zap.Logger, db DBTX, fileOperator FileOperator, orgWriter OrgMemberWriter, orgResolver OrgSlugResolver, checker onboardingChecker) *Service {
 	return &Service{
-		logger:       logger,
-		queries:      New(db),
-		tracer:       otel.Tracer("user/service"),
-		fileOperator: fileOperator,
-		orgWriter:    orgWriter,
-		orgResolver:  orgResolver,
+		logger:            logger,
+		queries:           New(db),
+		tracer:            otel.Tracer("user/service"),
+		fileOperator:      fileOperator,
+		orgWriter:         orgWriter,
+		orgResolver:       orgResolver,
+		onboardingChecker: checker,
 	}
 }
 
@@ -169,28 +176,50 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 		return FindOrCreateResult{UserID: existingUserID}, nil
 	}
 
-	// Different provider, same email → binding confirmation required
+	// Same email as an existing user: either first OAuth for a pre-provisioned user,
+	// or different provider, same email → binding confirmation required
 	if email != "" {
 		existingUser, err := s.queries.GetWithEarliestProviderByEmail(traceCtx, email)
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				err = databaseutil.WrapDBError(err, logger, "check user existence by email")
+				span.RecordError(err)
+				return FindOrCreateResult{}, err
+			}
+			// No user with this email — fall through to create a new user below.
+		} else {
+			// Does not create a new user if the user has been initialized
+			if !existingUser.Provider.Valid {
+				logger.Info("User has been initialized",
+					zap.String("name", name),
+					zap.String("email", email))
+				_, err = s.queries.CreateAuth(traceCtx, CreateAuthParams{
+					UserID:     existingUser.ID,
+					Provider:   oauthProvider,
+					ProviderID: oauthProviderID,
+				})
+				if err != nil {
+					err = databaseutil.WrapDBError(err, logger, "create auth for pre-provisioned user")
+					span.RecordError(err)
+					return FindOrCreateResult{}, err
+				}
+				return FindOrCreateResult{UserID: existingUser.ID}, nil
+			}
+		}
 		if err == nil {
 			// Found a user with the same email under a different provider
 			logger.Info("Email already exists under different provider, binding confirmation required",
 				zap.String("name", existingUser.Name.String),
 				zap.String("email", email),
-				zap.String("existing_provider", existingUser.Provider),
+				zap.String("existing_provider", existingUser.Provider.String),
 				zap.String("new_provider", oauthProvider),
 			)
 			return FindOrCreateResult{
 				UserID:             existingUser.ID,
 				ExistingName:       existingUser.Name.String,
-				ExistingProvider:   existingUser.Provider,
-				ExistingProviderID: existingUser.ProviderID,
+				ExistingProvider:   existingUser.Provider.String,
+				ExistingProviderID: existingUser.ProviderID.String,
 			}, nil
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			err = databaseutil.WrapDBError(err, logger, "check user existence by email")
-			span.RecordError(err)
-			return FindOrCreateResult{}, err
 		}
 	}
 
@@ -303,6 +332,68 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	return FindOrCreateResult{UserID: newUser.ID}, nil
 }
 
+func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalRole []string) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "FindOrCreateByEmail")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	id, err := s.queries.GetIDByEmail(traceCtx, email)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			err = databaseutil.WrapDBError(err, logger, "get user id existence by email")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+		// No user with this email
+		logger.Info("User not found, creating new user", zap.String("email", email))
+
+		defaultRoles := DefaultGlobalRoles(email)
+
+		roleSet := map[string]struct{}{}
+
+		for _, r := range globalRole {
+			roleSet[r] = struct{}{}
+		}
+
+		for _, r := range defaultRoles {
+			roleSet[r] = struct{}{}
+		}
+
+		var finalRoles []string
+		for r := range roleSet {
+			finalRoles = append(finalRoles, r)
+		}
+
+		if len(finalRoles) == 0 {
+			finalRoles = []string{"user"}
+		}
+
+		logger.Info("Final global roles for new user", zap.Strings("roles", finalRoles))
+
+		newUser, err := s.queries.Create(traceCtx, CreateParams{AvatarUrl: pgtype.Text{String: "", Valid: true}, Role: finalRoles})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create user")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+		logger.Info("Created new user", zap.String("user_id", newUser.ID.String()))
+
+		err = s.queries.CreateEmail(traceCtx, CreateEmailParams{
+			UserID: newUser.ID,
+			Value:  email})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create email")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+
+		return newUser.ID, nil
+	}
+
+	logger.Debug("Found existing user", zap.String("user_id", id.String()))
+	return id, nil
+}
+
 // downloadAndSaveAvatar downloads an avatar from a URL and saves it to the file service
 // Returns the backend URL for the saved avatar, or empty string if failed
 func (s *Service) downloadAndSaveAvatar(ctx context.Context, avatarURL string, userID uuid.UUID) string {
@@ -355,6 +446,18 @@ func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, pr
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
+	if existingProvider == "" && existingProviderID == "" {
+		_, err := s.queries.CreateAuth(traceCtx, CreateAuthParams{
+			UserID:     userID,
+			Provider:   provider,
+			ProviderID: providerID,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create auth")
+			span.RecordError(err)
+			return err
+		}
+	}
 	// Verify the target user actually owns the claimed existing auth entry.
 	ownerID, err := s.queries.GetIDByAuth(traceCtx, GetIDByAuthParams{
 		Provider:   existingProvider,
@@ -452,7 +555,7 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 	}
 	isAllowed := false
 	for _, userEmail := range userEmails {
-		if IsAllowed(userEmail) {
+		if s.onboardingChecker.AllowedOnboarding(userEmail) {
 			isAllowed = true
 			break
 		}

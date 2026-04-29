@@ -180,11 +180,22 @@ func (q *Queries) GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.
 	return user_id, err
 }
 
+const getIDByEmail = `-- name: GetIDByEmail :one
+SELECT user_id FROM user_emails WHERE value = $1 LIMIT 1
+`
+
+func (q *Queries) GetIDByEmail(ctx context.Context, value string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getIDByEmail, value)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const getWithEarliestProviderByEmail = `-- name: GetWithEarliestProviderByEmail :one
 SELECT u.id, u.name, a.provider, a.provider_id
 FROM user_emails e
          JOIN users u ON e.user_id = u.id
-         JOIN auth a ON a.user_id = u.id
+         LEFT JOIN auth a ON a.user_id = u.id
 WHERE e.value = $1
 ORDER BY a.created_at ASC
     LIMIT 1
@@ -193,8 +204,8 @@ ORDER BY a.created_at ASC
 type GetWithEarliestProviderByEmailRow struct {
 	ID         uuid.UUID
 	Name       pgtype.Text
-	Provider   string
-	ProviderID string
+	Provider   pgtype.Text
+	ProviderID pgtype.Text
 }
 
 func (q *Queries) GetWithEarliestProviderByEmail(ctx context.Context, value string) (GetWithEarliestProviderByEmailRow, error) {
