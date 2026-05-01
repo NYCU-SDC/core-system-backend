@@ -41,7 +41,7 @@ type Querier interface {
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
 	LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error)
-	GetUnitAncestorIDs(ctx context.Context, unitID uuid.UUID) ([]pgtype.UUID, error)
+	HasAdminInAncestorUnits(ctx context.Context, arg HasAdminInAncestorUnitsParams) (bool, error)
 
 	WithTx(tx pgx.Tx) *Queries
 }
@@ -691,30 +691,26 @@ func (s *Service) GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, e
 	return orgID, nil
 }
 
-func (s *Service) GetUnitAncestorByID(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetUnitAncestorByID")
+func (s *Service) HasAdminInAncestorUnits(ctx context.Context, unitID uuid.UUID, userID uuid.UUID) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "HasAdminInAncestorUnits")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	rows, err := s.queries.GetUnitAncestorIDs(traceCtx, unitID)
+	has, err := s.queries.HasAdminInAncestorUnits(traceCtx, HasAdminInAncestorUnitsParams{
+		ID:       unitID,
+		MemberID: userID,
+	})
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get unit ancestor by id")
+		err = databaseutil.WrapDBError(err, logger, "Check Admin In Ancestor Units")
 		span.RecordError(err)
-		return nil, err
+		return false, err
 	}
 
-	ids := make([]uuid.UUID, 0, len(rows))
-	for _, row := range rows {
-		if !row.Valid {
-			continue
-		}
-		ids = append(ids, row.Bytes)
-	}
-
-	logger.Info("Get unit ancestor by ID",
+	logger.Info("Check Admin In Ancestor Units",
 		zap.String("unit_id", unitID.String()),
-		zap.Int("count", len(ids)),
+		zap.String("user_id", userID.String()),
+		zap.Bool("has_admin_in_ancestor_units", has),
 	)
 
-	return ids, nil
+	return has, nil
 }

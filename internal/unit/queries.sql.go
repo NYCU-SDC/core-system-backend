@@ -288,42 +288,39 @@ func (q *Queries) GetOrganizationByIDWithSlug(ctx context.Context, id uuid.UUID)
 	return i, err
 }
 
-const getUnitAncestorIDs = `-- name: GetUnitAncestorIDs :many
-WITH RECURSIVE ancestors(ancestor_id) AS (
+const hasAdminInAncestorUnits = `-- name: HasAdminInAncestorUnits :one
+WITH RECURSIVE ancestors(unit_id) AS (
     SELECT parent_id
     FROM units u
     WHERE u.id = $1
       AND u.parent_id IS NOT NULL
 
-    UNION
+    UNION ALL
 
     SELECT u.parent_id
     FROM units u
-             JOIN ancestors a ON u.id = a.ancestor_id
+             JOIN ancestors a ON u.id = a.unit_id
     WHERE u.parent_id IS NOT NULL
 )
-SELECT ancestor_id
-FROM ancestors
+SELECT EXISTS (
+    SELECT 1
+    FROM ancestors a
+             JOIN unit_members um ON um.unit_id = a.unit_id
+    WHERE um.member_id = $2
+      AND um.role = 'admin'
+) AS has_admin
 `
 
-func (q *Queries) GetUnitAncestorIDs(ctx context.Context, id uuid.UUID) ([]pgtype.UUID, error) {
-	rows, err := q.db.Query(ctx, getUnitAncestorIDs, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []pgtype.UUID
-	for rows.Next() {
-		var ancestor_id pgtype.UUID
-		if err := rows.Scan(&ancestor_id); err != nil {
-			return nil, err
-		}
-		items = append(items, ancestor_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type HasAdminInAncestorUnitsParams struct {
+	ID       uuid.UUID
+	MemberID uuid.UUID
+}
+
+func (q *Queries) HasAdminInAncestorUnits(ctx context.Context, arg HasAdminInAncestorUnitsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasAdminInAncestorUnits, arg.ID, arg.MemberID)
+	var has_admin bool
+	err := row.Scan(&has_admin)
+	return has_admin, err
 }
 
 const listMembers = `-- name: ListMembers :many
