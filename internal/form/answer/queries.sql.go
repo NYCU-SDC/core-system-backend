@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const batchUpsert = `-- name: BatchUpsert :many
@@ -160,7 +161,7 @@ func (q *Queries) GetIDByResponseIDAndQuestionID(ctx context.Context, arg GetIDB
 }
 
 const listAnswersForExport = `-- name: ListAnswersForExport :many
-SELECT a.id, a.response_id, a.question_id, a.value, a.created_at, a.updated_at
+SELECT a.id, a.response_id, a.question_id, a.value, a.created_at, a.updated_at, fr.submitted_at
 FROM answers a
 JOIN form_responses fr ON a.response_id = fr.id
 WHERE fr.form_id = $1
@@ -173,15 +174,25 @@ type ListAnswersForExportParams struct {
 	Column2 []uuid.UUID
 }
 
-func (q *Queries) ListAnswersForExport(ctx context.Context, arg ListAnswersForExportParams) ([]Answer, error) {
+type ListAnswersForExportRow struct {
+	ID          uuid.UUID
+	ResponseID  uuid.UUID
+	QuestionID  uuid.UUID
+	Value       []byte
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	SubmittedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListAnswersForExport(ctx context.Context, arg ListAnswersForExportParams) ([]ListAnswersForExportRow, error) {
 	rows, err := q.db.Query(ctx, listAnswersForExport, arg.FormID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Answer
+	var items []ListAnswersForExportRow
 	for rows.Next() {
-		var i Answer
+		var i ListAnswersForExportRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ResponseID,
@@ -189,6 +200,7 @@ func (q *Queries) ListAnswersForExport(ctx context.Context, arg ListAnswersForEx
 			&i.Value,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SubmittedAt,
 		); err != nil {
 			return nil, err
 		}
