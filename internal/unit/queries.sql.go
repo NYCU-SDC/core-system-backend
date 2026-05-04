@@ -288,6 +288,41 @@ func (q *Queries) GetOrganizationWithSlug(ctx context.Context, id uuid.UUID) (Ge
 	return i, err
 }
 
+const hasAdminInAncestorUnits = `-- name: HasAdminInAncestorUnits :one
+WITH RECURSIVE ancestors(unit_id) AS (
+    SELECT parent_id
+    FROM units u
+    WHERE u.id = $1
+      AND u.parent_id IS NOT NULL
+
+    UNION ALL
+
+    SELECT u.parent_id
+    FROM units u
+             JOIN ancestors a ON u.id = a.unit_id
+    WHERE u.parent_id IS NOT NULL
+)
+SELECT EXISTS (
+    SELECT 1
+    FROM ancestors a
+             JOIN unit_members um ON um.unit_id = a.unit_id
+    WHERE um.member_id = $2
+      AND um.role = 'admin'
+) AS has_admin
+`
+
+type HasAdminInAncestorUnitsParams struct {
+	ID       uuid.UUID
+	MemberID uuid.UUID
+}
+
+func (q *Queries) HasAdminInAncestorUnits(ctx context.Context, arg HasAdminInAncestorUnitsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasAdminInAncestorUnits, arg.ID, arg.MemberID)
+	var has_admin bool
+	err := row.Scan(&has_admin)
+	return has_admin, err
+}
+
 const listMembers = `-- name: ListMembers :many
 SELECT m.member_id,
        m.role,
