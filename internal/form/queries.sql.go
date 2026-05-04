@@ -74,7 +74,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM created f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -132,7 +132,7 @@ type CreateRow struct {
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, error) {
@@ -186,7 +186,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, erro
 		&i.LastEditorName,
 		&i.LastEditorUsername,
 		&i.LastEditorAvatarUrl,
-		&i.LastEditorEmail,
+		&i.LastEditorEmails,
 	)
 	return i, err
 }
@@ -223,7 +223,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -263,7 +263,7 @@ type GetRow struct {
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
@@ -300,7 +300,7 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
 		&i.LastEditorName,
 		&i.LastEditorUsername,
 		&i.LastEditorAvatarUrl,
-		&i.LastEditorEmail,
+		&i.LastEditorEmails,
 	)
 	return i, err
 }
@@ -317,7 +317,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM forms f
          LEFT JOIN units u ON f.unit_id = u.id
          LEFT JOIN units o ON u.org_id = o.id
@@ -357,7 +357,7 @@ type GetByIDsRow struct {
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) GetByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetByIDsRow, error) {
@@ -400,7 +400,7 @@ func (q *Queries) GetByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetByID
 			&i.LastEditorName,
 			&i.LastEditorUsername,
 			&i.LastEditorAvatarUrl,
-			&i.LastEditorEmail,
+			&i.LastEditorEmails,
 		); err != nil {
 			return nil, err
 		}
@@ -501,7 +501,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -550,7 +550,7 @@ type ListRow struct {
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
@@ -593,7 +593,7 @@ func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
 			&i.LastEditorName,
 			&i.LastEditorUsername,
 			&i.LastEditorAvatarUrl,
-			&i.LastEditorEmail,
+			&i.LastEditorEmails,
 		); err != nil {
 			return nil, err
 		}
@@ -617,7 +617,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -664,7 +664,7 @@ type ListByUnitRow struct {
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error) {
@@ -707,7 +707,7 @@ func (q *Queries) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListB
 			&i.LastEditorName,
 			&i.LastEditorUsername,
 			&i.LastEditorAvatarUrl,
-			&i.LastEditorEmail,
+			&i.LastEditorEmails,
 		); err != nil {
 			return nil, err
 		}
@@ -752,7 +752,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM updated f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -809,7 +809,7 @@ type PatchRow struct {
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) Patch(ctx context.Context, arg PatchParams) (PatchRow, error) {
@@ -862,7 +862,7 @@ func (q *Queries) Patch(ctx context.Context, arg PatchParams) (PatchRow, error) 
 		&i.LastEditorName,
 		&i.LastEditorUsername,
 		&i.LastEditorAvatarUrl,
-		&i.LastEditorEmail,
+		&i.LastEditorEmails,
 	)
 	return i, err
 }

@@ -187,7 +187,7 @@ func (h *Handler) GetMessageContent(ctx context.Context, contentType ContentType
 			form.UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 			user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 			form.UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-			user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+			user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 		)
 		return response, nil
 	case ContentTypeText:
