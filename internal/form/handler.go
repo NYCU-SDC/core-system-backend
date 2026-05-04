@@ -67,6 +67,7 @@ type Response struct {
 	PreviewMessage         string               `json:"previewMessage"`
 	Status                 string               `json:"status"`
 	UnitID                 string               `json:"unitId"`
+	Creator                user.ProfileResponse `json:"creator"`
 	LastEditor             user.ProfileResponse `json:"lastEditor"`
 	Deadline               *time.Time           `json:"deadline"`
 	CreatedAt              time.Time            `json:"createdAt"`
@@ -145,7 +146,15 @@ func VisibilityToUppercase(v Visibility) string {
 
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline, publishTime is null when empty/invalid.
-func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
+func ToResponse(
+	form Form,
+	unitName string,
+	orgName string,
+	creator user.User,
+	creatorEmails []string,
+	lastEditor user.User,
+	lastEditorEmails []string,
+) Response {
 	var deadline *time.Time
 
 	if form.Deadline.Valid {
@@ -170,12 +179,19 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		PreviewMessage:  form.PreviewMessage.String,
 		Status:          statusToUppercase(form.Status),
 		UnitID:          form.UnitID.String(),
+		Creator: user.ProfileResponse{
+			ID:        creator.ID,
+			Name:      creator.Name.String,
+			Username:  creator.Username.String,
+			Emails:    creatorEmails,
+			AvatarURL: creator.AvatarUrl.String,
+		},
 		LastEditor: user.ProfileResponse{
-			ID:        editor.ID,
-			Name:      editor.Name.String,
-			Username:  editor.Username.String,
-			Emails:    emails,
-			AvatarURL: editor.AvatarUrl.String,
+			ID:        lastEditor.ID,
+			Name:      lastEditor.Name.String,
+			Username:  lastEditor.Username.String,
+			Emails:    lastEditorEmails,
+			AvatarURL: lastEditor.AvatarUrl.String,
 		},
 		Deadline:               deadline,
 		CreatedAt:              form.CreatedAt.Time,
@@ -260,6 +276,15 @@ func NewHandler(
 func editorFromFormRow(lastEditor uuid.UUID, name pgtype.Text, username pgtype.Text, avatar pgtype.Text) user.User {
 	return user.User{
 		ID:        lastEditor,
+		Name:      name,
+		Username:  username,
+		AvatarUrl: avatar,
+	}
+}
+
+func creatorFromFormRow(createdBy uuid.UUID, name pgtype.Text, username pgtype.Text, avatar pgtype.Text) user.User {
+	return user.User{
+		ID:        createdBy,
 		Name:      name,
 		Username:  username,
 		AvatarUrl: avatar,
@@ -430,6 +455,8 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 		formFromPatchRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
+		creatorFromFormRow(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
 	)
@@ -479,6 +506,8 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		formFromGetRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
+		creatorFromFormRow(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
 	)
@@ -502,6 +531,8 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 			formFromListRow(form),
 			form.UnitName.String,
 			form.OrgName.String,
+			creatorFromFormRow(form.CreatedBy, form.CreatorName, form.CreatorUsername, form.CreatorAvatarUrl),
+			user.ConvertEmailsToSlice(form.CreatorEmails),
 			editorFromFormRow(form.LastEditor, form.LastEditorName, form.LastEditorUsername, form.LastEditorAvatarUrl),
 			user.ConvertEmailsToSlice(form.LastEditorEmail),
 		))
@@ -548,6 +579,8 @@ func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) 
 		formFromCreateRow(newForm),
 		newForm.UnitName.String,
 		newForm.OrgName.String,
+		creatorFromFormRow(newForm.CreatedBy, newForm.CreatorName, newForm.CreatorUsername, newForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(newForm.CreatorEmails),
 		editorFromFormRow(newForm.LastEditor, newForm.LastEditorName, newForm.LastEditorUsername, newForm.LastEditorAvatarUrl),
 		user.ConvertEmailsToSlice(newForm.LastEditorEmail),
 	)
@@ -602,6 +635,8 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 			formFromListByUnitRow(currentForm),
 			currentForm.UnitName.String,
 			currentForm.OrgName.String,
+			creatorFromFormRow(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+			user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 			editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
 			user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
 		)
@@ -733,6 +768,8 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		formFromGetRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
+		creatorFromFormRow(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
 	)
@@ -774,6 +811,8 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		formFromGetRow(currentForm),
 		currentForm.UnitName.String,
 		currentForm.OrgName.String,
+		creatorFromFormRow(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
 	)
