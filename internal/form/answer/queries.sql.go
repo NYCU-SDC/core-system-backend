@@ -165,13 +165,13 @@ SELECT a.id, a.response_id, a.question_id, a.value, a.created_at, a.updated_at, 
 FROM answers a
 JOIN form_responses fr ON a.response_id = fr.id
 WHERE fr.form_id = $1
-  AND fr.progress = 'submitted'
+  AND fr.progress = 'SUBMITTED'
   AND a.question_id = ANY($2::uuid[])
 `
 
 type ListAnswersForExportParams struct {
-	FormID  uuid.UUID
-	Column2 []uuid.UUID
+	FormID     uuid.UUID
+	QuestionID []uuid.UUID
 }
 
 type ListAnswersForExportRow struct {
@@ -185,7 +185,7 @@ type ListAnswersForExportRow struct {
 }
 
 func (q *Queries) ListAnswersForExport(ctx context.Context, arg ListAnswersForExportParams) ([]ListAnswersForExportRow, error) {
-	rows, err := q.db.Query(ctx, listAnswersForExport, arg.FormID, arg.Column2)
+	rows, err := q.db.Query(ctx, listAnswersForExport, arg.FormID, arg.QuestionID)
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,7 @@ import (
 
 type Querier interface {
 	ListByResponseID(ctx context.Context, responseID uuid.UUID) ([]Answer, error)
+	ListAnswersForExport(ctx context.Context, arg ListAnswersForExportParams) ([]ListAnswersForExportRow, error)
 	Get(ctx context.Context, id uuid.UUID) (Answer, error)
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
@@ -131,6 +132,24 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 
 	logger.Info("successfully listed answers", zap.Int("count", len(transformedAnswers)), zap.String("responseID", responseID.String()))
 	return transformedAnswers, answerableList, answerableMap, nil
+}
+
+func (s Service) ListAnswersForExport(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]ListAnswersForExportRow, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListAnswersForExport")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	rows, err := s.queries.ListAnswersForExport(traceCtx, ListAnswersForExportParams{
+		FormID:     formID,
+		QuestionID: questionIDs,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list answers for export")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return rows, nil
 }
 
 func (s Service) Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error) {

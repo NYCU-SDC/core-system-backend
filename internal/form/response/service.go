@@ -1,8 +1,11 @@
 package response
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form"
 	"context"
 	"fmt"
+	"sort"
+	"time"
 
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/answer"
@@ -13,6 +16,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/xuri/excelize/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -37,6 +41,7 @@ type WorkflowResolver interface {
 
 type AnswerStore interface {
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]answer.Answer, []question.Answerable, map[string]question.Answerable, error)
+	ListAnswersForExport(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]answer.ListAnswersForExportRow, error)
 }
 
 type UserStore interface {
@@ -45,6 +50,8 @@ type UserStore interface {
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
+	ListQuestionsByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]question.ListQuestionsByIDsRow, error)
+	GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID) (map[string]question.Answerable, error)
 }
 
 type SectionWithAnswerableAndAnswer struct {
@@ -55,8 +62,15 @@ type SectionWithAnswerableAndAnswer struct {
 	Answer     []answer.Answer
 }
 
+type exportData struct {
+	FormTitle string
+	Headers   []ExportHeader
+	Rows      []ExportRow
+}
+
 type FormStore interface {
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	Get(ctx context.Context, id uuid.UUID) (form.GetRow, error)
 }
 
 type Service struct {
@@ -222,6 +236,221 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 	}
 
 	return responses, nil
+}
+
+func (s Service) ExportPreview(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (ExportPreviewResponse, error) {
+	data, err := s.getExportData(ctx, formID, questionIDs)
+	if err != nil {
+		return ExportPreviewResponse{}, err
+	}
+
+	return ExportPreviewResponse{
+		Headers: data.Headers,
+		Rows:    data.Rows,
+	}, nil
+}
+
+func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]byte, string, error) {
+	data, err := s.getExportData(ctx, formID, questionIDs)
+	if err != nil {
+		return nil, "", err
+	}
+
+	file := excelize.NewFile()
+	defer func() {
+		_ = file.Close()
+	}()
+
+	const sheet = "Sheet1"
+	if err := file.SetCellValue(sheet, "A1", "Response ID"); err != nil {
+		return nil, "", err
+	}
+
+	for i, header := range data.Headers {
+		cell, err := excelize.CoordinatesToCellName(i+2, 1)
+		if err != nil {
+			return nil, "", err
+		}
+		if err := file.SetCellValue(sheet, cell, header.Title); err != nil {
+			return nil, "", err
+		}
+	}
+
+	for rowIndex, row := range data.Rows {
+		excelRow := rowIndex + 2
+		cell, err := excelize.CoordinatesToCellName(1, excelRow)
+		if err != nil {
+			return nil, "", err
+		}
+		err = file.SetCellValue(sheet, cell, row.ID)
+		if err != nil {
+			return nil, "", err
+		}
+
+		for columnIndex, header := range data.Headers {
+			payload, ok := row.Answers[header.ID]
+			if !ok {
+				continue
+			}
+			cell, err := excelize.CoordinatesToCellName(columnIndex+2, excelRow)
+			if err != nil {
+				return nil, "", err
+			}
+			err = file.SetCellValue(sheet, cell, payload.DisplayValue)
+			if err != nil {
+				return nil, "", err
+			}
+		}
+	}
+
+	buffer, err := file.WriteToBuffer()
+	if err != nil {
+		return nil, "", err
+	}
+
+	return buffer.Bytes(), data.FormTitle, nil
+}
+
+func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (exportData, error) {
+	traceCtx, span := s.tracer.Start(ctx, "getExportData")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formRow, err := s.formStore.Get(traceCtx, formID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return exportData{}, internal.ErrFormNotFound
+		}
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "form", "id", formID.String(), logger, "get form by id")
+		span.RecordError(err)
+		return exportData{}, err
+	}
+
+	questionRows, err := s.sectionWithQuestionStore.ListQuestionsByIDs(traceCtx, questionIDs)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list questions by ids")
+		span.RecordError(err)
+		return exportData{}, err
+	}
+	if len(questionRows) != len(questionIDs) {
+		return exportData{}, internal.ErrQuestionNotFound
+	}
+
+	answerableMap, err := s.sectionWithQuestionStore.GetAnswerableMapByFormID(traceCtx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "question", "form_id", formID.String(), logger, "get answerable map by form id")
+		span.RecordError(err)
+		return exportData{}, err
+	}
+
+	for _, questionID := range questionIDs {
+		answerable, ok := answerableMap[questionID.String()]
+		if !ok || answerable.FormID() != formID {
+			return exportData{}, internal.ErrQuestionNotFound
+		}
+	}
+
+	sectionIDs, _, err := s.ResolveWorkflowSectionsForResponse(traceCtx, formID, nil, answerableMap, uuid.Nil)
+	if err != nil && !errors.Is(err, internal.ErrWorkflowNotFound) {
+		return exportData{}, err
+	}
+	sectionOrder := make(map[string]int, len(sectionIDs))
+	for i, sectionID := range sectionIDs {
+		sectionOrder[sectionID.String()] = i
+	}
+
+	sort.SliceStable(questionRows, func(i, j int) bool {
+		leftSectionOrder, leftFound := sectionOrder[questionRows[i].SectionID.String()]
+		rightSectionOrder, rightFound := sectionOrder[questionRows[j].SectionID.String()]
+		if leftFound && rightFound && leftSectionOrder != rightSectionOrder {
+			return leftSectionOrder < rightSectionOrder
+		}
+		if leftFound != rightFound {
+			return leftFound
+		}
+		if questionRows[i].SectionID != questionRows[j].SectionID {
+			return questionRows[i].SectionID.String() < questionRows[j].SectionID.String()
+		}
+		return questionRows[i].Order < questionRows[j].Order
+	})
+
+	headers := make([]ExportHeader, 0, len(questionRows))
+	for _, questionRow := range questionRows {
+		title := ""
+		if questionRow.Title.Valid {
+			title = questionRow.Title.String
+		}
+		headers = append(headers, ExportHeader{
+			ID:    questionRow.ID.String(),
+			Title: title,
+		})
+	}
+
+	answerRows, err := s.answerStore.ListAnswersForExport(traceCtx, formID, questionIDs)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "answer", "form_id", formID.String(), logger, "list answers for export")
+		span.RecordError(err)
+		return exportData{}, err
+	}
+
+	type responseRow struct {
+		id          uuid.UUID
+		submittedAt time.Time
+		answers     map[string]AnswerPayload
+	}
+
+	rowMap := make(map[string]*responseRow)
+	rows := make([]*responseRow, 0)
+	for _, answerRow := range answerRows {
+		row, ok := rowMap[answerRow.ResponseID.String()]
+		if !ok {
+			row = &responseRow{
+				id:          answerRow.ResponseID,
+				submittedAt: answerRow.SubmittedAt.Time,
+				answers:     make(map[string]AnswerPayload),
+			}
+			rowMap[answerRow.ResponseID.String()] = row
+			rows = append(rows, row)
+		}
+
+		answerable, ok := answerableMap[answerRow.QuestionID.String()]
+		if !ok {
+			return exportData{}, internal.ErrQuestionNotFound
+		}
+		displayValue, err := answerable.DisplayValue(answerRow.Value)
+		if err != nil {
+			span.RecordError(err)
+			return exportData{}, err
+		}
+		row.answers[answerRow.QuestionID.String()] = AnswerPayload{
+			CreatedAt:    answerRow.CreatedAt.Time,
+			UpdatedAt:    answerRow.UpdatedAt.Time,
+			ResponseID:   answerRow.ResponseID.String(),
+			Answer:       answerRow.Value,
+			DisplayValue: displayValue,
+		}
+	}
+
+	sort.SliceStable(rows, func(i, j int) bool {
+		if !rows[i].submittedAt.Equal(rows[j].submittedAt) {
+			return rows[i].submittedAt.Before(rows[j].submittedAt)
+		}
+		return rows[i].id.String() < rows[j].id.String()
+	})
+
+	exportRows := make([]ExportRow, 0, len(rows))
+	for _, row := range rows {
+		exportRows = append(exportRows, ExportRow{
+			ID:      row.id.String(),
+			Answers: row.answers,
+		})
+	}
+
+	return exportData{
+		FormTitle: formRow.Title,
+		Headers:   headers,
+		Rows:      exportRows,
+	}, nil
 }
 
 // Get retrieves a form response by ID along with its sections, questions, and answers

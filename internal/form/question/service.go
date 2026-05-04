@@ -31,6 +31,7 @@ type Querier interface {
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	Get(ctx context.Context, id uuid.UUID) (GetRow, error)
 	ListTypes(ctx context.Context, ids []uuid.UUID) ([]ListTypesRow, error)
+	ListQuestionsByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]ListQuestionsByIDsRow, error)
 	UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error)
 }
 
@@ -417,6 +418,21 @@ func (s *Service) ListTypes(ctx context.Context, ids []uuid.UUID) (map[string]Qu
 		result[row.ID.String()] = row.Type
 	}
 	return result, nil
+}
+
+func (s *Service) ListQuestionsByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]ListQuestionsByIDsRow, error) {
+	ctx, span := s.tracer.Start(ctx, "ListQuestionsByIDs")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	rows, err := s.queries.ListQuestionsByIDs(ctx, questionIDs)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list questions by ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return rows, nil
 }
 
 // GetAnswerableMapByFormID returns a map of question ID (as string) to Answerable for efficient lookups.
