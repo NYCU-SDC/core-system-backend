@@ -1,7 +1,10 @@
 -- name: Get :one
+-- Tie-break: in a long-running transaction, now() is frozen so active and a newly
+-- inserted draft can share the same updated_at. Prefer the draft (is_active false)
+-- so "latest" matches the in-progress edit; id breaks any remaining ties.
 SELECT * FROM workflow_versions
 WHERE form_id = $1
-ORDER BY updated_at DESC
+ORDER BY updated_at DESC, is_active ASC, id DESC
 LIMIT 1;
 
 -- name: Update :one
@@ -9,7 +12,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -43,7 +46,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -106,7 +109,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -242,7 +245,7 @@ current_active AS (
     FROM workflow_versions AS wv
     WHERE wv.form_id = @form_id
       AND wv.is_active = true
-    ORDER BY wv.updated_at DESC
+    ORDER BY wv.updated_at DESC, wv.id DESC
     LIMIT 1
 ),
 latest AS (
@@ -251,7 +254,7 @@ latest AS (
     SELECT wv.id, wv.is_active, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = @form_id
-    ORDER BY wv.updated_at DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
     LIMIT 1
     FOR UPDATE
 ),
