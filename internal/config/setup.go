@@ -64,7 +64,6 @@ func (s *SetupImpl) LoadSetupConfig(logger *zap.Logger, setupPath string, setupD
 			logger.Error("Failed to parse setup config", zap.Error(err))
 			return fmt.Errorf("failed to parse setup config: %w", err)
 		}
-		s.Config = cfg
 	}
 
 	allowedList := make(AllowedOnboardingList)
@@ -74,6 +73,7 @@ func (s *SetupImpl) LoadSetupConfig(logger *zap.Logger, setupPath string, setupD
 		}
 	}
 
+	s.Config = cfg
 	s.AllowedOnboardingList = allowedList
 
 	return nil
