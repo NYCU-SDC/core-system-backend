@@ -35,7 +35,7 @@ latest AS (
     SELECT wv.id, wv.is_active, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.seq DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -105,7 +105,7 @@ activated_from_update AS (
       AND wv.form_id = $1
       AND sa.should_update_latest = true
       AND sa.can_activate = true
-    RETURNING wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    RETURNING wv.id, wv.form_id, wv.last_editor, wv.seq, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
 ),
 activated_from_insert AS (
     -- Create a new workflow version that is ALREADY active
@@ -114,13 +114,13 @@ activated_from_insert AS (
     FROM request_workflow AS rw, should_activate AS sa
     WHERE sa.can_activate = true
       AND sa.should_update_latest = false
-    RETURNING id, form_id, last_editor, is_active, workflow, created_at, updated_at
+    RETURNING id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at
 ),
 activated AS (
     -- Combine both activation results
-    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM activated_from_update
+    SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM activated_from_update
     UNION ALL
-    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM activated_from_insert
+    SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM activated_from_insert
 ),
 unchanged AS (
     -- Return the current active workflow when activation is skipped
@@ -134,13 +134,13 @@ unchanged AS (
       )
 ),
 result_row AS (
-    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM activated
+    SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM activated
     UNION ALL
-    SELECT wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    SELECT wv.id, wv.form_id, wv.last_editor, wv.seq, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
     FROM workflow_versions AS wv
     WHERE wv.id IN (SELECT id FROM unchanged)
 )
-SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM result_row
+SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM result_row
 LIMIT 1
 `
 
@@ -154,6 +154,7 @@ type ActivateRow struct {
 	ID         uuid.UUID
 	FormID     uuid.UUID
 	LastEditor uuid.UUID
+	Seq        int64
 	IsActive   bool
 	Workflow   []byte
 	CreatedAt  pgtype.Timestamptz
@@ -169,6 +170,7 @@ func (q *Queries) Activate(ctx context.Context, arg ActivateParams) (ActivateRow
 		&i.ID,
 		&i.FormID,
 		&i.LastEditor,
+		&i.Seq,
 		&i.IsActive,
 		&i.Workflow,
 		&i.CreatedAt,
@@ -182,7 +184,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.seq DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -216,14 +218,14 @@ updated AS (
     FROM latest_workflow AS lw, new_node
     WHERE wv.id = lw.id 
       AND lw.is_active = false
-    RETURNING wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    RETURNING wv.id, wv.form_id, wv.last_editor, wv.seq, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
 ),
 created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
     SELECT $1, $2, lw.workflow || jsonb_build_array(new_node.node)
     FROM latest_workflow AS lw, new_node
     WHERE lw.is_active = true
-    RETURNING id, form_id, last_editor, is_active, workflow, created_at, updated_at
+    RETURNING id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at
 )
 SELECT 
     (SELECT node->>'id' FROM new_node)::uuid AS node_id,
@@ -278,7 +280,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.seq DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -416,15 +418,13 @@ func (q *Queries) DeleteNode(ctx context.Context, arg DeleteNodeParams) ([]byte,
 }
 
 const get = `-- name: Get :one
-SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM workflow_versions
+SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at
+FROM workflow_versions
 WHERE form_id = $1
-ORDER BY updated_at DESC, is_active ASC, id DESC
+ORDER BY updated_at DESC, is_active ASC, seq DESC
 LIMIT 1
 `
 
-// Tie-break: in a long-running transaction, now() is frozen so active and a newly
-// inserted draft can share the same updated_at. Prefer the draft (is_active false)
-// so "latest" matches the in-progress edit; id breaks any remaining ties.
 func (q *Queries) Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, error) {
 	row := q.db.QueryRow(ctx, get, formID)
 	var i WorkflowVersion
@@ -432,6 +432,7 @@ func (q *Queries) Get(ctx context.Context, formID uuid.UUID) (WorkflowVersion, e
 		&i.ID,
 		&i.FormID,
 		&i.LastEditor,
+		&i.Seq,
 		&i.IsActive,
 		&i.Workflow,
 		&i.CreatedAt,
@@ -445,7 +446,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.seq DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -455,21 +456,21 @@ updated AS (
     FROM latest_workflow AS lw
     WHERE wv.id = lw.id
       AND lw.is_active = false
-    RETURNING wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    RETURNING wv.id, wv.form_id, wv.last_editor, wv.seq, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
 ),
 created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
     SELECT $1, $2, $3
     FROM latest_workflow AS lw
     WHERE lw.is_active = true
-    RETURNING id, form_id, last_editor, is_active, workflow, created_at, updated_at
+    RETURNING id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at
 ),
 result_row AS (
-    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM updated
+    SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM updated
     UNION ALL
-    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM created
+    SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM created
 )
-SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM result_row
+SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM result_row
 LIMIT 1
 `
 
@@ -483,6 +484,7 @@ type UpdateRow struct {
 	ID         uuid.UUID
 	FormID     uuid.UUID
 	LastEditor uuid.UUID
+	Seq        int64
 	IsActive   bool
 	Workflow   []byte
 	CreatedAt  pgtype.Timestamptz
@@ -498,6 +500,7 @@ func (q *Queries) Update(ctx context.Context, arg UpdateParams) (UpdateRow, erro
 		&i.ID,
 		&i.FormID,
 		&i.LastEditor,
+		&i.Seq,
 		&i.IsActive,
 		&i.Workflow,
 		&i.CreatedAt,

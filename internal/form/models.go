@@ -640,6 +640,7 @@ type WorkflowVersion struct {
 	ID         uuid.UUID
 	FormID     uuid.UUID
 	LastEditor uuid.UUID
+	Seq        int64
 	IsActive   bool
 	Workflow   []byte
 	CreatedAt  pgtype.Timestamptz

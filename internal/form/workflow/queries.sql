@@ -1,10 +1,8 @@
 -- name: Get :one
--- Tie-break: in a long-running transaction, now() is frozen so active and a newly
--- inserted draft can share the same updated_at. Prefer the draft (is_active false)
--- so "latest" matches the in-progress edit; id breaks any remaining ties.
-SELECT * FROM workflow_versions
+SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at
+FROM workflow_versions
 WHERE form_id = $1
-ORDER BY updated_at DESC, is_active ASC, id DESC
+ORDER BY updated_at DESC, is_active ASC, seq DESC
 LIMIT 1;
 
 -- name: Update :one
@@ -12,7 +10,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.seq DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -22,21 +20,21 @@ updated AS (
     FROM latest_workflow AS lw
     WHERE wv.id = lw.id
       AND lw.is_active = false
-    RETURNING wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    RETURNING wv.id, wv.form_id, wv.last_editor, wv.seq, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
 ),
 created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
     SELECT $1, $2, $3
     FROM latest_workflow AS lw
     WHERE lw.is_active = true
-    RETURNING id, form_id, last_editor, is_active, workflow, created_at, updated_at
+    RETURNING id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at
 ),
 -- Return the full row from CTEs (inserted/updated rows are not visible to a later
 -- SELECT from the same table in the same statement).
 result_row AS (
-    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM updated
+    SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM updated
     UNION ALL
-    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM created
+    SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM created
 )
 SELECT * FROM result_row
 LIMIT 1;
@@ -46,7 +44,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.seq DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -80,14 +78,14 @@ updated AS (
     FROM latest_workflow AS lw, new_node
     WHERE wv.id = lw.id 
       AND lw.is_active = false
-    RETURNING wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    RETURNING wv.id, wv.form_id, wv.last_editor, wv.seq, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
 ),
 created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
     SELECT $1, $2, lw.workflow || jsonb_build_array(new_node.node)
     FROM latest_workflow AS lw, new_node
     WHERE lw.is_active = true
-    RETURNING id, form_id, last_editor, is_active, workflow, created_at, updated_at
+    RETURNING id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at
 )
 SELECT 
     (SELECT node->>'id' FROM new_node)::uuid AS node_id,
@@ -109,7 +107,7 @@ WITH latest_workflow AS (
     SELECT wv.id, wv.is_active, wv.form_id, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
-    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.seq DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -149,8 +147,8 @@ remaining_nodes AS (
     WHERE node->>'id' != (SELECT deleted_id FROM deleted_node_id)
 ),
 -- Expand each node into individual key-value pairs
-/* 
-Example of node_fields_expanded: 
+/*
+Example of node_fields_expanded:
 node_id   | field_key  | cleaned_value
 ----------|------------|------------
 "node-a"  | "id"       | "node-a"
@@ -254,7 +252,7 @@ latest AS (
     SELECT wv.id, wv.is_active, wv.workflow
     FROM workflow_versions AS wv
     WHERE wv.form_id = @form_id
-    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.is_active ASC, wv.seq DESC
     LIMIT 1
     FOR UPDATE
 ),
@@ -278,10 +276,10 @@ should_activate AS (
     - can_activate: Whether we should proceed with activation
     - should_update_latest: Whether to update the latest version (vs creating new one)
     */
-    SELECT 
+    SELECT
         l.id AS latest_id,
         l.is_active AS latest_is_active,
-        CASE 
+        CASE
             -- No latest version exists - can activate (will create first version)
             WHEN l.id IS NULL THEN true
             -- Request matches current active AND latest is active - skip activation
@@ -291,7 +289,7 @@ should_activate AS (
             -- Latest is active but request differs from current active - can activate (will create new version)
             ELSE true
         END AS can_activate,
-        CASE 
+        CASE
             -- Update latest version if it's inactive
             WHEN l.is_active = false THEN true
             -- Do not update if latest is active or doesn't exist (will create a new version)
@@ -324,7 +322,7 @@ activated_from_update AS (
       AND wv.form_id = @form_id
       AND sa.should_update_latest = true
       AND sa.can_activate = true
-    RETURNING wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    RETURNING wv.id, wv.form_id, wv.last_editor, wv.seq, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
 ),
 activated_from_insert AS (
     -- Create a new workflow version that is ALREADY active
@@ -333,7 +331,7 @@ activated_from_insert AS (
     FROM request_workflow AS rw, should_activate AS sa
     WHERE sa.can_activate = true
       AND sa.should_update_latest = false
-    RETURNING id, form_id, last_editor, is_active, workflow, created_at, updated_at
+    RETURNING id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at
 ),
 activated AS (
     -- Combine both activation results
@@ -355,9 +353,9 @@ unchanged AS (
 -- Return the full row from CTEs (inserted/updated rows are not visible to a later
 -- SELECT from the same table in the same statement).
 result_row AS (
-    SELECT id, form_id, last_editor, is_active, workflow, created_at, updated_at FROM activated
+    SELECT id, form_id, last_editor, seq, is_active, workflow, created_at, updated_at FROM activated
     UNION ALL
-    SELECT wv.id, wv.form_id, wv.last_editor, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
+    SELECT wv.id, wv.form_id, wv.last_editor, wv.seq, wv.is_active, wv.workflow, wv.created_at, wv.updated_at
     FROM workflow_versions AS wv
     WHERE wv.id IN (SELECT id FROM unchanged)
 )
