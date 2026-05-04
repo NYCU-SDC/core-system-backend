@@ -49,9 +49,6 @@ github_oauth:
   client_id: "your-github-oauth-client-id"
   client_secret: "your-github-oauth-client-secret"
 
-# Allowed list of emails for onboarding, use comma to separate multiple emails
-allow_onboarding_list:
-
 # default global user role
 # Format:
 #   <email>:<role>,
