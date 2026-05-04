@@ -457,6 +457,8 @@ func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, pr
 			span.RecordError(err)
 			return err
 		}
+		logger.Info("Created auth entry", zap.String("user_id", userID.String()), zap.String("provider", provider))
+		return nil
 	}
 	// Verify the target user actually owns the claimed existing auth entry.
 	ownerID, err := s.queries.GetIDByAuth(traceCtx, GetIDByAuthParams{

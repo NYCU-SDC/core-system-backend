@@ -163,7 +163,7 @@ func main() {
 	setupImpl := config.SetupImpl{}
 	err = setupImpl.LoadSetupConfig(logger, cfg.SetupPath, cfg.SetupData)
 	if err != nil {
-		logger.Fatal("Failed to initialize allowed onboarding list", zap.Error(err))
+		logger.Fatal("Failed to load setup configuration", zap.Error(err))
 	}
 
 	userService := user.NewService(logger, dbPool, fileService, unitService, unitService, &setupImpl)
