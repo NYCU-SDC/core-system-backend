@@ -184,19 +184,9 @@ func (h *Handler) GetMessageContent(ctx context.Context, contentType ContentType
 		},
 			currentForm.UnitName.String,
 			currentForm.OrgName.String,
-			user.User{
-				ID:        currentForm.CreatedBy,
-				Name:      currentForm.CreatorName,
-				Username:  currentForm.CreatorUsername,
-				AvatarUrl: currentForm.CreatorAvatarUrl,
-			},
+			form.UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 			user.ConvertEmailsToSlice(currentForm.CreatorEmails),
-			user.User{
-				ID:        currentForm.LastEditor,
-				Name:      currentForm.LastEditorName,
-				Username:  currentForm.LastEditorUsername,
-				AvatarUrl: currentForm.LastEditorAvatarUrl,
-			},
+			form.UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
 			user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
 		)
 		return response, nil
