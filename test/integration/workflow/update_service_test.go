@@ -196,33 +196,9 @@ func TestWorkflowService_Update(t *testing.T) {
 
 				// Same three node ids; start points directly to end. No other node references section (section is an orphan).
 				// Section still has `next` because draft validation requires it for section nodes.
-				unreachableJSON, err := json.Marshal([]map[string]interface{}{
-					{
-						"id":      startID.String(),
-						"type":    "start",
-						"label":   "Start",
-						"next":    endID.String(),
-						"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
-					},
-					{
-						"id":      sectionID.String(),
-						"type":    "section",
-						"label":   "Section",
-						"next":    endID.String(),
-						"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
-					},
-					{
-						"id":      endID.String(),
-						"type":    "end",
-						"label":   "End",
-						"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
-					},
-				})
-				require.NoError(t, err)
-
 				params.formID = data.FormRow.ID
 				params.userID = data.User
-				params.workflowJSON = unreachableJSON
+				params.workflowJSON = marshalOrphanSectionWorkflow(t, startID, sectionID, endID)
 				params.versionID = draftVersionID
 				params.startNodeID = startID
 				params.sectionNodeID = sectionID
@@ -310,33 +286,9 @@ func TestWorkflowService_Update(t *testing.T) {
 				require.Equal(t, 1, countWorkflowVersions(t, db, data.FormRow.ID))
 
 				// Same three node ids as activated workflow; start now points to end (structural change vs start→section→end).
-				structuralJSON, err := json.Marshal([]map[string]interface{}{
-					{
-						"id":      startID.String(),
-						"type":    "start",
-						"label":   "Start",
-						"next":    endID.String(),
-						"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
-					},
-					{
-						"id":      sectionID.String(),
-						"type":    "section",
-						"label":   "Section",
-						"next":    endID.String(),
-						"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
-					},
-					{
-						"id":      endID.String(),
-						"type":    "end",
-						"label":   "End",
-						"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
-					},
-				})
-				require.NoError(t, err)
-
 				params.formID = data.FormRow.ID
 				params.userID = data.User
-				params.workflowJSON = structuralJSON
+				params.workflowJSON = marshalOrphanSectionWorkflow(t, startID, sectionID, endID)
 				params.versionID = activeVersionID
 				return context.Background()
 			},
@@ -385,4 +337,34 @@ func TestWorkflowService_Update(t *testing.T) {
 			}
 		})
 	}
+}
+
+// marshalOrphanSectionWorkflow returns JSON for start→end with a section whose next is end but no other
+// node references the section (stable IDs from the caller).
+func marshalOrphanSectionWorkflow(t *testing.T, startID, sectionID, endID uuid.UUID) []byte {
+	t.Helper()
+	b, err := json.Marshal([]map[string]interface{}{
+		{
+			"id":      startID.String(),
+			"type":    "start",
+			"label":   "Start",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+		{
+			"id":      sectionID.String(),
+			"type":    "section",
+			"label":   "Section",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+		{
+			"id":      endID.String(),
+			"type":    "end",
+			"label":   "End",
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+	})
+	require.NoError(t, err)
+	return b
 }
