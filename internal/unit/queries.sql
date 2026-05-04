@@ -129,3 +129,25 @@ VALUES ($1, $2, $3)
 DO UPDATE SET
     role = EXCLUDED.role
 RETURNING unit_id, member_id, role;
+
+-- name: HasAdminInAncestorUnits :one
+WITH RECURSIVE ancestors(unit_id) AS (
+    SELECT parent_id
+    FROM units u
+    WHERE u.id = $1
+      AND u.parent_id IS NOT NULL
+
+    UNION ALL
+
+    SELECT u.parent_id
+    FROM units u
+             JOIN ancestors a ON u.id = a.unit_id
+    WHERE u.parent_id IS NOT NULL
+)
+SELECT EXISTS (
+    SELECT 1
+    FROM ancestors a
+             JOIN unit_members um ON um.unit_id = a.unit_id
+    WHERE um.member_id = $2
+      AND um.role = 'admin'
+) AS has_admin;
