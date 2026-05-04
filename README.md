@@ -3,7 +3,7 @@
 ## Requirements
 
 - **Go**: 1.24.2 or higher
-- **PostgreSQL**: 13 or higher
+- **PostgreSQL**: 18
 - **Docker** (optional): for running PostgreSQL container
 - **SQLC**: for code generation
 - **Mockery**: for generating test mocks
