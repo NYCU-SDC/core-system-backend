@@ -476,10 +476,10 @@ func validateRequiredNodeTypes(startNodeCount, endNodeCount int) []error {
 	return validationErrors
 }
 
-// validateReachabilityWarning checks that every node is reachable from the start node via BFS.
-// It returns an error listing unreachable node IDs. Used for non-blocking validation (e.g.
-// GetValidationInfo) after Activate; callers should have already enforced graph references.
-func validateReachabilityWarning(nodes []map[string]interface{}) error {
+// validateAllNodesReachableFromStart runs BFS from the sole start node and returns a joined error
+// listing any node IDs not visited (orphans / disconnected subgraphs). Call after graph reference
+// checks so every edge target exists. Used from GetValidationInfo for non-blocking warnings.
+func validateAllNodesReachableFromStart(nodes []map[string]interface{}) error {
 	graph := make(map[string][]string)
 
 	// Build adjacency list from next / nextTrue / nextFalse

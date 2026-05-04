@@ -293,7 +293,7 @@ func (s *Service) GetValidationInfo(ctx context.Context, formID uuid.UUID, workf
 	if parseErr != nil {
 		return []ValidationInfo{}, nil
 	}
-	err = validateReachabilityWarning(nodes)
+	err = validateAllNodesReachableFromStart(nodes)
 	if err != nil {
 		return parseValidationErrors(fmt.Errorf("reachability validation failed: %w", err)), nil
 	}
