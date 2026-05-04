@@ -288,27 +288,12 @@ func (s *Service) GetValidationInfo(ctx context.Context, formID uuid.UUID, workf
 		return parseValidationErrors(err), nil
 	}
 
-	// Activation passed; compute warnings that we choose not to block activation on.
+	// Activation passed; add non-blocking warnings (Activate already validated the graph).
 	nodes, parseErr := parseWorkflow(workflow)
 	if parseErr != nil {
-		// Should be unreachable because Activate already parsed successfully, but keep safe.
 		return []ValidationInfo{}, nil
 	}
-	err = validateNodeCount(nodes)
-	if err != nil {
-		return []ValidationInfo{}, nil
-	}
-	_, nodeMap, validationErrors, err := runCommonWorkflowValidation(ctx, formID, nodes, s.questionStore, false)
-	if err != nil || len(validationErrors) > 0 || nodeMap == nil {
-		// If common validation fails, Activate would have failed; don't add warnings.
-		return []ValidationInfo{}, nil
-	}
-	err = validateGraphReferences(nodes, nodeMap)
-	if err != nil {
-		// If graph refs are invalid, Activate would have failed; no warnings.
-		return []ValidationInfo{}, nil
-	}
-	err = validateReachabilityWarning(nodes, nodeMap)
+	err = validateReachabilityWarning(nodes)
 	if err != nil {
 		return parseValidationErrors(fmt.Errorf("reachability validation failed: %w", err)), nil
 	}

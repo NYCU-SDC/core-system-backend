@@ -477,11 +477,9 @@ func validateRequiredNodeTypes(startNodeCount, endNodeCount int) []error {
 }
 
 // validateReachabilityWarning checks that every node is reachable from the start node via BFS.
-// It returns an error listing unreachable node IDs. This is used for non-blocking validation
-// surfaces (e.g. GetValidationInfo) after we stopped enforcing reachability on Activate.
-//
-// Caller should run validateGraphReferences first so every edge target is known to exist in nodeMap.
-func validateReachabilityWarning(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
+// It returns an error listing unreachable node IDs. Used for non-blocking validation (e.g.
+// GetValidationInfo) after Activate; callers should have already enforced graph references.
+func validateReachabilityWarning(nodes []map[string]interface{}) error {
 	graph := make(map[string][]string)
 
 	// Build adjacency list from next / nextTrue / nextFalse
@@ -551,9 +549,12 @@ func validateReachabilityWarning(nodes []map[string]interface{}, nodeMap map[str
 		}
 	}
 
-	// Check if all nodes are reachable
 	var unreachableErrors []error
-	for nodeID := range nodeMap {
+	for _, node := range nodes {
+		nodeID, _ := node["id"].(string)
+		if nodeID == "" {
+			continue
+		}
 		if !visited[nodeID] {
 			unreachableErrors = append(unreachableErrors, fmt.Errorf("node '%s' is unreachable from the start node", nodeID))
 		}
