@@ -181,12 +181,24 @@ func (h *Handler) GetMessageContent(ctx context.Context, contentType ContentType
 			DressingHeaderFont:     currentForm.DressingHeaderFont,
 			DressingQuestionFont:   currentForm.DressingQuestionFont,
 			DressingTextFont:       currentForm.DressingTextFont,
-		}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
-			ID:        currentForm.LastEditor,
-			Name:      currentForm.LastEditorName,
-			Username:  currentForm.LastEditorUsername,
-			AvatarUrl: currentForm.LastEditorAvatarUrl,
-		}, user.ConvertEmailsToSlice(currentForm.LastEditorEmail))
+		},
+			currentForm.UnitName.String,
+			currentForm.OrgName.String,
+			user.User{
+				ID:        currentForm.CreatedBy,
+				Name:      currentForm.CreatorName,
+				Username:  currentForm.CreatorUsername,
+				AvatarUrl: currentForm.CreatorAvatarUrl,
+			},
+			user.ConvertEmailsToSlice(currentForm.CreatorEmails),
+			user.User{
+				ID:        currentForm.LastEditor,
+				Name:      currentForm.LastEditorName,
+				Username:  currentForm.LastEditorUsername,
+				AvatarUrl: currentForm.LastEditorAvatarUrl,
+			},
+			user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		)
 		return response, nil
 	case ContentTypeText:
 		return nil, nil

@@ -49,10 +49,14 @@ workflow_created AS (
         SELECT gen_random_uuid() AS start_node_id, gen_random_uuid() AS end_node_id
     ) AS node_ids
 )
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
+    creator_usr.name as creator_name,
+    creator_usr.username as creator_username,
+    creator_usr.avatar_url as creator_avatar_url,
+    creator_usr.emails as creator_emails,
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
@@ -60,7 +64,8 @@ SELECT
 FROM created f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;  
+LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
+LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;
 
 -- name: Patch :one
 WITH updated AS (
@@ -84,10 +89,14 @@ WITH updated AS (
     WHERE forms.id = sqlc.arg('id')
     RETURNING *
 )
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
+    creator_usr.name as creator_name,
+    creator_usr.username as creator_username,
+    creator_usr.avatar_url as creator_avatar_url,
+    creator_usr.emails as creator_emails,
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
@@ -95,16 +104,21 @@ SELECT
 FROM updated f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
+LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;
 
 -- name: Delete :exec
 DELETE FROM forms WHERE id = $1;
 
 -- name: Get :one
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
+    creator_usr.name as creator_name,
+    creator_usr.username as creator_username,
+    creator_usr.avatar_url as creator_avatar_url,
+    creator_usr.emails as creator_emails,
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
@@ -112,6 +126,7 @@ SELECT
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
+LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.id = $1;
 
@@ -120,6 +135,10 @@ SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
+    creator_usr.name as creator_name,
+    creator_usr.username as creator_username,
+    creator_usr.avatar_url as creator_avatar_url,
+    creator_usr.emails as creator_emails,
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
@@ -127,6 +146,7 @@ SELECT
 FROM forms f
          LEFT JOIN units u ON f.unit_id = u.id
          LEFT JOIN units o ON u.org_id = o.id
+         LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
          LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.id = ANY($1::uuid[]);
 
@@ -134,10 +154,14 @@ WHERE f.id = ANY($1::uuid[]);
 SELECT EXISTS(SELECT 1 FROM forms WHERE id = $1);
 
 -- name: List :many
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
+    creator_usr.name as creator_name,
+    creator_usr.username as creator_username,
+    creator_usr.avatar_url as creator_avatar_url,
+    creator_usr.emails as creator_emails,
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
@@ -145,6 +169,7 @@ SELECT
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
+LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE (sqlc.narg(status)::status IS NULL OR f.status = sqlc.narg(status)::status)
 AND (sqlc.narg(visibility)::visibility IS NULL OR f.visibility = sqlc.narg(visibility)::visibility)
@@ -156,6 +181,10 @@ SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
+    creator_usr.name as creator_name,
+    creator_usr.username as creator_username,
+    creator_usr.avatar_url as creator_avatar_url,
+    creator_usr.emails as creator_emails,
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
@@ -163,6 +192,7 @@ SELECT
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
+LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
 LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
 WHERE f.unit_id = $1
 AND f.status = ANY(sqlc.arg(status)::status[])
