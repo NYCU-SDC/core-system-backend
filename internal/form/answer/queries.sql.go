@@ -165,7 +165,7 @@ SELECT a.id, a.response_id, a.question_id, a.value, a.created_at, a.updated_at, 
 FROM answers a
 JOIN form_responses fr ON a.response_id = fr.id
 WHERE fr.form_id = $1
-  AND fr.progress = 'SUBMITTED'
+  AND fr.progress = 'submitted'
   AND a.question_id = ANY($2::uuid[])
 `
 

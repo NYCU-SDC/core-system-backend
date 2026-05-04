@@ -289,7 +289,7 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 
 		for columnIndex, header := range data.Headers {
 			payload, ok := row.Answers[header.ID]
-			if !ok {
+			if !ok || payload == nil {
 				continue
 			}
 			cell, err := excelize.CoordinatesToCellName(columnIndex+2, excelRow)
@@ -396,7 +396,7 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 	type responseRow struct {
 		id          uuid.UUID
 		submittedAt time.Time
-		answers     map[string]AnswerPayload
+		answers     map[string]*AnswerPayload
 	}
 
 	rowMap := make(map[string]*responseRow)
@@ -407,7 +407,10 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 			row = &responseRow{
 				id:          answerRow.ResponseID,
 				submittedAt: answerRow.SubmittedAt.Time,
-				answers:     make(map[string]AnswerPayload),
+				answers:     make(map[string]*AnswerPayload, len(questionIDs)),
+			}
+			for _, questionID := range questionIDs {
+				row.answers[questionID.String()] = nil
 			}
 			rowMap[answerRow.ResponseID.String()] = row
 			rows = append(rows, row)
@@ -422,7 +425,7 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 			span.RecordError(err)
 			return exportData{}, err
 		}
-		row.answers[answerRow.QuestionID.String()] = AnswerPayload{
+		row.answers[answerRow.QuestionID.String()] = &AnswerPayload{
 			CreatedAt:    answerRow.CreatedAt.Time,
 			UpdatedAt:    answerRow.UpdatedAt.Time,
 			ResponseID:   answerRow.ResponseID.String(),

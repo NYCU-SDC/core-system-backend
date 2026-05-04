@@ -91,8 +91,8 @@ type ExportHeader struct {
 }
 
 type ExportRow struct {
-	ID      string                   `json:"id" validate:"required,uuid"`
-	Answers map[string]AnswerPayload `json:"answers" validate:"required"`
+	ID      string                    `json:"id" validate:"required,uuid"`
+	Answers map[string]*AnswerPayload `json:"answers" validate:"required"`
 }
 
 type ExportPreviewResponse struct {
