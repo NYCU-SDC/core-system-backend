@@ -22,6 +22,8 @@ func NewConditionNode(node map[string]interface{}) (Validatable, error) {
 	return &ConditionNode{node: node}, nil
 }
 
+// Validate checks condition-node fields and rules; whether nextTrue/nextFalse targets exist is
+// enforced by validateGraphReferences in the workflow package.
 func (n *ConditionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[string]map[string]interface{}, questionStore QuestionStore) error {
 	nodeID, _ := n.node["id"].(string)
 
