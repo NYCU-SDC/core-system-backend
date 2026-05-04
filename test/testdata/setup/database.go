@@ -17,7 +17,7 @@ import (
 func setupPostgres(pool *dockertest.Pool, logger *zap.Logger) (*pgxpool.Pool, string, func(), error) {
 	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
 		Repository: "postgres",
-		Tag:        "11",
+		Tag:        "18",
 		Env: []string{
 			"POSTGRES_PASSWORD=password",
 			"POSTGRES_USER=postgres",
