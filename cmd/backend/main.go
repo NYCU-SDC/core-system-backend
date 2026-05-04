@@ -374,6 +374,8 @@ func main() {
 	// ----------------------
 	mux.Handle("GET /api/forms/{formId}/responses", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(responseHandler.List))
 	mux.Handle("GET /api/forms/{formId}/responses/me", authMiddleware.HandlerFunc(responseHandler.ListMe))
+	mux.Handle("POST /api/forms/{formId}/responses/export/preview", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(responseHandler.ExportPreview))
+	mux.Handle("POST /api/forms/{formId}/responses/export/download", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(responseHandler.ExportDownload))
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.Append(notArchivedByForm).HandlerFunc(responseHandler.Create))
 	// --- (Update response is not allowed)

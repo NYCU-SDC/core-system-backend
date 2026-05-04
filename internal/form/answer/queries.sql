@@ -61,3 +61,11 @@ WHERE response_id = $1;
 SELECT id, response_id, question_id, value, created_at, updated_at
 FROM answers
 WHERE id = $1;
+
+-- name: ListAnswersForExport :many
+SELECT a.id, a.response_id, a.question_id, a.value, a.created_at, a.updated_at, fr.submitted_at
+FROM answers a
+JOIN form_responses fr ON a.response_id = fr.id
+WHERE fr.form_id = $1
+  AND fr.progress = 'submitted'
+  AND a.question_id = ANY(@question_id::uuid[]);
