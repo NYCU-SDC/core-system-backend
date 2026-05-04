@@ -60,7 +60,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM created f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -100,7 +100,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM updated f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -122,7 +122,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -142,7 +142,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM forms f
          LEFT JOIN units u ON f.unit_id = u.id
          LEFT JOIN units o ON u.org_id = o.id
@@ -165,7 +165,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
@@ -188,7 +188,7 @@ SELECT
     usr.name as last_editor_name,
     usr.username as last_editor_username,
     usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    usr.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id

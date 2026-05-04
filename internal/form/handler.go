@@ -440,7 +440,7 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 	)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -491,7 +491,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 	)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -516,7 +516,7 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 			UserFromProfileFields(form.CreatedBy, form.CreatorName, form.CreatorUsername, form.CreatorAvatarUrl),
 			user.ConvertEmailsToSlice(form.CreatorEmails),
 			UserFromProfileFields(form.LastEditor, form.LastEditorName, form.LastEditorUsername, form.LastEditorAvatarUrl),
-			user.ConvertEmailsToSlice(form.LastEditorEmail),
+			user.ConvertEmailsToSlice(form.LastEditorEmails),
 		))
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
@@ -564,7 +564,7 @@ func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) 
 		UserFromProfileFields(newForm.CreatedBy, newForm.CreatorName, newForm.CreatorUsername, newForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(newForm.CreatorEmails),
 		UserFromProfileFields(newForm.LastEditor, newForm.LastEditorName, newForm.LastEditorUsername, newForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(newForm.LastEditorEmail),
+		user.ConvertEmailsToSlice(newForm.LastEditorEmails),
 	)
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
 }
@@ -620,7 +620,7 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 			UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 			user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 			UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-			user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+			user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 		)
 	}
 
@@ -753,7 +753,7 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 	)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -796,7 +796,7 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 	)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
