@@ -4,6 +4,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/test/integration"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	workflowbuilder "NYCU-SDC/core-system-backend/test/testdata/dbbuilder/workflow"
@@ -374,7 +375,8 @@ func TestWorkflowService_Update(t *testing.T) {
 				ctx = tc.setup(t, &params, db)
 			}
 
-			questionService := question.NewService(logger, db, nil)
+			markdownService := markdown.NewService(logger)
+			questionService := question.NewService(logger, db, nil, markdownService)
 			workflowService := workflow.NewService(logger, db, questionService)
 			result, updateErr := workflowService.Update(ctx, params.formID, params.workflowJSON, params.userID)
 			require.Equal(t, tc.expectedErr, updateErr != nil, "expected error: %v, got: %v", tc.expectedErr, updateErr)
@@ -383,12 +385,4 @@ func TestWorkflowService_Update(t *testing.T) {
 			}
 		})
 	}
-}
-
-func countWorkflowVersions(t *testing.T, db dbbuilder.DBTX, formID uuid.UUID) int {
-	t.Helper()
-	var count int
-	err := db.QueryRow(context.Background(), "SELECT COUNT(*) FROM workflow_versions WHERE form_id = $1", formID).Scan(&count)
-	require.NoError(t, err)
-	return count
 }
