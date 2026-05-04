@@ -67,19 +67,19 @@ SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
-    creator_usr.name as creator_name,
-    creator_usr.username as creator_username,
-    creator_usr.avatar_url as creator_avatar_url,
-    creator_usr.emails as creator_emails,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_emails
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM created f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 `
 
 type CreateParams struct {
@@ -216,19 +216,19 @@ SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
-    creator_usr.name as creator_name,
-    creator_usr.username as creator_username,
-    creator_usr.avatar_url as creator_avatar_url,
-    creator_usr.emails as creator_emails,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_emails
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.id = $1
 `
 
@@ -310,19 +310,19 @@ SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
-    creator_usr.name as creator_name,
-    creator_usr.username as creator_username,
-    creator_usr.avatar_url as creator_avatar_url,
-    creator_usr.emails as creator_emails,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_emails
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
          LEFT JOIN units u ON f.unit_id = u.id
          LEFT JOIN units o ON u.org_id = o.id
-         LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
-         LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+         LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+         LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.id = ANY($1::uuid[])
 `
 
@@ -494,19 +494,19 @@ SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
-    creator_usr.name as creator_name,
-    creator_usr.username as creator_username,
-    creator_usr.avatar_url as creator_avatar_url,
-    creator_usr.emails as creator_emails,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_emails
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE ($1::status IS NULL OR f.status = $1::status)
 AND ($2::visibility IS NULL OR f.visibility = $2::visibility)
 AND ($3::timestamptz IS NULL OR f.deadline >= $3::timestamptz)
@@ -610,19 +610,19 @@ SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
-    creator_usr.name as creator_name,
-    creator_usr.username as creator_username,
-    creator_usr.avatar_url as creator_avatar_url,
-    creator_usr.emails as creator_emails,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_emails
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.unit_id = $1
 AND f.status = ANY($2::status[])
 ORDER BY f.updated_at DESC
@@ -745,19 +745,19 @@ SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
-    creator_usr.name as creator_name,
-    creator_usr.username as creator_username,
-    creator_usr.avatar_url as creator_avatar_url,
-    creator_usr.emails as creator_emails,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_emails
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM updated f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails creator_usr ON f.created_by = creator_usr.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 `
 
 type PatchParams struct {
