@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type Params struct {
+type params struct {
 	formID       uuid.UUID
 	userID       uuid.UUID
 	workflowJSON []byte
@@ -24,9 +24,9 @@ type Params struct {
 
 type testCase struct {
 	name        string
-	params      Params
-	setup       func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context
-	validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error)
+	params      params
+	setup       func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context
+	validate    func(t *testing.T, params params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error)
 	expectedErr bool
 }
 
@@ -35,8 +35,8 @@ func TestWorkflow_Update(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:   "Update creates first workflow version when none exists",
-			params: Params{},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
 				data := builder.SetupTestData("update-first-org", "update-first-unit")
 
@@ -48,7 +48,7 @@ func TestWorkflow_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error")
 				require.NotEqual(t, uuid.Nil, result.ID, "workflow version ID should be set")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -65,8 +65,8 @@ func TestWorkflow_Update(t *testing.T) {
 		},
 		{
 			name:   "Update modifies existing draft version",
-			params: Params{},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
 				data := builder.SetupTestData("update-draft-org", "update-draft-unit")
 
@@ -89,7 +89,7 @@ func TestWorkflow_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error")
 				require.False(t, result.IsActive, "updated workflow should remain draft")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -107,8 +107,8 @@ func TestWorkflow_Update(t *testing.T) {
 		},
 		{
 			name:   "Update creates new draft version when latest is active",
-			params: Params{},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
 				data := builder.SetupTestData("update-active-org", "update-active-unit")
 
@@ -131,7 +131,7 @@ func TestWorkflow_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error")
 				require.False(t, result.IsActive, "new workflow version should be draft")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -157,8 +157,8 @@ func TestWorkflow_Update(t *testing.T) {
 		},
 		{
 			name:   "Update can modify draft version multiple times",
-			params: Params{},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
 				data := builder.SetupTestData("update-multiple-org", "update-multiple-unit")
 
@@ -190,7 +190,7 @@ func TestWorkflow_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.NoError(t, err, "should not return error")
 				require.False(t, result.IsActive, "workflow should remain draft")
 				require.Equal(t, params.formID, result.FormID, "form ID should match")
@@ -207,8 +207,8 @@ func TestWorkflow_Update(t *testing.T) {
 		},
 		{
 			name:   "Update with non-existent form ID returns error",
-			params: Params{},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
 				// Use a non-existent form ID
 				params.formID = uuid.New()
 				params.userID = uuid.New()
@@ -218,7 +218,7 @@ func TestWorkflow_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.Error(t, err, "should return error for non-existent form ID")
 				require.NotEmpty(t, err.Error(), "error message should not be empty")
 			},
@@ -226,8 +226,8 @@ func TestWorkflow_Update(t *testing.T) {
 		},
 		{
 			name:   "Update with invalid JSON workflow returns error",
-			params: Params{},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
 				data := builder.SetupTestData("update-invalid-json-org", "update-invalid-json-unit")
 
@@ -238,7 +238,7 @@ func TestWorkflow_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				require.Error(t, err, "should return error for invalid JSON workflow")
 				require.NotEmpty(t, err.Error(), "error message should not be empty")
 			},
@@ -246,8 +246,8 @@ func TestWorkflow_Update(t *testing.T) {
 		},
 		{
 			name:   "Update with empty workflow JSON returns error",
-			params: Params{},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
+			params: params{},
+			setup: func(t *testing.T, params *params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
 				data := builder.SetupTestData("update-empty-json-org", "update-empty-json-unit")
 
@@ -258,7 +258,7 @@ func TestWorkflow_Update(t *testing.T) {
 
 				return context.Background()
 			},
-			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+			validate: func(t *testing.T, params params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
 				if err != nil {
 					require.NotEmpty(t, err.Error(), "error message should not be empty")
 				}
