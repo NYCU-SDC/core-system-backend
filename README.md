@@ -26,7 +26,7 @@ make prepare
 3. **Start PostgreSQL container**
 
 ```
-docker run --name db -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
+docker run --name db -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres:18
 ```
 
 4. **Create database**
@@ -63,18 +63,18 @@ You should see: `OK`
 
 Copy `config.example.yaml` to `config.yaml`. Here is the configuration reference:
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `debug` | Enable debug mode | `false` |
-| `host` | Server bind address | `localhost` |
-| `port` | Server listening port | `8080` |
-| `base_url` | Public base URL for OAuth redirect URIs | `http://localhost:8080` |
-| `secret` | Secret key for signing JWT tokens | - |
-| `database_url` | PostgreSQL connection string | - |
-| `migration_source` | Database migration source path | `file://internal/database/migrations` |
-| `access_token_expiration` | Access token expiration | `15m` |
-| `refresh_token_expiration` | Refresh token expiration | `720h` (30 days) |
-| `otel_collector_url` | OpenTelemetry Collector URL (optional) | - |
+| Parameter                  | Description                             | Default                               |
+| -------------------------- | --------------------------------------- | ------------------------------------- |
+| `debug`                    | Enable debug mode                       | `false`                               |
+| `host`                     | Server bind address                     | `localhost`                           |
+| `port`                     | Server listening port                   | `8080`                                |
+| `base_url`                 | Public base URL for OAuth redirect URIs | `http://localhost:8080`               |
+| `secret`                   | Secret key for signing JWT tokens       | -                                     |
+| `database_url`             | PostgreSQL connection string            | -                                     |
+| `migration_source`         | Database migration source path          | `file://internal/database/migrations` |
+| `access_token_expiration`  | Access token expiration                 | `15m`                                 |
+| `refresh_token_expiration` | Refresh token expiration                | `720h` (30 days)                      |
+| `otel_collector_url`       | OpenTelemetry Collector URL (optional)  | -                                     |
 
 ### OAuth Settings
 
