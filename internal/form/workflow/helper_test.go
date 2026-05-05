@@ -705,6 +705,37 @@ func createWorkflow_UnreachableNode(t *testing.T) ([]byte, QuestionStore) {
 	return createWorkflowJSON(t, nodes), emptyQuestionStore()
 }
 
+// createWorkflow_ActivateOrphanSection returns start→end with a section node that has no incoming edges
+// (same layout as test builder CreateWorkflowWithUnreachableNode). Valid for Activate.
+func createWorkflow_ActivateOrphanSection(t *testing.T) []byte {
+	t.Helper()
+	startID := uuid.New()
+	endID := uuid.New()
+	sectionID := uuid.New()
+	return createWorkflowJSON(t, []map[string]interface{}{
+		{
+			"id":      startID.String(),
+			"type":    "start",
+			"label":   "Start",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+		{
+			"id":      endID.String(),
+			"type":    "end",
+			"label":   "End",
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+		{
+			"id":      sectionID.String(),
+			"type":    "section",
+			"label":   "Orphan",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+	})
+}
+
 // createWorkflow_InvalidNextRefWithStore returns a workflow with an invalid next reference and an empty question store.
 func createWorkflow_InvalidNextRefWithStore(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()

@@ -284,12 +284,19 @@ func (s *Service) GetValidationInfo(ctx context.Context, formID uuid.UUID, workf
 
 	// Call the validator's Activate method
 	err := s.validator.Activate(ctx, formID, workflow, s.questionStore)
-	if err == nil {
-		// Validation passed
-		return []ValidationInfo{}, nil
+	if err != nil {
+		return parseValidationErrors(err), nil
 	}
 
-	// Parse the validation errors
-	validationInfos := parseValidationErrors(err)
-	return validationInfos, nil
+	// Activation passed; add non-blocking warnings (Activate already validated the graph).
+	nodes, parseErr := parseWorkflow(workflow)
+	if parseErr != nil {
+		return []ValidationInfo{}, nil
+	}
+	err = validateAllNodesReachableFromStart(nodes)
+	if err != nil {
+		return parseValidationErrors(fmt.Errorf("reachability validation failed: %w", err)), nil
+	}
+
+	return []ValidationInfo{}, nil
 }

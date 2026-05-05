@@ -22,7 +22,9 @@ func NewConditionNode(node map[string]interface{}) (Validatable, error) {
 	return &ConditionNode{node: node}, nil
 }
 
-func (n *ConditionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[string]map[string]interface{}, questionStore QuestionStore) error {
+// Validate checks condition-node fields and rules; whether nextTrue/nextFalse targets exist is
+// enforced by validateGraphReferences in the workflow package.
+func (n *ConditionNode) Validate(ctx context.Context, formID uuid.UUID, questionStore QuestionStore) error {
 	nodeID, _ := n.node["id"].(string)
 
 	// Validate field names (check for typos and invalid fields)
@@ -40,15 +42,6 @@ func (n *ConditionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap 
 	nextFalse, ok := n.node["nextFalse"].(string)
 	if !ok || nextFalse == "" {
 		return fmt.Errorf("condition node '%s' must have a 'nextFalse' field", nodeID)
-	}
-
-	// Validate that nextTrue and nextFalse nodes exist
-	_, exists := nodeMap[nextTrue]
-	if !exists {
-		return fmt.Errorf("condition node '%s' references non-existent node '%s' in nextTrue", nodeID, nextTrue)
-	}
-	if _, exists := nodeMap[nextFalse]; !exists {
-		return fmt.Errorf("condition node '%s' references non-existent node '%s' in nextFalse", nodeID, nextFalse)
 	}
 
 	// Validate conditionRule
