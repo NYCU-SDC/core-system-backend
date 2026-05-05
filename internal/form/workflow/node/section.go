@@ -18,7 +18,7 @@ func NewSectionNode(node map[string]interface{}) (Validatable, error) {
 
 // Validate checks section-node fields; whether next points to an existing node is enforced by
 // validateGraphReferences in the workflow package.
-func (n *SectionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[string]map[string]interface{}, questionStore QuestionStore) error {
+func (n *SectionNode) Validate(ctx context.Context, formID uuid.UUID, questionStore QuestionStore) error {
 	nodeID, _ := n.node["id"].(string)
 
 	// Validate field names (check for typos and invalid fields)

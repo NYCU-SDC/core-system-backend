@@ -450,7 +450,7 @@ func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]int
 	if isActivate {
 		for i, validatedNode := range validatedNodes {
 			// Pass context, formID, and questionStore for condition rule validation
-			err := validatedNode.Validate(ctx, formID, nodeMap, questionStore)
+			err := validatedNode.Validate(ctx, formID, questionStore)
 			if err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("node at index %d: %w", i, err))
 			}
