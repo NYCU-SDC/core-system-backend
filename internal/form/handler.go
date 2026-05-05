@@ -75,7 +75,7 @@ type Response struct {
 	MessageAfterSubmission string               `json:"messageAfterSubmission"`
 	GoogleSheetURL         string               `json:"googleSheetUrl"`
 	Visibility             string               `json:"visibility"`
-	CoverImageURL          string               `json:"coverImageUrl"`
+	CoverImage             string               `json:"coverImage"`
 	Dressing               DressingRequest      `json:"dressing"`
 }
 
@@ -184,7 +184,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		Visibility:             VisibilityToUppercase(form.Visibility),
 		GoogleSheetURL:         form.GoogleSheetUrl.String,
 		PublishTime:            publishTime,
-		CoverImageURL:          form.CoverImageUrl.String,
+		CoverImage:             form.CoverImageUrl.String,
 		Dressing: DressingRequest{
 			Color:        form.DressingColor.String,
 			HeaderFont:   form.DressingHeaderFont.String,
