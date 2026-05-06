@@ -14,6 +14,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/file"
 	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/answer"
+	"NYCU-SDC/core-system-backend/internal/form/highlight"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/submit"
@@ -176,6 +177,7 @@ func main() {
 	answerService := answer.NewService(logger, dbPool, questionService, fileService, workflowService)
 	inboxService := inbox.NewService(logger, dbPool)
 	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService, formService, userService)
+	highlightService := highlight.NewService(logger, dbPool, formService)
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
@@ -195,6 +197,7 @@ func main() {
 	answerHandler := answer.NewHandler(logger, validator, problemWriter, answerService, questionService, responseService, jwtService, cfg.GoogleOauth.ClientID, cfg.GoogleOauth.ClientSecret, cfg.GitHubOauth.ClientID, cfg.GitHubOauth.ClientSecret, cfg.BaseURL, cfg.OauthProxyBaseURL)
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, submitService, tenantService, userService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
+	highlightHandler := highlight.NewHandler(logger, validator, problemWriter, highlightService)
 	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService, responseService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
@@ -359,6 +362,8 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/unarchive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.UnarchiveHandler))
 	mux.Handle("POST /api/forms/{formId}/archive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.ArchiveHandler))
 	mux.Handle("POST /api/forms/{formId}/publish", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(publishHandler.PublishForm))
+	mux.Handle("GET /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Get))
+	mux.Handle("PUT /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Put))
 
 	// Section Management
 	// ----------------------

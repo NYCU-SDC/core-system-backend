@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package file
+package highlight
 
 import (
 	"database/sql/driver"
