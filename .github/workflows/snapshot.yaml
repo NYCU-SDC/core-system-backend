@@ -205,3 +205,56 @@ jobs:
                 }
               }
             }'
+
+  ScenarioQA:
+    needs: Build
+    runs-on: ubuntu-latest
+    env:
+      QA_BASE_URL: http://localhost:18080/api
+      QA_LOGIN_USER_ID: 4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e
+      BACKEND_IMAGE: nycusdc/core-system-backend:pr-${{ github.event.number }}
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+
+      - name: Pull backend image for QA
+        run: docker pull ${BACKEND_IMAGE}
+
+      - name: Start QA backend stack
+        run: docker compose -f .deploy/ci/compose.yaml up -d --wait
+
+      - name: Checkout API scenarios repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/core-system-api
+          path: core-system-api
+          ref: CORE-236-parse-and-publish-httpyac-result
+
+      - name: Prepare reports dir
+        run: mkdir -p reports
+
+      - name: Run httpYac Tests
+        id: httpyac-tests
+        uses: NYCU-SDC/httpyac-action@CORE-236-parse-and-publish-httpyac-result
+        with:
+          scenarios-path: './core-system-api/scenarios/user-journey'
+          output-dir: './reports'
+          env: |
+            BASE_URL=${{ env.QA_BASE_URL }}
+            LOGIN_USER_ID=${{ env.QA_LOGIN_USER_ID }}
+
+      - name: List generated reports
+        if: always()
+        run: ls -lah reports/ || echo "No reports directory found"
+      
+      - name: Upload test reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          path: reports/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Teardown compose
+        if: always()
+        run: docker compose -f .deploy/ci/compose.yaml down -v
