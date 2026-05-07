@@ -243,7 +243,7 @@ current_active AS (
     FROM workflow_versions AS wv
     WHERE wv.form_id = @form_id
       AND wv.is_active = true
-    ORDER BY wv.updated_at DESC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.seq DESC
     LIMIT 1
 ),
 latest AS (

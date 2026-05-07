@@ -26,7 +26,7 @@ current_active AS (
     FROM workflow_versions AS wv
     WHERE wv.form_id = $1
       AND wv.is_active = true
-    ORDER BY wv.updated_at DESC, wv.id DESC
+    ORDER BY wv.updated_at DESC, wv.seq DESC
     LIMIT 1
 ),
 latest AS (
@@ -59,10 +59,10 @@ should_activate AS (
     - can_activate: Whether we should proceed with activation
     - should_update_latest: Whether to update the latest version (vs creating new one)
     */
-    SELECT 
+    SELECT
         l.id AS latest_id,
         l.is_active AS latest_is_active,
-        CASE 
+        CASE
             -- No latest version exists - can activate (will create first version)
             WHEN l.id IS NULL THEN true
             -- Request matches current active AND latest is active - skip activation
@@ -72,7 +72,7 @@ should_activate AS (
             -- Latest is active but request differs from current active - can activate (will create new version)
             ELSE true
         END AS can_activate,
-        CASE 
+        CASE
             -- Update latest version if it's inactive
             WHEN l.is_active = false THEN true
             -- Do not update if latest is active or doesn't exist (will create a new version)
@@ -314,8 +314,8 @@ remaining_nodes AS (
     LATERAL jsonb_array_elements(COALESCE(lw.workflow, '[]'::jsonb)) AS node
     WHERE node->>'id' != (SELECT deleted_id FROM deleted_node_id)
 ),
-/* 
-Example of node_fields_expanded: 
+/*
+Example of node_fields_expanded:
 node_id   | field_key  | cleaned_value
 "node-a"  | "id"       | "node-a"
 "node-a"  | "type"     | "start"
