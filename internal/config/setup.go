@@ -121,11 +121,7 @@ func parseSetupConfig(raw rawSetupConfig) (SetupConfig, error) {
 	users := make([]User, 0, len(raw.Users))
 
 	for _, rawOrg := range raw.Organizations {
-		org := Organization{
-			Name:        rawOrg.Name,
-			Slug:        rawOrg.Slug,
-			Description: rawOrg.Description,
-		}
+		org := Organization(rawOrg)
 
 		if org.Slug == "" {
 			return SetupConfig{}, fmt.Errorf("organization slug is required")
@@ -147,10 +143,7 @@ func parseSetupConfig(raw rawSetupConfig) (SetupConfig, error) {
 
 		orgMembers := make([]OrgMember, 0, len(rawUser.OrgMember))
 		for _, rawMember := range rawUser.OrgMember {
-			member := OrgMember{
-				Slug:    rawMember.Slug,
-				OrgRole: rawMember.OrgRole,
-			}
+			member := OrgMember(rawMember)
 
 			if member.Slug == "" {
 				return SetupConfig{}, fmt.Errorf("org member slug is required for email %q", email)
