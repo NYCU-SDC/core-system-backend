@@ -36,7 +36,7 @@ type Querier interface {
 	GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.UUID, error)
 	ExistsByAuth(ctx context.Context, arg ExistsByAuthParams) (bool, error)
 	Create(ctx context.Context, arg CreateParams) (User, error)
-	CreateWithID(ctx context.Context, arg CreateWithIDParams) (CreateWithIDRow, error)
+	CreateWithID(ctx context.Context, arg CreateWithIDParams) (User, error)
 	CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, error)
 	Update(ctx context.Context, arg UpdateParams) (User, error)
 	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
@@ -655,7 +655,6 @@ func (s *Service) createUserForEmail(ctx context.Context, email string, roles []
 			AvatarUrl:   pgtype.Text{String: "", Valid: true},
 			Role:        roles,
 			IsOnboarded: false,
-			Value:       email,
 		})
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "create user with specified id")
