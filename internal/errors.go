@@ -59,8 +59,10 @@ var (
 	ErrUserNotFound         = errors.New("user not found")
 	ErrNoUserInContext      = errors.New("no user found in request context")
 	ErrEmailAlreadyExists   = errors.New("email already exists")
+	ErrUserIDAlreadyExists  = errors.New("user id already exists")
 	ErrUserOnboarded        = errors.New("user already onboarded")
 	ErrUsernameConflict     = errors.New("user name already taken")
+	ErrEmailConflict        = errors.New("email already belongs to another user")
 	ErrUserNotInAllowedList = errors.New("user not in allowed onboarding list")
 
 	// OAuth Email Errors
