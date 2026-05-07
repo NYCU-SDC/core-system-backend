@@ -4,6 +4,7 @@ organizations:
     description: "Organization description"
 users:
   - email: "example@gmail.com"
+    user_id: "465c91a1-459f-479c-9eae-583e9eb71f54"
     global_role:
       - admin
     org_member:
