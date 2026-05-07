@@ -27,7 +27,7 @@ type UnitService interface {
 }
 
 type UserService interface {
-	FindOrCreateByEmail(ctx context.Context, email string, globalRole []string) (uuid.UUID, error)
+	FindOrCreateByEmail(ctx context.Context, email string, globalRole []string, userID *uuid.UUID) (uuid.UUID, error)
 }
 
 func NewService(logger *zap.Logger, setupImpl config2.SetupImpl, unitService UnitService, userService UserService) *Service {
@@ -38,8 +38,6 @@ func NewService(logger *zap.Logger, setupImpl config2.SetupImpl, unitService Uni
 		unitService: unitService,
 		userService: userService,
 	}
-
-	logger.Info("NewService process done")
 
 	return service
 }
@@ -86,7 +84,7 @@ func (s *Service) Setup(ctx context.Context) error {
 	logger.Info("Successfully initialized organizations")
 
 	for _, user := range s.setupImpl.Config.Users {
-		_, err := s.userService.FindOrCreateByEmail(traceCtx, user.Email, user.GlobalRole)
+		_, err := s.userService.FindOrCreateByEmail(traceCtx, user.Email, user.GlobalRole, user.UserID)
 		if err != nil {
 			logger.Error("Failed to find or create user", zap.String("email", user.Email), zap.Error(err))
 			span.RecordError(err)

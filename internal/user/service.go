@@ -36,6 +36,7 @@ type Querier interface {
 	GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.UUID, error)
 	ExistsByAuth(ctx context.Context, arg ExistsByAuthParams) (bool, error)
 	Create(ctx context.Context, arg CreateParams) (User, error)
+	CreateWithID(ctx context.Context, arg CreateWithIDParams) (CreateWithIDRow, error)
 	CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, error)
 	Update(ctx context.Context, arg UpdateParams) (User, error)
 	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
@@ -332,66 +333,61 @@ func (s *Service) FindOrCreate(ctx context.Context, name, username, avatarUrl st
 	return FindOrCreateResult{UserID: newUser.ID}, nil
 }
 
-func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalRole []string) (uuid.UUID, error) {
+// FindOrCreateByEmail returns the user ID associated with the given email.
+// If the email already exists, it returns the existing user ID.
+// If userID is provided and does not match the existing email owner, it returns a conflict error.
+// If the email does not exist, it creates a new user and links the email to that user.
+// When userID is provided for creation, the user is created with that ID only if it does not already exist.
+func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalRoles []string, userID *uuid.UUID) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "FindOrCreateByEmail")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	id, err := s.queries.GetIDByEmail(traceCtx, email)
+	existingID, err := s.queries.GetIDByEmail(traceCtx, email)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			err = databaseutil.WrapDBError(err, logger, "get user id existence by email")
 			span.RecordError(err)
 			return uuid.UUID{}, err
 		}
-		// No user with this email
-		logger.Info("User not found, creating new user", zap.String("email", email))
 
-		defaultRoles := DefaultGlobalRoles(email)
+		finalRoles := buildGlobalRoleSet(globalRoles, email)
 
-		roleSet := map[string]struct{}{}
-
-		for _, r := range globalRole {
-			roleSet[r] = struct{}{}
-		}
-
-		for _, r := range defaultRoles {
-			roleSet[r] = struct{}{}
-		}
-
-		var finalRoles []string
-		for r := range roleSet {
-			finalRoles = append(finalRoles, r)
-		}
-
-		if len(finalRoles) == 0 {
-			finalRoles = []string{"user"}
-		}
-
-		logger.Info("Final global roles for new user", zap.Strings("roles", finalRoles))
-
-		newUser, err := s.queries.Create(traceCtx, CreateParams{AvatarUrl: pgtype.Text{String: "", Valid: true}, Role: finalRoles})
+		// Email is not registered yet, create a new user with roles.
+		id, err := s.createUserForEmail(traceCtx, email, finalRoles, userID)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "create user")
-			span.RecordError(err)
-			return uuid.UUID{}, err
-		}
-		logger.Info("Created new user", zap.String("user_id", newUser.ID.String()))
-
-		err = s.queries.CreateEmail(traceCtx, CreateEmailParams{
-			UserID: newUser.ID,
-			Value:  email})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "create email")
-			span.RecordError(err)
+			err = databaseutil.WrapDBError(err, logger, "create user for email")
 			return uuid.UUID{}, err
 		}
 
-		return newUser.ID, nil
+		logger.Info(
+			"Created new user by email",
+			zap.String("email", email),
+			zap.String("user_id", id.String()),
+			zap.Strings("roles", finalRoles),
+		)
+		return id, nil
 	}
 
-	logger.Debug("Found existing user", zap.String("user_id", id.String()))
-	return id, nil
+	// Email already exists. If a requested userID is given, it must match the existing owner.
+	if userID != nil && existingID != *userID {
+		logger.Warn(
+			"Email already belongs to another user",
+			zap.String("email", email),
+			zap.String("existing_user_id", existingID.String()),
+			zap.String("requested_user_id", userID.String()),
+		)
+
+		return uuid.UUID{}, errors.New("email already belongs to another user")
+	}
+
+	logger.Debug(
+		"Found existing user by email",
+		zap.String("email", email),
+		zap.String("user_id", existingID.String()),
+	)
+
+	return existingID, nil
 }
 
 // downloadAndSaveAvatar downloads an avatar from a URL and saves it to the file service
@@ -595,4 +591,107 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 		return User{}, err
 	}
 	return user, nil
+}
+
+func buildGlobalRoleSet(globalRoles []string, email string) []string {
+	defaultRoles := DefaultGlobalRoles(email)
+	roleSet := map[string]struct{}{}
+
+	for _, r := range globalRoles {
+		roleSet[r] = struct{}{}
+	}
+
+	for _, r := range defaultRoles {
+		roleSet[r] = struct{}{}
+	}
+
+	var finalRoles []string
+	for r := range roleSet {
+		finalRoles = append(finalRoles, r)
+	}
+
+	if len(finalRoles) == 0 {
+		finalRoles = []string{"user"}
+	}
+
+	return finalRoles
+}
+
+// createUserForEmail creates a user and links the given email to the new user.
+// If userID is provided, it first verifies that the requested ID is not already used.
+// This function assumes the email does not already belong to another user.
+func (s *Service) createUserForEmail(ctx context.Context, email string, roles []string, userID *uuid.UUID) (uuid.UUID, error) {
+	traceCtx, span := s.tracer.Start(ctx, "createUserForEmail")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	var newUserID uuid.UUID
+
+	if userID != nil {
+		// Check if the requested user ID already exists to prevent conflicts
+		exists, err := s.queries.Exists(traceCtx, *userID)
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "check user existence by id")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+
+		if exists {
+			err := errors.New("requested user id already exists")
+			logger.Warn(
+				"Requested user ID already exists",
+				zap.String("email", email),
+				zap.String("requested_user_id", userID.String()),
+			)
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+
+		// Create user with the specified ID
+		newUser, err := s.queries.CreateWithID(traceCtx, CreateWithIDParams{
+			ID:          *userID,
+			Name:        pgtype.Text{},
+			Username:    pgtype.Text{},
+			AvatarUrl:   pgtype.Text{String: "", Valid: true},
+			Role:        roles,
+			IsOnboarded: false,
+			Value:       email,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create user with specified id")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+
+		newUserID = newUser.ID
+	} else {
+		// Create user with an auto-generated ID
+		newUser, err := s.queries.Create(traceCtx, CreateParams{
+			Name:        pgtype.Text{},
+			Username:    pgtype.Text{},
+			AvatarUrl:   pgtype.Text{String: "", Valid: true},
+			Role:        roles,
+			IsOnboarded: false,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "create user")
+			span.RecordError(err)
+			return uuid.UUID{}, err
+		}
+
+		newUserID = newUser.ID
+	}
+
+	// Link the email to the newly created user
+	err := s.queries.CreateEmail(traceCtx, CreateEmailParams{
+		UserID: newUserID,
+		Value:  email,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "create email")
+		span.RecordError(err)
+		return uuid.UUID{}, err
+	}
+
+	return newUserID, nil
 }

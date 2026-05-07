@@ -3,6 +3,11 @@ INSERT INTO users (name, username, avatar_url, role, is_onboarded)
 VALUES ($1, $2, $3, $4, $5) 
 RETURNING *;
 
+-- name: CreateWithID :one
+INSERT INTO users (id, name, username, avatar_url, role, is_onboarded)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
 -- name: Exists :one
 SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);
 
