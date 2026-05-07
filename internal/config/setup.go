@@ -93,16 +93,16 @@ func (s *SetupImpl) LoadSetupConfig(logger *zap.Logger, setupPath string, setupD
 		}
 	}
 
-	allowedList := make(AllowedOnboardingList)
-	for _, user := range cfg.Users {
-		if user.AllowedOnboarding {
-			allowedList[strings.ToLower(user.Email)] = struct{}{}
-		}
-	}
-
 	cfg, err = parseSetupConfig(rawCfg)
 	if err != nil {
 		return fmt.Errorf("invalid setup config: %w", err)
+	}
+
+	allowedList := make(AllowedOnboardingList)
+	for _, user := range rawCfg.Users {
+		if user.AllowedOnboarding {
+			allowedList[strings.ToLower(user.Email)] = struct{}{}
+		}
 	}
 
 	s.Config = cfg
