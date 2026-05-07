@@ -356,7 +356,7 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 		// Email is not registered yet, create a new user with roles.
 		id, err := s.createUserForEmail(traceCtx, email, finalRoles, userID)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "create user for email")
+			span.RecordError(err)
 			return uuid.UUID{}, err
 		}
 
@@ -371,14 +371,16 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 
 	// Email already exists. If a requested userID is given, it must match the existing owner.
 	if userID != nil && existingID != *userID {
+		err := internal.ErrEmailConflict
 		logger.Warn(
-			"Email already belongs to another user",
+			"email already exists with a different user ID",
+			zap.Error(err),
 			zap.String("email", email),
 			zap.String("existing_user_id", existingID.String()),
 			zap.String("requested_user_id", userID.String()),
 		)
-
-		return uuid.UUID{}, errors.New("email already belongs to another user")
+		span.RecordError(err)
+		return uuid.UUID{}, err
 	}
 
 	logger.Debug(
@@ -637,9 +639,10 @@ func (s *Service) createUserForEmail(ctx context.Context, email string, roles []
 		}
 
 		if exists {
-			err := errors.New("requested user id already exists")
+			err := internal.ErrUserIDAlreadyExists
 			logger.Warn(
 				"Requested user ID already exists",
+				zap.Error(err),
 				zap.String("email", email),
 				zap.String("requested_user_id", userID.String()),
 			)
