@@ -31,7 +31,7 @@ type Querier interface {
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]ListSectionsWithAnswersByFormIDRow, error)
 	Get(ctx context.Context, id uuid.UUID) (GetRow, error)
 	ListTypes(ctx context.Context, ids []uuid.UUID) ([]ListTypesRow, error)
-	ListQuestionsByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]ListQuestionsByIDsRow, error)
+	ListByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]ListByIDsRow, error)
 	UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error)
 }
 
@@ -420,12 +420,12 @@ func (s *Service) ListTypes(ctx context.Context, ids []uuid.UUID) (map[string]Qu
 	return result, nil
 }
 
-func (s *Service) ListQuestionsByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]ListQuestionsByIDsRow, error) {
-	ctx, span := s.tracer.Start(ctx, "ListQuestionsByIDs")
+func (s *Service) ListByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]ListByIDsRow, error) {
+	ctx, span := s.tracer.Start(ctx, "ListByIDs")
 	defer span.End()
 	logger := logutil.WithContext(ctx, s.logger)
 
-	rows, err := s.queries.ListQuestionsByIDs(ctx, questionIDs)
+	rows, err := s.queries.ListByIDs(ctx, questionIDs)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list questions by ids")
 		span.RecordError(err)

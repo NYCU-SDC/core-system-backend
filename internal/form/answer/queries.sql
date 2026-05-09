@@ -62,7 +62,7 @@ SELECT id, response_id, question_id, value, created_at, updated_at
 FROM answers
 WHERE id = $1;
 
--- name: ListAnswersForExport :many
+-- name: ListForExport :many
 SELECT a.id, a.response_id, a.question_id, a.value, a.created_at, a.updated_at, fr.submitted_at
 FROM answers a
 JOIN form_responses fr ON a.response_id = fr.id

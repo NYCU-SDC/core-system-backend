@@ -41,7 +41,7 @@ type WorkflowResolver interface {
 
 type AnswerStore interface {
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]answer.Answer, []question.Answerable, map[string]question.Answerable, error)
-	ListAnswersForExport(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]answer.ListAnswersForExportRow, error)
+	ListForExport(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]answer.ListForExportRow, error)
 }
 
 type UserStore interface {
@@ -50,7 +50,7 @@ type UserStore interface {
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
-	ListQuestionsByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]question.ListQuestionsByIDsRow, error)
+	ListQuestionsByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]question.ListByIDsRow, error)
 	GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID) (map[string]question.Answerable, error)
 }
 
@@ -262,7 +262,8 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 	}()
 
 	const sheet = "Sheet1"
-	if err := file.SetCellValue(sheet, "A1", "Response ID"); err != nil {
+	err = file.SetCellValue(sheet, "A1", "Response ID")
+	if err != nil {
 		return nil, "", err
 	}
 
@@ -271,7 +272,8 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 		if err != nil {
 			return nil, "", err
 		}
-		if err := file.SetCellValue(sheet, cell, header.Title); err != nil {
+		err = file.SetCellValue(sheet, cell, header.Title)
+		if err != nil {
 			return nil, "", err
 		}
 	}
@@ -386,7 +388,7 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 		})
 	}
 
-	answerRows, err := s.answerStore.ListAnswersForExport(traceCtx, formID, questionIDs)
+	answerRows, err := s.answerStore.ListForExport(traceCtx, formID, questionIDs)
 	if err != nil {
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "answer", "form_id", formID.String(), logger, "list answers for export")
 		span.RecordError(err)

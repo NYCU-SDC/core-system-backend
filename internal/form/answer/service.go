@@ -24,7 +24,7 @@ import (
 
 type Querier interface {
 	ListByResponseID(ctx context.Context, responseID uuid.UUID) ([]Answer, error)
-	ListAnswersForExport(ctx context.Context, arg ListAnswersForExportParams) ([]ListAnswersForExportRow, error)
+	ListForExport(ctx context.Context, arg ListForExportParams) ([]ListForExportRow, error)
 	Get(ctx context.Context, id uuid.UUID) (Answer, error)
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
@@ -134,12 +134,12 @@ func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answ
 	return transformedAnswers, answerableList, answerableMap, nil
 }
 
-func (s Service) ListAnswersForExport(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]ListAnswersForExportRow, error) {
-	traceCtx, span := s.tracer.Start(ctx, "ListAnswersForExport")
+func (s Service) ListForExport(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]ListForExportRow, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListForExport")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	rows, err := s.queries.ListAnswersForExport(traceCtx, ListAnswersForExportParams{
+	rows, err := s.queries.ListForExport(traceCtx, ListForExportParams{
 		FormID:     formID,
 		QuestionID: questionIDs,
 	})

@@ -170,7 +170,7 @@ FROM questions q
 JOIN sections s ON q.section_id = s.id
 WHERE q.id = $1;
 
--- name: ListQuestionsByIDs :many
+-- name: ListByIDs :many
 SELECT id, title, section_id, "order"
 FROM questions
 WHERE id = ANY($1::uuid[]);
