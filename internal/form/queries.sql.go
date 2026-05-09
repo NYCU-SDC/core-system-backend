@@ -41,8 +41,8 @@ WITH created AS (
 ),
 workflow_created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
-    SELECT 
-        id, 
+    SELECT
+        id,
         last_editor,
         jsonb_build_array(
             jsonb_build_object(
@@ -606,7 +606,7 @@ func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
 }
 
 const listByUnit = `-- name: ListByUnit :many
-SELECT 
+SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
     u.name as unit_name,
     o.name as org_name,
