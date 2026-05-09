@@ -16,7 +16,9 @@ func NewStartNode(node map[string]interface{}) (Validatable, error) {
 	return &StartNode{node: node}, nil
 }
 
-func (n *StartNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[string]map[string]interface{}, questionStore QuestionStore) error {
+// Validate checks start-node fields; whether next points to an existing node is enforced by
+// validateGraphReferences in the workflow package.
+func (n *StartNode) Validate(ctx context.Context, formID uuid.UUID, questionStore QuestionStore) error {
 	nodeID, _ := n.node["id"].(string)
 
 	// Validate field names (check for typos and invalid fields)
@@ -29,12 +31,6 @@ func (n *StartNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[
 	next, ok := n.node["next"].(string)
 	if !ok || next == "" {
 		return fmt.Errorf("start node '%s' must have a 'next' field", nodeID)
-	}
-
-	// Validate that next node exists
-	_, exists := nodeMap[next]
-	if !exists {
-		return fmt.Errorf("start node '%s' references non-existent node '%s' in next", nodeID, next)
 	}
 
 	return nil

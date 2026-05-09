@@ -153,11 +153,11 @@ func TestWorkflowService_GetValidationInfo(t *testing.T) {
 			expectedInfo: true,
 		},
 		{
-			name:   "unreachable node",
+			name:   "orphan node (no incoming edges) — returns validation info warning",
 			params: Params{},
 			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
-				data := builder.SetupTestData("info-unreachable-org", "info-unreachable-unit")
+				data := builder.SetupTestData("info-orphan-warning-org", "info-orphan-warning-unit")
 				params.formID = data.FormRow.ID
 				params.workflowJSON = builder.CreateWorkflowWithUnreachableNode()
 				return context.Background()
