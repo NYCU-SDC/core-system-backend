@@ -148,8 +148,6 @@ func VisibilityToUppercase(v Visibility) string {
 // Ensures deadline, publishTime is null when empty/invalid.
 func ToResponse(
 	form Form,
-	unitName string,
-	orgName string,
 	creator user.User,
 	creatorEmails []string,
 	lastEditor user.User,
@@ -435,8 +433,6 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ToResponse(
 		formFromPatchRow(currentForm),
-		currentForm.UnitName.String,
-		currentForm.OrgName.String,
 		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
@@ -486,8 +482,6 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ToResponse(
 		formFromGetRow(currentForm),
-		currentForm.UnitName.String,
-		currentForm.OrgName.String,
 		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
@@ -511,8 +505,6 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	for _, form := range forms {
 		responses = append(responses, ToResponse(
 			formFromListRow(form),
-			form.UnitName.String,
-			form.OrgName.String,
 			UserFromProfileFields(form.CreatedBy, form.CreatorName, form.CreatorUsername, form.CreatorAvatarUrl),
 			user.ConvertEmailsToSlice(form.CreatorEmails),
 			UserFromProfileFields(form.LastEditor, form.LastEditorName, form.LastEditorUsername, form.LastEditorAvatarUrl),
@@ -559,8 +551,6 @@ func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) 
 
 	response := ToResponse(
 		formFromCreateRow(newForm),
-		newForm.UnitName.String,
-		newForm.OrgName.String,
 		UserFromProfileFields(newForm.CreatedBy, newForm.CreatorName, newForm.CreatorUsername, newForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(newForm.CreatorEmails),
 		UserFromProfileFields(newForm.LastEditor, newForm.LastEditorName, newForm.LastEditorUsername, newForm.LastEditorAvatarUrl),
@@ -615,8 +605,6 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 	for i, currentForm := range forms {
 		responses[i] = ToResponse(
 			formFromListByUnitRow(currentForm),
-			currentForm.UnitName.String,
-			currentForm.OrgName.String,
 			UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 			user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 			UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
@@ -748,8 +736,6 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ToResponse(
 		formFromGetRow(currentForm),
-		currentForm.UnitName.String,
-		currentForm.OrgName.String,
 		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
@@ -791,8 +777,6 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ToResponse(
 		formFromGetRow(currentForm),
-		currentForm.UnitName.String,
-		currentForm.OrgName.String,
 		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),

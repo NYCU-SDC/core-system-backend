@@ -39,8 +39,6 @@ func TestToResponse_proseMirrorAndHTML(t *testing.T) {
 
 	resp := ToResponse(
 		f,
-		"unit",
-		"org",
 		user.User{
 			ID:       f.CreatedBy,
 			Name:     pgtype.Text{String: "Cr", Valid: true},
