@@ -239,8 +239,14 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 }
 
 func (s Service) ExportPreview(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (ExportPreviewResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ExportPreview")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
 	data, err := s.getExportData(ctx, formID, questionIDs)
 	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get export data for preview")
+		span.RecordError(err)
 		return ExportPreviewResponse{}, err
 	}
 
@@ -251,8 +257,14 @@ func (s Service) ExportPreview(ctx context.Context, formID uuid.UUID, questionID
 }
 
 func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]byte, string, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ExportDownload")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
 	data, err := s.getExportData(ctx, formID, questionIDs)
 	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get export data for download")
+		span.RecordError(err)
 		return nil, "", err
 	}
 
@@ -264,16 +276,19 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 	const sheet = "Sheet1"
 	err = file.SetCellValue(sheet, "A1", "Response ID")
 	if err != nil {
+		span.RecordError(err)
 		return nil, "", err
 	}
 
 	for i, header := range data.Headers {
 		cell, err := excelize.CoordinatesToCellName(i+2, 1)
 		if err != nil {
+			span.RecordError(err)
 			return nil, "", err
 		}
 		err = file.SetCellValue(sheet, cell, header.Title)
 		if err != nil {
+			span.RecordError(err)
 			return nil, "", err
 		}
 	}
@@ -282,10 +297,12 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 		excelRow := rowIndex + 2
 		cell, err := excelize.CoordinatesToCellName(1, excelRow)
 		if err != nil {
+			span.RecordError(err)
 			return nil, "", err
 		}
 		err = file.SetCellValue(sheet, cell, row.ID)
 		if err != nil {
+			span.RecordError(err)
 			return nil, "", err
 		}
 
@@ -296,10 +313,12 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 			}
 			cell, err := excelize.CoordinatesToCellName(columnIndex+2, excelRow)
 			if err != nil {
+				span.RecordError(err)
 				return nil, "", err
 			}
 			err = file.SetCellValue(sheet, cell, payload.DisplayValue)
 			if err != nil {
+				span.RecordError(err)
 				return nil, "", err
 			}
 		}
@@ -307,6 +326,7 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 
 	buffer, err := file.WriteToBuffer()
 	if err != nil {
+		span.RecordError(err)
 		return nil, "", err
 	}
 
