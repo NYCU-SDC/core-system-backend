@@ -316,7 +316,7 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 				span.RecordError(err)
 				return nil, "", err
 			}
-			err = file.SetCellValue(sheet, cell, payload.DisplayValue)
+			err = file.SetCellValue(sheet, cell, escapeForExcel(payload.DisplayValue))
 			if err != nil {
 				span.RecordError(err)
 				return nil, "", err
@@ -841,4 +841,16 @@ func calculateSectionProgress(answerables []question.Answerable, answerMap map[s
 
 	// Otherwise, it's DRAFT (at least one answer, but not all required)
 	return SectionProgressDraft
+}
+
+func escapeForExcel(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '@', '+', '-', '\t', '\r':
+		return "'" + s
+	default:
+		return s
+	}
 }
