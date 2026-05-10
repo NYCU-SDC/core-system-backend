@@ -103,6 +103,27 @@ func visibilityFromAPIFormat(v string) Visibility {
 	}
 }
 
+// optionalPtrText maps an optional JSON field to pgtype.Text: unset pointer → unset SQL param (COALESCE noop).
+func optionalPtrText(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
+}
+
+// optionalPtrTimestamptz maps an optional time to pgtype.Timestamptz.
+func optionalPtrTimestamptz(t *time.Time) pgtype.Timestamptz {
+	if t == nil {
+		return pgtype.Timestamptz{}
+	}
+	return pgtype.Timestamptz{Time: *t, Valid: true}
+}
+
+// nonEmptyText maps a dressing (or similar) string to pgtype.Text: empty string stays SQL-unset (Valid:false).
+func nonEmptyText(s string) pgtype.Text {
+	return pgtype.Text{String: s, Valid: s != ""}
+}
+
 func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore, request Request) (formFields, error) {
 	form := formFields{}
 
@@ -134,16 +155,11 @@ func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore
 		preview = snip
 	}
 
-	if request.Dressing != nil {
-		form.dressingColor = pgtype.Text{String: request.Dressing.Color, Valid: request.Dressing.Color != ""}
-		form.dressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: request.Dressing.HeaderFont != ""}
-		form.dressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: request.Dressing.QuestionFont != ""}
-		form.dressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: request.Dressing.TextFont != ""}
-	} else {
-		form.dressingColor = pgtype.Text{Valid: false}
-		form.dressingHeaderFont = pgtype.Text{Valid: false}
-		form.dressingQuestionFont = pgtype.Text{Valid: false}
-		form.dressingTextFont = pgtype.Text{Valid: false}
+	if d := request.Dressing; d != nil {
+		form.dressingColor = nonEmptyText(d.Color)
+		form.dressingHeaderFont = nonEmptyText(d.HeaderFont)
+		form.dressingQuestionFont = nonEmptyText(d.QuestionFont)
+		form.dressingTextFont = nonEmptyText(d.TextFont)
 	}
 
 	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
@@ -198,20 +214,14 @@ func (s *Service) PatchParams(ctx context.Context, params PatchParams) (PatchRow
 	ctx, span := s.tracer.Start(ctx, "PatchParams")
 	defer span.End()
 
-	row, err := s.runQueriesPatch(ctx, params)
-	if err != nil {
-		span.RecordError(err)
-	}
-	return row, err
-}
-
-// runQueriesPatch runs the sqlc-generated Patch query (internal/form/queries.sql.go).
-func (s *Service) runQueriesPatch(ctx context.Context, params PatchParams) (PatchRow, error) {
 	logger := logutil.WithContext(ctx, s.logger)
 	row, err := s.queries.Patch(ctx, params)
 	if err != nil {
-		return PatchRow{}, databaseutil.WrapDBError(err, logger, "patch form")
+		err = databaseutil.WrapDBError(err, logger, "patch form")
+		span.RecordError(err)
+		return PatchRow{}, err
 	}
+
 	return row, nil
 }
 
@@ -220,12 +230,14 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 	defer span.End()
 
 	params := PatchParams{
-		ID:         id,
-		LastEditor: userID,
-	}
-
-	if request.Title != nil {
-		params.Title = pgtype.Text{String: *request.Title, Valid: true}
+		ID:                     id,
+		LastEditor:             userID,
+		Title:                  optionalPtrText(request.Title),
+		PreviewMessage:         optionalPtrText(request.PreviewMessage),
+		Deadline:               optionalPtrTimestamptz(request.Deadline),
+		PublishTime:            optionalPtrTimestamptz(request.PublishTime),
+		MessageAfterSubmission: optionalPtrText(request.MessageAfterSubmission),
+		GoogleSheetUrl:         optionalPtrText(request.GoogleSheetURL),
 	}
 
 	if request.Description.Set {
@@ -238,53 +250,23 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.DescriptionHtml = pgtype.Text{String: descHTML, Valid: true}
 	}
 
-	if request.PreviewMessage != nil {
-		params.PreviewMessage = pgtype.Text{String: *request.PreviewMessage, Valid: true}
-	}
-
-	if request.Deadline != nil {
-		params.Deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
-	}
-
-	if request.PublishTime != nil {
-		params.PublishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
-	}
-
-	if request.MessageAfterSubmission != nil {
-		params.MessageAfterSubmission = pgtype.Text{String: *request.MessageAfterSubmission, Valid: true}
-	}
-
-	if request.GoogleSheetURL != nil {
-		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetURL, Valid: true}
-	}
-
-	if request.Visibility != nil {
+	v := request.Visibility
+	if v != nil {
 		params.Visibility = NullVisibility{
-			Visibility: visibilityFromAPIFormat(*request.Visibility),
+			Visibility: visibilityFromAPIFormat(*v),
 			Valid:      true,
 		}
 	}
 
-	if request.Dressing != nil {
-		if request.Dressing.Color != "" {
-			params.DressingColor = pgtype.Text{String: request.Dressing.Color, Valid: true}
-		}
-		if request.Dressing.HeaderFont != "" {
-			params.DressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: true}
-		}
-		if request.Dressing.QuestionFont != "" {
-			params.DressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: true}
-		}
-		if request.Dressing.TextFont != "" {
-			params.DressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: true}
-		}
+	d := request.Dressing
+	if d != nil {
+		params.DressingColor = nonEmptyText(d.Color)
+		params.DressingHeaderFont = nonEmptyText(d.HeaderFont)
+		params.DressingQuestionFont = nonEmptyText(d.QuestionFont)
+		params.DressingTextFont = nonEmptyText(d.TextFont)
 	}
 
-	row, err := s.runQueriesPatch(ctx, params)
-	if err != nil {
-		span.RecordError(err)
-	}
-	return row, err
+	return s.PatchParams(ctx, params)
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
