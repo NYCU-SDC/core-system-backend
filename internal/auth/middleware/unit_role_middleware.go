@@ -21,6 +21,7 @@ import (
 
 type UnitRoleService interface {
 	GetMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID) (unit.UnitRole, error)
+	HasAdminInAncestorUnits(ctx context.Context, unitID uuid.UUID, userID uuid.UUID) (bool, error)
 }
 
 type UnitRoleMiddleware struct {
@@ -80,6 +81,25 @@ func (m *UnitRoleMiddleware) checkRole(
 		return
 	}
 
+	// check ancestor admin
+	hasAdmin, err := m.service.HasAdminInAncestorUnits(traceCtx, unitID, u.ID)
+	if err != nil {
+		logger.Error("failed to check ancestor units admin",
+			zap.String("user_id", u.ID.String()),
+			zap.String("unit_id", unitID.String()),
+			zap.Error(err),
+		)
+
+		m.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if hasAdmin {
+		next(w, r)
+		return
+	}
+
+	// check current unit role
 	dbRole, err := m.service.GetMemberRole(traceCtx, unitID, u.ID)
 	if err != nil {
 		if errors.Is(err, internal.ErrNotFound) {

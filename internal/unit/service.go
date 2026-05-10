@@ -41,6 +41,7 @@ type Querier interface {
 	GetMemberRole(ctx context.Context, arg GetMemberRoleParams) (UnitRole, error)
 	UpdateMemberRole(ctx context.Context, arg UpdateMemberRoleParams) error
 	LockAdminsForUnit(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error)
+	HasAdminInAncestorUnits(ctx context.Context, arg HasAdminInAncestorUnitsParams) (bool, error)
 
 	WithTx(tx pgx.Tx) *Queries
 }
@@ -688,4 +689,28 @@ func (s *Service) GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, e
 		return uuid.UUID{}, fmt.Errorf("organization with slug %q not found", slug)
 	}
 	return orgID, nil
+}
+
+func (s *Service) HasAdminInAncestorUnits(ctx context.Context, unitID uuid.UUID, userID uuid.UUID) (bool, error) {
+	traceCtx, span := s.tracer.Start(ctx, "HasAdminInAncestorUnits")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	has, err := s.queries.HasAdminInAncestorUnits(traceCtx, HasAdminInAncestorUnitsParams{
+		ID:       unitID,
+		MemberID: userID,
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "Check Admin In Ancestor Units")
+		span.RecordError(err)
+		return false, err
+	}
+
+	logger.Info("Check Admin In Ancestor Units",
+		zap.String("unit_id", unitID.String()),
+		zap.String("user_id", userID.String()),
+		zap.Bool("has_admin_in_ancestor_units", has),
+	)
+
+	return has, nil
 }
