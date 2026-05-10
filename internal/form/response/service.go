@@ -287,7 +287,7 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 			span.RecordError(err)
 			return nil, "", err
 		}
-		err = file.SetCellValue(sheet, cell, header.Title)
+		err = file.SetCellValue(sheet, cell, escapeForExcel(header.Title))
 		if err != nil {
 			span.RecordError(err)
 			return nil, "", err
