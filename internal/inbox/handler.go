@@ -182,8 +182,6 @@ func (h *Handler) GetMessageContent(ctx context.Context, contentType ContentType
 			DressingQuestionFont:   currentForm.DressingQuestionFont,
 			DressingTextFont:       currentForm.DressingTextFont,
 		},
-			currentForm.UnitName.String,
-			currentForm.OrgName.String,
 			form.UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
 			user.ConvertEmailsToSlice(currentForm.CreatorEmails),
 			form.UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
