@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -23,6 +24,10 @@ type Querier interface {
 	CreateNode(ctx context.Context, arg CreateNodeParams) (CreateNodeRow, error)
 	DeleteNode(ctx context.Context, arg DeleteNodeParams) ([]byte, error)
 	Activate(ctx context.Context, arg ActivateParams) (ActivateRow, error)
+}
+
+type FormStore interface {
+	PatchParams(ctx context.Context, params form.PatchParams) (form.PatchRow, error)
 }
 
 type Validator interface {
@@ -45,15 +50,17 @@ type NodePayload struct {
 type Service struct {
 	logger        *zap.Logger
 	queries       Querier
+	formStore     FormStore
 	tracer        trace.Tracer
 	validator     Validator
 	questionStore QuestionStore
 }
 
-func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore) *Service {
+func NewService(logger *zap.Logger, db DBTX, formStore FormStore, questionStore QuestionStore) *Service {
 	return &Service{
 		logger:        logger,
 		queries:       New(db),
+		formStore:     formStore,
 		tracer:        otel.Tracer("workflow/service"),
 		validator:     NewValidator(),
 		questionStore: questionStore,
@@ -62,10 +69,11 @@ func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore) *Servi
 
 // NewServiceForTesting creates a Service with injected dependencies for testing.
 // This allows unit tests to mock the Querier and Validator interfaces.
-func NewServiceForTesting(logger *zap.Logger, tracer trace.Tracer, queries Querier, validator Validator, questionStore QuestionStore) *Service {
+func NewServiceForTesting(logger *zap.Logger, tracer trace.Tracer, queries Querier, formStore FormStore, validator Validator, questionStore QuestionStore) *Service {
 	return &Service{
 		logger:        logger,
 		queries:       queries,
+		formStore:     formStore,
 		tracer:        tracer,
 		validator:     validator,
 		questionStore: questionStore,
@@ -162,6 +170,8 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 		return WorkflowVersion{}, err
 	}
 
+	_ = s.patchFormLastEditor(ctx, formID, userID)
+
 	return WorkflowVersion(row), nil
 }
 
@@ -216,6 +226,8 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		return CreateNodeRow{}, err
 	}
 
+	_ = s.patchFormLastEditor(ctx, formID, userID)
+
 	return createdRow, nil
 }
 
@@ -242,6 +254,8 @@ func (s *Service) DeleteNode(ctx context.Context, formID uuid.UUID, nodeID uuid.
 		span.RecordError(err)
 		return []byte{}, err
 	}
+
+	_ = s.patchFormLastEditor(ctx, formID, userID)
 
 	return deleted, nil
 }
@@ -272,7 +286,26 @@ func (s *Service) Activate(ctx context.Context, formID uuid.UUID, userID uuid.UU
 		return WorkflowVersion{}, err
 	}
 
+	_ = s.patchFormLastEditor(ctx, formID, userID)
+
 	return WorkflowVersion(row), nil
+}
+
+// patchFormLastEditor updates forms.last_editor so API FormResponse.lastEditor stays in sync
+func (s *Service) patchFormLastEditor(ctx context.Context, formID, userID uuid.UUID) error {
+	_, err := s.formStore.PatchParams(ctx, form.PatchParams{
+		ID:         formID,
+		LastEditor: userID,
+	})
+	if err != nil {
+		logger := logutil.WithContext(ctx, s.logger)
+		wrapped := databaseutil.WrapDBErrorWithKeyValue(err, "forms", "formId", formID.String(), logger, "sync form last_editor after workflow change")
+		logger.Warn("Failed to sync form last_editor after workflow change", zap.Error(wrapped))
+
+		return wrapped
+	}
+
+	return nil
 }
 
 // GetValidationInfo checks if a workflow can be activated and returns detailed validation errors.

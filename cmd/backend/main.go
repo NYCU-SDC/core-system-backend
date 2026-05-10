@@ -172,7 +172,7 @@ func main() {
 	markdownService := markdown.NewService(logger)
 	formService := form.NewService(logger, dbPool, markdownService)
 	questionService := question.NewService(logger, dbPool, formService, markdownService)
-	workflowService := workflow.NewService(logger, dbPool, questionService)
+	workflowService := workflow.NewService(logger, dbPool, formService, questionService)
 	answerService := answer.NewService(logger, dbPool, questionService, fileService, workflowService)
 	inboxService := inbox.NewService(logger, dbPool)
 	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService, formService, userService)

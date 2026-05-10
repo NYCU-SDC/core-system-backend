@@ -193,10 +193,31 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	return newForm, nil
 }
 
+// PatchParams applies a form row patch built from sql-level params (used by workflow for last_editor sync, etc.).
+func (s *Service) PatchParams(ctx context.Context, params PatchParams) (PatchRow, error) {
+	ctx, span := s.tracer.Start(ctx, "PatchParams")
+	defer span.End()
+
+	row, err := s.runQueriesPatch(ctx, params)
+	if err != nil {
+		span.RecordError(err)
+	}
+	return row, err
+}
+
+// runQueriesPatch runs the sqlc-generated Patch query (internal/form/queries.sql.go).
+func (s *Service) runQueriesPatch(ctx context.Context, params PatchParams) (PatchRow, error) {
+	logger := logutil.WithContext(ctx, s.logger)
+	row, err := s.queries.Patch(ctx, params)
+	if err != nil {
+		return PatchRow{}, databaseutil.WrapDBError(err, logger, "patch form")
+	}
+	return row, nil
+}
+
 func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error) {
 	ctx, span := s.tracer.Start(ctx, "Patch")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
 
 	params := PatchParams{
 		ID:         id,
@@ -259,14 +280,11 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		}
 	}
 
-	patchedForm, err := s.queries.Patch(ctx, params)
+	row, err := s.runQueriesPatch(ctx, params)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "patch form")
 		span.RecordError(err)
-		return PatchRow{}, err
 	}
-
-	return patchedForm, nil
+	return row, err
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
