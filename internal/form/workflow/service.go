@@ -170,7 +170,11 @@ func (s *Service) Update(ctx context.Context, formID uuid.UUID, workflow []byte,
 		return WorkflowVersion{}, err
 	}
 
-	_ = s.patchFormLastEditor(ctx, formID, userID)
+	err = s.patchFormLastEditor(ctx, formID, userID)
+	if err != nil {
+		span.RecordError(err)
+		return WorkflowVersion{}, err
+	}
 
 	return WorkflowVersion(row), nil
 }
@@ -226,7 +230,11 @@ func (s *Service) CreateNode(ctx context.Context, formID uuid.UUID, nodeType Nod
 		return CreateNodeRow{}, err
 	}
 
-	_ = s.patchFormLastEditor(ctx, formID, userID)
+	err = s.patchFormLastEditor(ctx, formID, userID)
+	if err != nil {
+		span.RecordError(err)
+		return CreateNodeRow{}, err
+	}
 
 	return createdRow, nil
 }
@@ -255,7 +263,11 @@ func (s *Service) DeleteNode(ctx context.Context, formID uuid.UUID, nodeID uuid.
 		return []byte{}, err
 	}
 
-	_ = s.patchFormLastEditor(ctx, formID, userID)
+	err = s.patchFormLastEditor(ctx, formID, userID)
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
 
 	return deleted, nil
 }
@@ -286,23 +298,29 @@ func (s *Service) Activate(ctx context.Context, formID uuid.UUID, userID uuid.UU
 		return WorkflowVersion{}, err
 	}
 
-	_ = s.patchFormLastEditor(ctx, formID, userID)
+	err = s.patchFormLastEditor(ctx, formID, userID)
+	if err != nil {
+		span.RecordError(err)
+		return WorkflowVersion{}, err
+	}
 
 	return WorkflowVersion(row), nil
 }
 
 // patchFormLastEditor updates forms.last_editor so API FormResponse.lastEditor stays in sync
 func (s *Service) patchFormLastEditor(ctx context.Context, formID, userID uuid.UUID) error {
-	_, err := s.formStore.PatchParams(ctx, form.PatchParams{
+	traceCtx, span := s.tracer.Start(ctx, "patchFormLastEditor")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	_, err := s.formStore.PatchParams(traceCtx, form.PatchParams{
 		ID:         formID,
 		LastEditor: userID,
 	})
 	if err != nil {
-		logger := logutil.WithContext(ctx, s.logger)
-		wrapped := databaseutil.WrapDBErrorWithKeyValue(err, "forms", "formId", formID.String(), logger, "sync form last_editor after workflow change")
-		logger.Warn("Failed to sync form last_editor after workflow change", zap.Error(wrapped))
-
-		return wrapped
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "forms", "formId", formID.String(), logger, "sync form last_editor after workflow change")
+		span.RecordError(err)
+		return err
 	}
 
 	return nil
