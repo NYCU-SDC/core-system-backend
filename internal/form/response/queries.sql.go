@@ -218,6 +218,41 @@ func (q *Queries) ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) 
 	return items, nil
 }
 
+const listSubmittedByFormID = `-- name: ListSubmittedByFormID :many
+SELECT id, form_id, submitted_by, submitted_at, progress, created_at, updated_at FROM form_responses
+WHERE form_id = $1
+  AND progress = 'SUBMITTED'
+ORDER BY submitted_at ASC, id ASC
+`
+
+func (q *Queries) ListSubmittedByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
+	rows, err := q.db.Query(ctx, listSubmittedByFormID, formID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FormResponse
+	for rows.Next() {
+		var i FormResponse
+		if err := rows.Scan(
+			&i.ID,
+			&i.FormID,
+			&i.SubmittedBy,
+			&i.SubmittedAt,
+			&i.Progress,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const update = `-- name: Update :exec
 UPDATE form_responses
 SET updated_at = now(), progress = $2

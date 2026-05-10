@@ -46,3 +46,9 @@ SELECT EXISTS(SELECT 1 FROM form_responses WHERE id = $1);
 
 -- name: ExistsByFormIDAndSubmittedBy :one
 SELECT EXISTS(SELECT 1 FROM form_responses WHERE form_id = $1 AND submitted_by = $2);
+
+-- name: ListSubmittedByFormID :many
+SELECT * FROM form_responses
+WHERE form_id = $1
+  AND progress = 'SUBMITTED'
+ORDER BY submitted_at ASC, id ASC;

@@ -33,6 +33,7 @@ type Querier interface {
 	ListByFormIDAndSubmittedBy(ctx context.Context, arg ListByFormIDAndSubmittedByParams) ([]FormResponse, error)
 	ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error)
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error)
+	ListSubmittedByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 }
 
 type WorkflowResolver interface {
@@ -50,7 +51,7 @@ type UserStore interface {
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]question.SectionWithAnswerableList, error)
-	ListQuestionsByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]question.ListByIDsRow, error)
+	ListByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]question.ListByIDsRow, error)
 	GetAnswerableMapByFormID(ctx context.Context, formID uuid.UUID) (map[string]question.Answerable, error)
 }
 
@@ -348,7 +349,7 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 		return exportData{}, err
 	}
 
-	questionRows, err := s.sectionWithQuestionStore.ListQuestionsByIDs(traceCtx, questionIDs)
+	questionRows, err := s.sectionWithQuestionStore.ListByIDs(traceCtx, questionIDs)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list questions by ids")
 		span.RecordError(err)
@@ -408,9 +409,9 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 		})
 	}
 
-	answerRows, err := s.answerStore.ListForExport(traceCtx, formID, questionIDs)
+	submittedResponses, err := s.queries.ListSubmittedByFormID(traceCtx, formID)
 	if err != nil {
-		err = databaseutil.WrapDBErrorWithKeyValue(err, "answer", "form_id", formID.String(), logger, "list answers for export")
+		err = databaseutil.WrapDBError(err, logger, "list submitted responses by form id")
 		span.RecordError(err)
 		return exportData{}, err
 	}
@@ -421,23 +422,33 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 		answers     map[string]*AnswerPayload
 	}
 
-	rowMap := make(map[string]*responseRow)
-	rows := make([]*responseRow, 0)
+	rowMap := make(map[string]*responseRow, len(submittedResponses))
+	rows := make([]*responseRow, 0, len(submittedResponses))
+	for _, submittedResponse := range submittedResponses {
+		row := &responseRow{
+			id:          submittedResponse.ID,
+			submittedAt: submittedResponse.SubmittedAt.Time,
+			answers:     make(map[string]*AnswerPayload, len(submittedResponses)),
+		}
+		for _, questionID := range questionIDs {
+			row.answers[questionID.String()] = nil
+		}
+		rowMap[row.id.String()] = row
+		rows = append(rows, row)
+	}
+
+	answerRows, err := s.answerStore.ListForExport(traceCtx, formID, questionIDs)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "answer", "form_id", formID.String(), logger, "list answers for export")
+		span.RecordError(err)
+		return exportData{}, err
+	}
+
 	for _, answerRow := range answerRows {
 		row, ok := rowMap[answerRow.ResponseID.String()]
 		if !ok {
-			row = &responseRow{
-				id:          answerRow.ResponseID,
-				submittedAt: answerRow.SubmittedAt.Time,
-				answers:     make(map[string]*AnswerPayload, len(questionIDs)),
-			}
-			for _, questionID := range questionIDs {
-				row.answers[questionID.String()] = nil
-			}
-			rowMap[answerRow.ResponseID.String()] = row
-			rows = append(rows, row)
+			continue
 		}
-
 		answerable, ok := answerableMap[answerRow.QuestionID.String()]
 		if !ok {
 			return exportData{}, internal.ErrQuestionNotFound
@@ -455,13 +466,6 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 			DisplayValue: displayValue,
 		}
 	}
-
-	sort.SliceStable(rows, func(i, j int) bool {
-		if !rows[i].submittedAt.Equal(rows[j].submittedAt) {
-			return rows[i].submittedAt.Before(rows[j].submittedAt)
-		}
-		return rows[i].id.String() < rows[j].id.String()
-	})
 
 	exportRows := make([]ExportRow, 0, len(rows))
 	for _, row := range rows {
