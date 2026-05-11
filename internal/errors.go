@@ -227,6 +227,10 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("username already taken")
 	case errors.Is(err, ErrUserNotInAllowedList):
 		return problem.NewForbiddenProblem("user not in allowed onboarding list")
+	case errors.Is(err, ErrUserIDAlreadyExists):
+		return problem.NewValidateProblem("user id already exists")
+	case errors.Is(err, ErrEmailConflict):
+		return problem.NewValidateProblem("email already belongs to another user")
 
 	// OAuth Email Errors
 	case errors.Is(err, ErrFailedToExtractEmail):
