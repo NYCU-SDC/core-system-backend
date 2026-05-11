@@ -76,8 +76,7 @@ func (q *Queries) CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, e
 
 const createEmail = `-- name: CreateEmail :exec
 INSERT INTO user_emails (user_id, value)
-VALUES ($1, $2) 
-ON CONFLICT (user_id, value) DO NOTHING
+VALUES ($1, $2)
 `
 
 type CreateEmailParams struct {
