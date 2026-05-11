@@ -17,7 +17,7 @@ type QuestionStore interface {
 // Validatable defines the interface for node validation
 // Similar to Answerable in question package
 type Validatable interface {
-	Validate(ctx context.Context, formID uuid.UUID, nodeMap map[string]map[string]interface{}, questionStore QuestionStore) error
+	Validate(ctx context.Context, formID uuid.UUID, questionStore QuestionStore) error
 }
 
 // ConditionSource represents the source type for condition rules
