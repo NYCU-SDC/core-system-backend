@@ -74,15 +74,15 @@ func (s *Service) ProcessProseMirrorJSON(ctx context.Context, raw []byte) (canon
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 || string(raw) == "null" {
-		return []byte(EmptyDocumentJSON), "", nil
-	}
-
 	if err := rejectIfRichTextJSONTooLarge(raw); err != nil {
 		logger.Warn("rich text JSON payload too large", zap.Error(err))
 		span.RecordError(err)
 		return nil, "", err
+	}
+
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return []byte(EmptyDocumentJSON), "", nil
 	}
 
 	var root pm.Node
@@ -231,19 +231,20 @@ func (s *Service) PlainText(ctx context.Context, raw []byte) (string, error) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	trimmed := bytes.TrimSpace(raw)
-	if len(trimmed) == 0 || string(trimmed) == "null" {
-		return "", nil
-	}
-
-	if err := rejectIfRichTextJSONTooLarge(trimmed); err != nil {
+	err := rejectIfRichTextJSONTooLarge(raw)
+	if err != nil {
 		logger.Warn("rich text JSON payload too large", zap.Error(err))
 		span.RecordError(err)
 		return "", err
 	}
 
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return "", nil
+	}
+
 	var root pm.Node
-	err := json.Unmarshal(trimmed, &root)
+	err = json.Unmarshal(trimmed, &root)
 	if err != nil {
 		wrapped := wrapUnmarshalErr(err)
 		logger.Error("invalid rich text JSON", zap.Error(wrapped))
