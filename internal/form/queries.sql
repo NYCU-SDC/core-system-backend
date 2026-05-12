@@ -16,12 +16,13 @@ WITH created AS (
                        dressing_color,
                        dressing_header_font,
                        dressing_question_font,
-                       dressing_text_font
+                       dressing_text_font,
+                       allow_edit_response
                        )
     VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15, $16
+        $11, $12, $13, $14, $15, $16, $17
     )
     RETURNING *
 ),
@@ -80,6 +81,7 @@ WITH updated AS (
         dressing_header_font = COALESCE(sqlc.narg('dressing_header_font')::text, forms.dressing_header_font),
         dressing_question_font = COALESCE(sqlc.narg('dressing_question_font')::text, forms.dressing_question_font),
         dressing_text_font = COALESCE(sqlc.narg('dressing_text_font')::text, forms.dressing_text_font),
+        allow_edit_response = COALESCE(sqlc.narg('allow_edit_response')::boolean, forms.allow_edit_response),
         updated_at = now()
     WHERE forms.id = sqlc.arg('id')
     RETURNING *

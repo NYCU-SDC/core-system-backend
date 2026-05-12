@@ -67,6 +67,7 @@ type formFields struct {
 	dressingHeaderFont     pgtype.Text
 	dressingQuestionFont   pgtype.Text
 	dressingTextFont       pgtype.Text
+	allowEditResponse      bool
 }
 
 type Service struct {
@@ -151,6 +152,7 @@ func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore
 	form.messageAfterSubmission = request.MessageAfterSubmission
 	form.visibility = visibilityFromAPIFormat(request.Visibility)
 	form.title = request.Title
+	form.allowEditResponse = request.AllowEditResponse
 
 	return form, nil
 }
@@ -183,6 +185,7 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 		DressingHeaderFont:     fields.dressingHeaderFont,
 		DressingQuestionFont:   fields.dressingQuestionFont,
 		DressingTextFont:       fields.dressingTextFont,
+		AllowEditResponse:      fields.allowEditResponse,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create form")
@@ -257,6 +260,10 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		if request.Dressing.TextFont != "" {
 			params.DressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: true}
 		}
+	}
+
+	if request.AllowEditResponse != nil {
+		params.AllowEditResponse = pgtype.Bool{Bool: *request.AllowEditResponse, Valid: true}
 	}
 
 	patchedForm, err := s.queries.Patch(ctx, params)

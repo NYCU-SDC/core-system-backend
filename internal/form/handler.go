@@ -44,6 +44,7 @@ type Request struct {
 	Visibility             string           `json:"visibility" validate:"required,oneof=PUBLIC PRIVATE"`
 	CoverImageURL          string           `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
+	AllowEditResponse      bool             `json:"allowEditResponse"`
 }
 
 type PatchRequest struct {
@@ -57,6 +58,7 @@ type PatchRequest struct {
 	Visibility             *string            `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
 	CoverImageURL          *string            `json:"coverImageUrl"`
 	Dressing               *DressingRequest   `json:"dressing"`
+	AllowEditResponse      *bool              `json:"allowEditResponse"`
 }
 
 type Response struct {
@@ -77,6 +79,7 @@ type Response struct {
 	Visibility             string               `json:"visibility"`
 	CoverImage             string               `json:"coverImage"`
 	Dressing               DressingRequest      `json:"dressing"`
+	AllowEditResponse      bool                 `json:"allowEditResponse"`
 }
 
 type CoverUploadResponse struct {
@@ -191,6 +194,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 			QuestionFont: form.DressingQuestionFont.String,
 			TextFont:     form.DressingTextFont.String,
 		},
+		AllowEditResponse: form.AllowEditResponse,
 	}
 }
 
@@ -289,6 +293,7 @@ func formFromCreateRow(r CreateRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -315,6 +320,7 @@ func formFromGetRow(r GetRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -341,6 +347,7 @@ func formFromPatchRow(r PatchRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -367,6 +374,7 @@ func formFromListRow(r ListRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -393,6 +401,7 @@ func formFromListByUnitRow(r ListByUnitRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
