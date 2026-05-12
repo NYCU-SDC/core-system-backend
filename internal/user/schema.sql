@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS user_emails (
     value VARCHAR(255) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(user_id, value)
+    UNIQUE(value)
 );
 
 CREATE OR REPLACE VIEW users_with_emails AS
