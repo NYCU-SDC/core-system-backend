@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -40,6 +41,11 @@ func TestProcessAPIText(t *testing.T) {
 			name:        "malformed JSON string",
 			raw:         []byte(`"unclosed`),
 			expectedErr: internal.ErrInvalidDocumentJSON,
+		},
+		{
+			name:        "quoted JSON string exceeds max byte size",
+			raw:         append(append([]byte{'"'}, bytes.Repeat([]byte{'a'}, MaxRichTextJSONBytes-1)...), '"'),
+			expectedErr: internal.ErrInvalidDocumentTooLarge,
 		},
 		{
 			name: "prose mirror object matches Process",
@@ -294,6 +300,100 @@ func TestProcess(t *testing.T) {
 			},
 			expectedErr: nil,
 		},
+		{
+			name: "link trims whitespace around https href",
+			raw:  []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"  https://example.com/path  "}}],"text":"x"}]}]}`),
+			validate: func(t *testing.T, _ []byte, docHTML string) {
+				t.Helper()
+				require.Contains(t, docHTML, `href="https://example.com/path"`)
+			},
+			expectedErr: nil,
+		},
+		{
+			name:        "rejects invalid mailto",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"mailto:not-an-email"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects link title too long",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"https://example.com","title":"` + strings.Repeat("t", MaxLinkTitleRunes+1) + `"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects heading level as string",
+			raw:         []byte(`{"type":"doc","content":[{"type":"heading","attrs":{"level":"2"},"content":[{"type":"text","text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentHeading,
+		},
+		{
+			name:        "rejects fractional heading level",
+			raw:         []byte(`{"type":"doc","content":[{"type":"heading","attrs":{"level":2.5},"content":[{"type":"text","text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentHeading,
+		},
+		{
+			name:        "rejects variable name with internal space",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"variable","attrs":{"name":"BAD NAME"}}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentVariableAttrs,
+		},
+		{
+			name:        "rejects NUL in text",
+			raw:         []byte("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"x\\u0000y\"}]}]}"),
+			expectedErr: internal.ErrInvalidDocumentNode,
+		},
+		{
+			name:        "rejects NUL in link href",
+			raw:         []byte("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"marks\":[{\"type\":\"link\",\"attrs\":{\"href\":\"https://ex.com\\u0000\"}}],\"text\":\"x\"}]}]}"),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects hash href longer than max runes",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"#` + strings.Repeat("a", MaxLinkHrefRunes) + `"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects single text leaf over max runes",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", MaxRichTextLeafRunes+1) + `"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentTooLarge,
+		},
+		{
+			name:        "rejects hash link with target",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"#section","target":"_blank"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects empty variable name",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"variable","attrs":{"name":""}}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentVariableAttrs,
+		},
+		{
+			name:        "rejects variable name over max runes",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"variable","attrs":{"name":"` + strings.Repeat("v", MaxVariableNameRunes+1) + `"}}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentVariableAttrs,
+		},
+		{
+			name:        "rejects NUL in variable name",
+			raw:         []byte("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"variable\",\"attrs\":{\"name\":\"x\\u0000y\"}}]}]}"),
+			expectedErr: internal.ErrInvalidDocumentVariableAttrs,
+		},
+		{
+			name:        "rejects NUL in link title",
+			raw:         []byte("{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"marks\":[{\"type\":\"link\",\"attrs\":{\"href\":\"https://example.com\",\"title\":\"a\\u0000b\"}}],\"text\":\"x\"}]}]}"),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects javascript link scheme",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"javascript:alert(1)"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects web link without host",
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","marks":[{"type":"link","attrs":{"href":"https://"}}],"text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentLink,
+		},
+		{
+			name:        "rejects heading level null",
+			raw:         []byte(`{"type":"doc","content":[{"type":"heading","attrs":{"level":null},"content":[{"type":"text","text":"x"}]}]}`),
+			expectedErr: internal.ErrInvalidDocumentHeading,
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -380,9 +480,15 @@ func TestPlainText(t *testing.T) {
 		},
 		{
 			name:        "rejects oversized payload",
-			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", maxRichTextBytes) + `"}]}]}`),
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", MaxRichTextLeafRunes+1) + `"}]}]}`),
 			expected:    "",
 			expectedErr: internal.ErrInvalidDocumentTooLarge,
+		},
+		{
+			name:        "top-level text normalized like Process",
+			raw:         []byte(`{"type":"doc","content":[{"type":"text","text":"solo"}]}`),
+			expected:    "solo",
+			expectedErr: nil,
 		},
 	}
 	for _, tc := range testCases {
@@ -448,7 +554,7 @@ func TestPreviewSnippet(t *testing.T) {
 		},
 		{
 			name:        "propagates PlainText oversized error",
-			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", maxRichTextBytes) + `"}]}]}`),
+			raw:         []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", MaxRichTextLeafRunes+1) + `"}]}]}`),
 			maxRunes:    10,
 			expectedErr: internal.ErrInvalidDocumentTooLarge,
 		},
@@ -468,6 +574,17 @@ func TestPreviewSnippet(t *testing.T) {
 	}
 }
 
+func TestProcess_JSONPayloadTooLarge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("allocates > MaxRichTextJSONBytes")
+	}
+	t.Parallel()
+	md := newTestService()
+	raw := bytes.Repeat([]byte{'x'}, MaxRichTextJSONBytes+1)
+	_, _, err := md.ProcessRequest(context.Background(), raw)
+	require.ErrorIs(t, err, internal.ErrInvalidDocumentTooLarge)
+}
+
 func TestEmptyDocContent(t *testing.T) {
 	t.Parallel()
 	md := newTestService()
@@ -479,17 +596,20 @@ func TestTooLargeProcessRejected(t *testing.T) {
 	t.Parallel()
 	md := newTestService()
 
-	raw := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", maxRichTextBytes) + `"}]}]}`)
+	raw := []byte(`{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"` + strings.Repeat("x", MaxRichTextLeafRunes+1) + `"}]}]}`)
 
 	_, _, err := md.ProcessProseMirrorJSON(context.Background(), raw)
 	require.ErrorIs(t, err, internal.ErrInvalidDocumentTooLarge)
 }
 
 func TestTooLargeProcessRequestRejected(t *testing.T) {
+	if testing.Short() {
+		t.Skip("allocates > MaxRichTextJSONBytes")
+	}
 	t.Parallel()
 	md := newTestService()
 
-	plain := strings.Repeat("x", maxRichTextBytes)
+	plain := strings.Repeat("x", MaxRichTextJSONBytes-1)
 	raw, err := json.Marshal(plain)
 	require.NoError(t, err)
 
