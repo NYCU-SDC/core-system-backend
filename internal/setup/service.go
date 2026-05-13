@@ -125,13 +125,6 @@ func (s *Service) Setup(ctx context.Context) error {
 				span.RecordError(err)
 				return err
 			}
-			err = s.unitService.UpdateUnitMemberRole(traceCtx, orgID, userID, unit.UnitRole(org.OrgRole))
-			if err != nil {
-				logger.Error("Failed to update unit member role", zap.String("org_name", org.Slug), zap.String("user_email", user.Email), zap.Error(err))
-				span.RecordError(err)
-				return err
-			}
-
 		}
 	}
 	logger.Info("Successfully initialized user roles")
