@@ -406,28 +406,33 @@ func (b Builder) CreateWorkflowMissingLabel() []byte {
 	return workflowJSON
 }
 
-// CreateWorkflowWithUnreachableNode creates a workflow with an unreachable node
+// CreateWorkflowWithUnreachableNode creates a workflow where a section node is an orphan:
+// no other node's next/nextTrue/nextFalse points at it (start goes directly to end).
+// Valid for both draft Update and Activate (graph references are valid; orphan nodes are allowed).
 func (b Builder) CreateWorkflowWithUnreachableNode() []byte {
 	startID := uuid.New()
 	endID := uuid.New()
 	orphanID := uuid.New()
 	workflowJSON, err := json.Marshal([]map[string]interface{}{
 		{
-			"id":    startID.String(),
-			"type":  "start",
-			"label": "Start",
-			"next":  endID.String(),
+			"id":      startID.String(),
+			"type":    "start",
+			"label":   "Start",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
 		},
 		{
-			"id":    endID.String(),
-			"type":  "end",
-			"label": "End",
+			"id":      endID.String(),
+			"type":    "end",
+			"label":   "End",
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
 		},
 		{
-			"id":    orphanID.String(),
-			"type":  "section",
-			"label": "Orphan",
-			"next":  endID.String(),
+			"id":      orphanID.String(),
+			"type":    "section",
+			"label":   "Orphan",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
 		},
 	})
 	require.NoError(b.t, err)

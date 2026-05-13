@@ -101,6 +101,11 @@ func TestActivate(t *testing.T) {
 			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1.7976931348623157e+308"), "y": json.Number("2")}),
 			expectedErr:  false,
 		},
+		{
+			name:         "orphan section (no incoming edges from other nodes)",
+			workflowJSON: createWorkflow_ActivateOrphanSection(t),
+			expectedErr:  false,
+		},
 	}
 
 	validator := NewValidator()

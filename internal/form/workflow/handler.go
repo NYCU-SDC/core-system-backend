@@ -254,6 +254,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
+// UpdateHandler replaces the form's workflow with the JSON body after normalizing types.
 func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "UpdateWorkflow")
 	defer span.End()

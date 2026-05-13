@@ -99,9 +99,9 @@ func (s *SetupImpl) LoadSetupConfig(logger *zap.Logger, setupPath string, setupD
 	}
 
 	allowedList := make(AllowedOnboardingList)
-	for _, user := range rawCfg.Users {
+	for _, user := range cfg.Users {
 		if user.AllowedOnboarding {
-			allowedList[strings.ToLower(user.Email)] = struct{}{}
+			allowedList[user.Email] = struct{}{}
 		}
 	}
 

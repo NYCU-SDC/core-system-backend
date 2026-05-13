@@ -4,7 +4,9 @@ import (
 	"NYCU-SDC/core-system-backend/internal/user"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -79,12 +81,37 @@ type CreateResponse struct {
 	ID string `json:"id" validate:"required,uuid"`
 }
 
+type ExportPreviewRequest struct {
+	QuestionIDs []string `json:"questionIds" validate:"required,dive,uuid"`
+}
+
+type ExportHeader struct {
+	ID    string `json:"id" validate:"required,uuid"`
+	Title string `json:"title" validate:"required"`
+}
+
+type ExportRow struct {
+	ID      string                    `json:"id" validate:"required,uuid"`
+	Answers map[string]*AnswerPayload `json:"answers" validate:"required"`
+}
+
+type ExportPreviewResponse struct {
+	Headers []ExportHeader `json:"headers" validate:"required,dive"`
+	Rows    []ExportRow    `json:"rows" validate:"required,dive"`
+}
+
+type ExportDownloadRequest struct {
+	QuestionIDs []string `json:"questionIds" validate:"required,dive,uuid"`
+}
+
 type Store interface {
 	Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error)
 	ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUID, userID uuid.UUID) ([]FormResponse, error)
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error)
 	Delete(ctx context.Context, responseID uuid.UUID) error
+	ExportPreview(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (ExportPreviewResponse, error)
+	ExportDownload(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]byte, string, error)
 }
 
 type QuestionStore interface {
@@ -398,6 +425,93 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, CreateResponse{
 		ID: newResponse.ID.String(),
 	})
+}
+
+func (h *Handler) ExportPreview(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ExportPreview")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formIDStr := r.PathValue("formId")
+	formID, err := handlerutil.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req ExportPreviewRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	questionIDs, err := parseQuestionIDs(req.QuestionIDs)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response, err := h.store.ExportPreview(traceCtx, formID, questionIDs)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) ExportDownload(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ExportDownload")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formIDStr := r.PathValue("formId")
+	formID, err := handlerutil.ParseUUID(formIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req ExportDownloadRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	questionIDs, err := parseQuestionIDs(req.QuestionIDs)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	fileBytes, filename, err := h.store.ExportDownload(traceCtx, formID, questionIDs)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s.xlsx", url.PathEscape(filename)))
+	w.WriteHeader(http.StatusOK)
+	_, err = w.Write(fileBytes)
+	if err != nil {
+		logger.Error("failed to write export download response", zap.Error(err))
+		span.RecordError(err)
+	}
+}
+
+func parseQuestionIDs(questionIDStrs []string) ([]uuid.UUID, error) {
+	questionIDs := make([]uuid.UUID, 0, len(questionIDStrs))
+	for _, questionIDStr := range questionIDStrs {
+		questionID, err := handlerutil.ParseUUID(questionIDStr)
+		if err != nil {
+			return nil, err
+		}
+		questionIDs = append(questionIDs, questionID)
+	}
+	return questionIDs, nil
 }
 
 // Delete deletes a response by id
