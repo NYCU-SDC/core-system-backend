@@ -3,6 +3,11 @@ INSERT INTO users (name, username, avatar_url, role, is_onboarded)
 VALUES ($1, $2, $3, $4, $5) 
 RETURNING *;
 
+-- name: CreateWithID :one
+INSERT INTO users (id, name, username, avatar_url, role, is_onboarded)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING *;
+
 -- name: Exists :one
 SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);
 
@@ -40,8 +45,7 @@ SELECT EXISTS(SELECT 1 FROM auth WHERE provider = $1 AND provider_id = $2);
 
 -- name: CreateEmail :exec
 INSERT INTO user_emails (user_id, value)
-VALUES ($1, $2) 
-ON CONFLICT (user_id, value) DO NOTHING;
+VALUES ($1, $2);
 
 -- name: GetEmails :many
 SELECT user_emails.value as email FROM user_emails WHERE user_id = $1;
