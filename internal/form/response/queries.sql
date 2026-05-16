@@ -52,3 +52,12 @@ SELECT * FROM form_responses
 WHERE form_id = $1
   AND progress = 'SUBMITTED'
 ORDER BY submitted_at ASC, id ASC;
+
+-- name: GetEditInfo :one
+SELECT
+    r.progress,
+    f.allow_edit_response,
+    f.deadline
+FROM form_responses r
+         JOIN forms f ON f.id = r.form_id
+WHERE r.id = $1;

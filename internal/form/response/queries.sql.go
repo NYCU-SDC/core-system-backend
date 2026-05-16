@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const create = `-- name: Create :one
@@ -96,6 +97,29 @@ func (q *Queries) Get(ctx context.Context, arg GetParams) (FormResponse, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getEditInfo = `-- name: GetEditInfo :one
+SELECT
+    r.progress,
+    f.allow_edit_response,
+    f.deadline
+FROM form_responses r
+         JOIN forms f ON f.id = r.form_id
+WHERE r.id = $1
+`
+
+type GetEditInfoRow struct {
+	Progress          ResponseProgress
+	AllowEditResponse bool
+	Deadline          pgtype.Timestamptz
+}
+
+func (q *Queries) GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error) {
+	row := q.db.QueryRow(ctx, getEditInfo, id)
+	var i GetEditInfoRow
+	err := row.Scan(&i.Progress, &i.AllowEditResponse, &i.Deadline)
 	return i, err
 }
 

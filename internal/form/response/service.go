@@ -16,6 +16,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/xuri/excelize/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -34,6 +35,7 @@ type Querier interface {
 	ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error)
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error)
 	ListSubmittedByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
+	GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error)
 }
 
 type WorkflowResolver interface {
@@ -857,4 +859,24 @@ func escapeForExcel(s string) string {
 	default:
 		return s
 	}
+}
+
+func (s *Service) GetEditInfo(ctx context.Context, id uuid.UUID) (string, bool, pgtype.Timestamptz, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetEditInfo")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	editInfo, err := s.queries.GetEditInfo(traceCtx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			span.RecordError(internal.ErrResponseNotFound)
+			return "", false, pgtype.Timestamptz{}, internal.ErrResponseNotFound
+		}
+
+		err = databaseutil.WrapDBError(err, logger, "get response edit info")
+		span.RecordError(err)
+		return "", false, pgtype.Timestamptz{}, err
+	}
+
+	return string(editInfo.Progress), editInfo.AllowEditResponse, editInfo.Deadline, nil
 }

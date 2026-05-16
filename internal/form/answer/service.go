@@ -29,7 +29,6 @@ type Querier interface {
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
 	WithTx(tx pgx.Tx) *Queries
-	GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error)
 }
 
 type TxBeginner interface {
@@ -734,24 +733,4 @@ func (s Service) MergeAnswersForWorkflowResolution(
 		zap.Int("mergedAnswerCount", len(out)),
 	)
 	return out, nil
-}
-
-func (s *Service) GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetEditInfo")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	editInfo, err := s.queries.GetEditInfo(traceCtx, id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			span.RecordError(internal.ErrResponseNotFound)
-			return GetEditInfoRow{}, internal.ErrResponseNotFound
-		}
-
-		err = databaseutil.WrapDBError(err, logger, "get response edit info")
-		span.RecordError(err)
-		return GetEditInfoRow{}, err
-	}
-
-	return editInfo, nil
 }

@@ -69,12 +69,3 @@ JOIN form_responses fr ON a.response_id = fr.id
 WHERE fr.form_id = $1
   AND fr.progress = 'submitted'
   AND a.question_id = ANY(@question_id::uuid[]);
-
--- name: GetEditInfo :one
-SELECT
-    r.progress,
-    f.allow_edit_response,
-    f.deadline
-FROM form_responses r
-         JOIN forms f ON f.id = r.form_id
-WHERE r.id = $1;
