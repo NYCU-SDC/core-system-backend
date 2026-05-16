@@ -258,15 +258,7 @@ func (s *Service) UpdateOrder(ctx context.Context, formID, viewID uuid.UUID, new
 		return View{}, err
 	}
 
-	return View{
-		ID:        row.ID,
-		FormID:    row.FormID,
-		Title:     row.Title,
-		Locked:    row.Locked,
-		Order:     row.Order,
-		CreatedAt: row.CreatedAt,
-		UpdatedAt: row.UpdatedAt,
-	}, nil
+	return View(row), nil
 }
 
 // Lock sets locked=true on the view.
