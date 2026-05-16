@@ -95,11 +95,12 @@ var (
 	ErrSearchTooLong              = errors.New("search string exceeds maximum length")
 
 	// Form Errors
-	ErrFormNotFound       = errors.New("form not found")
-	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
-	ErrFormDeadlinePassed = errors.New("form deadline has passed")
-	ErrArchivedForm       = errors.New("archived form should not accept new response")
-	ErrInvalidStatus      = errors.New("invalid form status")
+	ErrFormNotFound         = errors.New("form not found")
+	ErrFormNotDraft         = fmt.Errorf("form is not in draft status")
+	ErrFormDeadlinePassed   = errors.New("form deadline has passed")
+	ErrArchivedForm         = errors.New("archived form should not accept new response")
+	ErrInvalidStatus        = errors.New("invalid form status")
+	ErrFormDeadlineExceeded = errors.New("missing the deadline for the form")
 
 	// Question Errors
 	ErrQuestionNotFound           = errors.New("question not found")
@@ -115,6 +116,7 @@ var (
 	ErrResponseAlreadyExists  = errors.New("user already has a response for this form")
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 	ErrResponseNotOwned       = errors.New("response does not belong to the current user")
+	ErrResponseEditNotAllowed = errors.New("response is not allowed to be edited")
 
 	// Answer / Workflow: cannot answer questions in a section skipped by workflow
 	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
@@ -283,7 +285,9 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("archived form should not accept new response")
 	case errors.Is(err, ErrInvalidStatus):
 		return problem.NewValidateProblem("invalid form status")
-
+	case errors.Is(err, ErrFormDeadlineExceeded):
+		return problem.NewForbiddenProblem("missing the deadline for the form")
+		
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):
 		return problem.NewValidateProblem("invalid isRead parameter")
@@ -318,6 +322,8 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrResponseAlreadyExists):
 		return problem.NewValidateProblem("user already has a response for this form")
 	case errors.Is(err, ErrResponseNotOwned):
+		return problem.NewForbiddenProblem("response does not belong to the current user")
+	case errors.Is(err, ErrResponseEditNotAllowed):
 		return problem.NewForbiddenProblem("response does not belong to the current user")
 
 	// Submit Errors

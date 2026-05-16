@@ -80,6 +80,7 @@ type ResponseStore interface {
 	// GetSubmittedBy returns the user ID who submitted the response with the given ID.
 	// Used for ownership checks without creating an import cycle with the response package.
 	GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error)
 }
 
 // OAuthProvider is the interface needed to initiate and complete an OAuth flow.
@@ -267,6 +268,25 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
+	}
+
+	// Check edit info
+	editInfo, err := h.responseStore.GetEditInfo(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if editInfo.Progress == "submitted" {
+		if !editInfo.AllowEditResponse {
+			h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseEditNotAllowed, logger)
+			return
+		}
+
+		if editInfo.Deadline.Valid && time.Now().After(editInfo.Deadline.Time) {
+			h.problemWriter.WriteError(traceCtx, w, internal.ErrFormDeadlineExceeded, logger)
+			return
+		}
 	}
 
 	// Get all answers and answerables, so we can resolve active sections from workflow so we reject answers for skipped sections
