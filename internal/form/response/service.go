@@ -16,7 +16,6 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/xuri/excelize/v2"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -861,7 +860,7 @@ func escapeForExcel(s string) string {
 	}
 }
 
-func (s *Service) GetEditInfo(ctx context.Context, id uuid.UUID) (string, bool, pgtype.Timestamptz, error) {
+func (s *Service) GetEditInfo(ctx context.Context, id uuid.UUID) (string, bool, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetEditInfo")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -870,13 +869,13 @@ func (s *Service) GetEditInfo(ctx context.Context, id uuid.UUID) (string, bool, 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			span.RecordError(internal.ErrResponseNotFound)
-			return "", false, pgtype.Timestamptz{}, internal.ErrResponseNotFound
+			return "", false, internal.ErrResponseNotFound
 		}
 
 		err = databaseutil.WrapDBError(err, logger, "get response edit info")
 		span.RecordError(err)
-		return "", false, pgtype.Timestamptz{}, err
+		return "", false, err
 	}
 
-	return string(editInfo.Progress), editInfo.AllowEditResponse, editInfo.Deadline, nil
+	return string(editInfo.Progress), editInfo.AllowEditResponse, nil
 }

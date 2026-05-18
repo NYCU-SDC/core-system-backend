@@ -20,7 +20,6 @@ import (
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -81,7 +80,7 @@ type ResponseStore interface {
 	// GetSubmittedBy returns the user ID who submitted the response with the given ID.
 	// Used for ownership checks without creating an import cycle with the response package.
 	GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
-	GetEditInfo(ctx context.Context, id uuid.UUID) (string, bool, pgtype.Timestamptz, error)
+	GetEditInfo(ctx context.Context, id uuid.UUID) (string, bool, error)
 }
 
 // OAuthProvider is the interface needed to initiate and complete an OAuth flow.
@@ -272,7 +271,7 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check edit info
-	progress, allowEditResponse, deadline, err := h.responseStore.GetEditInfo(traceCtx, responseID)
+	progress, allowEditResponse, err := h.responseStore.GetEditInfo(traceCtx, responseID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -281,11 +280,6 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 	if progress == "submitted" {
 		if !allowEditResponse {
 			h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseEditNotAllowed, logger)
-			return
-		}
-
-		if deadline.Valid && time.Now().After(deadline.Time) {
-			h.problemWriter.WriteError(traceCtx, w, internal.ErrFormDeadlineExceeded, logger)
 			return
 		}
 	}
