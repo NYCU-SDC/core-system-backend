@@ -212,7 +212,7 @@ type mockQuestionStoreForEnrich struct {
 	sections  map[string]question.Section
 }
 
-func (m *mockQuestionStoreForEnrich) GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error) {
+func (m *mockQuestionStoreForEnrich) Get(ctx context.Context, id uuid.UUID) (question.Answerable, error) {
 	if a, ok := m.questions[id.String()]; ok {
 		return a, nil
 	}

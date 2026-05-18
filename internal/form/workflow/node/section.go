@@ -16,7 +16,9 @@ func NewSectionNode(node map[string]interface{}) (Validatable, error) {
 	return &SectionNode{node: node}, nil
 }
 
-func (n *SectionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[string]map[string]interface{}, questionStore QuestionStore) error {
+// Validate checks section-node fields; whether next points to an existing node is enforced by
+// validateGraphReferences in the workflow package.
+func (n *SectionNode) Validate(ctx context.Context, formID uuid.UUID, questionStore QuestionStore) error {
 	nodeID, _ := n.node["id"].(string)
 
 	// Validate field names (check for typos and invalid fields)
@@ -31,22 +33,17 @@ func (n *SectionNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap ma
 		return fmt.Errorf("section node '%s' must have a 'next' field", nodeID)
 	}
 
-	// Validate that next node exists
-	_, exists := nodeMap[next]
-	if !exists {
-		return fmt.Errorf("section node '%s' references non-existent node '%s' in next", nodeID, next)
-	}
-
 	return nil
 }
 
 // validateFieldNames validates that the node only contains valid field names
 func (n *SectionNode) validateFieldNames(nodeID string) error {
 	validFields := map[string]bool{
-		"id":    true,
-		"type":  true,
-		"label": true,
-		"next":  true,
+		"id":      true,
+		"type":    true,
+		"label":   true,
+		"next":    true,
+		"payload": true,
 	}
 
 	var invalidFields []string

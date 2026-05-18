@@ -77,7 +77,7 @@ type mockQuestionStore struct {
 	questions map[uuid.UUID]question.Answerable
 }
 
-func (m *mockQuestionStore) GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error) {
+func (m *mockQuestionStore) Get(ctx context.Context, id uuid.UUID) (question.Answerable, error) {
 	if q, ok := m.questions[id]; ok {
 		return q, nil
 	}
@@ -107,6 +107,18 @@ func createTestService(t *testing.T, logger *zap.Logger, tracer trace.Tracer, mo
 // createWorkflowJSON marshals nodes to JSON and fails the test on error
 func createWorkflowJSON(t *testing.T, nodes []map[string]interface{}) []byte {
 	t.Helper()
+
+	// Default `payload` to a valid object for tests that don't explicitly specify it.
+	// The workflow validator requires payload to be present on every node.
+	for i := range nodes {
+		if _, ok := nodes[i]["payload"]; !ok {
+			nodes[i]["payload"] = map[string]interface{}{
+				"x": 0,
+				"y": 0,
+			}
+		}
+	}
+
 	jsonBytes, err := json.Marshal(nodes)
 	require.NoError(t, err)
 	return jsonBytes
@@ -132,6 +144,29 @@ func createWorkflow_SimpleValid(t *testing.T) []byte {
 	})
 }
 
+// createWorkflow_SimpleValid_WithNodePayload returns a minimal start -> end workflow
+// where `payload` is present on both nodes.
+func createWorkflow_SimpleValid_WithNodePayload(t *testing.T, payload interface{}) []byte {
+	t.Helper()
+	startID := uuid.New()
+	endID := uuid.New()
+	return createWorkflowJSON(t, []map[string]interface{}{
+		{
+			"id":      startID.String(),
+			"type":    "start",
+			"label":   "Start",
+			"next":    endID.String(),
+			"payload": payload,
+		},
+		{
+			"id":      endID.String(),
+			"type":    "end",
+			"label":   "End",
+			"payload": payload,
+		},
+	})
+}
+
 // createWorkflow_ComplexValid returns a workflow with start, section, condition, and end
 func createWorkflow_ComplexValid(t *testing.T) []byte {
 	t.Helper()
@@ -145,12 +180,20 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 			"type":  "start",
 			"label": "Start",
 			"next":  sectionID.String(),
+			"payload": map[string]interface{}{
+				"x": 0,
+				"y": 0,
+			},
 		},
 		{
 			"id":    sectionID.String(),
 			"type":  "section",
 			"label": "Section",
 			"next":  conditionID.String(),
+			"payload": map[string]interface{}{
+				"x": 0,
+				"y": 0,
+			},
 		},
 		{
 			"id":        conditionID.String(),
@@ -163,17 +206,29 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 				"question": "answer",
 				"pattern":  "yes",
 			},
+			"payload": map[string]interface{}{
+				"x": 0,
+				"y": 0,
+			},
 		},
 		{
 			"id":    uuid.New().String(),
 			"type":  "section",
 			"label": "Reference Section",
 			"next":  conditionID.String(),
+			"payload": map[string]interface{}{
+				"x": 0,
+				"y": 0,
+			},
 		},
 		{
 			"id":    endID.String(),
 			"type":  "end",
 			"label": "End",
+			"payload": map[string]interface{}{
+				"x": 0,
+				"y": 0,
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -648,6 +703,37 @@ func createWorkflow_UnreachableNode(t *testing.T) ([]byte, QuestionStore) {
 		{"id": orphanID.String(), "type": "section", "label": "Orphan"},
 	}
 	return createWorkflowJSON(t, nodes), emptyQuestionStore()
+}
+
+// createWorkflow_ActivateOrphanSection returns start→end with a section node that has no incoming edges
+// (same layout as test builder CreateWorkflowWithUnreachableNode). Valid for Activate.
+func createWorkflow_ActivateOrphanSection(t *testing.T) []byte {
+	t.Helper()
+	startID := uuid.New()
+	endID := uuid.New()
+	sectionID := uuid.New()
+	return createWorkflowJSON(t, []map[string]interface{}{
+		{
+			"id":      startID.String(),
+			"type":    "start",
+			"label":   "Start",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+		{
+			"id":      endID.String(),
+			"type":    "end",
+			"label":   "End",
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+		{
+			"id":      sectionID.String(),
+			"type":    "section",
+			"label":   "Orphan",
+			"next":    endID.String(),
+			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+		},
+	})
 }
 
 // createWorkflow_InvalidNextRefWithStore returns a workflow with an invalid next reference and an empty question store.

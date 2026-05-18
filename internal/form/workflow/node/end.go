@@ -16,7 +16,7 @@ func NewEndNode(node map[string]interface{}) (Validatable, error) {
 	return &EndNode{node: node}, nil
 }
 
-func (n *EndNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[string]map[string]interface{}, questionStore QuestionStore) error {
+func (n *EndNode) Validate(ctx context.Context, formID uuid.UUID, questionStore QuestionStore) error {
 	nodeID, _ := n.node["id"].(string)
 
 	// Validate field names (check for typos and invalid fields)
@@ -31,9 +31,10 @@ func (n *EndNode) Validate(ctx context.Context, formID uuid.UUID, nodeMap map[st
 // validateFieldNames validates that the node only contains valid field names
 func (n *EndNode) validateFieldNames(nodeID string) error {
 	validFields := map[string]bool{
-		"id":    true,
-		"type":  true,
-		"label": true,
+		"id":      true,
+		"type":    true,
+		"label":   true,
+		"payload": true,
 	}
 
 	var invalidFields []string

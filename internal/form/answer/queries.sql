@@ -3,12 +3,7 @@ SELECT * FROM answers
 WHERE response_id = $1
 ORDER BY created_at ASC;
 
--- name: ListByQuestionIDAndResponseID :one
-SELECT * FROM answers
-WHERE question_id = $1 AND response_id = $2
-ORDER BY created_at ASC;
-
--- name: Get :one
+-- name: GetIDByResponseIDAndQuestionID :one
 SELECT id FROM answers
 WHERE response_id = $1 AND question_id = $2;
 
@@ -62,7 +57,15 @@ RETURNING *;
 DELETE FROM answers
 WHERE response_id = $1;
 
--- name: GetByID :one
+-- name: Get :one
 SELECT id, response_id, question_id, value, created_at, updated_at
 FROM answers
 WHERE id = $1;
+
+-- name: ListForExport :many
+SELECT a.id, a.response_id, a.question_id, a.value, a.created_at, a.updated_at, fr.submitted_at
+FROM answers a
+JOIN form_responses fr ON a.response_id = fr.id
+WHERE fr.form_id = $1
+  AND fr.progress = 'submitted'
+  AND a.question_id = ANY(@question_id::uuid[]);

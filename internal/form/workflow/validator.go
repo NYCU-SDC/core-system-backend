@@ -1,13 +1,16 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow/node"
 
@@ -26,7 +29,7 @@ var nodeIDPatternTemplates = []string{
 	node.TypeSection + " node '%s'",
 	node.TypeCondition + " node '%s'",
 	node.TypeEnd + " node '%s'",
-	// Generic node pattern: "node 'uuid' is unreachable"
+	// Generic node pattern: "node 'uuid' ..."
 	"node '%s'",
 	// Duplicate node ID pattern: "duplicate node id 'uuid'"
 	"duplicate node id '%s'",
@@ -55,7 +58,7 @@ const (
 // QuestionStore defines the interface for querying form questions and sections.
 // Used for validation (condition rule question IDs), label enrichment (section titles, condition labels).
 type QuestionStore interface {
-	GetByID(ctx context.Context, id uuid.UUID) (question.Answerable, error)
+	Get(ctx context.Context, id uuid.UUID) (question.Answerable, error)
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
 }
 
@@ -92,7 +95,7 @@ func NewValidator() Validator {
 // - Array structure
 // - Node structure and required fields
 // - Valid node types
-// - Reachability (all nodes are reachable)
+// - Graph references (next, nextTrue, nextFalse point to existing nodes)
 // - Condition rule question IDs exist and types match
 // Returns all validation errors if validation fails
 func (v workflowValidator) Activate(ctx context.Context, formID uuid.UUID, workflow []byte, questionStore QuestionStore) error {
@@ -117,9 +120,9 @@ func (v workflowValidator) Activate(ctx context.Context, formID uuid.UUID, workf
 	}
 
 	if nodeMap != nil {
-		err := validateReachability(nodes, nodeMap)
+		err := validateGraphReferences(nodes, nodeMap)
 		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("reachability validation failed: %w", err))
+			validationErrors = append(validationErrors, fmt.Errorf("graph validation failed: %w", err))
 		}
 	}
 
@@ -152,9 +155,9 @@ func (v workflowValidator) Validate(ctx context.Context, formID uuid.UUID, workf
 	}
 
 	if nodeMap != nil {
-		err := validateReference(nodes, nodeMap)
+		err := validateGraphReferences(nodes, nodeMap)
 		if err != nil {
-			validationErrors = append(validationErrors, fmt.Errorf("graph references validation failed: %w", err))
+			validationErrors = append(validationErrors, fmt.Errorf("graph validation failed: %w", err))
 		}
 
 		// Validate that condition nodes reference sections visited before them (section = question's section, resolved from question ID)
@@ -206,7 +209,9 @@ func formatValidationErrors(validationErrors []error) error {
 // parseWorkflow parses workflow JSON into nodes. Call once at entry point and pass nodes to helpers.
 func parseWorkflow(workflow []byte) ([]map[string]interface{}, error) {
 	var nodes []map[string]interface{}
-	err := json.Unmarshal(workflow, &nodes)
+	dec := json.NewDecoder(bytes.NewReader(workflow))
+	dec.UseNumber()
+	err := dec.Decode(&nodes)
 	if err != nil {
 		return nil, fmt.Errorf("invalid JSON format: %w", err)
 	}
@@ -293,13 +298,93 @@ func validateNodeID(node map[string]interface{}, index int) (string, error) {
 	return id, nil
 }
 
+func payloadCoordValidationErrors(
+	payloadObj map[string]interface{},
+	coordKey string,
+	nodeType string,
+	nodeID string,
+	missingMsg string,
+	invalidMsg string,
+) []error {
+	var payloadErrs []error
+	val, present := payloadObj[coordKey]
+	if !present {
+		payloadErrs = append(payloadErrs, fmt.Errorf(
+			"%w: %s '%s' has invalid payload: %s",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+			missingMsg,
+		))
+		return payloadErrs
+	}
+
+	n, ok := val.(json.Number)
+	if !ok {
+		payloadErrs = append(payloadErrs, fmt.Errorf(
+			"%w: %s '%s' has invalid payload: %s",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+			invalidMsg,
+		))
+		return payloadErrs
+	}
+
+	f64, err := n.Float64()
+	if err != nil || f64 > math.MaxFloat64 {
+		payloadErrs = append(payloadErrs, fmt.Errorf(
+			"%w: %s '%s' has invalid payload: %s",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+			invalidMsg,
+		))
+	}
+	return payloadErrs
+}
+
+// validatePayloadField validates node.payload.
+func validatePayloadField(node map[string]interface{}, nodeType string, nodeID string) error {
+	payload, ok := node["payload"]
+	if !ok {
+		return fmt.Errorf(
+			"%w: %s '%s' is missing required payload field",
+			internal.ErrWorkflowNodePayloadInvalid,
+			nodeType,
+			nodeID,
+		)
+	}
+
+	// Payload must not be null.
+	if payload == nil {
+		return fmt.Errorf("%w: %s '%s' has invalid payload: payload must be an object", internal.ErrWorkflowNodePayloadInvalid, nodeType, nodeID)
+	}
+
+	// Accept JSON objects only. Arrays, strings, numbers, booleans are rejected.
+	payloadObj, isObj := payload.(map[string]interface{})
+	if !isObj {
+		return fmt.Errorf("%w: %s '%s' has invalid payload: payload must be a JSON object", internal.ErrWorkflowNodePayloadInvalid, nodeType, nodeID)
+	}
+
+	payloadErrs := payloadCoordValidationErrors(payloadObj, "x", nodeType, nodeID, "missing payload.x", "payload.x must be an float64")
+	payloadErrs = append(payloadErrs, payloadCoordValidationErrors(payloadObj, "y", nodeType, nodeID, "missing payload.y", "payload.y must be an float64")...)
+
+	if len(payloadErrs) > 0 {
+		return errors.Join(payloadErrs...)
+	}
+
+	return nil
+}
+
 // validateNodes validates all nodes in the workflow and returns:
 // - nodeMap: map of node ID to node
 // - startNodeCount: number of start nodes found
 // - endNodeCount: number of end nodes found
 // - errors: all validation errors collected
 // When isActivate is true, this performs full node-specific validation (used by Activate).
-// When false, it performs a relaxed validation suitable for draft Update.
+// When false, it skips node.Validatable checks that depend on activation-specific rules,
+// but `payload` presence is still required for draft Update.
 func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]interface{}, questionStore QuestionStore, isActivate bool) (map[string]map[string]interface{}, int, int, []error) {
 	nodeMap := make(map[string]map[string]interface{})
 	nodeIDs := make(map[string]bool)
@@ -309,8 +394,18 @@ func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]int
 	var validationErrors []error
 
 	for i, nodeData := range nodes {
+		// Validate payload first so payload errors are collected even if other
+		// required-field checks fail and would trigger an early continue.
+		nodeTypeForPayload, _ := nodeData["type"].(string)
+		nodeIDForPayload, _ := nodeData["id"].(string)
+		err := validatePayloadField(nodeData, nodeTypeForPayload, nodeIDForPayload)
+		if err != nil {
+			validationErrors = append(validationErrors, err)
+		}
+
 		// Validate required fields (id, type, label)
-		if err := validateRequiredFields(nodeData, i); err != nil {
+		err = validateRequiredFields(nodeData, i)
+		if err != nil {
 			validationErrors = append(validationErrors, err)
 			continue // Skip this node but continue validating others
 		}
@@ -355,7 +450,7 @@ func validateNodes(ctx context.Context, formID uuid.UUID, nodes []map[string]int
 	if isActivate {
 		for i, validatedNode := range validatedNodes {
 			// Pass context, formID, and questionStore for condition rule validation
-			err := validatedNode.Validate(ctx, formID, nodeMap, questionStore)
+			err := validatedNode.Validate(ctx, formID, questionStore)
 			if err != nil {
 				validationErrors = append(validationErrors, fmt.Errorf("node at index %d: %w", i, err))
 			}
@@ -381,22 +476,13 @@ func validateRequiredNodeTypes(startNodeCount, endNodeCount int) []error {
 	return validationErrors
 }
 
-// validateReachability checks if all nodes in the workflow are reachable
-// It ensures:
-// - All node references (next, nextTrue, nextFalse) point to valid nodes
-// - All nodes can be reached from entry points (start nodes or first node)
-// - No orphaned nodes exist
-func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
-	// First validate references
-	err := validateReference(nodes, nodeMap)
-	if err != nil {
-		return err
-	}
-
-	// Build graph for reachability validation
+// validateAllNodesReachableFromStart runs BFS from the sole start node and returns a joined error
+// listing any node IDs not visited (orphans / disconnected subgraphs). Call after graph reference
+// checks so every edge target exists. Used from GetValidationInfo for non-blocking warnings.
+func validateAllNodesReachableFromStart(nodes []map[string]interface{}) error {
 	graph := make(map[string][]string)
 
-	// Build adjacency list and validate references
+	// Build adjacency list from next / nextTrue / nextFalse
 	for _, node := range nodes {
 		nodeID, _ := node["id"].(string)
 		nodeType, _ := node["type"].(string)
@@ -437,8 +523,11 @@ func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map
 			break
 		}
 	}
+	if startNodeID == "" {
+		return nil
+	}
 
-	// BFS traversal from the start node to ensure all nodes are reachable
+	// BFS traversal from the start node
 	visited := make(map[string]bool)
 	queue := make([]string, 0)
 
@@ -460,9 +549,12 @@ func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map
 		}
 	}
 
-	// Check if all nodes are reachable
 	var unreachableErrors []error
-	for nodeID := range nodeMap {
+	for _, node := range nodes {
+		nodeID, _ := node["id"].(string)
+		if nodeID == "" {
+			continue
+		}
 		if !visited[nodeID] {
 			unreachableErrors = append(unreachableErrors, fmt.Errorf("node '%s' is unreachable from the start node", nodeID))
 		}
@@ -475,8 +567,9 @@ func validateReachability(nodes []map[string]interface{}, nodeMap map[string]map
 	return nil
 }
 
-// validateReferences validates that any explicit reference fields point to nodes that exist.
-func validateReference(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
+// validateGraphReferences ensures next, nextTrue, and nextFalse reference existing node IDs.
+// This is the single place for edge-target existence checks (Activate and Validate both use it).
+func validateGraphReferences(nodes []map[string]interface{}, nodeMap map[string]map[string]interface{}) error {
 	var referenceErrors []error
 
 	for _, node := range nodes {
@@ -549,15 +642,13 @@ func validateConditionSectionOrder(ctx context.Context, formID uuid.UUID, nodes 
 		switch nodeType {
 		case string(NodeTypeCondition):
 			nextTrue, ok := n["nextTrue"].(string)
-			if !ok || nextTrue == "" {
-				continue
+			if ok && nextTrue != "" {
+				nextNodes = append(nextNodes, nextTrue)
 			}
-			nextNodes = append(nextNodes, nextTrue)
 			nextFalse, ok := n["nextFalse"].(string)
-			if !ok || nextFalse == "" {
-				continue
+			if ok && nextFalse != "" {
+				nextNodes = append(nextNodes, nextFalse)
 			}
-			nextNodes = append(nextNodes, nextFalse)
 		default:
 			next, ok := n["next"].(string)
 			if !ok || next == "" {
@@ -611,7 +702,7 @@ func validateConditionSectionOrder(ctx context.Context, formID uuid.UUID, nodes 
 			continue
 		}
 
-		answerable, err := questionStore.GetByID(ctx, questionID)
+		answerable, err := questionStore.Get(ctx, questionID)
 		if err != nil {
 			continue
 		}
@@ -719,7 +810,7 @@ func validateDraftConditionQuestion(
 		return fmt.Errorf("condition node '%s' conditionRule.question '%s' is not a valid UUID", nodeID, rule.Question)
 	}
 
-	answerable, err := questionStore.GetByID(ctx, questionID)
+	answerable, err := questionStore.Get(ctx, questionID)
 	if err != nil {
 		return fmt.Errorf("condition node '%s' references non-existent question '%s' in conditionRule.question", nodeID, rule.Question)
 	}

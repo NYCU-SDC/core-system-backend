@@ -3,10 +3,10 @@ INSERT INTO files (original_filename, content_type, size, data, uploaded_by)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
--- name: GetByID :one
+-- name: Get :one
 SELECT * FROM files WHERE id = $1;
 
--- name: GetMetadataByID :one
+-- name: GetMetadata :one
 SELECT id, original_filename, content_type, size, uploaded_by, created_at, updated_at 
 FROM files WHERE id = $1;
 
@@ -17,7 +17,7 @@ FROM files WHERE uploaded_by = $1 ORDER BY created_at DESC;
 -- name: Delete :exec
 DELETE FROM files WHERE id = $1;
 
--- name: ExistsByID :one
+-- name: Exists :one
 SELECT EXISTS(SELECT 1 FROM files WHERE id = $1);
 
 -- name: GetAll :many
@@ -39,10 +39,10 @@ SELECT * FROM file_attachments WHERE file_id = $1 ORDER BY created_at ASC;
 SELECT * FROM file_attachments
 WHERE resource_type = $1 AND resource_id = $2 ORDER BY created_at ASC;
 
--- name: DeleteAttachmentByID :exec
+-- name: DeleteAttachment :exec
 DELETE FROM file_attachments WHERE id = $1;
 
--- name: GetAttachmentByID :one
+-- name: GetAttachment :one
 SELECT * FROM file_attachments WHERE id = $1;
 
 -- name: ExistsAttachmentByFileAndResource :one
@@ -62,7 +62,7 @@ WHERE file_id = $1
 DELETE FROM file_attachments
 WHERE file_id = $1;
 
--- name: LockFileByID :one
+-- name: LockFile :one
 SELECT id
 FROM files
 WHERE id = $1

@@ -37,7 +37,7 @@ INSERT INTO slug_history (slug, org_id)
 VALUES ($1, $2)
 RETURNING *;
 
--- name: UpdateSlugHistory :many
+-- name: UpsertSlugHistory :many
 WITH
     -- Select the currently active slug for the org
     current_slug AS (

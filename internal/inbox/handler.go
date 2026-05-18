@@ -26,8 +26,8 @@ import (
 type Store interface {
 	List(ctx context.Context, userID uuid.UUID, filter *FilterRequest, page int, size int) ([]ListRow, error)
 	Count(ctx context.Context, userID uuid.UUID, filter *FilterRequest) (int64, error)
-	GetByID(ctx context.Context, id uuid.UUID, userID uuid.UUID) (GetByIDRow, error)
-	UpdateByID(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg UserInboxMessageFilter) (UpdateByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID, userID uuid.UUID) (GetRow, error)
+	Update(ctx context.Context, id uuid.UUID, userID uuid.UUID, arg UserInboxMessageFilter) (UpdateRow, error)
 }
 
 type UserInboxMessageFilter struct {
@@ -96,10 +96,10 @@ func (h *Handler) mapToResponse(ctx context.Context, message ListRow) (Response,
 	traceCtx, span := h.tracer.Start(ctx, "mapToResponse")
 	defer span.End()
 
-	previewMessage := h.extractStringField(traceCtx, message.PreviewMessage)
-	title := h.extractStringField(traceCtx, message.Title)
-	orgName := h.extractStringField(traceCtx, message.OrgName)
-	unitName := h.extractStringField(traceCtx, message.UnitName)
+	previewMessage := h.extractStringField(traceCtx, "previewMessage", message.PreviewMessage)
+	title := h.extractStringField(traceCtx, "title", message.Title)
+	orgName := h.extractStringField(traceCtx, "orgName", message.OrgName)
+	unitName := h.extractStringField(traceCtx, "unitName", message.UnitName)
 
 	return Response{
 		ID: message.ID.String(),
@@ -123,11 +123,11 @@ func (h *Handler) mapToResponse(ctx context.Context, message ListRow) (Response,
 	}, nil
 }
 
-// extractStringField extracts a string field from the database result
-func (h *Handler) extractStringField(ctx context.Context, field interface{}) string {
+// extractStringField extracts a string field from the database result.
+// fieldName is used in traces and logs only; field values are never logged to avoid PII in observability.
+func (h *Handler) extractStringField(ctx context.Context, fieldName string, field interface{}) string {
 	traceCtx, span := h.tracer.Start(ctx, "extractStringField", trace.WithAttributes(
-		attribute.String("field", fmt.Sprintf("%v", field)),
-		attribute.String("field_type", fmt.Sprintf("%T", field)),
+		attribute.String("field", fieldName),
 	))
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
@@ -136,13 +136,12 @@ func (h *Handler) extractStringField(ctx context.Context, field interface{}) str
 		fieldStr, ok := field.(string)
 		if ok {
 			return fieldStr
-		} else {
-			logutil.WithContext(traceCtx, logger).Warn("field type mismatch",
-				zap.String("field_type", fmt.Sprintf("%T", field)),
-				zap.String("field", fmt.Sprintf("%v", field)),
-			)
-			return ""
 		}
+		logutil.WithContext(traceCtx, logger).Warn("field type mismatch",
+			zap.String("field", fieldName),
+			zap.String("field_type", fmt.Sprintf("%T", field)),
+		)
+		return ""
 	}
 	return ""
 }
@@ -154,23 +153,34 @@ func (h *Handler) GetMessageContent(ctx context.Context, contentType ContentType
 
 	switch contentType {
 	case ContentTypeForm:
-		currentForm, err := h.formStore.GetByID(traceCtx, contentID)
+		currentForm, err := h.formStore.Get(traceCtx, contentID)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "get form by id")
 			span.RecordError(err)
 			return form.Response{}, err
 		}
 		response := form.ToResponse(form.Form{
-			ID:             currentForm.ID,
-			Title:          currentForm.Title,
-			Description:    currentForm.Description,
-			PreviewMessage: currentForm.PreviewMessage,
-			Status:         currentForm.Status,
-			UnitID:         currentForm.UnitID,
-			LastEditor:     currentForm.LastEditor,
-			Deadline:       currentForm.Deadline,
-			CreatedAt:      currentForm.CreatedAt,
-			UpdatedAt:      currentForm.UpdatedAt,
+			ID:                     currentForm.ID,
+			Title:                  currentForm.Title,
+			DescriptionJson:        currentForm.DescriptionJson,
+			DescriptionHtml:        currentForm.DescriptionHtml,
+			PreviewMessage:         currentForm.PreviewMessage,
+			MessageAfterSubmission: currentForm.MessageAfterSubmission,
+			Status:                 currentForm.Status,
+			UnitID:                 currentForm.UnitID,
+			CreatedBy:              currentForm.CreatedBy,
+			LastEditor:             currentForm.LastEditor,
+			Deadline:               currentForm.Deadline,
+			CreatedAt:              currentForm.CreatedAt,
+			UpdatedAt:              currentForm.UpdatedAt,
+			Visibility:             currentForm.Visibility,
+			GoogleSheetUrl:         currentForm.GoogleSheetUrl,
+			PublishTime:            currentForm.PublishTime,
+			CoverImageUrl:          currentForm.CoverImageUrl,
+			DressingColor:          currentForm.DressingColor,
+			DressingHeaderFont:     currentForm.DressingHeaderFont,
+			DressingQuestionFont:   currentForm.DressingQuestionFont,
+			DressingTextFont:       currentForm.DressingTextFont,
 		}, currentForm.UnitName.String, currentForm.OrgName.String, user.User{
 			ID:        currentForm.LastEditor,
 			Name:      currentForm.LastEditorName,
@@ -255,7 +265,7 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.store.GetByID(traceCtx, id, currentUser.ID)
+	message, err := h.store.Get(traceCtx, id, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -272,10 +282,10 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	previewMessage := h.extractStringField(traceCtx, message.PreviewMessage)
-	title := h.extractStringField(traceCtx, message.Title)
-	orgName := h.extractStringField(traceCtx, message.OrgName)
-	unitName := h.extractStringField(traceCtx, message.UnitName)
+	previewMessage := h.extractStringField(traceCtx, "previewMessage", message.PreviewMessage)
+	title := h.extractStringField(traceCtx, "title", message.Title)
+	orgName := h.extractStringField(traceCtx, "orgName", message.OrgName)
+	unitName := h.extractStringField(traceCtx, "unitName", message.UnitName)
 
 	response := ResponseDetail{
 		ID: message.ID.String(),
@@ -327,7 +337,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.store.UpdateByID(traceCtx, id, currentUser.ID, UserInboxMessageFilter{
+	message, err := h.store.Update(traceCtx, id, currentUser.ID, UserInboxMessageFilter{
 		IsRead:     req.IsRead,
 		IsStarred:  req.IsStarred,
 		IsArchived: req.IsArchived,
@@ -337,10 +347,10 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	previewMessage := h.extractStringField(traceCtx, message.PreviewMessage)
-	title := h.extractStringField(traceCtx, message.Title)
-	orgName := h.extractStringField(traceCtx, message.OrgName)
-	unitName := h.extractStringField(traceCtx, message.UnitName)
+	previewMessage := h.extractStringField(traceCtx, "previewMessage", message.PreviewMessage)
+	title := h.extractStringField(traceCtx, "title", message.Title)
+	orgName := h.extractStringField(traceCtx, "orgName", message.OrgName)
+	unitName := h.extractStringField(traceCtx, "unitName", message.UnitName)
 
 	response := Response{
 		ID: message.ID.String(),

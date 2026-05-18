@@ -468,14 +468,15 @@ func createSingleChoiceAnswerable(t *testing.T, questionID, sectionID, formID, c
 	require.NoError(t, err)
 
 	q := question.Question{
-		ID:          questionID,
-		SectionID:   sectionID,
-		Required:    false,
-		Type:        "single_choice",
-		Title:       pgtype.Text{String: "Test Question", Valid: true},
-		Description: pgtype.Text{String: "", Valid: false},
-		Metadata:    choiceMetadata,
-		Order:       1,
+		ID:              questionID,
+		SectionID:       sectionID,
+		Required:        false,
+		Type:            "single_choice",
+		Title:           pgtype.Text{String: "Test Question", Valid: true},
+		DescriptionJson: []byte(`{"type":"doc","content":[{"type":"paragraph"}]}`),
+		DescriptionHtml: "",
+		Metadata:        choiceMetadata,
+		Order:           1,
 	}
 	answerable, err := question.NewSingleChoice(q, formID)
 	require.NoError(t, err)
@@ -499,14 +500,15 @@ func createMultipleChoiceAnswerable(t *testing.T, questionID, sectionID, formID 
 	require.NoError(t, err)
 
 	q := question.Question{
-		ID:          questionID,
-		SectionID:   sectionID,
-		Required:    false,
-		Type:        "multiple_choice",
-		Title:       pgtype.Text{String: "Test Question", Valid: true},
-		Description: pgtype.Text{String: "", Valid: false},
-		Metadata:    choiceMetadata,
-		Order:       1,
+		ID:              questionID,
+		SectionID:       sectionID,
+		Required:        false,
+		Type:            "multiple_choice",
+		Title:           pgtype.Text{String: "Test Question", Valid: true},
+		DescriptionJson: []byte(`{"type":"doc","content":[{"type":"paragraph"}]}`),
+		DescriptionHtml: "",
+		Metadata:        choiceMetadata,
+		Order:           1,
 	}
 	answerable, err := question.NewMultiChoice(q, formID)
 	require.NoError(t, err)

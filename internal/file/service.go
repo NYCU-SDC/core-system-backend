@@ -22,12 +22,12 @@ import (
 
 type Querier interface {
 	Create(ctx context.Context, arg CreateParams) (File, error)
-	GetByID(ctx context.Context, id uuid.UUID) (File, error)
-	GetMetadataByID(ctx context.Context, id uuid.UUID) (GetMetadataByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID) (File, error)
+	GetMetadata(ctx context.Context, id uuid.UUID) (GetMetadataRow, error)
 	GetByUploadedBy(ctx context.Context, uploadedBy pgtype.UUID) ([]GetByUploadedByRow, error)
 	Delete(ctx context.Context, id uuid.UUID) error
-	ExistsByID(ctx context.Context, id uuid.UUID) (bool, error)
-	LockFileByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	LockFile(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetAll(ctx context.Context, arg GetAllParams) ([]GetAllRow, error)
 	Count(ctx context.Context) (int64, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (FileAttachment, error)
@@ -35,8 +35,8 @@ type Querier interface {
 	ListAttachmentsByResource(ctx context.Context, arg ListAttachmentsByResourceParams) ([]FileAttachment, error)
 	ExistsAttachmentByFileAndResource(ctx context.Context, arg ExistsAttachmentByFileAndResourceParams) (bool, error)
 	GetAttachmentByFileAndResource(ctx context.Context, arg GetAttachmentByFileAndResourceParams) (FileAttachment, error)
-	GetAttachmentByID(ctx context.Context, id uuid.UUID) (FileAttachment, error)
-	DeleteAttachmentByID(ctx context.Context, id uuid.UUID) error
+	GetAttachment(ctx context.Context, id uuid.UUID) (FileAttachment, error)
+	DeleteAttachment(ctx context.Context, id uuid.UUID) error
 	DeleteAttachmentsByFileID(ctx context.Context, fileID uuid.UUID) error
 	WithTx(tx pgx.Tx) *Queries
 }
@@ -189,7 +189,7 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 
 	qtx := s.queries.WithTx(tx)
 
-	_, err = qtx.LockFileByID(traceCtx, fileID)
+	_, err = qtx.LockFile(traceCtx, fileID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return FileAttachment{}, internal.ErrFileNotFound
@@ -302,12 +302,12 @@ func (s *Service) SaveFileForResource(
 	return savedFile, attachment, nil
 }
 
-func (s *Service) GetAttachmentByID(ctx context.Context, attachmentID uuid.UUID) (FileAttachment, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetAttachmentByID")
+func (s *Service) GetAttachment(ctx context.Context, attachmentID uuid.UUID) (FileAttachment, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetAttachment")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	attachment, err := s.queries.GetAttachmentByID(traceCtx, attachmentID)
+	attachment, err := s.queries.GetAttachment(traceCtx, attachmentID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get attachment by id")
 		span.RecordError(err)
@@ -350,13 +350,13 @@ func (s *Service) ListAttachmentsByResource(ctx context.Context, resourceType Re
 	return attachments, nil
 }
 
-// DeleteAttachmentByID only removes the link, not the file itself.
-func (s *Service) DeleteAttachmentByID(ctx context.Context, attachmentID uuid.UUID) error {
-	traceCtx, span := s.tracer.Start(ctx, "DeleteAttachmentByID")
+// DeleteAttachment only removes the link, not the file itself.
+func (s *Service) DeleteAttachment(ctx context.Context, attachmentID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "DeleteAttachment")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.DeleteAttachmentByID(traceCtx, attachmentID)
+	err := s.queries.DeleteAttachment(traceCtx, attachmentID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete attachment by id")
 		span.RecordError(err)
@@ -430,7 +430,7 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 
 	qtx := s.queries.WithTx(tx)
 
-	_, err = qtx.LockFileByID(traceCtx, fileID)
+	_, err = qtx.LockFile(traceCtx, fileID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return internal.ErrFileNotFound
@@ -466,7 +466,7 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 			return err
 		}
 
-		err := qtx.DeleteAttachmentByID(traceCtx, att.ID)
+		err := qtx.DeleteAttachment(traceCtx, att.ID)
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "delete attachment after removing resource reference")
 			span.RecordError(err)
@@ -498,13 +498,13 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 	return nil
 }
 
-// GetByID retrieves a file record with data by ID
-func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (File, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetByID")
+// Get retrieves a file record with data by ID
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (File, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	file, err := s.queries.GetByID(traceCtx, id)
+	file, err := s.queries.Get(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get file by id")
 		span.RecordError(err)
@@ -514,17 +514,17 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (File, error) {
 	return file, nil
 }
 
-// GetMetadataByID retrieves file metadata without the binary data
-func (s *Service) GetMetadataByID(ctx context.Context, id uuid.UUID) (GetMetadataByIDRow, error) {
-	traceCtx, span := s.tracer.Start(ctx, "GetMetadataByID")
+// GetMetadata retrieves file metadata without the binary data
+func (s *Service) GetMetadata(ctx context.Context, id uuid.UUID) (GetMetadataRow, error) {
+	traceCtx, span := s.tracer.Start(ctx, "GetMetadata")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	metadata, err := s.queries.GetMetadataByID(traceCtx, id)
+	metadata, err := s.queries.GetMetadata(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get file metadata by id")
 		span.RecordError(err)
-		return GetMetadataByIDRow{}, err
+		return GetMetadataRow{}, err
 	}
 
 	return metadata, nil

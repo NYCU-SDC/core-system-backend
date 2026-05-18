@@ -110,7 +110,7 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get file with data from database
-	fileInfo, err := h.service.GetByID(traceCtx, fileID)
+	fileInfo, err := h.service.Get(traceCtx, fileID)
 	if err != nil {
 		logger.Warn("Failed to get file", zap.Error(err), zap.String("file_id", fileIDStr))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrFileNotFound, logger)
@@ -128,9 +128,9 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, fileInfo.OriginalFilename, fileInfo.CreatedAt.Time, reader)
 }
 
-// GetByID handles GET /files/{id}/info - gets file info (without binary data)
-func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetByID")
+// Get handles GET /files/{id}/info - gets file info (without binary data)
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -144,7 +144,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get file metadata (without binary data)
-	fileInfo, err := h.service.GetMetadataByID(traceCtx, fileID)
+	fileInfo, err := h.service.GetMetadata(traceCtx, fileID)
 	if err != nil {
 		logger.Warn("Failed to get file", zap.Error(err), zap.String("file_id", fileIDStr))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrFileNotFound, logger)

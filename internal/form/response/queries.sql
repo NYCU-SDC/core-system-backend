@@ -7,13 +7,18 @@ RETURNING *;
 SELECT * FROM form_responses
 WHERE id = $1 AND form_id = $2;
 
--- name: GetFormIDByID :one
+-- name: GetFormID :one
 SELECT form_id FROM form_responses
 WHERE id = $1;
 
 -- name: ListByFormIDAndSubmittedBy :many
 SELECT * FROM form_responses
 WHERE form_id = $1 AND submitted_by = $2
+ORDER BY submitted_at DESC NULLS LAST;
+
+-- name: ListByFormID :many
+SELECT * FROM form_responses
+WHERE form_id = $1
 ORDER BY submitted_at DESC NULLS LAST;
 
 -- name: ListBySubmittedBy :many
@@ -41,3 +46,9 @@ SELECT EXISTS(SELECT 1 FROM form_responses WHERE id = $1);
 
 -- name: ExistsByFormIDAndSubmittedBy :one
 SELECT EXISTS(SELECT 1 FROM form_responses WHERE form_id = $1 AND submitted_by = $2);
+
+-- name: ListSubmittedByFormID :many
+SELECT * FROM form_responses
+WHERE form_id = $1
+  AND progress = 'SUBMITTED'
+ORDER BY submitted_at ASC, id ASC;

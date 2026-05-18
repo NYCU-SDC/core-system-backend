@@ -4,6 +4,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/test/integration"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	workflowbuilder "NYCU-SDC/core-system-backend/test/testdata/dbbuilder/workflow"
@@ -177,17 +178,30 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			name:   "unreachable nodes",
+			name:   "orphan node (no incoming edges) activates successfully",
 			params: Params{},
 			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
-				data := builder.SetupTestData("validate-unreachable-org", "validate-unreachable-unit")
+				data := builder.SetupTestData("validate-orphan-activate-org", "validate-orphan-activate-unit")
 				params.formID = data.FormRow.ID
 				params.userID = data.User
 				params.workflowJSON = builder.CreateWorkflowWithUnreachableNode()
 				return context.Background()
 			},
-			expectedErr: true,
+			validate: func(t *testing.T, params Params, db dbbuilder.DBTX, result workflow.WorkflowVersion, err error) {
+				require.NoError(t, err, "should not return error for workflow with orphan section")
+				require.NotEqual(t, uuid.Nil, result.ID, "workflow version ID should be set")
+				require.Equal(t, params.formID, result.FormID, "form ID should match")
+				require.Equal(t, params.userID, result.LastEditor, "last editor should match")
+				require.True(t, result.IsActive, "workflow should be active")
+
+				builder := workflowbuilder.New(t, db)
+				workflowData := builder.ParseWorkflow(result.Workflow)
+				require.True(t, builder.HasNodeType(workflowData, "start"), "workflow should have start node")
+				require.True(t, builder.HasNodeType(workflowData, "section"), "workflow should still contain orphan section node")
+				require.True(t, builder.HasNodeType(workflowData, "end"), "workflow should have end node")
+			},
+			expectedErr: false,
 		},
 		{
 			name:   "invalid node references",
@@ -330,14 +344,15 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 
 				questionQueries := question.New(db)
 				createRow, err := questionQueries.Create(context.Background(), question.CreateParams{
-					SectionID:   sectionID,
-					Required:    false,
-					Type:        question.QuestionTypeSingleChoice,
-					Title:       pgtype.Text{String: "Q", Valid: true},
-					Description: pgtype.Text{},
-					Metadata:    metadata,
-					Order:       1,
-					SourceID:    pgtype.UUID{},
+					SectionID:       sectionID,
+					Required:        false,
+					Type:            question.QuestionTypeSingleChoice,
+					Title:           pgtype.Text{String: "Q", Valid: true},
+					DescriptionJson: []byte(`{"type":"doc","content":[{"type":"paragraph"}]}`),
+					DescriptionHtml: "",
+					Metadata:        metadata,
+					Order:           1,
+					SourceID:        pgtype.UUID{},
 				})
 				require.NoError(t, err)
 				questionID := createRow.ID
@@ -373,7 +388,7 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 			}
 
 			// Create question service to satisfy QuestionStore interface
-			questionService := question.NewService(logger, db, nil)
+			questionService := question.NewService(logger, db, nil, markdown.NewService(logger))
 
 			// Create workflow service with real dependencies
 			workflowService := workflow.NewService(logger, db, questionService)

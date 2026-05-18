@@ -283,9 +283,11 @@ func TestService_CreateNode(t *testing.T) {
 	}
 
 	type testCase struct {
-		name      string
-		params    Params
-		expectErr bool
+		name     string
+		params   Params
+		payload  NodePayload
+		setup    func(t *testing.T, mq *mockQuerier, formID, userID uuid.UUID, params Params, payload NodePayload)
+		validate func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload)
 	}
 
 	testCases := []testCase{
@@ -296,7 +298,12 @@ func TestService_CreateNode(t *testing.T) {
 				nodeType:      NodeTypeStart,
 				questionStore: nil,
 			},
-			expectErr: true,
+			payload: payloadXY(0, 0),
+			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+				require.Error(t, err, "expected error but got nil")
+				require.Equal(t, CreateNodeRow{}, result)
+				mq.AssertNotCalled(t, "CreateNode")
+			},
 		},
 		{
 			name: "invalid node type parameter - end",
@@ -305,7 +312,12 @@ func TestService_CreateNode(t *testing.T) {
 				nodeType:      NodeTypeEnd,
 				questionStore: nil,
 			},
-			expectErr: true,
+			payload: payloadXY(0, 0),
+			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+				require.Error(t, err, "expected error but got nil")
+				require.Equal(t, CreateNodeRow{}, result)
+				mq.AssertNotCalled(t, "CreateNode")
+			},
 		},
 		{
 			name: "invalid node type parameter - empty string",
@@ -314,7 +326,12 @@ func TestService_CreateNode(t *testing.T) {
 				nodeType:      NodeType(""),
 				questionStore: nil,
 			},
-			expectErr: true,
+			payload: payloadXY(0, 0),
+			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+				require.Error(t, err, "expected error but got nil")
+				require.Equal(t, CreateNodeRow{}, result)
+				mq.AssertNotCalled(t, "CreateNode")
+			},
 		},
 		{
 			name: "invalid node type parameter - unknown type",
@@ -323,7 +340,26 @@ func TestService_CreateNode(t *testing.T) {
 				nodeType:      NodeType("unknown"),
 				questionStore: nil,
 			},
-			expectErr: true,
+			payload: payloadXY(0, 0),
+			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+				require.Error(t, err, "expected error but got nil")
+				require.Equal(t, CreateNodeRow{}, result)
+				mq.AssertNotCalled(t, "CreateNode")
+			},
+		},
+		{
+			name: "missing payload coordinates",
+			params: Params{
+				workflowJSON:  createWorkflow_SimpleValid(t),
+				nodeType:      NodeTypeSection,
+				questionStore: nil,
+			},
+			payload: payloadNil(),
+			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+				require.Error(t, err, "expected error but got nil")
+				require.Equal(t, CreateNodeRow{}, result)
+				mq.AssertNotCalled(t, "CreateNode")
+			},
 		},
 		{
 			name: "valid workflow - simple section creation",
@@ -332,7 +368,30 @@ func TestService_CreateNode(t *testing.T) {
 				nodeType:      NodeTypeSection,
 				questionStore: nil,
 			},
-			expectErr: false,
+			payload: payloadXY(0, 0),
+			setup: func(t *testing.T, mq *mockQuerier, formID, userID uuid.UUID, params Params, payload NodePayload) {
+				expectedRow := CreateNodeRow{
+					NodeID:    uuid.New(),
+					NodeType:  params.nodeType,
+					NodeLabel: nil,
+					Workflow:  params.workflowJSON,
+				}
+
+				mq.On("CreateNode", mock.Anything, CreateNodeParams{
+					FormID:     formID,
+					LastEditor: userID,
+					Type:       params.nodeType,
+					PayloadX:   *payload.X,
+					PayloadY:   *payload.Y,
+				}).Return(expectedRow, nil).Once()
+			},
+			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+				require.NoError(t, err, "unexpected error: %v", err)
+				require.NotEqual(t, uuid.Nil, result.NodeID)
+				require.Equal(t, params.nodeType, result.NodeType)
+				require.NotEmpty(t, result.Workflow)
+				mq.AssertExpectations(t)
+			},
 		},
 		{
 			name: "valid workflow - condition node creation",
@@ -341,7 +400,30 @@ func TestService_CreateNode(t *testing.T) {
 				nodeType:      NodeTypeCondition,
 				questionStore: nil,
 			},
-			expectErr: false,
+			payload: payloadXY(0, 0),
+			setup: func(t *testing.T, mq *mockQuerier, formID, userID uuid.UUID, params Params, payload NodePayload) {
+				expectedRow := CreateNodeRow{
+					NodeID:    uuid.New(),
+					NodeType:  params.nodeType,
+					NodeLabel: nil,
+					Workflow:  params.workflowJSON,
+				}
+
+				mq.On("CreateNode", mock.Anything, CreateNodeParams{
+					FormID:     formID,
+					LastEditor: userID,
+					Type:       params.nodeType,
+					PayloadX:   *payload.X,
+					PayloadY:   *payload.Y,
+				}).Return(expectedRow, nil).Once()
+			},
+			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+				require.NoError(t, err, "unexpected error: %v", err)
+				require.NotEqual(t, uuid.Nil, result.NodeID)
+				require.Equal(t, params.nodeType, result.NodeType)
+				require.NotEmpty(t, result.Workflow)
+				mq.AssertExpectations(t)
+			},
 		},
 	}
 
@@ -359,43 +441,25 @@ func TestService_CreateNode(t *testing.T) {
 
 			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
 
-			// Only set up mock if node type is valid (service will call querier)
-			// Note: CreateNode calls the querier BEFORE validation, so we need to set up the mock
-			// for all valid node types, even when validation will fail
-			switch tc.params.nodeType {
-			case NodeTypeSection, NodeTypeCondition:
-				expectedRow := CreateNodeRow{
-					NodeID:    uuid.New(),
-					NodeType:  tc.params.nodeType,
-					NodeLabel: nil,
-					Workflow:  tc.params.workflowJSON,
-				}
-
-				mockQuerier.On("CreateNode", mock.Anything, CreateNodeParams{
-					FormID:     formID,
-					LastEditor: userID,
-					Type:       tc.params.nodeType,
-				}).Return(expectedRow, nil).Once()
+			if tc.setup != nil {
+				tc.setup(t, mockQuerier, formID, userID, tc.params, tc.payload)
 			}
 
-			result, err := service.CreateNode(ctx, formID, tc.params.nodeType, userID)
+			result, err := service.CreateNode(ctx, formID, tc.params.nodeType, tc.payload, userID)
 
-			if tc.expectErr {
-				require.Error(t, err, "expected error but got nil")
-				// For invalid node types, querier should not be called
-				switch tc.params.nodeType {
-				case NodeTypeSection, NodeTypeCondition:
-					mockQuerier.AssertExpectations(t)
-				default:
-					mockQuerier.AssertNotCalled(t, "CreateNode")
-				}
-			} else {
-				require.NoError(t, err, "unexpected error: %v", err)
-				require.NotNil(t, result)
-				mockQuerier.AssertExpectations(t)
+			if tc.validate != nil {
+				tc.validate(t, mockQuerier, result, err, tc.params, tc.payload)
 			}
 		})
 	}
+}
+
+func payloadXY(x, y float64) NodePayload {
+	return NodePayload{X: &x, Y: &y}
+}
+
+func payloadNil() NodePayload {
+	return NodePayload{X: nil, Y: nil}
 }
 
 func TestService_Get(t *testing.T) {

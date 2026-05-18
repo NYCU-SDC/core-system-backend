@@ -2,7 +2,9 @@ package question
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -22,7 +24,7 @@ type Request struct {
 	Required     *bool            `json:"required" validate:"required"`
 	Type         string           `json:"type" validate:"required,oneof=SHORT_TEXT LONG_TEXT SINGLE_CHOICE MULTIPLE_CHOICE DATE DROPDOWN DETAILED_MULTIPLE_CHOICE UPLOAD_FILE LINEAR_SCALE RATING RANKING OAUTH_CONNECT HYPERLINK"`
 	Title        string           `json:"title" validate:"required"`
-	Description  string           `json:"description"`
+	Description  json.RawMessage  `json:"description"`
 	Order        int32            `json:"order" validate:"required,min=1"`
 	Choices      []ChoiceOption   `json:"choices,omitempty" validate:"omitempty,required_if=Type SINGLE_CHOICE,required_if=Type MULTIPLE_CHOICE,required_if=Type DETAILED_MULTIPLE_CHOICE,required_if=Type DROPDOWN,required_if=Type RANKING,dive"`
 	Scale        ScaleOption      `json:"scale,omitempty" validate:"omitempty,required_if=Type LINEAR_SCALE,required_if=Type RATING"`
@@ -33,30 +35,32 @@ type Request struct {
 }
 
 type Response struct {
-	ID           uuid.UUID         `json:"id"`
-	SectionID    uuid.UUID         `json:"sectionId"`
-	Required     bool              `json:"required"`
-	Type         string            `json:"type"`
-	Title        string            `json:"title"`
-	Description  string            `json:"description"`
-	Choices      *[]Choice         `json:"choices,omitempty"`
-	Scale        *ScaleOption      `json:"scale,omitempty"`
-	UploadFile   *UploadFileOption `json:"uploadFile,omitempty"`
-	Date         *DateOption       `json:"date,omitempty"`
-	OauthConnect string            `json:"oauthConnect,omitempty"`
-	SourceID     string            `json:"sourceId,omitempty"`
-	CreatedAt    time.Time         `json:"createdAt"`
-	UpdatedAt    time.Time         `json:"updatedAt"`
+	ID              uuid.UUID         `json:"id"`
+	SectionID       uuid.UUID         `json:"sectionId"`
+	Required        bool              `json:"required"`
+	Type            string            `json:"type"`
+	Title           string            `json:"title"`
+	Description     json.RawMessage   `json:"description"`
+	DescriptionHtml string            `json:"descriptionHtml,omitempty"`
+	Choices         *[]Choice         `json:"choices,omitempty"`
+	Scale           *ScaleOption      `json:"scale,omitempty"`
+	UploadFile      *UploadFileOption `json:"uploadFile,omitempty"`
+	Date            *DateOption       `json:"date,omitempty"`
+	OauthConnect    string            `json:"oauthConnect,omitempty"`
+	SourceID        string            `json:"sourceId,omitempty"`
+	CreatedAt       time.Time         `json:"createdAt"`
+	UpdatedAt       time.Time         `json:"updatedAt"`
 }
 
 type SectionPayload struct {
-	ID          uuid.UUID `json:"id"`
-	FormID      uuid.UUID `json:"formId"`
-	Title       string    `json:"title"`
-	Progress    string    `json:"progress"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID              uuid.UUID       `json:"id"`
+	FormID          uuid.UUID       `json:"formId"`
+	Title           string          `json:"title"`
+	Progress        string          `json:"progress"`
+	Description     json.RawMessage `json:"description,omitempty"`
+	DescriptionHtml string          `json:"descriptionHtml,omitempty"`
+	CreatedAt       time.Time       `json:"createdAt"`
+	UpdatedAt       time.Time       `json:"updatedAt"`
 }
 
 type SectionResponse struct {
@@ -65,28 +69,32 @@ type SectionResponse struct {
 }
 
 func ToSection(section Section) SectionPayload {
+	desc := markdown.DefaultDescriptionJSON(section.DescriptionJson)
 	return SectionPayload{
-		ID:          section.ID,
-		FormID:      section.FormID,
-		Title:       section.Title.String,
-		Description: section.Description.String,
-		CreatedAt:   section.CreatedAt.Time,
-		UpdatedAt:   section.UpdatedAt.Time,
+		ID:              section.ID,
+		FormID:          section.FormID,
+		Title:           section.Title.String,
+		Description:     desc,
+		DescriptionHtml: section.DescriptionHtml,
+		CreatedAt:       section.CreatedAt.Time,
+		UpdatedAt:       section.UpdatedAt.Time,
 	}
 }
 
 func ToResponse(answerable Answerable) (Response, error) {
 	q := answerable.Question()
 
+	desc := markdown.DefaultDescriptionJSON(q.DescriptionJson)
 	response := Response{
-		ID:          q.ID,
-		SectionID:   q.SectionID,
-		Required:    q.Required,
-		Type:        strings.ToUpper(string(q.Type)),
-		Title:       q.Title.String,
-		Description: q.Description.String,
-		CreatedAt:   q.CreatedAt.Time,
-		UpdatedAt:   q.UpdatedAt.Time,
+		ID:              q.ID,
+		SectionID:       q.SectionID,
+		Required:        q.Required,
+		Type:            strings.ToUpper(string(q.Type)),
+		Title:           q.Title.String,
+		Description:     desc,
+		DescriptionHtml: q.DescriptionHtml,
+		CreatedAt:       q.CreatedAt.Time,
+		UpdatedAt:       q.UpdatedAt.Time,
 	}
 	if q.SourceID.Valid {
 		response.SourceID = q.SourceID.String()
@@ -201,8 +209,8 @@ func ToResponse(answerable Answerable) (Response, error) {
 }
 
 type Store interface {
-	Create(ctx context.Context, input CreateParams) (Answerable, error)
-	Update(ctx context.Context, input UpdateParams, order int32) (Answerable, error)
+	Create(ctx context.Context, input CreateInput) (Answerable, error)
+	Update(ctx context.Context, input UpdateInput, order int32) (Answerable, error)
 	DeleteAndReorder(ctx context.Context, sectionID uuid.UUID, id uuid.UUID) error
 	ListSectionsWithAnswersByFormID(ctx context.Context, formID uuid.UUID) ([]SectionWithAnswerableList, error)
 }
@@ -259,12 +267,12 @@ func (h *Handler) AddHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	request := CreateParams{
+	request := CreateInput{
 		SectionID:   sectionID,
 		Required:    *req.Required,
 		Type:        QuestionType(req.Type),
 		Title:       pgtype.Text{String: req.Title, Valid: true},
-		Description: pgtype.Text{String: req.Description, Valid: true},
+		Description: req.Description,
 		Order:       req.Order,
 		Metadata:    metadata,
 		SourceID:    pgtype.UUID{Bytes: req.SourceID, Valid: req.SourceID != uuid.Nil},
@@ -319,13 +327,13 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	request := UpdateParams{
+	request := UpdateInput{
 		ID:          id,
 		SectionID:   sectionID,
 		Required:    *req.Required,
 		Type:        QuestionType(req.Type),
 		Title:       pgtype.Text{String: req.Title, Valid: true},
-		Description: pgtype.Text{String: req.Description, Valid: true},
+		Description: req.Description,
 		Metadata:    metadata,
 		SourceID:    pgtype.UUID{Bytes: req.SourceID, Valid: req.SourceID != uuid.Nil},
 	}

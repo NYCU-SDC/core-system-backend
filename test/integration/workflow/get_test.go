@@ -6,6 +6,7 @@ import (
 
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
+	"NYCU-SDC/core-system-backend/internal/markdown"
 	"NYCU-SDC/core-system-backend/test/integration"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	workflowbuilder "NYCU-SDC/core-system-backend/test/testdata/dbbuilder/workflow"
@@ -152,11 +153,11 @@ func TestWorkflowService_GetValidationInfo(t *testing.T) {
 			expectedInfo: true,
 		},
 		{
-			name:   "unreachable node",
+			name:   "orphan node (no incoming edges) — returns validation info warning",
 			params: Params{},
 			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX) context.Context {
 				builder := workflowbuilder.New(t, db)
-				data := builder.SetupTestData("info-unreachable-org", "info-unreachable-unit")
+				data := builder.SetupTestData("info-orphan-warning-org", "info-orphan-warning-unit")
 				params.formID = data.FormRow.ID
 				params.workflowJSON = builder.CreateWorkflowWithUnreachableNode()
 				return context.Background()
@@ -293,7 +294,7 @@ func TestWorkflowService_GetValidationInfo(t *testing.T) {
 			}
 
 			// Create question service to satisfy QuestionStore interface
-			questionService := question.NewService(logger, db, nil)
+			questionService := question.NewService(logger, db, nil, markdown.NewService(logger))
 
 			// Create workflow service with real dependencies
 			workflowService := workflow.NewService(logger, db, questionService)

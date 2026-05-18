@@ -3,7 +3,7 @@ INSERT INTO units (name, org_id, description, metadata, type, parent_id)
 VALUES ($1, $2, $3, $4, $5, $6)
     RETURNING *;
 
--- name: GetByID :one
+-- name: Get :one
 SELECT * FROM units WHERE id = $1;
 
 -- name: GetAllOrganizations :many
@@ -21,7 +21,7 @@ WHERE u.type = 'organization'
     AND um.member_id = $1
     AND sh.ended_at IS NULL;
 
--- name: GetOrganizationByIDWithSlug :one
+-- name: GetOrganizationWithSlug :one
 SELECT u.*, sh.slug
 FROM units u
 LEFT JOIN slug_history sh ON sh.org_id = u.id
@@ -129,3 +129,25 @@ VALUES ($1, $2, $3)
 DO UPDATE SET
     role = EXCLUDED.role
 RETURNING unit_id, member_id, role;
+
+-- name: HasAdminInAncestorUnits :one
+WITH RECURSIVE ancestors(unit_id) AS (
+    SELECT parent_id
+    FROM units u
+    WHERE u.id = $1
+      AND u.parent_id IS NOT NULL
+
+    UNION ALL
+
+    SELECT u.parent_id
+    FROM units u
+             JOIN ancestors a ON u.id = a.unit_id
+    WHERE u.parent_id IS NOT NULL
+)
+SELECT EXISTS (
+    SELECT 1
+    FROM ancestors a
+             JOIN unit_members um ON um.unit_id = a.unit_id
+    WHERE um.member_id = $2
+      AND um.role = 'admin'
+) AS has_admin;

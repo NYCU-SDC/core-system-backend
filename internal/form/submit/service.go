@@ -29,7 +29,7 @@ type QuestionStore interface {
 }
 
 type FormStore interface {
-	GetByID(ctx context.Context, id uuid.UUID) (form.GetByIDRow, error)
+	Get(ctx context.Context, id uuid.UUID) (form.GetRow, error)
 	List(ctx context.Context, status form.Status, visibility form.Visibility, excludeExpired bool) ([]form.ListRow, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]form.GetByIDsRow, error)
 }
@@ -37,7 +37,7 @@ type FormStore interface {
 type FormResponseStore interface {
 	Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (response.FormResponse, error)
 	Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (response.FormResponse, []response.SectionWithAnswerableAndAnswer, error)
-	GetFormIDByID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (response.FormResponse, error)
 	ListBySubmittedBy(ctx context.Context, submittedBy uuid.UUID) ([]response.FormResponse, error)
 }
@@ -71,7 +71,7 @@ func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []sh
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	// Get the form ID associated with this response
-	formID, err := s.responseStore.GetFormIDByID(traceCtx, responseID)
+	formID, err := s.responseStore.GetFormID(traceCtx, responseID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return response.FormResponse{}, []error{internal.ErrResponseNotFound}

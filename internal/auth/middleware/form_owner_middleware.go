@@ -18,7 +18,7 @@ import (
 )
 
 type FormOwnerService interface {
-	GetCreatorByID(ctx context.Context, formID uuid.UUID) (uuid.UUID, error)
+	GetCreator(ctx context.Context, formID uuid.UUID) (uuid.UUID, error)
 }
 
 type FormOwnerMiddleware struct {
@@ -76,7 +76,7 @@ func (m *FormOwnerMiddleware) checkOwner(
 		return
 	}
 
-	creatorID, err := m.service.GetCreatorByID(traceCtx, formID)
+	creatorID, err := m.service.GetCreator(traceCtx, formID)
 	if err != nil {
 		if errors.Is(err, internal.ErrFormNotFound) {
 			logger.Warn("form not found",
