@@ -47,10 +47,11 @@ const (
 )
 
 type UserForm struct {
-	FormID   uuid.UUID
-	Title    string
-	Deadline pgtype.Timestamptz
-	Status   UserFormStatus
+	FormID      uuid.UUID
+	Title       string
+	Deadline    pgtype.Timestamptz
+	Status      UserFormStatus
+	ResponseIDs []uuid.UUID
 }
 
 type Service struct {
