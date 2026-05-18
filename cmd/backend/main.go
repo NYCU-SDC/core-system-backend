@@ -17,6 +17,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/response"
 	"NYCU-SDC/core-system-backend/internal/form/submit"
+	"NYCU-SDC/core-system-backend/internal/form/view"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/internal/inbox"
 	"NYCU-SDC/core-system-backend/internal/jwt"
@@ -200,6 +201,8 @@ func main() {
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
 	fileHandler := file.NewHandler(logger, validator, problemWriter, fileService)
+	viewService := view.NewService(logger, dbPool)
+	viewHandler := view.NewHandler(logger, validator, problemWriter, viewService)
 
 	// ============================================
 	// Middleware
@@ -401,6 +404,17 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/workflow/nodes", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).Append(notArchivedByForm).HandlerFunc(workflowHandler.CreateNodeHandler))
 	mux.Handle("PUT /api/forms/{formId}/workflow", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).Append(notArchivedByForm).HandlerFunc(workflowHandler.UpdateHandler))
 	mux.Handle("DELETE /api/forms/{formId}/workflow/nodes/{nodeId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).Append(notArchivedByForm).HandlerFunc(workflowHandler.DeleteNodeHandler))
+
+	// View Management
+	// ----------------------
+	mux.Handle("POST /api/forms/{formId}/views", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Create))
+	mux.Handle("GET /api/forms/{formId}/views", authMiddleware.HandlerFunc(viewHandler.List))
+	mux.Handle("GET /api/forms/{formId}/views/{viewId}", authMiddleware.HandlerFunc(viewHandler.Get))
+	mux.Handle("PATCH /api/forms/{formId}/views/{viewId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Update))
+	mux.Handle("POST /api/forms/{formId}/views/{viewId}/lock", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Lock))
+	mux.Handle("POST /api/forms/{formId}/views/{viewId}/unlock", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Unlock))
+	mux.Handle("POST /api/forms/{formId}/views/{viewId}/duplicate", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Duplicate))
+	mux.Handle("DELETE /api/forms/{formId}/views/{viewId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Delete))
 
 	// ============================================
 	// File routes
