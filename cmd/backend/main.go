@@ -381,7 +381,6 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/responses/export/download", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(responseHandler.ExportDownload))
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.Append(notArchivedByForm).HandlerFunc(responseHandler.Create))
-	// --- (Update response is not allowed)
 	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.Append(formOwner).HandlerFunc(responseHandler.Delete))
 
 	// Response Operations

@@ -80,6 +80,7 @@ type ResponseStore interface {
 	// GetSubmittedBy returns the user ID who submitted the response with the given ID.
 	// Used for ownership checks without creating an import cycle with the response package.
 	GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	GetEditInfo(ctx context.Context, id uuid.UUID) (progress string, allowEditResponse bool, err error)
 }
 
 // OAuthProvider is the interface needed to initiate and complete an OAuth flow.
@@ -269,6 +270,13 @@ func (h *Handler) UpdateFormResponse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check editable
+	err = shared.ValidateResponseEditable(traceCtx, h.responseStore, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	// Get all answers and answerables, so we can resolve active sections from workflow so we reject answers for skipped sections
 	currentAnswers, _, answerableMap, err := h.store.List(traceCtx, formID, responseID)
 	if err != nil {
@@ -423,6 +431,13 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Check editable
+	err = shared.ValidateResponseEditable(traceCtx, h.responseStore, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
 	// Validate that the question exists, is an oauth_connect type, and matches the provider
 	answerable, err := h.questionStore.Get(traceCtx, questionID)
 	if err != nil {
@@ -498,6 +513,13 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Warn("failed to parse form state JWT", zap.Error(err))
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: invalid state", internal.ErrInvalidCallbackInfo), logger)
+		return
+	}
+
+	// Check editable
+	err = shared.ValidateResponseEditable(traceCtx, h.responseStore, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
@@ -635,6 +657,13 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check editable
+	err = shared.ValidateResponseEditable(traceCtx, h.responseStore, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	
 	// Resolve active sections from workflow so we reject file uploads for skipped sections.
 	// This mirrors UpdateFormResponse skipped-section enforcement.
 	currentAnswers, _, answerableMap, err := h.store.List(traceCtx, formID, responseID)
