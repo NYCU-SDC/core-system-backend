@@ -235,7 +235,7 @@ jobs:
 
       - name: Run httpYac Tests
         id: httpyac-tests
-        uses: NYCU-SDC/httpyac-action@CORE-236-parse-and-publish-httpyac-result
+        uses: NYCU-SDC/httpyac-action
         with:
           scenarios-path: './core-system-api/scenarios/user-journey'
           output-dir: './reports'
