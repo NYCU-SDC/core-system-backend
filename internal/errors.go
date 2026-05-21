@@ -321,7 +321,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrResponseNotOwned):
 		return problem.NewForbiddenProblem("response does not belong to the current user")
 	case errors.Is(err, ErrResponseEditNotAllowed):
-		return problem.NewForbiddenProblem("response does not belong to the current user")
+		return problem.NewForbiddenProblem("response is not allowed to be edited")
 
 	// Submit Errors
 	case errors.Is(err, ErrResponseNotComplete{}):
