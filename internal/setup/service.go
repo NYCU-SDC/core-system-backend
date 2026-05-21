@@ -1,9 +1,11 @@
 package setup
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	config2 "NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/unit"
 	"context"
+	"errors"
 	"fmt"
 
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
@@ -24,6 +26,10 @@ type Service struct {
 type UnitService interface {
 	SlugExists(ctx context.Context, slug string) (bool, error)
 	CreateOrganization(ctx context.Context, name string, description string, slug string) (unit.Unit, error)
+	GetOrgIDBySlug(ctx context.Context, slug string) (uuid.UUID, error)
+	AddMemberWithRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, role string) error
+	GetMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID) (unit.UnitRole, error)
+	UpdateUnitMemberRole(ctx context.Context, unitID uuid.UUID, memberID uuid.UUID, newRole unit.UnitRole) error
 }
 
 type UserService interface {
@@ -83,15 +89,45 @@ func (s *Service) Setup(ctx context.Context) error {
 	}
 	logger.Info("Successfully initialized organizations")
 
+	userIDs := make(map[string]uuid.UUID, len(s.setupImpl.Config.Users))
 	for _, user := range s.setupImpl.Config.Users {
-		_, err := s.userService.FindOrCreateByEmail(traceCtx, user.Email, user.GlobalRole, user.UserID)
+		id, err := s.userService.FindOrCreateByEmail(traceCtx, user.Email, user.GlobalRole, user.UserID)
 		if err != nil {
 			logger.Error("Failed to find or create user", zap.String("email", user.Email), zap.Error(err))
 			span.RecordError(err)
 			return err
 		}
+		userIDs[user.Email] = id
 	}
 	logger.Info("Successfully initialized users")
+
+	for _, user := range s.setupImpl.Config.Users {
+		userID := userIDs[user.Email]
+		for _, org := range user.OrgMember {
+			orgID, err := s.unitService.GetOrgIDBySlug(traceCtx, org.Slug)
+			if err != nil {
+				logger.Error("Failed to get organization id by slug", zap.String("org_name", org.Slug), zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+			_, err = s.unitService.GetMemberRole(traceCtx, orgID, userID)
+			if err != nil {
+				if errors.Is(err, internal.ErrNotFound) {
+					err = s.unitService.AddMemberWithRole(traceCtx, orgID, userID, org.OrgRole)
+					if err != nil {
+						logger.Error("Failed to add member with role", zap.String("org_name", org.Slug), zap.String("user_email", user.Email), zap.Error(err))
+						span.RecordError(err)
+						return err
+					}
+					continue
+				}
+				logger.Error("Failed to get current member role", zap.String("org_name", org.Slug), zap.String("user_email", user.Email), zap.Error(err))
+				span.RecordError(err)
+				return err
+			}
+		}
+	}
+	logger.Info("Successfully initialized user roles")
 
 	return nil
 }

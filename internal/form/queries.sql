@@ -28,8 +28,8 @@ WITH created AS (
 ),
 workflow_created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
-    SELECT 
-        id, 
+    SELECT
+        id,
         last_editor,
         jsonb_build_array(
             jsonb_build_object(
@@ -50,18 +50,23 @@ workflow_created AS (
         SELECT gen_random_uuid() AS start_node_id, gen_random_uuid() AS end_node_id
     ) AS node_ids
 )
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM created f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;  
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id;
 
 -- name: Patch :one
 WITH updated AS (
@@ -86,35 +91,45 @@ WITH updated AS (
     WHERE forms.id = sqlc.arg('id')
     RETURNING *
 )
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM updated f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id;
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id;
 
 -- name: Delete :exec
 DELETE FROM forms WHERE id = $1;
 
 -- name: Get :one
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.id = $1;
 
 -- name: GetByIDs :many
@@ -122,50 +137,65 @@ SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
          LEFT JOIN units u ON f.unit_id = u.id
          LEFT JOIN units o ON u.org_id = o.id
-         LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+         LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+         LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.id = ANY($1::uuid[]);
 
 -- name: Exists :one
 SELECT EXISTS(SELECT 1 FROM forms WHERE id = $1);
 
 -- name: List :many
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE (sqlc.narg(status)::status IS NULL OR f.status = sqlc.narg(status)::status)
 AND (sqlc.narg(visibility)::visibility IS NULL OR f.visibility = sqlc.narg(visibility)::visibility)
 AND (sqlc.narg(deadline_after)::timestamptz IS NULL OR f.deadline >= sqlc.narg(deadline_after)::timestamptz)
 ORDER BY f.updated_at DESC;
 
 -- name: ListByUnit :many
-SELECT 
+SELECT
     f.*,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.unit_id = $1
 AND f.status = ANY(sqlc.arg(status)::status[])
 ORDER BY f.updated_at DESC;

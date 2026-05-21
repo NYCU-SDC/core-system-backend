@@ -42,8 +42,8 @@ WITH created AS (
 ),
 workflow_created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
-    SELECT 
-        id, 
+    SELECT
+        id,
         last_editor,
         jsonb_build_array(
             jsonb_build_object(
@@ -64,18 +64,23 @@ workflow_created AS (
         SELECT gen_random_uuid() AS start_node_id, gen_random_uuid() AS end_node_id
     ) AS node_ids
 )
-SELECT 
+SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM created f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 `
 
 type CreateParams struct {
@@ -123,10 +128,14 @@ type CreateRow struct {
 	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
+	CreatorName            pgtype.Text
+	CreatorUsername        pgtype.Text
+	CreatorAvatarUrl       pgtype.Text
+	CreatorEmails          interface{}
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, error) {
@@ -175,10 +184,14 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, erro
 		&i.AllowEditResponse,
 		&i.UnitName,
 		&i.OrgName,
+		&i.CreatorName,
+		&i.CreatorUsername,
+		&i.CreatorAvatarUrl,
+		&i.CreatorEmails,
 		&i.LastEditorName,
 		&i.LastEditorUsername,
 		&i.LastEditorAvatarUrl,
-		&i.LastEditorEmail,
+		&i.LastEditorEmails,
 	)
 	return i, err
 }
@@ -204,18 +217,23 @@ func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 const get = `-- name: Get :one
-SELECT 
+SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.id = $1
 `
 
@@ -244,10 +262,14 @@ type GetRow struct {
 	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
+	CreatorName            pgtype.Text
+	CreatorUsername        pgtype.Text
+	CreatorAvatarUrl       pgtype.Text
+	CreatorEmails          interface{}
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
@@ -278,10 +300,14 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
 		&i.AllowEditResponse,
 		&i.UnitName,
 		&i.OrgName,
+		&i.CreatorName,
+		&i.CreatorUsername,
+		&i.CreatorAvatarUrl,
+		&i.CreatorEmails,
 		&i.LastEditorName,
 		&i.LastEditorUsername,
 		&i.LastEditorAvatarUrl,
-		&i.LastEditorEmail,
+		&i.LastEditorEmails,
 	)
 	return i, err
 }
@@ -291,14 +317,19 @@ SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
          LEFT JOIN units u ON f.unit_id = u.id
          LEFT JOIN units o ON u.org_id = o.id
-         LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+         LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+         LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.id = ANY($1::uuid[])
 `
 
@@ -327,10 +358,14 @@ type GetByIDsRow struct {
 	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
+	CreatorName            pgtype.Text
+	CreatorUsername        pgtype.Text
+	CreatorAvatarUrl       pgtype.Text
+	CreatorEmails          interface{}
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) GetByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetByIDsRow, error) {
@@ -367,10 +402,14 @@ func (q *Queries) GetByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetByID
 			&i.AllowEditResponse,
 			&i.UnitName,
 			&i.OrgName,
+			&i.CreatorName,
+			&i.CreatorUsername,
+			&i.CreatorAvatarUrl,
+			&i.CreatorEmails,
 			&i.LastEditorName,
 			&i.LastEditorUsername,
 			&i.LastEditorAvatarUrl,
-			&i.LastEditorEmail,
+			&i.LastEditorEmails,
 		); err != nil {
 			return nil, err
 		}
@@ -460,18 +499,23 @@ func (q *Queries) GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (pgtyp
 }
 
 const list = `-- name: List :many
-SELECT 
+SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE ($1::status IS NULL OR f.status = $1::status)
 AND ($2::visibility IS NULL OR f.visibility = $2::visibility)
 AND ($3::timestamptz IS NULL OR f.deadline >= $3::timestamptz)
@@ -509,10 +553,14 @@ type ListRow struct {
 	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
+	CreatorName            pgtype.Text
+	CreatorUsername        pgtype.Text
+	CreatorAvatarUrl       pgtype.Text
+	CreatorEmails          interface{}
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
@@ -549,10 +597,14 @@ func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
 			&i.AllowEditResponse,
 			&i.UnitName,
 			&i.OrgName,
+			&i.CreatorName,
+			&i.CreatorUsername,
+			&i.CreatorAvatarUrl,
+			&i.CreatorEmails,
 			&i.LastEditorName,
 			&i.LastEditorUsername,
 			&i.LastEditorAvatarUrl,
-			&i.LastEditorEmail,
+			&i.LastEditorEmails,
 		); err != nil {
 			return nil, err
 		}
@@ -565,18 +617,23 @@ func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
 }
 
 const listByUnit = `-- name: ListByUnit :many
-SELECT 
+SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM forms f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE f.unit_id = $1
 AND f.status = ANY($2::status[])
 ORDER BY f.updated_at DESC
@@ -612,10 +669,14 @@ type ListByUnitRow struct {
 	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
+	CreatorName            pgtype.Text
+	CreatorUsername        pgtype.Text
+	CreatorAvatarUrl       pgtype.Text
+	CreatorEmails          interface{}
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListByUnitRow, error) {
@@ -652,10 +713,14 @@ func (q *Queries) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListB
 			&i.AllowEditResponse,
 			&i.UnitName,
 			&i.OrgName,
+			&i.CreatorName,
+			&i.CreatorUsername,
+			&i.CreatorAvatarUrl,
+			&i.CreatorEmails,
 			&i.LastEditorName,
 			&i.LastEditorUsername,
 			&i.LastEditorAvatarUrl,
-			&i.LastEditorEmail,
+			&i.LastEditorEmails,
 		); err != nil {
 			return nil, err
 		}
@@ -690,18 +755,23 @@ WITH updated AS (
     WHERE forms.id = $16
     RETURNING id, title, description_json, description_html, preview_message, message_after_submission, status, unit_id, created_by, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font, allow_edit_response
 )
-SELECT 
+SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
-    usr.name as last_editor_name,
-    usr.username as last_editor_username,
-    usr.avatar_url as last_editor_avatar_url,
-    usr.emails as last_editor_email
+    creator.name as creator_name,
+    creator.username as creator_username,
+    creator.avatar_url as creator_avatar_url,
+    creator.emails as creator_emails,
+    last_editor.name as last_editor_name,
+    last_editor.username as last_editor_username,
+    last_editor.avatar_url as last_editor_avatar_url,
+    last_editor.emails as last_editor_emails
 FROM updated f
 LEFT JOIN units u ON f.unit_id = u.id
 LEFT JOIN units o ON u.org_id = o.id
-LEFT JOIN users_with_emails usr ON f.last_editor = usr.id
+LEFT JOIN users_with_emails creator ON f.created_by = creator.id
+LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 `
 
 type PatchParams struct {
@@ -748,10 +818,14 @@ type PatchRow struct {
 	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
+	CreatorName            pgtype.Text
+	CreatorUsername        pgtype.Text
+	CreatorAvatarUrl       pgtype.Text
+	CreatorEmails          interface{}
 	LastEditorName         pgtype.Text
 	LastEditorUsername     pgtype.Text
 	LastEditorAvatarUrl    pgtype.Text
-	LastEditorEmail        interface{}
+	LastEditorEmails       interface{}
 }
 
 func (q *Queries) Patch(ctx context.Context, arg PatchParams) (PatchRow, error) {
@@ -799,10 +873,14 @@ func (q *Queries) Patch(ctx context.Context, arg PatchParams) (PatchRow, error) 
 		&i.AllowEditResponse,
 		&i.UnitName,
 		&i.OrgName,
+		&i.CreatorName,
+		&i.CreatorUsername,
+		&i.CreatorAvatarUrl,
+		&i.CreatorEmails,
 		&i.LastEditorName,
 		&i.LastEditorUsername,
 		&i.LastEditorAvatarUrl,
-		&i.LastEditorEmail,
+		&i.LastEditorEmails,
 	)
 	return i, err
 }

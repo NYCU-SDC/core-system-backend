@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/internal/markdown"
@@ -328,8 +329,9 @@ func TestWorkflowService_Update(t *testing.T) {
 			}
 
 			markdownService := markdown.NewService(logger)
-			questionService := question.NewService(logger, db, nil, markdownService)
-			workflowService := workflow.NewService(logger, db, questionService)
+			formService := form.NewService(logger, db, markdownService)
+			questionService := question.NewService(logger, db, formService, markdownService)
+			workflowService := workflow.NewService(logger, db, formService, questionService)
 			result, updateErr := workflowService.Update(ctx, params.formID, params.workflowJSON, params.userID)
 			require.Equal(t, tc.expectedErr, updateErr != nil, "expected error: %v, got: %v", tc.expectedErr, updateErr)
 			if tc.validate != nil {

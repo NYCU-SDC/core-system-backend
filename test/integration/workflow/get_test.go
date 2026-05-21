@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/internal/markdown"
@@ -293,11 +294,10 @@ func TestWorkflowService_GetValidationInfo(t *testing.T) {
 				ctx = tc.setup(t, &params, db)
 			}
 
-			// Create question service to satisfy QuestionStore interface
-			questionService := question.NewService(logger, db, nil, markdown.NewService(logger))
-
-			// Create workflow service with real dependencies
-			workflowService := workflow.NewService(logger, db, questionService)
+			md := markdown.NewService(logger)
+			formService := form.NewService(logger, db, md)
+			questionService := question.NewService(logger, db, formService, md)
+			workflowService := workflow.NewService(logger, db, formService, questionService)
 
 			// Call GetValidationInfo which returns ValidationInfo array
 			validationInfos, err := workflowService.GetValidationInfo(ctx, params.formID, params.workflowJSON)
