@@ -11,7 +11,6 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -57,52 +56,34 @@ func NewService(logger *zap.Logger, db DBTX) *Service {
 	}
 }
 
-// generateDefaultTitle returns a unique default title for a new view given existing titles.
-func generateDefaultTitle(existingTitles []string) string {
+// generateUniqueTitle returns a unique title starting from candidate.
+// If candidate conflicts, it appends （1）, （2）, ... up to len(existingTitles).
+func generateUniqueTitle(existingTitles []string, candidate string) string {
 	titleSet := make(map[string]struct{}, len(existingTitles))
 	for _, t := range existingTitles {
 		titleSet[t] = struct{}{}
 	}
 
-	_, exists := titleSet[defaultViewTitle]
-	if !exists {
-		return defaultViewTitle
+	if _, exists := titleSet[candidate]; !exists {
+		return candidate
 	}
 
-	for i := 1; ; i++ {
-		candidate := fmt.Sprintf("%s（%d）", defaultViewTitle, i)
-		_, exists := titleSet[candidate]
+	for i := 1; i <= len(existingTitles); i++ {
+		numbered := fmt.Sprintf("%s（%d）", candidate, i)
+		_, exists := titleSet[numbered]
 		if !exists {
-			return candidate
+			return numbered
 		}
 	}
+
+	return fmt.Sprintf("%s（%d）", candidate, len(existingTitles)+1)
 }
 
 // generateDuplicateTitle returns a unique title for a duplicated view.
-// It wraps the original title in another layer of "的副本" until no conflict is found.
+// The base candidate is "「originalTitle」的副本"; conflicts are resolved by appending （1）, （2）, ...
 func generateDuplicateTitle(originalTitle string, existingTitles []string) string {
-	titleSet := make(map[string]struct{}, len(existingTitles))
-	for _, t := range existingTitles {
-		titleSet[t] = struct{}{}
-	}
-
 	candidate := "「" + originalTitle + "」的副本"
-	for {
-		_, exists := titleSet[candidate]
-		if !exists {
-			return candidate
-		}
-		candidate = "「" + candidate + "」的副本"
-	}
-}
-
-// isUniqueViolation returns true if the pgconn error is a unique_violation (23505).
-func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		return pgErr.Code == "23505"
-	}
-	return false
+	return generateUniqueTitle(existingTitles, candidate)
 }
 
 // Create creates a new view for the given form with a generated default title.
@@ -128,7 +109,7 @@ func (s *Service) Create(ctx context.Context, formID uuid.UUID) (View, error) {
 		return View{}, err
 	}
 
-	title := generateDefaultTitle(titles)
+	title := generateUniqueTitle(titles, defaultViewTitle)
 
 	order, err := s.queries.MaxOrder(traceCtx, formID)
 	if err != nil {
@@ -143,9 +124,6 @@ func (s *Service) Create(ctx context.Context, formID uuid.UUID) (View, error) {
 		Order:  order + 1,
 	})
 	if err != nil {
-		if isUniqueViolation(err) {
-			return View{}, internal.ErrViewNameDuplicate
-		}
 		err = databaseutil.WrapDBError(err, logger, "create view")
 		span.RecordError(err)
 		return View{}, err
@@ -217,9 +195,6 @@ func (s *Service) UpdateTitle(ctx context.Context, formID, viewID uuid.UUID, tit
 		if errors.Is(err, pgx.ErrNoRows) {
 			return View{}, internal.ErrViewNotFound
 		}
-		if isUniqueViolation(err) {
-			return View{}, internal.ErrViewNameDuplicate
-		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "view", "id", viewID.String(), logger, "update view title")
 		span.RecordError(err)
 		return View{}, err
@@ -240,8 +215,11 @@ func (s *Service) UpdateOrder(ctx context.Context, formID, viewID uuid.UUID, new
 		span.RecordError(err)
 		return View{}, err
 	}
-	if newOrder > maxOrder || newOrder < 0 {
-		return View{}, internal.ErrViewOrderOutOfRange
+	if newOrder < 0 {
+		newOrder = 0
+	}
+	if newOrder > maxOrder {
+		newOrder = maxOrder
 	}
 
 	row, err := s.queries.UpdateOrder(traceCtx, UpdateOrderParams{
@@ -392,13 +370,32 @@ func (s *Service) Delete(ctx context.Context, formID, viewID uuid.UUID) error {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	deleted, err := s.queries.DeleteIfUnlocked(traceCtx, DeleteIfUnlockedParams{
+	beginner, ok := s.db.(TxBeginner)
+	if !ok {
+		return fmt.Errorf("db does not support transactions")
+	}
+
+	tx, err := beginner.BeginTx(traceCtx, pgx.TxOptions{})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "begin tx")
+		span.RecordError(err)
+		return err
+	}
+	defer func() {
+		if rbErr := tx.Rollback(traceCtx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+			logger.Error("rollback failed", zap.Error(rbErr))
+		}
+	}()
+
+	qtx := s.queries.WithTx(tx)
+
+	deleted, err := qtx.DeleteIfUnlocked(traceCtx, DeleteIfUnlockedParams{
 		ID:     viewID,
 		FormID: formID,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			exist, exErr := s.queries.Exists(traceCtx, ExistsParams{
+			exist, exErr := qtx.Exists(traceCtx, ExistsParams{
 				ID:     viewID,
 				FormID: formID,
 			})
@@ -417,13 +414,20 @@ func (s *Service) Delete(ctx context.Context, formID, viewID uuid.UUID) error {
 		return err
 	}
 
-	err = s.queries.ShiftOrders(traceCtx, ShiftOrdersParams{
+	err = qtx.ShiftOrders(traceCtx, ShiftOrdersParams{
 		FormID:  formID,
 		Order:   deleted.Order,
 		Order_2: -1,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "shift orders for delete")
+		span.RecordError(err)
+		return err
+	}
+
+	err = tx.Commit(traceCtx)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "commit tx")
 		span.RecordError(err)
 		return err
 	}
