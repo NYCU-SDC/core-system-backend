@@ -872,17 +872,12 @@ func (h *Handler) ListFormsOfCurrentUser(w http.ResponseWriter, r *http.Request)
 			deadline = &userForm.Deadline.Time
 		}
 
-		responseIDs := userForm.ResponseIDs
-		if responseIDs == nil {
-			responseIDs = []uuid.UUID{}
-		}
-
 		userFormsResponse = append(userFormsResponse, UserFormResponse{
 			FormID:      userForm.FormID.String(),
 			Title:       userForm.Title,
 			Deadline:    deadline,
 			Status:      userForm.Status,
-			ResponseIDs: responseIDs,
+			ResponseIDs: userForm.ResponseIDs,
 		})
 	}
 
