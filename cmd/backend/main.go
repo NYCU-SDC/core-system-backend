@@ -408,8 +408,8 @@ func main() {
 	// View Management
 	// ----------------------
 	mux.Handle("POST /api/forms/{formId}/views", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Create))
-	mux.Handle("GET /api/forms/{formId}/views", authMiddleware.HandlerFunc(viewHandler.List))
-	mux.Handle("GET /api/forms/{formId}/views/{viewId}", authMiddleware.HandlerFunc(viewHandler.Get))
+	mux.Handle("GET /api/forms/{formId}/views", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.List))
+	mux.Handle("GET /api/forms/{formId}/views/{viewId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Get))
 	mux.Handle("PATCH /api/forms/{formId}/views/{viewId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Update))
 	mux.Handle("POST /api/forms/{formId}/views/{viewId}/lock", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Lock))
 	mux.Handle("POST /api/forms/{formId}/views/{viewId}/unlock", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Unlock))
