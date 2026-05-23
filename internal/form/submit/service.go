@@ -155,6 +155,7 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 			formResponseIDs[currentResponse.FormID],
 			currentResponse.ID,
 		)
+
 		status := form.UserFormStatusInProgress
 		if currentResponse.SubmittedAt.Valid {
 			status = form.UserFormStatusCompleted
