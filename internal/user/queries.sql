@@ -37,18 +37,29 @@ INSERT INTO auth (user_id, provider, provider_id)
 VALUES ($1, $2, $3)
 RETURNING *;
 
--- name: GetIDByAuth :one
+-- name: GetByAuth :one
 SELECT user_id FROM auth WHERE provider = $1 AND provider_id = $2;
 
 -- name: ExistsByAuth :one
 SELECT EXISTS(SELECT 1 FROM auth WHERE provider = $1 AND provider_id = $2);
 
--- name: CreateEmail :exec
+-- name: UpsertEmail :one
 INSERT INTO user_emails (user_id, value)
-VALUES ($1, $2);
+VALUES ($1, $2)
+ON CONFLICT (value) DO UPDATE SET updated_at = now()
+RETURNING id;
+
+-- name: GetEmailIDByUserAndValue :one
+SELECT id FROM user_emails WHERE user_id = $1 AND value = $2;
+
+-- name: GetByEmailForUpdate :one
+SELECT user_id FROM user_emails WHERE value = $1 FOR UPDATE;
 
 -- name: GetEmails :many
-SELECT user_emails.value as email FROM user_emails WHERE user_id = $1;
+SELECT user_emails.value as email FROM user_emails WHERE user_id = $1 ORDER BY value;
 
--- name: GetIDByEmail :one
+-- name: GetByEmail :one
 SELECT user_id FROM user_emails WHERE value = $1;
+
+-- name: GetLoginProfile :one
+SELECT emails_and_auths FROM user_login_profile WHERE user_id = $1;

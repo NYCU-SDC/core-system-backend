@@ -609,6 +609,7 @@ type User struct {
 }
 
 type UserEmail struct {
+	ID        uuid.UUID
 	UserID    uuid.UUID
 	Value     string
 	CreatedAt pgtype.Timestamptz
@@ -622,6 +623,11 @@ type UserInboxMessage struct {
 	IsRead     bool
 	IsStarred  bool
 	IsArchived bool
+}
+
+type UserLoginProfile struct {
+	UserID         uuid.UUID
+	EmailsAndAuths []byte
 }
 
 type UsersWithEmail struct {

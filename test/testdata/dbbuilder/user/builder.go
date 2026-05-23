@@ -13,10 +13,10 @@ import (
 )
 
 type FactoryParams struct {
-	Name      string
-	Username  string
-	AvatarURL string
-	Role      []string
+	Name        string
+	Username    string
+	AvatarURL   string
+	Role        []string
 	IsOnboarded bool
 }
 
@@ -37,10 +37,10 @@ func (b Builder) Create(opts ...Option) user.User {
 	queries := b.Queries()
 
 	p := &FactoryParams{
-		Name:      testdata.RandomFullName(),
-		Username:  testdata.RandomName(),
-		AvatarURL: testdata.RandomURL(),
-		Role:      []string{"user"}, // Default role is "user"
+		Name:        testdata.RandomFullName(),
+		Username:    testdata.RandomName(),
+		AvatarURL:   testdata.RandomURL(),
+		Role:        []string{"user"}, // Default role is "user"
 		IsOnboarded: false,
 	}
 	for _, opt := range opts {
@@ -48,10 +48,10 @@ func (b Builder) Create(opts ...Option) user.User {
 	}
 
 	userRow, err := queries.Create(context.Background(), user.CreateParams{
-		Name:      pgtype.Text{String: p.Name, Valid: true},
-		Username:  pgtype.Text{String: p.Username, Valid: true},
-		AvatarUrl: pgtype.Text{String: p.AvatarURL, Valid: true},
-		Role:      p.Role,
+		Name:        pgtype.Text{String: p.Name, Valid: true},
+		Username:    pgtype.Text{String: p.Username, Valid: true},
+		AvatarUrl:   pgtype.Text{String: p.AvatarURL, Valid: true},
+		Role:        p.Role,
 		IsOnboarded: p.IsOnboarded,
 	})
 	require.NoError(b.t, err)
@@ -62,7 +62,7 @@ func (b Builder) Create(opts ...Option) user.User {
 // CreateEmail creates an email record for a user
 func (b Builder) CreateEmail(userID uuid.UUID, email string) {
 	queries := b.Queries()
-	err := queries.CreateEmail(context.Background(), user.CreateEmailParams{
+	_, err := queries.UpsertEmail(context.Background(), user.UpsertEmailParams{
 		UserID: userID,
 		Value:  email,
 	})
