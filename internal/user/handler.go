@@ -51,13 +51,12 @@ type ProfileResponse struct {
 
 // MeResponse represents the response format for /user/me endpoint
 type MeResponse struct {
-	ID             string           `json:"id"`
-	Username       string           `json:"username"`
-	Name           string           `json:"name"`
-	AvatarUrl      string           `json:"avatarUrl"`
-	Role           string           `json:"role"`
-	Emails         []string         `json:"emails"`
-	EmailsAndAuths []EmailAuthEntry `json:"emailsAndAuths"`
+	ID        string   `json:"id"`
+	Username  string   `json:"username"`
+	Name      string   `json:"name"`
+	AvatarUrl string   `json:"avatarUrl"`
+	Role      string   `json:"role"`
+	Emails    []string `json:"emails"`
 
 	// Todo: This field is currently always false, but we keep it here for future use when we want to enforce onboarding for invited users
 	RequireOnboarding bool `json:"require_onboarding"`
@@ -152,23 +151,10 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) buildMeResponse(ctx context.Context, logger *zap.Logger, currentUser User, roleStr string) MeResponse {
-	emailsAndAuths, err := h.service.GetLoginProfileEntries(ctx, currentUser.ID)
-	var emails []string
+	emails, err := h.service.GetEmails(ctx, currentUser.ID)
 	if err != nil {
-		logger.Warn("Failed to get login profile", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
-
-		emailsAndAuths = []EmailAuthEntry{}
-
-		emails, err = h.service.GetEmails(ctx, currentUser.ID)
-		if err != nil {
-			logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
-			emails = []string{}
-		}
-	} else {
-		emails = make([]string, len(emailsAndAuths))
-		for i, entry := range emailsAndAuths {
-			emails[i] = entry.Email
-		}
+		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
+		emails = []string{}
 	}
 
 	return MeResponse{
@@ -178,7 +164,6 @@ func (h *Handler) buildMeResponse(ctx context.Context, logger *zap.Logger, curre
 		AvatarUrl:         currentUser.AvatarUrl.String,
 		Role:              roleStr,
 		Emails:            emails,
-		EmailsAndAuths:    emailsAndAuths,
 		RequireOnboarding: false,
 	}
 }
