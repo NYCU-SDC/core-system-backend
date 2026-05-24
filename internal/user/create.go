@@ -11,40 +11,26 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func userEmailIDParam(id uuid.UUID) pgtype.UUID {
-	if id == uuid.Nil {
-		return pgtype.UUID{}
-	}
-
-	return pgtype.UUID{Bytes: id, Valid: true}
-}
-
 // linkEmailTx assigns email to accountID inside an existing transaction, enforcing global email uniqueness.
-// It returns the user_emails row id when email is non-empty.
-func (s *Service) linkEmailTx(ctx context.Context, qtx *Queries, userID uuid.UUID, email string) (uuid.UUID, error) {
+func (s *Service) linkEmailTx(ctx context.Context, qtx *Queries, userID uuid.UUID, email string) error {
 	if email == "" {
-		return uuid.Nil, nil
+		return nil
 	}
 
 	err := qtx.validateEmailFree(ctx, email)
 	if err != nil {
-		return uuid.Nil, err
+		return err
 	}
 
-	emailID, err := qtx.UpsertEmail(ctx, UpsertEmailParams{
+	err = qtx.UpsertEmail(ctx, UpsertEmailParams{
 		UserID: userID,
 		Value:  email,
 	})
 	if err != nil {
-		return uuid.Nil, err
+		return err
 	}
 
-	err = validateEmailOwner(ctx, qtx, email, userID)
-	if err != nil {
-		return uuid.Nil, err
-	}
-
-	return emailID, nil
+	return validateEmailOwner(ctx, qtx, email, userID)
 }
 
 // createEmailOnlyTx creates an email-only user (no auth row) and links email within a transaction.
@@ -86,7 +72,7 @@ func (s *Service) createEmailOnlyTx(
 		newUserID = newUser.ID
 	}
 
-	_, err := s.linkEmailTx(ctx, qtx, newUserID, email)
+	err := s.linkEmailTx(ctx, qtx, newUserID, email)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
@@ -115,16 +101,15 @@ func (s *Service) createOAuthTx(ctx context.Context, qtx *Queries, params create
 		return uuid.UUID{}, err
 	}
 
-	emailID, err := s.linkEmailTx(ctx, qtx, newUser.ID, params.Email)
+	err = s.linkEmailTx(ctx, qtx, newUser.ID, params.Email)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
 
 	_, err = qtx.CreateAuth(ctx, CreateAuthParams{
-		UserID:      newUser.ID,
-		UserEmailID: userEmailIDParam(emailID),
-		Provider:    params.OAuthProvider,
-		ProviderID:  params.OAuthProviderID,
+		UserID:     newUser.ID,
+		Provider:   params.OAuthProvider,
+		ProviderID: params.OAuthProviderID,
 	})
 	if err != nil {
 		return uuid.UUID{}, err

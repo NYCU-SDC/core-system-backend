@@ -95,15 +95,3 @@ func setupEmailOnlyCreateAuthScenario(t *testing.T, db dbbuilder.DBTX) (
 
 	return owner.ID, email, provider, providerID
 }
-
-func loginProfileEntryForEmail(t *testing.T, entries []user.EmailAuthEntry, email string) *user.EmailAuthEntry {
-	t.Helper()
-
-	for i := range entries {
-		if entries[i].Email == email {
-			return &entries[i]
-		}
-	}
-
-	return nil
-}

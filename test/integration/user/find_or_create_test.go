@@ -62,13 +62,6 @@ func TestFindOrCreate(t *testing.T) {
 					ProviderID: params.OAuthProviderID,
 				})
 				require.NoError(t, authErr)
-
-				emailID, emailIDErr := queries.GetEmailIDByAuth(context.Background(), user.GetEmailIDByAuthParams{
-					Provider:   params.OAuthProvider,
-					ProviderID: params.OAuthProviderID,
-				})
-				require.NoError(t, emailIDErr)
-				require.True(t, emailID.Valid, "OAuth bind must set user_email_id on the email row")
 			},
 		},
 		{

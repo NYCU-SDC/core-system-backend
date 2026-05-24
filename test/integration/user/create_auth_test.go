@@ -68,20 +68,6 @@ func TestCreateAuth(t *testing.T) {
 					ProviderID: newProviderID,
 				})
 				require.NoError(t, authErr)
-
-				linkedEmailID, err := queries.GetEmailIDByAuth(context.Background(), user.GetEmailIDByAuthParams{
-					Provider:   newProvider,
-					ProviderID: newProviderID,
-				})
-				require.NoError(t, err)
-				require.True(t, linkedEmailID.Valid)
-
-				existingEmailID, err := queries.GetEmailIDByAuth(context.Background(), user.GetEmailIDByAuthParams{
-					Provider:   existingProvider,
-					ProviderID: existingProviderID,
-				})
-				require.NoError(t, err)
-				require.Equal(t, existingEmailID, linkedEmailID)
 				return nil
 			},
 		},

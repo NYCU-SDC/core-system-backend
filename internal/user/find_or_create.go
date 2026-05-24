@@ -63,7 +63,7 @@ func (s *Service) resolveOAuthByEmail(
 	var result FindOrCreateResult
 
 	err := s.withTransaction(ctx, func(qtx *Queries) error {
-		emailRow, err := qtx.GetEmailForUpdate(ctx, params.Email)
+		_, err := qtx.GetByEmailForUpdate(ctx, params.Email)
 		if errors.Is(err, pgx.ErrNoRows) {
 			outcome = emailNotFound
 			return nil
@@ -107,10 +107,9 @@ func (s *Service) resolveOAuthByEmail(
 			zap.String("email", params.Email))
 
 		_, err = qtx.CreateAuth(ctx, CreateAuthParams{
-			UserID:      existingUser.ID,
-			UserEmailID: userEmailIDParam(emailRow.ID),
-			Provider:    params.OAuthProvider,
-			ProviderID:  params.OAuthProviderID,
+			UserID:     existingUser.ID,
+			Provider:   params.OAuthProvider,
+			ProviderID: params.OAuthProviderID,
 		})
 		if err != nil {
 			return databaseutil.WrapDBError(err, logger, "create auth for email-only user")

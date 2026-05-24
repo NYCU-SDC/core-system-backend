@@ -455,13 +455,12 @@ type Answer struct {
 }
 
 type Auth struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	UserEmailID pgtype.UUID
-	Provider    string
-	ProviderID  string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Provider   string
+	ProviderID string
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
 }
 
 type File struct {
@@ -610,7 +609,6 @@ type User struct {
 }
 
 type UserEmail struct {
-	ID        uuid.UUID
 	UserID    uuid.UUID
 	Value     string
 	CreatedAt pgtype.Timestamptz
@@ -624,11 +622,6 @@ type UserInboxMessage struct {
 	IsRead     bool
 	IsStarred  bool
 	IsArchived bool
-}
-
-type UserLoginProfile struct {
-	UserID         uuid.UUID
-	EmailsAndAuths []byte
 }
 
 type UsersWithEmail struct {

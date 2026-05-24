@@ -33,17 +33,15 @@ func (u User) GetID() uuid.UUID {
 type Querier interface {
 	Get(ctx context.Context, id uuid.UUID) (UsersWithEmail, error)
 	GetByAuth(ctx context.Context, arg GetByAuthParams) (uuid.UUID, error)
-	GetEmailIDByAuth(ctx context.Context, arg GetEmailIDByAuthParams) (pgtype.UUID, error)
 	Create(ctx context.Context, arg CreateParams) (User, error)
 	CreateWithID(ctx context.Context, arg CreateWithIDParams) (User, error)
 	CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, error)
 	Update(ctx context.Context, arg UpdateParams) (User, error)
 	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
-	UpsertEmail(ctx context.Context, arg UpsertEmailParams) (uuid.UUID, error)
+	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
 	GetByEmail(ctx context.Context, value string) (uuid.UUID, error)
 	GetByEmailForUpdate(ctx context.Context, value string) (uuid.UUID, error)
 	GetWithEarliestProviderByEmail(ctx context.Context, value string) (GetWithEarliestProviderByEmailRow, error)
-	GetLoginProfile(ctx context.Context, userID uuid.UUID) ([]byte, error)
 	WithTx(tx pgx.Tx) *Queries
 }
 
@@ -349,10 +347,9 @@ func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, pr
 
 	if existingProvider == "" && existingProviderID == "" {
 		_, err := s.queries.CreateAuth(traceCtx, CreateAuthParams{
-			UserID:      userID,
-			UserEmailID: pgtype.UUID{},
-			Provider:    provider,
-			ProviderID:  providerID,
+			UserID:     userID,
+			Provider:   provider,
+			ProviderID: providerID,
 		})
 		if err != nil {
 			err = databaseutil.WrapDBError(err, logger, "create auth")
@@ -376,21 +373,10 @@ func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, pr
 		return internal.ErrInvalidAuthUser
 	}
 
-	existingEmailID, err := s.queries.GetEmailIDByAuth(traceCtx, GetEmailIDByAuthParams{
-		Provider:   existingProvider,
-		ProviderID: existingProviderID,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get user email id for existing auth")
-		span.RecordError(err)
-		return err
-	}
-
 	_, err = s.queries.CreateAuth(traceCtx, CreateAuthParams{
-		UserID:      userID,
-		UserEmailID: existingEmailID,
-		Provider:    provider,
-		ProviderID:  providerID,
+		UserID:     userID,
+		Provider:   provider,
+		ProviderID: providerID,
 	})
 	if err != nil {
 		wrapped := databaseutil.WrapDBError(err, logger, "create auth")
@@ -411,7 +397,7 @@ func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email strin
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	_, err := s.queries.UpsertEmail(traceCtx, UpsertEmailParams{
+	err := s.queries.UpsertEmail(traceCtx, UpsertEmailParams{
 		UserID: userID,
 		Value:  email,
 	})
