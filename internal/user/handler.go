@@ -2,6 +2,7 @@ package user
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"context"
 	"net/http"
 	"strings"
 
@@ -50,12 +51,13 @@ type ProfileResponse struct {
 
 // MeResponse represents the response format for /user/me endpoint
 type MeResponse struct {
-	ID        string   `json:"id"`
-	Username  string   `json:"username"`
-	Name      string   `json:"name"`
-	AvatarUrl string   `json:"avatarUrl"`
-	Role      string   `json:"role"`
-	Emails    []string `json:"emails"`
+	ID             string           `json:"id"`
+	Username       string           `json:"username"`
+	Name           string           `json:"name"`
+	AvatarUrl      string           `json:"avatarUrl"`
+	Role           string           `json:"role"`
+	Emails         []string         `json:"emails"`
+	EmailsAndAuths []EmailAuthEntry `json:"emailsAndAuths"`
 
 	// Todo: This field is currently always false, but we keep it here for future use when we want to enforce onboarding for invited users
 	RequireOnboarding bool `json:"require_onboarding"`
@@ -109,23 +111,7 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 		roleStr = strings.Join(currentUser.Role, ",")
 	}
 
-	// Get user emails
-	emails, err := h.service.GetEmails(traceCtx, currentUser.ID)
-	if err != nil {
-		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
-		emails = []string{}
-	}
-
-	response := MeResponse{
-		ID:                currentUser.ID.String(),
-		Username:          currentUser.Username.String,
-		Name:              currentUser.Name.String,
-		AvatarUrl:         currentUser.AvatarUrl.String,
-		Role:              roleStr,
-		Emails:            emails,
-		RequireOnboarding: false,
-	}
-
+	response := h.buildMeResponse(traceCtx, logger, *currentUser, roleStr)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
@@ -161,22 +147,38 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 		roleStr = strings.Join(newUser.Role, ",")
 	}
 
-	// Get user emails
-	emails, err := h.service.GetEmails(traceCtx, newUser.ID)
+	response := h.buildMeResponse(traceCtx, logger, newUser, roleStr)
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) buildMeResponse(ctx context.Context, logger *zap.Logger, currentUser User, roleStr string) MeResponse {
+	emailsAndAuths, err := h.service.GetLoginProfileEntries(ctx, currentUser.ID)
+	var emails []string
 	if err != nil {
-		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", newUser.ID.String()))
-		emails = []string{}
+		logger.Warn("Failed to get login profile", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
+
+		emailsAndAuths = []EmailAuthEntry{}
+
+		emails, err = h.service.GetEmails(ctx, currentUser.ID)
+		if err != nil {
+			logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
+			emails = []string{}
+		}
+	} else {
+		emails = make([]string, len(emailsAndAuths))
+		for i, entry := range emailsAndAuths {
+			emails[i] = entry.Email
+		}
 	}
 
-	response := MeResponse{
-		ID:                newUser.ID.String(),
-		Username:          newUser.Username.String,
-		Name:              newUser.Name.String,
-		AvatarUrl:         newUser.AvatarUrl.String,
+	return MeResponse{
+		ID:                currentUser.ID.String(),
+		Username:          currentUser.Username.String,
+		Name:              currentUser.Name.String,
+		AvatarUrl:         currentUser.AvatarUrl.String,
 		Role:              roleStr,
 		Emails:            emails,
+		EmailsAndAuths:    emailsAndAuths,
 		RequireOnboarding: false,
 	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
