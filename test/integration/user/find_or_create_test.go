@@ -8,38 +8,12 @@ import (
 	userbuilder "NYCU-SDC/core-system-backend/test/testdata/dbbuilder/user"
 	"context"
 	"fmt"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
-
-func TestMain(m *testing.M) {
-	resourceManager, _, err := integration.GetOrInitResource()
-	if err != nil {
-		panic(err)
-	}
-
-	_, rollback, err := resourceManager.SetupPostgres()
-	if err != nil {
-		panic(err)
-	}
-
-	code := m.Run()
-
-	rollback()
-	resourceManager.Cleanup()
-
-	os.Exit(code)
-}
-
-func newUserService(t *testing.T, db dbbuilder.DBTX, logger *zap.Logger) *user.Service {
-	t.Helper()
-	return user.NewService(logger, db, nil, nil, nil, nil)
-}
 
 func TestFindOrCreate(t *testing.T) {
 	resourceManager, logger, err := integration.GetOrInitResource()
@@ -75,32 +49,26 @@ func TestFindOrCreate(t *testing.T) {
 			},
 		},
 		{
-			name: "email-only account attaches OAuth",
-			setup: func(t *testing.T, db dbbuilder.DBTX) (user.FindOrCreateParams, uuid.UUID) {
-				builder := userbuilder.New(t, db)
-				account := builder.Create()
-				email := fmt.Sprintf("emailonly-%s@example.com", uuid.NewString())
-				builder.CreateEmail(account.ID, email)
-				provider := "google"
-				providerID := uuid.NewString()
-				return user.FindOrCreateParams{
-					Name:            "Test User",
-					Email:           email,
-					Role:            []string{"user"},
-					OAuthProvider:   provider,
-					OAuthProviderID: providerID,
-				}, account.ID
-			},
+			name:  "email-only account attaches OAuth",
+			setup: setupEmailOnlyAccountFindOrCreate,
 			validate: func(t *testing.T, db dbbuilder.DBTX, params user.FindOrCreateParams, result user.FindOrCreateResult, err error, expectUserID uuid.UUID) {
 				require.NoError(t, err)
 				require.Equal(t, expectUserID, result.UserID)
 				require.Empty(t, result.ExistingProvider)
 
-				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
+				queries := user.New(db)
+				_, authErr := queries.GetByAuth(context.Background(), user.GetByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
 				require.NoError(t, authErr)
+
+				emailID, emailIDErr := queries.GetEmailIDByAuth(context.Background(), user.GetEmailIDByAuthParams{
+					Provider:   params.OAuthProvider,
+					ProviderID: params.OAuthProviderID,
+				})
+				require.NoError(t, emailIDErr)
+				require.True(t, emailID.Valid, "OAuth bind must set user_email_id on the email row")
 			},
 		},
 		{
@@ -136,10 +104,9 @@ func TestFindOrCreate(t *testing.T) {
 		{
 			name: "new signup with unknown email",
 			setup: func(t *testing.T, db dbbuilder.DBTX) (user.FindOrCreateParams, uuid.UUID) {
-				email := fmt.Sprintf("new-%s@example.com", uuid.NewString())
 				return user.FindOrCreateParams{
 					Name:            testdata.RandomFullName(),
-					Email:           email,
+					Email:           fmt.Sprintf("new-%s@example.com", uuid.NewString()),
 					Role:            []string{"user"},
 					OAuthProvider:   "google",
 					OAuthProviderID: uuid.NewString(),
@@ -192,7 +159,6 @@ func TestFindOrCreate(t *testing.T) {
 			svc := newUserService(t, db, logger)
 
 			result, err := svc.FindOrCreate(context.Background(), params)
-
 			tc.validate(t, db, params, result, err, expectUserID)
 		})
 	}
