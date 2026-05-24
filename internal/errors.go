@@ -111,8 +111,9 @@ var (
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
 
 	// View Errors
-	ErrViewNotFound = errors.New("view not found")
-	ErrViewLocked   = errors.New("view is locked and cannot be deleted")
+	ErrViewNotFound      = errors.New("view not found")
+	ErrViewLocked        = errors.New("view is locked and cannot be deleted")
+	ErrViewNameDuplicate = errors.New("view name is already in use")
 
 	// Response Errors
 	ErrResponseNotFound       = errors.New("response not found")
@@ -326,6 +327,8 @@ func ErrorHandler(err error) problem.Problem {
 			Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409",
 			Detail: "view is locked and cannot be deleted",
 		}
+	case errors.Is(err, ErrViewNameDuplicate):
+		return problem.NewBadRequestProblem("view name is already in use")
 
 	// Response Errors
 	case errors.Is(err, ErrResponseNotFound):

@@ -11,6 +11,7 @@ import (
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -64,7 +65,8 @@ func generateUniqueTitle(existingTitles []string, candidate string) string {
 		titleSet[t] = struct{}{}
 	}
 
-	if _, exists := titleSet[candidate]; !exists {
+	_, exists := titleSet[candidate]
+	if !exists {
 		return candidate
 	}
 
@@ -84,6 +86,15 @@ func generateUniqueTitle(existingTitles []string, candidate string) string {
 func generateDuplicateTitle(originalTitle string, existingTitles []string) string {
 	candidate := "「" + originalTitle + "」的副本"
 	return generateUniqueTitle(existingTitles, candidate)
+}
+
+// isUniqueViolation returns true if the error is a PostgreSQL unique_violation (23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	return false
 }
 
 // Create creates a new view for the given form with a generated default title.
@@ -194,6 +205,9 @@ func (s *Service) UpdateTitle(ctx context.Context, formID, viewID uuid.UUID, tit
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return View{}, internal.ErrViewNotFound
+		}
+		if isUniqueViolation(err) {
+			return View{}, internal.ErrViewNameDuplicate
 		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "view", "id", viewID.String(), logger, "update view title")
 		span.RecordError(err)
