@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS auth (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_email_id UUID REFERENCES user_emails(id) ON DELETE CASCADE,
     provider VARCHAR(255) NOT NULL,
     provider_id VARCHAR(255) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -57,7 +58,7 @@ SELECT
                         (
                             SELECT json_agg(a.provider ORDER BY a.provider)
                             FROM auth AS a
-                            WHERE a.user_id = u.id
+                            WHERE a.user_email_id = e.id
                         ),
                         '[]'::json
                     )

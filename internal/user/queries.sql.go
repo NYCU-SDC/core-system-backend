@@ -49,23 +49,30 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (User, error) {
 }
 
 const createAuth = `-- name: CreateAuth :one
-INSERT INTO auth (user_id, provider, provider_id)
-VALUES ($1, $2, $3)
-RETURNING id, user_id, provider, provider_id, created_at, updated_at
+INSERT INTO auth (user_id, user_email_id, provider, provider_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id, user_id, user_email_id, provider, provider_id, created_at, updated_at
 `
 
 type CreateAuthParams struct {
-	UserID     uuid.UUID
-	Provider   string
-	ProviderID string
+	UserID      uuid.UUID
+	UserEmailID pgtype.UUID
+	Provider    string
+	ProviderID  string
 }
 
 func (q *Queries) CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, error) {
-	row := q.db.QueryRow(ctx, createAuth, arg.UserID, arg.Provider, arg.ProviderID)
+	row := q.db.QueryRow(ctx, createAuth,
+		arg.UserID,
+		arg.UserEmailID,
+		arg.Provider,
+		arg.ProviderID,
+	)
 	var i Auth
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.UserEmailID,
 		&i.Provider,
 		&i.ProviderID,
 		&i.CreatedAt,
@@ -200,20 +207,36 @@ func (q *Queries) GetByEmailForUpdate(ctx context.Context, value string) (uuid.U
 	return user_id, err
 }
 
-const getEmailIDByUserAndValue = `-- name: GetEmailIDByUserAndValue :one
-SELECT id FROM user_emails WHERE user_id = $1 AND value = $2
+const getEmailForUpdate = `-- name: GetEmailForUpdate :one
+SELECT id, user_id FROM user_emails WHERE value = $1 FOR UPDATE
 `
 
-type GetEmailIDByUserAndValueParams struct {
+type GetEmailForUpdateRow struct {
+	ID     uuid.UUID
 	UserID uuid.UUID
-	Value  string
 }
 
-func (q *Queries) GetEmailIDByUserAndValue(ctx context.Context, arg GetEmailIDByUserAndValueParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getEmailIDByUserAndValue, arg.UserID, arg.Value)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
+func (q *Queries) GetEmailForUpdate(ctx context.Context, value string) (GetEmailForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getEmailForUpdate, value)
+	var i GetEmailForUpdateRow
+	err := row.Scan(&i.ID, &i.UserID)
+	return i, err
+}
+
+const getEmailIDByAuth = `-- name: GetEmailIDByAuth :one
+SELECT user_email_id FROM auth WHERE provider = $1 AND provider_id = $2
+`
+
+type GetEmailIDByAuthParams struct {
+	Provider   string
+	ProviderID string
+}
+
+func (q *Queries) GetEmailIDByAuth(ctx context.Context, arg GetEmailIDByAuthParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, getEmailIDByAuth, arg.Provider, arg.ProviderID)
+	var user_email_id pgtype.UUID
+	err := row.Scan(&user_email_id)
+	return user_email_id, err
 }
 
 const getEmails = `-- name: GetEmails :many
@@ -255,7 +278,7 @@ const getWithEarliestProviderByEmail = `-- name: GetWithEarliestProviderByEmail 
 SELECT u.id, u.name, a.provider, a.provider_id
 FROM user_emails e
          JOIN users u ON e.user_id = u.id
-         LEFT JOIN auth a ON a.user_id = u.id
+         LEFT JOIN auth a ON a.user_email_id = e.id
 WHERE e.value = $1
 ORDER BY a.created_at ASC
     LIMIT 1

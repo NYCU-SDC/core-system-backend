@@ -455,12 +455,13 @@ type Answer struct {
 }
 
 type Auth struct {
-	ID         uuid.UUID
-	UserID     uuid.UUID
-	Provider   string
-	ProviderID string
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	UserEmailID pgtype.UUID
+	Provider    string
+	ProviderID  string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type File struct {
