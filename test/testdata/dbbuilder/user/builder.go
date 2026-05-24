@@ -5,6 +5,7 @@ import (
 	"NYCU-SDC/core-system-backend/test/testdata"
 	"NYCU-SDC/core-system-backend/test/testdata/dbbuilder"
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -38,7 +39,7 @@ func (b Builder) Create(opts ...Option) user.User {
 
 	p := &FactoryParams{
 		Name:        testdata.RandomFullName(),
-		Username:    testdata.RandomName(),
+		Username:    fmt.Sprintf("%s-%s", testdata.RandomName(), uuid.NewString()),
 		AvatarURL:   testdata.RandomURL(),
 		Role:        []string{"user"}, // Default role is "user"
 		IsOnboarded: false,
