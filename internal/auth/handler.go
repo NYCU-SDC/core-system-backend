@@ -48,7 +48,6 @@ type JWTStore interface {
 }
 
 type UserStore interface {
-	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 	Get(ctx context.Context, id uuid.UUID) (user.UsersWithEmail, error)
 	FindOrCreate(ctx context.Context, params user.FindOrCreateParams) (user.FindOrCreateResult, error)
 	CreateAuth(ctx context.Context, userID uuid.UUID, provider, providerID, existingProvider, existingProviderID string) error
@@ -496,8 +495,8 @@ func (h *Handler) InternalAPITokenLogin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	exists, err := h.userStore.Exists(traceCtx, uid)
-	if err != nil || !exists {
+	_, err = h.userStore.Get(traceCtx, uid)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrUserNotFound, logger)
 		return
 	}

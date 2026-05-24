@@ -14,7 +14,7 @@ import (
 
 const create = `-- name: Create :one
 INSERT INTO users (name, username, avatar_url, role, is_onboarded)
-VALUES ($1, $2, $3, $4, $5) 
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, name, username, avatar_url, role, is_onboarded, created_at, updated_at
 `
 
@@ -117,33 +117,6 @@ func (q *Queries) CreateWithID(ctx context.Context, arg CreateWithIDParams) (Use
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const exists = `-- name: Exists :one
-SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)
-`
-
-func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
-	row := q.db.QueryRow(ctx, exists, id)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
-const existsByAuth = `-- name: ExistsByAuth :one
-SELECT EXISTS(SELECT 1 FROM auth WHERE provider = $1 AND provider_id = $2)
-`
-
-type ExistsByAuthParams struct {
-	Provider   string
-	ProviderID string
-}
-
-func (q *Queries) ExistsByAuth(ctx context.Context, arg ExistsByAuthParams) (bool, error) {
-	row := q.db.QueryRow(ctx, existsByAuth, arg.Provider, arg.ProviderID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }
 
 const get = `-- name: Get :one

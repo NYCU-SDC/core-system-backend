@@ -1,15 +1,12 @@
 -- name: Create :one
 INSERT INTO users (name, username, avatar_url, role, is_onboarded)
-VALUES ($1, $2, $3, $4, $5) 
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: CreateWithID :one
 INSERT INTO users (id, name, username, avatar_url, role, is_onboarded)
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
-
--- name: Exists :one
-SELECT EXISTS(SELECT 1 FROM users WHERE id = $1);
 
 -- name: GetWithEarliestProviderByEmail :one
 SELECT u.id, u.name, a.provider, a.provider_id
@@ -42,9 +39,6 @@ SELECT user_id FROM auth WHERE provider = $1 AND provider_id = $2;
 
 -- name: GetEmailIDByAuth :one
 SELECT user_email_id FROM auth WHERE provider = $1 AND provider_id = $2;
-
--- name: ExistsByAuth :one
-SELECT EXISTS(SELECT 1 FROM auth WHERE provider = $1 AND provider_id = $2);
 
 -- name: UpsertEmail :one
 INSERT INTO user_emails (user_id, value)

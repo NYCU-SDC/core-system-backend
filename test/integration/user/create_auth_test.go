@@ -30,10 +30,9 @@ func TestCreateAuth(t *testing.T) {
 				owner := builder.Create()
 				impostor := builder.Create()
 				email := fmt.Sprintf("auth-wrong-owner-%s@example.com", uuid.NewString())
-				builder.CreateEmail(owner.ID, email)
 				existingProvider := "github"
 				existingProviderID := uuid.NewString()
-				builder.CreateAuth(owner.ID, existingProvider, existingProviderID)
+				builder.CreateAuth(owner.ID, email, existingProvider, existingProviderID)
 
 				return svc.CreateAuth(
 					context.Background(),
@@ -51,9 +50,10 @@ func TestCreateAuth(t *testing.T) {
 			setup: func(t *testing.T, db dbbuilder.DBTX, svc *user.Service) error {
 				builder := userbuilder.New(t, db)
 				owner := builder.Create()
+				email := fmt.Sprintf("auth-link-%s@example.com", uuid.NewString())
 				existingProvider := "github"
 				existingProviderID := uuid.NewString()
-				builder.CreateAuth(owner.ID, existingProvider, existingProviderID)
+				builder.CreateAuth(owner.ID, email, existingProvider, existingProviderID)
 				newProvider := "google"
 				newProviderID := uuid.NewString()
 
@@ -69,12 +69,11 @@ func TestCreateAuth(t *testing.T) {
 					return err
 				}
 
-				exists, existsErr := user.New(db).ExistsByAuth(context.Background(), user.ExistsByAuthParams{
+				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
 					Provider:   newProvider,
 					ProviderID: newProviderID,
 				})
-				require.NoError(t, existsErr)
-				require.True(t, exists)
+				require.NoError(t, authErr)
 				return nil
 			},
 		},
@@ -83,9 +82,10 @@ func TestCreateAuth(t *testing.T) {
 			setup: func(t *testing.T, db dbbuilder.DBTX, svc *user.Service) error {
 				builder := userbuilder.New(t, db)
 				owner := builder.Create()
+				email := fmt.Sprintf("auth-link-%s@example.com", uuid.NewString())
 				existingProvider := "github"
 				existingProviderID := uuid.NewString()
-				builder.CreateAuth(owner.ID, existingProvider, existingProviderID)
+				builder.CreateAuth(owner.ID, email, existingProvider, existingProviderID)
 				newProvider := "google"
 				newProviderID := uuid.NewString()
 

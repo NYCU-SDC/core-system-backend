@@ -27,21 +27,13 @@ const (
 
 // GetByOAuthProvider returns the user ID for an existing (provider, providerID) auth row.
 func (s *Service) GetByOAuthProvider(ctx context.Context, provider, providerID string) (uuid.UUID, bool, error) {
-	exists, err := s.queries.ExistsByAuth(ctx, ExistsByAuthParams{
-		Provider:   provider,
-		ProviderID: providerID,
-	})
-	if err != nil {
-		return uuid.UUID{}, false, err
-	}
-	if !exists {
-		return uuid.UUID{}, false, nil
-	}
-
 	userID, err := s.queries.GetByAuth(ctx, GetByAuthParams{
 		Provider:   provider,
 		ProviderID: providerID,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.UUID{}, false, nil
+	}
 	if err != nil {
 		return uuid.UUID{}, false, err
 	}
@@ -65,11 +57,13 @@ func (s *Service) resolveOAuthByEmail(
 	ctx context.Context,
 	params FindOrCreateParams,
 ) (oauthEmailOutcome, FindOrCreateResult, error) {
+	logger := logutil.WithContext(ctx, s.logger)
+
 	var outcome oauthEmailOutcome
 	var result FindOrCreateResult
 
 	err := s.withTransaction(ctx, func(qtx *Queries) error {
-		_, err := qtx.GetByEmailForUpdate(ctx, params.Email)
+		emailRow, err := qtx.GetEmailForUpdate(ctx, params.Email)
 		if errors.Is(err, pgx.ErrNoRows) {
 			outcome = emailNotFound
 			return nil
@@ -87,9 +81,14 @@ func (s *Service) resolveOAuthByEmail(
 			return err
 		}
 
-		// Email belongs to another OAuth provider — require explicit binding confirmation.
 		if existingUser.Provider.Valid {
-			logger := logutil.WithContext(ctx, s.logger)
+			if existingUser.Provider.String == params.OAuthProvider &&
+				existingUser.ProviderID.String == params.OAuthProviderID {
+				outcome = linkedEmailUser
+				result = FindOrCreateResult{UserID: existingUser.ID}
+				return nil
+			}
+
 			logger.Info("Email already exists under different provider, binding confirmation required",
 				zap.String("name", existingUser.Name.String),
 				zap.String("email", params.Email),
@@ -103,37 +102,18 @@ func (s *Service) resolveOAuthByEmail(
 			return nil
 		}
 
-		// Email-only account: attach this OAuth provider to the existing user.
-		logger := logutil.WithContext(ctx, s.logger)
 		logger.Info("User has been initialized",
 			zap.String("name", params.Name),
 			zap.String("email", params.Email))
 
 		_, err = qtx.CreateAuth(ctx, CreateAuthParams{
-			UserID:     existingUser.ID,
-			Provider:   params.OAuthProvider,
-			ProviderID: params.OAuthProviderID,
+			UserID:      existingUser.ID,
+			UserEmailID: userEmailIDParam(emailRow.ID),
+			Provider:    params.OAuthProvider,
+			ProviderID:  params.OAuthProviderID,
 		})
 		if err != nil {
-			wrapped := databaseutil.WrapDBError(err, logger, "create auth for email-only user")
-			// Concurrent link won the race — return the account that already owns this provider.
-			if errors.Is(wrapped, databaseutil.ErrUniqueViolation) {
-				id, lookupErr := qtx.GetByAuth(ctx, GetByAuthParams{
-					Provider:   params.OAuthProvider,
-					ProviderID: params.OAuthProviderID,
-				})
-				if lookupErr == nil {
-					logger.Debug("Concurrent OAuth link won race, returning existing auth owner",
-						zap.String("email", params.Email),
-						zap.String("provider", params.OAuthProvider),
-						zap.String("user_id", id.String()))
-					outcome = linkedEmailUser
-					result = FindOrCreateResult{UserID: id}
-					return nil
-				}
-			}
-
-			return wrapped
+			return databaseutil.WrapDBError(err, logger, "create auth for email-only user")
 		}
 
 		outcome = linkedEmailUser
@@ -142,7 +122,22 @@ func (s *Service) resolveOAuthByEmail(
 		return nil
 	})
 	if err != nil {
-		return 0, FindOrCreateResult{}, err
+		wrapped := databaseutil.WrapDBError(err, logger, "check user existence by email")
+		if errors.Is(wrapped, databaseutil.ErrUniqueViolation) {
+			id, lookupErr := s.queries.GetByAuth(ctx, GetByAuthParams{
+				Provider:   params.OAuthProvider,
+				ProviderID: params.OAuthProviderID,
+			})
+			if lookupErr == nil {
+				logger.Debug("Concurrent OAuth link won race, returning existing auth owner",
+					zap.String("email", params.Email),
+					zap.String("provider", params.OAuthProvider),
+					zap.String("user_id", id.String()))
+				return linkedEmailUser, FindOrCreateResult{UserID: id}, nil
+			}
+		}
+
+		return 0, FindOrCreateResult{}, wrapped
 	}
 
 	return outcome, result, nil

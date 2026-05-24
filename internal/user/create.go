@@ -2,33 +2,49 @@ package user
 
 import (
 	"context"
+	"errors"
 
 	"NYCU-SDC/core-system-backend/internal"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+func userEmailIDParam(id uuid.UUID) pgtype.UUID {
+	if id == uuid.Nil {
+		return pgtype.UUID{}
+	}
+
+	return pgtype.UUID{Bytes: id, Valid: true}
+}
+
 // linkEmailTx assigns email to accountID inside an existing transaction, enforcing global email uniqueness.
-func (s *Service) linkEmailTx(ctx context.Context, qtx *Queries, accountID uuid.UUID, email string) error {
+// It returns the user_emails row id when email is non-empty.
+func (s *Service) linkEmailTx(ctx context.Context, qtx *Queries, userID uuid.UUID, email string) (uuid.UUID, error) {
 	if email == "" {
-		return nil
+		return uuid.Nil, nil
 	}
 
 	err := qtx.validateEmailFree(ctx, email)
 	if err != nil {
-		return err
+		return uuid.Nil, err
 	}
 
-	_, err = qtx.UpsertEmail(ctx, UpsertEmailParams{
-		UserID: accountID,
+	emailID, err := qtx.UpsertEmail(ctx, UpsertEmailParams{
+		UserID: userID,
 		Value:  email,
 	})
 	if err != nil {
-		return err
+		return uuid.Nil, err
 	}
 
-	return validateEmailOwner(ctx, qtx, email, accountID)
+	err = validateEmailOwner(ctx, qtx, email, userID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	return emailID, nil
 }
 
 // createEmailOnlyTx creates an email-only user (no auth row) and links email within a transaction.
@@ -70,7 +86,7 @@ func (s *Service) createEmailOnlyTx(
 		newUserID = newUser.ID
 	}
 
-	err := s.linkEmailTx(ctx, qtx, newUserID, email)
+	_, err := s.linkEmailTx(ctx, qtx, newUserID, email)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
@@ -99,15 +115,16 @@ func (s *Service) createOAuthTx(ctx context.Context, qtx *Queries, params create
 		return uuid.UUID{}, err
 	}
 
-	err = s.linkEmailTx(ctx, qtx, newUser.ID, params.Email)
+	emailID, err := s.linkEmailTx(ctx, qtx, newUser.ID, params.Email)
 	if err != nil {
 		return uuid.UUID{}, err
 	}
 
 	_, err = qtx.CreateAuth(ctx, CreateAuthParams{
-		UserID:     newUser.ID,
-		Provider:   params.OAuthProvider,
-		ProviderID: params.OAuthProviderID,
+		UserID:      newUser.ID,
+		UserEmailID: userEmailIDParam(emailID),
+		Provider:    params.OAuthProvider,
+		ProviderID:  params.OAuthProviderID,
 	})
 	if err != nil {
 		return uuid.UUID{}, err
@@ -137,12 +154,12 @@ func (s *Service) createWithEmailOnly(
 	var newUserID uuid.UUID
 	err := s.withTransaction(ctx, func(qtx *Queries) error {
 		if userID != nil {
-			exists, err := qtx.Exists(ctx, *userID)
-			if err != nil {
-				return err
-			}
-			if exists {
+			_, err := qtx.Get(ctx, *userID)
+			if err == nil {
 				return internal.ErrUserIDAlreadyExists
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
 			}
 		}
 

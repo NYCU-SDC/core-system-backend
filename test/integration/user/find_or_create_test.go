@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -58,7 +59,7 @@ func TestFindOrCreate(t *testing.T) {
 				builder.CreateEmail(account.ID, email)
 				provider := "google"
 				providerID := uuid.NewString()
-				builder.CreateAuth(account.ID, provider, providerID)
+				builder.CreateAuth(account.ID, email, provider, providerID)
 				return user.FindOrCreateParams{
 					Name:            "Test User",
 					Email:           email,
@@ -95,12 +96,11 @@ func TestFindOrCreate(t *testing.T) {
 				require.Equal(t, expectUserID, result.UserID)
 				require.Empty(t, result.ExistingProvider)
 
-				exists, existsErr := user.New(db).ExistsByAuth(context.Background(), user.ExistsByAuthParams{
+				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
-				require.NoError(t, existsErr)
-				require.True(t, exists)
+				require.NoError(t, authErr)
 			},
 		},
 		{
@@ -110,7 +110,7 @@ func TestFindOrCreate(t *testing.T) {
 				account := builder.Create(userbuilder.WithName("Existing User"))
 				email := fmt.Sprintf("binding-%s@example.com", uuid.NewString())
 				builder.CreateEmail(account.ID, email)
-				builder.CreateAuth(account.ID, "github", uuid.NewString())
+				builder.CreateAuth(account.ID, email, "github", uuid.NewString())
 				return user.FindOrCreateParams{
 					Name:            "Test User",
 					Email:           email,
@@ -126,12 +126,11 @@ func TestFindOrCreate(t *testing.T) {
 				require.NotEmpty(t, result.ExistingProviderID)
 				require.Equal(t, "Existing User", result.ExistingName)
 
-				exists, existsErr := user.New(db).ExistsByAuth(context.Background(), user.ExistsByAuthParams{
+				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
-				require.NoError(t, existsErr)
-				require.False(t, exists)
+				require.ErrorIs(t, authErr, pgx.ErrNoRows)
 			},
 		},
 		{
@@ -151,12 +150,11 @@ func TestFindOrCreate(t *testing.T) {
 				require.NotEqual(t, uuid.Nil, result.UserID)
 				require.Empty(t, result.ExistingProvider)
 
-				exists, existsErr := user.New(db).ExistsByAuth(context.Background(), user.ExistsByAuthParams{
+				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
-				require.NoError(t, existsErr)
-				require.True(t, exists)
+				require.NoError(t, authErr)
 			},
 		},
 		{
@@ -175,12 +173,11 @@ func TestFindOrCreate(t *testing.T) {
 				require.NotEqual(t, uuid.Nil, result.UserID)
 				require.Empty(t, result.ExistingProvider)
 
-				exists, existsErr := user.New(db).ExistsByAuth(context.Background(), user.ExistsByAuthParams{
+				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
-				require.NoError(t, existsErr)
-				require.True(t, exists)
+				require.NoError(t, authErr)
 			},
 		},
 	}
@@ -240,12 +237,11 @@ func TestFindOrCreate_emailOnlyThenCrossProviderBinding(t *testing.T) {
 	require.Equal(t, "github", second.ExistingProvider)
 	require.Equal(t, githubID, second.ExistingProviderID)
 
-	googleExists, err := user.New(db).ExistsByAuth(context.Background(), user.ExistsByAuthParams{
+	_, err = user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
 		Provider:   "google",
 		ProviderID: googleID,
 	})
-	require.NoError(t, err)
-	require.False(t, googleExists)
+	require.ErrorIs(t, err, pgx.ErrNoRows)
 }
 
 func TestFindOrCreate_secondCallReturnsSameAccount(t *testing.T) {

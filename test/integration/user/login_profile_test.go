@@ -26,8 +26,8 @@ func TestGetLoginProfileEntries_fromView(t *testing.T) {
 	emailB := fmt.Sprintf("profile-b-%s@example.com", uuid.NewString())
 	builder.CreateEmail(account.ID, emailA)
 	builder.CreateEmail(account.ID, emailB)
-	builder.CreateAuth(account.ID, "github", uuid.NewString())
-	builder.CreateAuth(account.ID, "google", uuid.NewString())
+	builder.CreateAuth(account.ID, emailA, "github", uuid.NewString())
+	builder.CreateAuth(account.ID, emailB, "google", uuid.NewString())
 
 	svc := newUserService(t, db, logger)
 	entries, err := svc.GetLoginProfileEntries(context.Background(), account.ID)
@@ -39,6 +39,6 @@ func TestGetLoginProfileEntries_fromView(t *testing.T) {
 		byEmail[entry.Email] = entry
 	}
 
-	require.ElementsMatch(t, []string{"github", "google"}, byEmail[emailA].AuthProviders)
-	require.ElementsMatch(t, []string{"github", "google"}, byEmail[emailB].AuthProviders)
+	require.ElementsMatch(t, []string{"github"}, byEmail[emailA].AuthProviders)
+	require.ElementsMatch(t, []string{"google"}, byEmail[emailB].AuthProviders)
 }
