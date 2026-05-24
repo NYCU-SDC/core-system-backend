@@ -68,3 +68,15 @@ func (b Builder) CreateEmail(userID uuid.UUID, email string) {
 	})
 	require.NoError(b.t, err)
 }
+
+// CreateAuth links an OAuth provider to an account.
+func (b Builder) CreateAuth(accountID uuid.UUID, provider, providerID string) user.Auth {
+	queries := b.Queries()
+	auth, err := queries.CreateAuth(context.Background(), user.CreateAuthParams{
+		UserID:     accountID,
+		Provider:   provider,
+		ProviderID: providerID,
+	})
+	require.NoError(b.t, err)
+	return auth
+}
