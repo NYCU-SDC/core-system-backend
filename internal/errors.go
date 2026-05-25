@@ -108,6 +108,7 @@ var (
 	ErrQuestionTypeMismatch       = errors.New("question type does not match the expected type")
 	ErrHighlightQuestionType      = errors.New("question type cannot be used for highlight")
 	ErrHighlightQuestionNotInForm = errors.New("highlight question does not belong to form")
+	ErrHighlightNotFound          = errors.New("form highlight not found")
 	ErrValidationFailed           = errors.New("validation failed")
 	ErrInvalidSourceIDWithChoices = errors.New("cannot specify both source_id and choices")
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
@@ -312,7 +313,9 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrHighlightQuestionType):
 		return problem.NewValidateProblem("question type cannot be used for highlight")
 	case errors.Is(err, ErrHighlightQuestionNotInForm):
-		return problem.NewValidateProblem("highlight question does not belong to form")
+		return problem.NewNotFoundProblem("highlight question not found")
+	case errors.Is(err, ErrHighlightNotFound):
+		return problem.NewNotFoundProblem("form highlight not found")
 	case errors.Is(err, ErrInvalidSourceIDWithChoices):
 		return problem.NewBadRequestProblem("cannot specify both source_id and choices")
 	case errors.Is(err, ErrInvalidSourceIDForType):

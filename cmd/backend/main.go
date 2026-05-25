@@ -364,6 +364,8 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/publish", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(publishHandler.PublishForm))
 	mux.Handle("GET /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Get))
 	mux.Handle("PUT /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Put))
+	mux.Handle("PATCH /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Patch))
+	mux.Handle("DELETE /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Delete))
 
 	// Section Management
 	// ----------------------

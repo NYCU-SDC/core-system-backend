@@ -17,6 +17,13 @@ RETURNING *;
 DELETE FROM form_highlights
 WHERE form_id = $1;
 
+-- name: UpdateDisplayTitleByFormID :one
+UPDATE form_highlights
+SET display_title = $2,
+    updated_at = now()
+WHERE form_id = $1
+RETURNING *;
+
 -- name: GetQuestionByFormIDAndQuestionID :one
 SELECT
     q.id,

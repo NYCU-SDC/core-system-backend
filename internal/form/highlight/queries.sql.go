@@ -104,6 +104,33 @@ func (q *Queries) ListAnswerValuesByQuestionID(ctx context.Context, questionID u
 	return items, nil
 }
 
+const updateDisplayTitleByFormID = `-- name: UpdateDisplayTitleByFormID :one
+UPDATE form_highlights
+SET display_title = $2,
+    updated_at = now()
+WHERE form_id = $1
+RETURNING id, form_id, question_id, display_title, created_at, updated_at
+`
+
+type UpdateDisplayTitleByFormIDParams struct {
+	FormID       uuid.UUID
+	DisplayTitle pgtype.Text
+}
+
+func (q *Queries) UpdateDisplayTitleByFormID(ctx context.Context, arg UpdateDisplayTitleByFormIDParams) (FormHighlight, error) {
+	row := q.db.QueryRow(ctx, updateDisplayTitleByFormID, arg.FormID, arg.DisplayTitle)
+	var i FormHighlight
+	err := row.Scan(
+		&i.ID,
+		&i.FormID,
+		&i.QuestionID,
+		&i.DisplayTitle,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const upsertByFormID = `-- name: UpsertByFormID :one
 INSERT INTO form_highlights (form_id, question_id, display_title)
 VALUES ($1, $2, $3)

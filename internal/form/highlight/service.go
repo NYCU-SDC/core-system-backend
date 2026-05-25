@@ -24,6 +24,7 @@ type Querier interface {
 	GetByFormID(ctx context.Context, formID uuid.UUID) (FormHighlight, error)
 	UpsertByFormID(ctx context.Context, arg UpsertByFormIDParams) (FormHighlight, error)
 	DeleteByFormID(ctx context.Context, formID uuid.UUID) error
+	UpdateDisplayTitleByFormID(ctx context.Context, arg UpdateDisplayTitleByFormIDParams) (FormHighlight, error)
 	GetQuestionByFormIDAndQuestionID(ctx context.Context, arg GetQuestionByFormIDAndQuestionIDParams) (GetQuestionByFormIDAndQuestionIDRow, error)
 	ListAnswerValuesByQuestionID(ctx context.Context, questionID uuid.UUID) ([][]byte, error)
 }
@@ -33,7 +34,11 @@ type FormStore interface {
 }
 
 type Request struct {
-	QuestionID   *uuid.UUID
+	QuestionID   uuid.UUID
+	DisplayTitle *string
+}
+
+type PatchRequest struct {
 	DisplayTitle *string
 }
 
@@ -123,18 +128,9 @@ func (s *Service) Set(ctx context.Context, formID uuid.UUID, req Request) (Respo
 		return emptyResponse(), internal.ErrFormNotFound
 	}
 
-	if req.QuestionID == nil {
-		if err := s.queries.DeleteByFormID(traceCtx, formID); err != nil {
-			err = databaseutil.WrapDBError(err, logger, "delete form highlight")
-			span.RecordError(err)
-			return Response{}, err
-		}
-		return emptyResponse(), nil
-	}
-
 	questionRow, err := s.queries.GetQuestionByFormIDAndQuestionID(traceCtx, GetQuestionByFormIDAndQuestionIDParams{
 		FormID: formID,
-		ID:     *req.QuestionID,
+		ID:     req.QuestionID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Response{}, ErrQuestionNotInForm{FormID: formID.String(), QuestionID: req.QuestionID.String()}
@@ -155,7 +151,7 @@ func (s *Service) Set(ctx context.Context, formID uuid.UUID, req Request) (Respo
 	displayTitle := normalizeDisplayTitle(req.DisplayTitle)
 	highlightRow, err := s.queries.UpsertByFormID(traceCtx, UpsertByFormIDParams{
 		FormID:       formID,
-		QuestionID:   *req.QuestionID,
+		QuestionID:   req.QuestionID,
 		DisplayTitle: displayTitle,
 	})
 	if err != nil {
@@ -165,6 +161,91 @@ func (s *Service) Set(ctx context.Context, formID uuid.UUID, req Request) (Respo
 	}
 
 	return s.buildResponse(traceCtx, questionRow, highlightRow.DisplayTitle)
+}
+
+func (s *Service) Patch(ctx context.Context, formID uuid.UUID, req PatchRequest) (Response, error) {
+	traceCtx, span := s.tracer.Start(ctx, "Patch")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.formStore.Exists(traceCtx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return Response{}, err
+	}
+	if !exists {
+		return emptyResponse(), internal.ErrFormNotFound
+	}
+
+	highlightRow, err := s.queries.GetByFormID(traceCtx, formID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Response{}, internal.ErrHighlightNotFound
+	}
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get form highlight")
+		span.RecordError(err)
+		return Response{}, err
+	}
+
+	updatedHighlightRow, err := s.queries.UpdateDisplayTitleByFormID(traceCtx, UpdateDisplayTitleByFormIDParams{
+		FormID:       formID,
+		DisplayTitle: normalizeDisplayTitle(req.DisplayTitle),
+	})
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "update form highlight display title")
+		span.RecordError(err)
+		return Response{}, err
+	}
+
+	questionRow, err := s.queries.GetQuestionByFormIDAndQuestionID(traceCtx, GetQuestionByFormIDAndQuestionIDParams{
+		FormID: formID,
+		ID:     highlightRow.QuestionID,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Response{}, internal.ErrHighlightNotFound
+	}
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get highlighted question")
+		span.RecordError(err)
+		return Response{}, err
+	}
+
+	return s.buildResponse(traceCtx, questionRow, updatedHighlightRow.DisplayTitle)
+}
+
+func (s *Service) Clear(ctx context.Context, formID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "Clear")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	exists, err := s.formStore.Exists(traceCtx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check form exists")
+		span.RecordError(err)
+		return err
+	}
+	if !exists {
+		return internal.ErrFormNotFound
+	}
+
+	_, err = s.queries.GetByFormID(traceCtx, formID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return internal.ErrHighlightNotFound
+	}
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get form highlight")
+		span.RecordError(err)
+		return err
+	}
+
+	if err := s.queries.DeleteByFormID(traceCtx, formID); err != nil {
+		err = databaseutil.WrapDBError(err, logger, "delete form highlight")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) buildResponse(ctx context.Context, questionRow GetQuestionByFormIDAndQuestionIDRow, storedDisplayTitle pgtype.Text) (Response, error) {

@@ -1,6 +1,7 @@
 package highlight
 
 import (
+	"NYCU-SDC/core-system-backend/internal"
 	"context"
 	"net/http"
 
@@ -15,13 +16,19 @@ import (
 )
 
 type setRequest struct {
-	QuestionID   *uuid.UUID `json:"questionId"`
+	QuestionID   *uuid.UUID `json:"questionId" validate:"required"`
 	DisplayTitle *string    `json:"displayTitle"`
+}
+
+type patchRequest struct {
+	DisplayTitle *string `json:"displayTitle"`
 }
 
 type Store interface {
 	Get(ctx context.Context, formID uuid.UUID) (Response, error)
 	Set(ctx context.Context, formID uuid.UUID, req Request) (Response, error)
+	Patch(ctx context.Context, formID uuid.UUID, req PatchRequest) (Response, error)
+	Clear(ctx context.Context, formID uuid.UUID) error
 }
 
 type Handler struct {
@@ -80,11 +87,65 @@ func (h *Handler) Put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.store.Set(traceCtx, formID, Request(req))
+	if req.QuestionID == nil {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
+		return
+	}
+
+	response, err := h.store.Set(traceCtx, formID, Request{
+		QuestionID:   *req.QuestionID,
+		DisplayTitle: req.DisplayTitle,
+	})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Patch")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formID, err := handlerutil.ParseUUID(r.PathValue("formId"))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var req patchRequest
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response, err := h.store.Patch(traceCtx, formID, PatchRequest(req))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Delete")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formID, err := handlerutil.ParseUUID(r.PathValue("formId"))
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if err := h.store.Clear(traceCtx, formID); err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
