@@ -12,13 +12,15 @@ type ResponseStore interface {
 	GetEditInfo(ctx context.Context, id uuid.UUID) (progress string, allowEditResponse bool, err error)
 }
 
-func ValidateResponseEditable(ctx context.Context, getter ResponseStore, responseID uuid.UUID) error {
-	progress, allowEditResponse, err := getter.GetEditInfo(ctx, responseID)
+const ResponseProgressSubmitted = "submitted"
+
+func ValidateResponseEditable(ctx context.Context, responseStore ResponseStore, responseID uuid.UUID) error {
+	progress, allowEditResponse, err := responseStore.GetEditInfo(ctx, responseID)
 	if err != nil {
 		return err
 	}
 
-	if progress == "submitted" && !allowEditResponse {
+	if progress == ResponseProgressSubmitted && !allowEditResponse {
 		return internal.ErrResponseEditNotAllowed
 	}
 
