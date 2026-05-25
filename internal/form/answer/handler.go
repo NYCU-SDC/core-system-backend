@@ -93,8 +93,8 @@ type OAuthProvider interface {
 
 // JWTIssuer is the minimal interface needed to generate a form OAuth state token.
 type JWTIssuer interface {
-	NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string) (string, error)
-	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
+	NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, userID uuid.UUID) (string, error)
+	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, userID uuid.UUID, err error)
 }
 
 type Handler struct {
@@ -475,7 +475,7 @@ func (h *Handler) ConnectOAuthAccountStart(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Generate a signed state JWT carrying the form context
-	state, err := h.jwtIssuer.NewFormState(traceCtx, callbackURL, responseID, questionID, redirectURL)
+	state, err := h.jwtIssuer.NewFormState(traceCtx, callbackURL, responseID, questionID, redirectURL, currentUser.ID)
 	if err != nil {
 		logger.Error("failed to generate form OAuth state", zap.Error(err))
 		span.RecordError(err)
@@ -509,10 +509,27 @@ func (h *Handler) OAuthAnswerCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Parse state JWT to recover redirectURL and form context.
 	// Must be done before any redirect so we know where to send the user.
-	_, responseID, questionID, redirectURL, err := h.jwtIssuer.ParseFormState(traceCtx, stateToken)
+	_, responseID, questionID, redirectURL, stateUserID, err := h.jwtIssuer.ParseFormState(traceCtx, stateToken)
 	if err != nil {
 		logger.Warn("failed to parse form state JWT", zap.Error(err))
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("%w: invalid state", internal.ErrInvalidCallbackInfo), logger)
+		return
+	}
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrUnauthorizedError, logger)
+		return
+	}
+
+	submittedBy, err := h.responseStore.GetSubmittedBy(traceCtx, responseID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if stateUserID != currentUser.ID || submittedBy != currentUser.ID || submittedBy != stateUserID {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrResponseNotOwned, logger)
 		return
 	}
 
@@ -663,7 +680,7 @@ func (h *Handler) UploadQuestionFiles(w http.ResponseWriter, r *http.Request) {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
-	
+
 	// Resolve active sections from workflow so we reject file uploads for skipped sections.
 	// This mirrors UpdateFormResponse skipped-section enforcement.
 	currentAnswers, _, answerableMap, err := h.store.List(traceCtx, formID, responseID)
