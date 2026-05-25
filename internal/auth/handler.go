@@ -32,7 +32,6 @@ const (
 type JWTIssuer interface {
 	New(ctx context.Context, user user.User) (string, error)
 	NewState(ctx context.Context, service, environment, callbackURL, redirectURL string) (string, error)
-	NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string) (string, error)
 	NewLinkToken(ctx context.Context, provider, providerID, existingProvider, existingProviderID, redirectURL, userID string) (string, error)
 	Parse(ctx context.Context, tokenString string) (user.User, error)
 	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
