@@ -35,7 +35,6 @@ type JWTIssuer interface {
 	NewLinkToken(ctx context.Context, provider, providerID, existingProvider, existingProviderID, redirectURL, userID string) (string, error)
 	Parse(ctx context.Context, tokenString string) (user.User, error)
 	ParseState(ctx context.Context, tokenString string) (*jwt.OauthProxyClaims, error)
-	ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error)
 	ParseLinkToken(ctx context.Context, tokenString string) (*jwt.LinkClaims, uuid.UUID, error)
 	GenerateRefreshToken(ctx context.Context, userID uuid.UUID) (jwt.RefreshToken, error)
 	GetUserIDByRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (uuid.UUID, error)
