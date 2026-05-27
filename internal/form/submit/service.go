@@ -187,10 +187,11 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 		}
 		for _, f := range completedForms {
 			allForms[f.ID] = form.ListRow{
-				ID:       f.ID,
-				Title:    f.Title,
-				Deadline: f.Deadline,
-				Status:   f.Status,
+				ID:                f.ID,
+				Title:             f.Title,
+				Deadline:          f.Deadline,
+				Status:            f.Status,
+				AllowEditResponse: f.AllowEditResponse,
 			}
 		}
 	}
@@ -203,10 +204,11 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 		}
 
 		userForms = append(userForms, form.UserForm{
-			FormID:   formID,
-			Title:    row.Title,
-			Deadline: row.Deadline,
-			Status:   status,
+			FormID:            formID,
+			Title:             row.Title,
+			Deadline:          row.Deadline,
+			Status:            status,
+			AllowEditResponse: row.AllowEditResponse,
 		})
 	}
 
