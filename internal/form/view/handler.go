@@ -309,5 +309,5 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, nil)
+	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
