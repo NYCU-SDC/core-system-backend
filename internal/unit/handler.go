@@ -142,6 +142,7 @@ type UserFormResponse struct {
 	Title             string              `json:"title"`
 	Deadline          *time.Time          `json:"deadline"`
 	Status            form.UserFormStatus `json:"status"`
+	ResponseIDs       []uuid.UUID         `json:"responseIds"`
 	AllowEditResponse bool                `json:"allowEditResponse"`
 }
 
@@ -877,6 +878,7 @@ func (h *Handler) ListFormsOfCurrentUser(w http.ResponseWriter, r *http.Request)
 			Title:             userForm.Title,
 			Deadline:          deadline,
 			Status:            userForm.Status,
+			ResponseIDs:       userForm.ResponseIDs,
 			AllowEditResponse: userForm.AllowEditResponse,
 		})
 	}

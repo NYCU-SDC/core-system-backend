@@ -51,6 +51,7 @@ type UserForm struct {
 	Title             string
 	Deadline          pgtype.Timestamptz
 	Status            UserFormStatus
+	ResponseIDs       []uuid.UUID
 	AllowEditResponse bool
 }
 
