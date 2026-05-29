@@ -11,6 +11,7 @@ import (
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -33,6 +34,15 @@ func NewFileResourceHandler(logger *zap.Logger, queries FileReferenceQuerier) *F
 		queries: queries,
 		tracer:  otel.Tracer("answer/file_resource_handler"),
 	}
+}
+
+// WithTx returns a handler that reads and writes answer file references on tx.
+func (h *FileResourceHandler) WithTx(tx pgx.Tx) file.ResourceHandler {
+	q, ok := h.queries.(*Queries)
+	if !ok {
+		return h
+	}
+	return NewFileResourceHandler(h.logger, q.WithTx(tx))
 }
 
 func (h *FileResourceHandler) ResourceType() file.ResourceType {
