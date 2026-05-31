@@ -483,7 +483,8 @@ func (h *Handler) InternalAPITokenLogin(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		UserIDStr string `json:"uid" validate:"required"`
 	}
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
