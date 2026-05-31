@@ -167,18 +167,18 @@ func (s LinearScale) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (s LinearScale) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode linear scale answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	linearScaleAnswer, ok := answer.(shared.LinearScaleAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.LinearScaleAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.LinearScaleAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	// Match against the string representation of the value
 	match, err := matchPattern(fmt.Sprintf("%d", linearScaleAnswer.Value), pattern)
 	if err != nil {
-		return false, fmt.Errorf("failed to match pattern for linear scale answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
 	return match, nil
 }
@@ -301,18 +301,18 @@ func (s Rating) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (s Rating) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode rating answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	ratingAnswer, ok := answer.(shared.RatingAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.RatingAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.RatingAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	// Match against the string representation of the value
 	match, err := matchPattern(fmt.Sprintf("%d", ratingAnswer.Value), pattern)
 	if err != nil {
-		return false, fmt.Errorf("failed to match pattern for rating answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
 	return match, nil
 }
