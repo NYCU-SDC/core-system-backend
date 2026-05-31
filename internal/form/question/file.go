@@ -220,7 +220,17 @@ func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
 }
 
 func (u UploadFile) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
-	return false, errors.New("MatchesPattern is not supported for upload_file question type")
+	display, err := u.DisplayValue(rawValue)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
+	}
+
+	match, err := matchPattern(display, pattern)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
+	}
+
+	return match, nil
 }
 
 // GenerateUploadFileMetadata generates metadata for upload file question
