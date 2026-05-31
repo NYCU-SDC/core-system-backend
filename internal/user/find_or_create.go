@@ -89,15 +89,45 @@ func (s *Service) resolveOAuthByEmail(
 				return nil
 			}
 
-			logger.Info("Email already exists under different provider, binding confirmation required",
-				zap.String("name", existingUser.Name.String),
+			emails, emailErr := qtx.GetEmails(ctx, existingUser.ID)
+			if emailErr != nil {
+				return emailErr
+			}
+
+			// Single-email accounts require binding confirmation before linking a second
+			// OAuth provider on the same address. Multi-email accounts auto-link because the
+			// login email is already verified on this account.
+			if len(emails) <= 1 {
+				logger.Info("Email already exists under different provider, binding confirmation required",
+					zap.String("name", existingUser.Name.String),
+					zap.String("email", params.Email),
+					zap.String("existing_provider", existingUser.Provider.String),
+					zap.String("new_provider", params.OAuthProvider),
+				)
+
+				outcome = bindingRequired
+				result = existingUser.bindingResult()
+
+				return nil
+			}
+
+			logger.Info("Linking additional OAuth provider for multi-email account",
 				zap.String("email", params.Email),
 				zap.String("existing_provider", existingUser.Provider.String),
 				zap.String("new_provider", params.OAuthProvider),
 			)
 
-			outcome = bindingRequired
-			result = existingUser.bindingResult()
+			_, err = qtx.CreateAuth(ctx, CreateAuthParams{
+				UserID:     existingUser.ID,
+				Provider:   params.OAuthProvider,
+				ProviderID: params.OAuthProviderID,
+			})
+			if err != nil {
+				return databaseutil.WrapDBError(err, logger, "create auth for multi-email account")
+			}
+
+			outcome = linkedEmailUser
+			result = FindOrCreateResult{UserID: existingUser.ID}
 
 			return nil
 		}
@@ -122,17 +152,24 @@ func (s *Service) resolveOAuthByEmail(
 	})
 	if err != nil {
 		wrapped := databaseutil.WrapDBError(err, logger, "check user existence by email")
-		if errors.Is(wrapped, databaseutil.ErrUniqueViolation) {
-			id, lookupErr := s.queries.GetByAuth(ctx, GetByAuthParams{
-				Provider:   params.OAuthProvider,
-				ProviderID: params.OAuthProviderID,
-			})
-			if lookupErr == nil {
+		recovery, ok := s.recoverOAuthCreateConflict(ctx, wrapped, params.OAuthProvider, params.OAuthProviderID, params.Email)
+		if ok {
+			switch recovery.kind {
+			case oauthCreateConflictViaAuth:
 				logger.Debug("Concurrent OAuth link won race, returning existing auth owner",
 					zap.String("email", params.Email),
 					zap.String("provider", params.OAuthProvider),
-					zap.String("user_id", id.String()))
-				return linkedEmailUser, FindOrCreateResult{UserID: id}, nil
+					zap.String("user_id", recovery.accountID.String()))
+				return linkedEmailUser, FindOrCreateResult{UserID: recovery.accountID}, nil
+			case oauthCreateConflictViaEmail:
+				result, resolveErr := s.resolveOAuthEmailConflict(ctx, params, recovery.accountID)
+				if resolveErr != nil {
+					return 0, FindOrCreateResult{}, resolveErr
+				}
+				if result.ExistingProvider != "" {
+					return bindingRequired, result, nil
+				}
+				return linkedEmailUser, result, nil
 			}
 		}
 
