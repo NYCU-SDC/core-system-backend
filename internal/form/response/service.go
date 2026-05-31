@@ -14,6 +14,7 @@ import (
 	"errors"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -184,7 +185,7 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 
 	_, err := s.userStore.Get(traceCtx, userID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, handlerutil.ErrNotFound) {
 			return nil, internal.ErrUserNotFound
 		}
 		err = databaseutil.WrapDBError(err, logger, "get user")
@@ -222,7 +223,7 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 
 	_, err := s.userStore.Get(traceCtx, userID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, handlerutil.ErrNotFound) {
 			return nil, internal.ErrUserNotFound
 		}
 		err = databaseutil.WrapDBError(err, logger, "get user")
