@@ -65,7 +65,7 @@ func (b Builder) CreateEmail(userID uuid.UUID, email string) {
 	queries := b.Queries()
 	err := queries.UpsertEmail(context.Background(), user.UpsertEmailParams{
 		UserID: userID,
-		Value:  email,
+		Email:  email,
 	})
 	require.NoError(b.t, err)
 }
@@ -75,7 +75,7 @@ func (b Builder) CreateAuth(accountID uuid.UUID, email, provider, providerID str
 	queries := b.Queries()
 	err := queries.UpsertEmail(context.Background(), user.UpsertEmailParams{
 		UserID: accountID,
-		Value:  email,
+		Email:  email,
 	})
 	require.NoError(b.t, err)
 

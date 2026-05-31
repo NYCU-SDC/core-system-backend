@@ -57,7 +57,7 @@ func TestFindOrCreate(t *testing.T) {
 				require.Empty(t, result.ExistingProvider)
 
 				queries := user.New(db)
-				_, authErr := queries.GetByAuth(context.Background(), user.GetByAuthParams{
+				_, authErr := queries.GetIDByAuth(context.Background(), user.GetIDByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
@@ -87,7 +87,7 @@ func TestFindOrCreate(t *testing.T) {
 				require.NotEmpty(t, result.ExistingProviderID)
 				require.Equal(t, "Existing User", result.ExistingName)
 
-				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
+				_, authErr := user.New(db).GetIDByAuth(context.Background(), user.GetIDByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
@@ -110,7 +110,7 @@ func TestFindOrCreate(t *testing.T) {
 				require.NotEqual(t, uuid.Nil, result.UserID)
 				require.Empty(t, result.ExistingProvider)
 
-				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
+				_, authErr := user.New(db).GetIDByAuth(context.Background(), user.GetIDByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
@@ -133,7 +133,7 @@ func TestFindOrCreate(t *testing.T) {
 				require.NotEqual(t, uuid.Nil, result.UserID)
 				require.Empty(t, result.ExistingProvider)
 
-				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
+				_, authErr := user.New(db).GetIDByAuth(context.Background(), user.GetIDByAuthParams{
 					Provider:   params.OAuthProvider,
 					ProviderID: params.OAuthProviderID,
 				})
@@ -196,7 +196,7 @@ func TestFindOrCreate_emailOnlyThenCrossProviderBinding(t *testing.T) {
 	require.Equal(t, "github", second.ExistingProvider)
 	require.Equal(t, githubID, second.ExistingProviderID)
 
-	_, err = user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
+	_, err = user.New(db).GetIDByAuth(context.Background(), user.GetIDByAuthParams{
 		Provider:   "google",
 		ProviderID: googleID,
 	})

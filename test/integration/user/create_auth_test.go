@@ -63,7 +63,7 @@ func TestCreateAuth(t *testing.T) {
 				}
 
 				queries := user.New(db)
-				_, authErr := queries.GetByAuth(context.Background(), user.GetByAuthParams{
+				_, authErr := queries.GetIDByAuth(context.Background(), user.GetIDByAuthParams{
 					Provider:   newProvider,
 					ProviderID: newProviderID,
 				})
@@ -81,7 +81,7 @@ func TestCreateAuth(t *testing.T) {
 					return err
 				}
 
-				_, authErr := user.New(db).GetByAuth(context.Background(), user.GetByAuthParams{
+				_, authErr := user.New(db).GetIDByAuth(context.Background(), user.GetIDByAuthParams{
 					Provider:   provider,
 					ProviderID: providerID,
 				})

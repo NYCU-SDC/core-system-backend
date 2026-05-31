@@ -24,7 +24,7 @@ func (s *Service) linkEmailTx(ctx context.Context, qtx *Queries, userID uuid.UUI
 
 	err = qtx.UpsertEmail(ctx, UpsertEmailParams{
 		UserID: userID,
-		Value:  email,
+		Email:  email,
 	})
 	if err != nil {
 		return err

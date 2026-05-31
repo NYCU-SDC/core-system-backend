@@ -32,15 +32,15 @@ func (u User) GetID() uuid.UUID {
 
 type Querier interface {
 	Get(ctx context.Context, id uuid.UUID) (UsersWithEmail, error)
-	GetByAuth(ctx context.Context, arg GetByAuthParams) (uuid.UUID, error)
+	GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.UUID, error)
 	Create(ctx context.Context, arg CreateParams) (User, error)
 	CreateWithID(ctx context.Context, arg CreateWithIDParams) (User, error)
 	CreateAuth(ctx context.Context, arg CreateAuthParams) (Auth, error)
 	Update(ctx context.Context, arg UpdateParams) (User, error)
 	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
 	UpsertEmail(ctx context.Context, arg UpsertEmailParams) error
-	GetByEmail(ctx context.Context, value string) (uuid.UUID, error)
-	GetByEmailForUpdate(ctx context.Context, value string) (uuid.UUID, error)
+	GetIDByEmail(ctx context.Context, email string) (uuid.UUID, error)
+	GetIDByEmailForUpdate(ctx context.Context, email string) (uuid.UUID, error)
 	GetWithEarliestProviderByEmail(ctx context.Context, value string) (GetWithEarliestProviderByEmailRow, error)
 	WithTx(tx pgx.Tx) *Queries
 }
@@ -233,7 +233,7 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	existingID, err := s.queries.GetByEmail(traceCtx, email)
+	existingID, err := s.queries.GetIDByEmail(traceCtx, email)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			err = databaseutil.WrapDBError(err, logger, "get user id existence by email")
@@ -248,7 +248,7 @@ func (s *Service) FindOrCreateByEmail(ctx context.Context, email string, globalR
 		if err != nil {
 			// Concurrent create claimed the email — return the winner unless caller requested a different ID.
 			if errors.Is(err, internal.ErrEmailConflict) {
-				existingID, lookupErr := s.queries.GetByEmail(traceCtx, email)
+				existingID, lookupErr := s.queries.GetIDByEmail(traceCtx, email)
 				if lookupErr == nil {
 					if userID != nil && existingID != *userID {
 						return uuid.UUID{}, internal.ErrEmailConflict
@@ -359,7 +359,7 @@ func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, pr
 		return nil
 	}
 	// Verify the target user actually owns the claimed existing auth entry.
-	ownerID, err := s.queries.GetByAuth(traceCtx, GetByAuthParams{
+	ownerID, err := s.queries.GetIDByAuth(traceCtx, GetIDByAuthParams{
 		Provider:   existingProvider,
 		ProviderID: existingProviderID,
 	})
@@ -397,7 +397,7 @@ func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email strin
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	err := s.withTransaction(traceCtx, func(qtx *Queries) error {
-		_, err := qtx.GetByEmailForUpdate(ctx, email)
+		_, err := qtx.GetIDByEmailForUpdate(ctx, email)
 		if err == nil {
 			return validateEmailOwner(ctx, qtx, email, userID)
 		}
@@ -407,7 +407,7 @@ func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email strin
 
 		return qtx.UpsertEmail(ctx, UpsertEmailParams{
 			UserID: userID,
-			Value:  email,
+			Email:  email,
 		})
 	})
 	if err != nil {

@@ -33,7 +33,7 @@ func TestFindOrCreateByEmail(t *testing.T) {
 			validate: func(t *testing.T, db dbbuilder.DBTX, email string, gotID uuid.UUID, err error, expectID uuid.UUID) {
 				require.NoError(t, err)
 				require.NotEqual(t, uuid.Nil, gotID)
-				owner, lookupErr := user.New(db).GetByEmail(context.Background(), email)
+				owner, lookupErr := user.New(db).GetIDByEmail(context.Background(), email)
 				require.NoError(t, lookupErr)
 				require.Equal(t, gotID, owner)
 			},

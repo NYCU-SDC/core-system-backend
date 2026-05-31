@@ -27,7 +27,7 @@ const (
 
 // GetByOAuthProvider returns the user ID for an existing (provider, providerID) auth row.
 func (s *Service) GetByOAuthProvider(ctx context.Context, provider, providerID string) (uuid.UUID, bool, error) {
-	userID, err := s.queries.GetByAuth(ctx, GetByAuthParams{
+	userID, err := s.queries.GetIDByAuth(ctx, GetIDByAuthParams{
 		Provider:   provider,
 		ProviderID: providerID,
 	})
@@ -63,7 +63,7 @@ func (s *Service) resolveOAuthByEmail(
 	var result FindOrCreateResult
 
 	err := s.withTransaction(ctx, func(qtx *Queries) error {
-		_, err := qtx.GetByEmailForUpdate(ctx, params.Email)
+		_, err := qtx.GetIDByEmailForUpdate(ctx, params.Email)
 		if errors.Is(err, pgx.ErrNoRows) {
 			outcome = emailNotFound
 			return nil
@@ -220,7 +220,7 @@ func (s *Service) recoverOAuthCreateConflict(
 		return oauthCreateConflictRecovery{}, false
 	}
 
-	recoveredID, lookupErr := s.queries.GetByAuth(ctx, GetByAuthParams{
+	recoveredID, lookupErr := s.queries.GetIDByAuth(ctx, GetIDByAuthParams{
 		Provider:   oauthProvider,
 		ProviderID: oauthProviderID,
 	})
@@ -237,7 +237,7 @@ func (s *Service) recoverOAuthCreateConflict(
 	}
 
 	if email != "" {
-		recoveredID, lookupErr := s.queries.GetByEmail(ctx, email)
+		recoveredID, lookupErr := s.queries.GetIDByEmail(ctx, email)
 		if lookupErr == nil {
 			logger := logutil.WithContext(ctx, s.logger)
 			logger.Debug("Recovered OAuth create conflict via email lookup",

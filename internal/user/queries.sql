@@ -13,7 +13,7 @@ SELECT u.id, u.name, a.provider, a.provider_id
 FROM user_emails e
          JOIN users u ON e.user_id = u.id
          LEFT JOIN auth a ON a.user_id = u.id
-WHERE e.value = $1
+WHERE e.value = @email
 ORDER BY a.created_at ASC
     LIMIT 1;
 
@@ -24,29 +24,29 @@ WHERE id = $1;
 
 -- name: Update :one
 UPDATE users
-SET name = $2, username = $3, avatar_url = $4, is_onboarded = $5,
+SET name = @name, username = @username, avatar_url = @avatar_url, is_onboarded = @is_onboarded,
     updated_at = now()
-WHERE id = $1
+WHERE id = @id
 RETURNING *;
 
 -- name: CreateAuth :one
 INSERT INTO auth (user_id, provider, provider_id)
-VALUES ($1, $2, $3)
+VALUES (@user_id, @provider, @provider_id)
 RETURNING *;
 
--- name: GetByAuth :one
-SELECT user_id FROM auth WHERE provider = $1 AND provider_id = $2;
+-- name: GetIDByAuth :one
+SELECT user_id FROM auth WHERE provider = @provider AND provider_id = @provider_id;
 
 -- name: UpsertEmail :exec
 INSERT INTO user_emails (user_id, value)
-VALUES ($1, $2)
+VALUES (@user_id, @email)
 ON CONFLICT (value) DO UPDATE SET updated_at = now();
 
--- name: GetByEmailForUpdate :one
-SELECT user_id FROM user_emails WHERE value = $1 FOR UPDATE;
+-- name: GetIDByEmailForUpdate :one
+SELECT user_id FROM user_emails WHERE value = @email FOR UPDATE;
 
 -- name: GetEmails :many
-SELECT user_emails.value as email FROM user_emails WHERE user_id = $1 ORDER BY value;
+SELECT user_emails.value as email FROM user_emails WHERE user_id = @user_id ORDER BY value;
 
--- name: GetByEmail :one
-SELECT user_id FROM user_emails WHERE value = $1;
+-- name: GetIDByEmail :one
+SELECT user_id FROM user_emails WHERE value = @email;

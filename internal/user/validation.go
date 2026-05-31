@@ -12,7 +12,7 @@ import (
 
 // validateEmailFree locks the email row and returns ErrEmailConflict if it is already registered.
 func (q *Queries) validateEmailFree(ctx context.Context, email string) error {
-	_, err := q.GetByEmailForUpdate(ctx, email)
+	_, err := q.GetIDByEmailForUpdate(ctx, email)
 	if err == nil {
 		return internal.ErrEmailConflict
 	}
@@ -24,9 +24,9 @@ func (q *Queries) validateEmailFree(ctx context.Context, email string) error {
 
 // validateEmailOwner returns ErrEmailConflict when the global email is owned by another account.
 func validateEmailOwner(ctx context.Context, q interface {
-	GetByEmail(context.Context, string) (uuid.UUID, error)
+	GetIDByEmail(context.Context, string) (uuid.UUID, error)
 }, email string, accountID uuid.UUID) error {
-	ownerID, err := q.GetByEmail(ctx, email)
+	ownerID, err := q.GetIDByEmail(ctx, email)
 	if err != nil {
 		return err
 	}
