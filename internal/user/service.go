@@ -147,7 +147,6 @@ func resolveAvatarURL(name, avatarURL string) string {
 // FindOrCreateParams holds OAuth profile data for FindOrCreate.
 type FindOrCreateParams struct {
 	Name            string
-	Username        string
 	AvatarURL       string
 	Email           string
 	Role            []string
@@ -397,27 +396,36 @@ func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email strin
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	err := s.queries.UpsertEmail(traceCtx, UpsertEmailParams{
-		UserID: userID,
-		Value:  email,
+	err := s.withTransaction(traceCtx, func(qtx *Queries) error {
+		_, err := qtx.GetByEmailForUpdate(ctx, email)
+		if err == nil {
+			return validateEmailOwner(ctx, qtx, email, userID)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+
+		return qtx.UpsertEmail(ctx, UpsertEmailParams{
+			UserID: userID,
+			Value:  email,
+		})
 	})
 	if err != nil {
+		if errors.Is(err, internal.ErrEmailConflict) {
+			logger.Warn("Email belongs to another user",
+				zap.String("user_id", userID.String()),
+				zap.String("email", email),
+				zap.Error(err))
+			span.RecordError(err)
+			return err
+		}
+
 		logger.Error("Failed to create email record",
 			zap.String("user_id", userID.String()),
 			zap.String("email", email),
 			zap.Error(err))
 
 		err = databaseutil.WrapDBError(err, logger, "create email")
-		span.RecordError(err)
-		return err
-	}
-
-	err = validateEmailOwner(traceCtx, s.queries, email, userID)
-	if err != nil {
-		logger.Warn("Email belongs to another user",
-			zap.String("user_id", userID.String()),
-			zap.String("email", email),
-			zap.Error(err))
 		span.RecordError(err)
 		return err
 	}

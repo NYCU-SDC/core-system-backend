@@ -274,7 +274,6 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.userStore.FindOrCreate(traceCtx, user.FindOrCreateParams{
 		Name:            userInfo.Name.String,
-		Username:        userInfo.Username.String,
 		AvatarURL:       userInfo.AvatarUrl.String,
 		Email:           email,
 		Role:            userInfo.Role,
