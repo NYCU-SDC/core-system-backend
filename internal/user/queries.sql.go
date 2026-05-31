@@ -118,9 +118,9 @@ FROM users_with_emails
 WHERE id = $1
 `
 
-func (q *Queries) Get(ctx context.Context, id uuid.UUID) (UsersWithEmail, error) {
+func (q *Queries) Get(ctx context.Context, id uuid.UUID) (UserWithEmails, error) {
 	row := q.db.QueryRow(ctx, get, id)
-	var i UsersWithEmail
+	var i UserWithEmails
 	err := row.Scan(
 		&i.ID,
 		&i.Name,

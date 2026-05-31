@@ -20,7 +20,7 @@ ORDER BY a.created_at ASC
 -- name: Get :one
 SELECT id, name, username, avatar_url, role, is_onboarded, created_at, updated_at, emails
 FROM users_with_emails
-WHERE id = $1;
+WHERE id = @id;
 
 -- name: Update :one
 UPDATE users

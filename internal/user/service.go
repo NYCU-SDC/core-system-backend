@@ -31,7 +31,7 @@ func (u User) GetID() uuid.UUID {
 }
 
 type Querier interface {
-	Get(ctx context.Context, id uuid.UUID) (UsersWithEmail, error)
+	Get(ctx context.Context, id uuid.UUID) (UserWithEmails, error)
 	GetIDByAuth(ctx context.Context, arg GetIDByAuthParams) (uuid.UUID, error)
 	Create(ctx context.Context, arg CreateParams) (User, error)
 	CreateWithID(ctx context.Context, arg CreateWithIDParams) (User, error)
@@ -123,7 +123,7 @@ func (s *Service) withTransaction(ctx context.Context, fn func(*Queries) error) 
 	})
 }
 
-func (s *Service) Get(ctx context.Context, id uuid.UUID) (UsersWithEmail, error) {
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (UserWithEmails, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -132,7 +132,7 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (UsersWithEmail, error)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
-		return UsersWithEmail{}, err
+		return UserWithEmails{}, err
 	}
 	return user, nil
 }

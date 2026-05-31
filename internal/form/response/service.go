@@ -48,7 +48,7 @@ type AnswerStore interface {
 }
 
 type UserStore interface {
-	Get(ctx context.Context, id uuid.UUID) (user.UsersWithEmail, error)
+	Get(ctx context.Context, id uuid.UUID) (user.UserWithEmails, error)
 }
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)

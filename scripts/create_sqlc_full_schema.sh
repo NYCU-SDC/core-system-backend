@@ -67,7 +67,26 @@ find ./internal -type f -name "queries.sql" | while read -r QUERY_FILE; do
     PACKAGE_DIR=$(dirname "$QUERY_FILE")
     PACKAGE_NAME=$(basename "$PACKAGE_DIR")
 
-    cat >> "$SQLC_YAML" << EOF
+    if [ "$PACKAGE_NAME" = "user" ]; then
+        cat >> "$SQLC_YAML" << EOF
+  - engine: "postgresql"
+    queries: "$QUERY_FILE"
+    schema: "$OUTPUT_FILE"
+    gen:
+      go:
+        package: "$PACKAGE_NAME"
+        out: "$PACKAGE_DIR"
+        sql_package: "pgx/v5"
+        rename:
+          users_with_email: UserWithEmails
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+EOF
+    else
+        cat >> "$SQLC_YAML" << EOF
   - engine: "postgresql"
     queries: "$QUERY_FILE"
     schema: "$OUTPUT_FILE"
@@ -82,4 +101,5 @@ find ./internal -type f -name "queries.sql" | while read -r QUERY_FILE; do
               import: "github.com/google/uuid"
               type: "UUID"
 EOF
+    fi
 done

@@ -48,7 +48,7 @@ type JWTStore interface {
 }
 
 type UserStore interface {
-	Get(ctx context.Context, id uuid.UUID) (user.UsersWithEmail, error)
+	Get(ctx context.Context, id uuid.UUID) (user.UserWithEmails, error)
 	FindOrCreate(ctx context.Context, params user.FindOrCreateParams) (user.FindOrCreateResult, error)
 	CreateAuth(ctx context.Context, userID uuid.UUID, provider, providerID, existingProvider, existingProviderID string) error
 }
