@@ -191,7 +191,8 @@ func FromFile(filePath string, config *Config, logger *LogBuffer) (*Config, erro
 }
 
 func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
-	if err := godotenv.Overload(); err != nil {
+	err := godotenv.Overload()
+	if err != nil {
 		if os.IsNotExist(err) {
 			logger.Warn("No .env file found", err, map[string]string{"path": ".env"})
 		} else {
