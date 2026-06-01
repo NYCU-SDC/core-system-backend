@@ -79,9 +79,11 @@ func (q *Queries) GetQuestionByFormIDAndQuestionID(ctx context.Context, arg GetQ
 }
 
 const listAnswerValuesByQuestionID = `-- name: ListAnswerValuesByQuestionID :many
-SELECT value
-FROM answers
-WHERE question_id = $1
+SELECT a.value
+FROM answers a
+JOIN form_responses fr ON fr.id = a.response_id
+WHERE a.question_id = $1
+  AND fr.progress = 'submitted'
 `
 
 func (q *Queries) ListAnswerValuesByQuestionID(ctx context.Context, questionID uuid.UUID) ([][]byte, error) {

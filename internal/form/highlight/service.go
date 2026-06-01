@@ -239,7 +239,8 @@ func (s *Service) Clear(ctx context.Context, formID uuid.UUID) error {
 		return err
 	}
 
-	if err := s.queries.DeleteByFormID(traceCtx, formID); err != nil {
+	err = s.queries.DeleteByFormID(traceCtx, formID)
+	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete form highlight")
 		span.RecordError(err)
 		return err
