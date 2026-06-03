@@ -392,7 +392,7 @@ func main() {
 	mux.Handle("PATCH /api/responses/{responseId}/answers", authMiddleware.Append(notArchivedByResponse).HandlerFunc(answerHandler.UpdateFormResponse))
 	mux.Handle("POST /api/responses/{responseId}/questions/{questionId}/files", authMiddleware.Append(notArchivedByResponse).HandlerFunc(answerHandler.UploadQuestionFiles))
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", authMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
-	mux.Handle("GET /api/oauth/questions/{provider}/callback", basicMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
+	mux.Handle("GET /api/oauth/questions/{provider}/callback", authMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
 
 	// Workflow Management
 	// ----------------------
