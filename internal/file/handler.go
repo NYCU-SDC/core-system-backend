@@ -3,6 +3,7 @@ package file
 import (
 	"NYCU-SDC/core-system-backend/internal"
 	"bytes"
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -18,11 +19,20 @@ import (
 	"go.uber.org/zap"
 )
 
+type Store interface {
+	Get(ctx context.Context, id uuid.UUID) (File, error)
+	GetMetadata(ctx context.Context, id uuid.UUID) (GetMetadataRow, error)
+	Delete(ctx context.Context, fileID uuid.UUID) error
+	GetAll(ctx context.Context, limit, offset int32) ([]GetAllRow, error)
+	Count(ctx context.Context) (int64, error)
+	GetByUploadedBy(ctx context.Context, userID uuid.UUID) ([]GetByUploadedByRow, error)
+}
+
 type Handler struct {
 	logger        *zap.Logger
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
-	service       *Service
+	store         Store
 	tracer        trace.Tracer
 }
 
@@ -30,13 +40,13 @@ func NewHandler(
 	logger *zap.Logger,
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
-	service *Service,
+	store Store,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
 		validator:     validator,
 		problemWriter: problemWriter,
-		service:       service,
+		store:         store,
 		tracer:        otel.Tracer("file/handler"),
 	}
 }
@@ -110,7 +120,7 @@ func (h *Handler) Download(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get file with data from database
-	fileInfo, err := h.service.Get(traceCtx, fileID)
+	fileInfo, err := h.store.Get(traceCtx, fileID)
 	if err != nil {
 		logger.Warn("Failed to get file", zap.Error(err), zap.String("file_id", fileIDStr))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrFileNotFound, logger)
@@ -144,7 +154,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get file metadata (without binary data)
-	fileInfo, err := h.service.GetMetadata(traceCtx, fileID)
+	fileInfo, err := h.store.GetMetadata(traceCtx, fileID)
 	if err != nil {
 		logger.Warn("Failed to get file", zap.Error(err), zap.String("file_id", fileIDStr))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrFileNotFound, logger)
@@ -173,7 +183,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete file from database
-	err := h.service.Delete(traceCtx, fileID)
+	err := h.store.Delete(traceCtx, fileID)
 	if err != nil {
 		logger.Error("Failed to delete file", zap.Error(err), zap.String("file_id", fileIDStr))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrFailedToDeleteFile, logger)
@@ -216,7 +226,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get files (metadata only, without binary data)
-	files, err := h.service.GetAll(traceCtx, limit, offset)
+	files, err := h.store.GetAll(traceCtx, limit, offset)
 	if err != nil {
 		logger.Error("Failed to get files", zap.Error(err))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
@@ -225,7 +235,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get total count
-	total, err := h.service.Count(traceCtx)
+	total, err := h.store.Count(traceCtx)
 	if err != nil {
 		logger.Error("Failed to count files", zap.Error(err))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
@@ -263,7 +273,7 @@ func (h *Handler) ListMyFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get files uploaded by user (metadata only, without binary data)
-	files, err := h.service.GetByUploadedBy(traceCtx, currentUserID)
+	files, err := h.store.GetByUploadedBy(traceCtx, currentUserID)
 	if err != nil {
 		logger.Error("Failed to get user files", zap.Error(err))
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrInternalServerError, logger)
