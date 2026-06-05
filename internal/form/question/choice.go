@@ -130,12 +130,12 @@ func (s SingleChoice) EncodeRequest(answer any) (json.RawMessage, error) {
 func (s SingleChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	singleChoiceAnswer, ok := answer.(shared.SingleChoiceAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.SingleChoiceAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.SingleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	if singleChoiceAnswer.Snapshot.OtherText != "" {
@@ -284,12 +284,12 @@ func (m MultiChoice) EncodeRequest(answer any) (json.RawMessage, error) {
 func (m MultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := m.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	multiChoiceAnswer, ok := answer.(shared.MultipleChoiceAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.MultipleChoiceAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.MultipleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	if len(multiChoiceAnswer.Choices) == 0 {
@@ -453,12 +453,12 @@ func (m DetailedMultiChoice) EncodeRequest(answer any) (json.RawMessage, error) 
 func (m DetailedMultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := m.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	detailedMultiChoiceAnswer, ok := answer.(shared.DetailedMultipleChoiceAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.DetailedMultipleChoiceAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.DetailedMultipleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	if len(detailedMultiChoiceAnswer.Choices) == 0 {
@@ -691,12 +691,12 @@ func (r Ranking) EncodeRequest(answer any) (json.RawMessage, error) {
 func (r Ranking) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := r.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	rankingAnswer, ok := answer.(shared.RankingAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.RankingAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.RankingAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	if len(rankingAnswer.RankedChoices) == 0 {

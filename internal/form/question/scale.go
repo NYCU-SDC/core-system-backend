@@ -153,12 +153,12 @@ func (s LinearScale) EncodeRequest(answer any) (json.RawMessage, error) {
 func (s LinearScale) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	linearScaleAnswer, ok := answer.(shared.LinearScaleAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.LinearScaleAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.LinearScaleAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	return fmt.Sprintf("%d (%d-%d)", linearScaleAnswer.Value, s.MinVal, s.MaxVal), nil
@@ -287,12 +287,12 @@ func (s Rating) EncodeRequest(answer any) (json.RawMessage, error) {
 func (s Rating) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	ratingAnswer, ok := answer.(shared.RatingAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.RatingAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.RatingAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	return fmt.Sprintf("%d (%d-%d)", ratingAnswer.Value, s.MinVal, s.MaxVal), nil

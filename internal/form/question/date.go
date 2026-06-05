@@ -324,12 +324,12 @@ func (d Date) EncodeRequest(answer any) (json.RawMessage, error) {
 func (d Date) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := d.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	dateAnswer, ok := answer.(shared.DateAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.DateAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.DateAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	// Use the String() method from shared.DateAnswer which formats based on available components

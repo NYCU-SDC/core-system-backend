@@ -110,7 +110,7 @@ func (o OAuthConnect) EncodeRequest(answer any) (json.RawMessage, error) {
 func (o OAuthConnect) DisplayValue(rawValue json.RawMessage) (string, error) {
 	var v shared.OAuthConnectAnswer
 	if err := json.Unmarshal(rawValue, &v); err != nil {
-		return "", fmt.Errorf("failed to decode oauth_connect answer for display: %w", err)
+		return "", fmt.Errorf("%w: failed to decode oauth_connect answer for display: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 	if v.Username != "" && v.Email != "" {
 		return fmt.Sprintf("%s(%s)", v.Username, v.Email), nil
@@ -124,7 +124,7 @@ func (o OAuthConnect) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (o OAuthConnect) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	display, err := o.DisplayValue(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
+		return false, err
 	}
 
 	match, err := matchPattern(display, pattern)

@@ -82,12 +82,12 @@ func (s ShortText) EncodeRequest(answer any) (json.RawMessage, error) {
 func (s ShortText) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.ShortTextAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	return shortTextAnswer.Value, nil
@@ -181,12 +181,12 @@ func (l LongText) EncodeRequest(answer any) (json.RawMessage, error) {
 func (l LongText) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := l.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	longTextAnswer, ok := answer.(shared.LongTextAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.LongTextAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	value := longTextAnswer.Value
@@ -289,12 +289,12 @@ func (h Hyperlink) EncodeRequest(answer any) (json.RawMessage, error) {
 func (h Hyperlink) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := h.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.HyperlinkAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	return hyperlinkAnswer.Value, nil
