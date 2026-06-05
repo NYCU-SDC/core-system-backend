@@ -3,6 +3,7 @@ package answer
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/file"
@@ -37,12 +38,15 @@ func NewFileResourceHandler(logger *zap.Logger, queries FileReferenceQuerier) *F
 }
 
 // WithTx returns a handler that reads and writes answer file references on tx.
-func (h *FileResourceHandler) WithTx(tx pgx.Tx) file.ResourceHandler {
+func (h *FileResourceHandler) WithTx(tx pgx.Tx) (file.ResourceHandler, error) {
 	q, ok := h.queries.(*Queries)
 	if !ok {
-		return h
+		return nil, fmt.Errorf(
+			"answer file resource handler requires *answer.Queries for transactional operations, got %T",
+			h.queries,
+		)
 	}
-	return NewFileResourceHandler(h.logger, q.WithTx(tx))
+	return NewFileResourceHandler(h.logger, q.WithTx(tx)), nil
 }
 
 func (h *FileResourceHandler) ResourceType() file.ResourceType {

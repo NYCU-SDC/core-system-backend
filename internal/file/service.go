@@ -50,7 +50,7 @@ type ResourceHandler interface {
 // on the same pgx.Tx as file.Service transactional operations.
 type TxResourceHandler interface {
 	ResourceHandler
-	WithTx(tx pgx.Tx) ResourceHandler
+	WithTx(tx pgx.Tx) (ResourceHandler, error)
 }
 
 type Service struct {
@@ -403,7 +403,18 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 			}
 			txHandler, ok := handler.(TxResourceHandler)
 			if ok {
-				handler = txHandler.WithTx(tx)
+				var err error
+				handler, err = txHandler.WithTx(tx)
+				if err != nil {
+					err = fmt.Errorf(
+						"bind tx for resource type %s resource id %s: %w",
+						att.ResourceType,
+						att.ResourceID.String(),
+						err,
+					)
+					span.RecordError(err)
+					return err
+				}
 			}
 
 			err := handler.RemoveFileReference(traceCtx, fileID, att.ResourceID)
