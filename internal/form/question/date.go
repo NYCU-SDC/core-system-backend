@@ -2,7 +2,6 @@ package question
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -338,7 +337,16 @@ func (d Date) DisplayValue(rawValue json.RawMessage) (string, error) {
 }
 
 func (d Date) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
-	return false, errors.New("MatchesPattern is not supported for date question type")
+	display, err := d.DisplayValue(rawValue)
+	if err != nil {
+		return false, err
+	}
+
+	match, err := matchPattern(display, pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for date answer: %w", err)
+	}
+	return match, nil
 }
 
 // GenerateDateMetadata creates and validates metadata JSON for date questions
