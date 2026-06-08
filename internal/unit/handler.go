@@ -138,11 +138,12 @@ type UnitMemberResponse struct {
 }
 
 type UserFormResponse struct {
-	FormID        string              `json:"id"`
-	Title         string              `json:"title"`
-	Deadline      *time.Time          `json:"deadline"`
-	Status        form.UserFormStatus `json:"status"`
-	ResponseIDs   []uuid.UUID         `json:"responseIds"`
+	FormID            string              `json:"id"`
+	Title             string              `json:"title"`
+	Deadline          *time.Time          `json:"deadline"`
+	Status            form.UserFormStatus `json:"status"`
+	ResponseIDs       []uuid.UUID         `json:"responseIds"`
+	AllowEditResponse bool                `json:"allowEditResponse"`
 }
 
 type UpdateUnitMemberRoleResponse struct {
@@ -873,11 +874,12 @@ func (h *Handler) ListFormsOfCurrentUser(w http.ResponseWriter, r *http.Request)
 		}
 
 		userFormsResponse = append(userFormsResponse, UserFormResponse{
-			FormID:      userForm.FormID.String(),
-			Title:       userForm.Title,
-			Deadline:    deadline,
-			Status:      userForm.Status,
-			ResponseIDs: userForm.ResponseIDs,
+			FormID:            userForm.FormID.String(),
+			Title:             userForm.Title,
+			Deadline:          deadline,
+			Status:            userForm.Status,
+			ResponseIDs:       userForm.ResponseIDs,
+			AllowEditResponse: userForm.AllowEditResponse,
 		})
 	}
 
