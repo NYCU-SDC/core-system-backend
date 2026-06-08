@@ -199,12 +199,12 @@ func (u UploadFile) EncodeRequest(answer any) (json.RawMessage, error) {
 func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := u.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	uploadFileAnswer, ok := answer.(shared.UploadFileAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.UploadFileAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.UploadFileAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	count := len(uploadFileAnswer.Files)
@@ -220,7 +220,17 @@ func (u UploadFile) DisplayValue(rawValue json.RawMessage) (string, error) {
 }
 
 func (u UploadFile) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
-	return false, errors.New("MatchesPattern is not supported for upload_file question type")
+	display, err := u.DisplayValue(rawValue)
+	if err != nil {
+		return false, err
+	}
+
+	match, err := matchPattern(display, pattern)
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
+	}
+
+	return match, nil
 }
 
 // GenerateUploadFileMetadata generates metadata for upload file question

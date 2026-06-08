@@ -102,13 +102,17 @@ var (
 	ErrInvalidStatus      = errors.New("invalid form status")
 
 	// Question Errors
-	ErrQuestionNotFound           = errors.New("question not found")
-	ErrSectionNotFound            = errors.New("section not found")
-	ErrQuestionRequired           = errors.New("question is required but not answered")
-	ErrQuestionTypeMismatch       = errors.New("question type does not match the expected type")
-	ErrValidationFailed           = errors.New("validation failed")
-	ErrInvalidSourceIDWithChoices = errors.New("cannot specify both source_id and choices")
-	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
+	ErrQuestionNotFound                 = errors.New("question not found")
+	ErrSectionNotFound                  = errors.New("section not found")
+	ErrQuestionRequired                 = errors.New("question is required but not answered")
+	ErrQuestionTypeMismatch             = errors.New("question type does not match the expected type")
+	ErrValidationFailed                 = errors.New("validation failed")
+	ErrInvalidSourceIDWithChoices       = errors.New("cannot specify both source_id and choices")
+	ErrInvalidSourceIDForType           = errors.New("source_id is not supported for this question type")
+	ErrQuestionAnswerDecodeFailed       = errors.New("failed to decode question answer")
+	ErrQuestionAnswerUnexpectedType     = errors.New("unexpected question answer type")
+	ErrQuestionAnswerDisplayValueFailed = errors.New("failed to get display value for question answer")
+	ErrQuestionAnswerPatternMatchFailed = errors.New("failed to match pattern for question answer")
 
 	// Response Errors
 	ErrResponseNotFound       = errors.New("response not found")
@@ -127,16 +131,17 @@ var (
 	ErrWorkflowMergeAnswerEncodeFailed = errors.New("failed to encode answer for workflow resolution")
 
 	// Workflow Errors
-	ErrWorkflowNotFound              = errors.New("no workflow configured for this form")
-	ErrWorkflowValidationFailed      = errors.New("workflow validation failed")
-	ErrWorkflowResolveSectionsFailed = errors.New("workflow resolve sections failed")
-	ErrWorkflowNotActive             = errors.New("workflow is not active")
-	ErrMarshalWorkflow               = errors.New("failed to marshal workflow")
-	ErrUnmarshalAPIWorkflow          = errors.New("failed to unmarshal API workflow")
-	ErrUnmarshalDBWorkflow           = errors.New("failed to unmarshal database workflow")
-	ErrWorkflowNodeNotFound          = errors.New("node not found in current workflow")
-	ErrMarshalMergedWorkflow         = errors.New("failed to marshal merged workflow")
-	ErrWorkflowNodePayloadInvalid    = errors.New("invalid workflow node payload")
+	ErrWorkflowNotFound                    = errors.New("no workflow configured for this form")
+	ErrWorkflowValidationFailed            = errors.New("workflow validation failed")
+	ErrWorkflowResolveSectionsFailed       = errors.New("workflow resolve sections failed")
+	ErrWorkflowConditionPatternMatchFailed = errors.New("failed to match pattern for workflow condition")
+	ErrWorkflowNotActive                   = errors.New("workflow is not active")
+	ErrMarshalWorkflow                     = errors.New("failed to marshal workflow")
+	ErrUnmarshalAPIWorkflow                = errors.New("failed to unmarshal API workflow")
+	ErrUnmarshalDBWorkflow                 = errors.New("failed to unmarshal database workflow")
+	ErrWorkflowNodeNotFound                = errors.New("node not found in current workflow")
+	ErrMarshalMergedWorkflow               = errors.New("failed to marshal merged workflow")
+	ErrWorkflowNodePayloadInvalid          = errors.New("invalid workflow node payload")
 
 	// File Errors
 	ErrFileNotFound       = errors.New("file not found")

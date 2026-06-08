@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
@@ -81,12 +82,12 @@ func (s ShortText) EncodeRequest(answer any) (json.RawMessage, error) {
 func (s ShortText) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.ShortTextAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	return shortTextAnswer.Value, nil
@@ -95,17 +96,17 @@ func (s ShortText) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (s ShortText) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode short text answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.ShortTextAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.ShortTextAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	match, err := matchPattern(shortTextAnswer.Value, pattern)
 	if err != nil {
-		return false, fmt.Errorf("failed to match pattern for short text answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
 	return match, nil
 }
@@ -180,12 +181,12 @@ func (l LongText) EncodeRequest(answer any) (json.RawMessage, error) {
 func (l LongText) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := l.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	longTextAnswer, ok := answer.(shared.LongTextAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.LongTextAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	value := longTextAnswer.Value
@@ -199,17 +200,17 @@ func (l LongText) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (l LongText) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := l.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode long text answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	longTextAnswer, ok := answer.(shared.LongTextAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.LongTextAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.LongTextAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	match, err := matchPattern(longTextAnswer.Value, pattern)
 	if err != nil {
-		return false, fmt.Errorf("failed to match pattern for long text answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
 	return match, nil
 }
@@ -288,12 +289,12 @@ func (h Hyperlink) EncodeRequest(answer any) (json.RawMessage, error) {
 func (h Hyperlink) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := h.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.HyperlinkAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	return hyperlinkAnswer.Value, nil
@@ -302,17 +303,17 @@ func (h Hyperlink) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (h Hyperlink) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := h.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode hyperlink answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.HyperlinkAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.HyperlinkAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	match, err := matchPattern(hyperlinkAnswer.Value, pattern)
 	if err != nil {
-		return false, fmt.Errorf("failed to match pattern for hyperlink answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
 	return match, nil
 }
