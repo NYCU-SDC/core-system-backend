@@ -1,8 +1,6 @@
 module NYCU-SDC/core-system-backend
 
-go 1.24.2
-
-toolchain go1.24.3
+go 1.25.0
 
 require (
 	github.com/NYCU-SDC/summer v1.0.1-0.20260223122644-53bd4b1781f1
@@ -10,7 +8,7 @@ require (
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.7.4
+	github.com/jackc/pgx/v5 v5.9.0
 	github.com/joho/godotenv v1.5.1
 	github.com/karitham/prosemirror v0.0.0-20240412091021-32d4dcfe075e
 	github.com/microcosm-cc/bluemonday v1.0.27
