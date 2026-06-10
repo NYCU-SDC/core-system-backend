@@ -120,6 +120,7 @@ var (
 	ErrResponseAlreadyExists  = errors.New("user already has a response for this form")
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 	ErrResponseNotOwned       = errors.New("response does not belong to the current user")
+	ErrResponseEditNotAllowed = errors.New("response is not allowed to be edited")
 
 	// Answer / Workflow: cannot answer questions in a section skipped by workflow
 	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
@@ -337,6 +338,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("user already has a response for this form")
 	case errors.Is(err, ErrResponseNotOwned):
 		return problem.NewForbiddenProblem("response does not belong to the current user")
+	case errors.Is(err, ErrResponseEditNotAllowed):
+		return problem.NewForbiddenProblem("response is not allowed to be edited")
 
 	// Submit Errors
 	case errors.Is(err, ErrResponseNotComplete{}):

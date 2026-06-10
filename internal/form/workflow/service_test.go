@@ -8,6 +8,8 @@ import (
 	"sort"
 	"testing"
 
+	"NYCU-SDC/core-system-backend/internal/form"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -60,7 +62,11 @@ func TestService_Activate(t *testing.T) {
 
 			mockQuerier := new(mockQuerier)
 			mockValidator := new(mockValidator)
-			service := createTestService(t, logger, tracer, mockQuerier, mockValidator, nil)
+			mfp := new(mockFormStore)
+			mfp.On("PatchParams", mock.Anything, mock.MatchedBy(func(p form.PatchParams) bool {
+				return p.ID == formID && p.LastEditor == userID
+			})).Return(form.PatchRow{}, nil).Once()
+			service := NewServiceForTesting(logger, tracer, mockQuerier, mfp, mockValidator, nil)
 
 			workflowJSON := tc.params.workflowJSON
 			mockValidator.On("Activate", mock.Anything, formID, workflowJSON, mock.Anything).Return(nil).Once()
@@ -93,6 +99,7 @@ func TestService_Activate(t *testing.T) {
 
 			mockValidator.AssertExpectations(t)
 			mockQuerier.AssertExpectations(t)
+			mfp.AssertExpectations(t)
 		})
 	}
 }
@@ -139,7 +146,11 @@ func TestService_Update(t *testing.T) {
 
 			mockQuerier := new(mockQuerier)
 			realValidator := NewValidator()
-			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, nil)
+			mfp := new(mockFormStore)
+			mfp.On("PatchParams", mock.Anything, mock.MatchedBy(func(p form.PatchParams) bool {
+				return p.ID == formID && p.LastEditor == userID
+			})).Return(form.PatchRow{}, nil).Once()
+			service := NewServiceForTesting(logger, tracer, mockQuerier, mfp, realValidator, nil)
 			workflowJSON := tc.params.workflowJSON
 			versionID := uuid.New()
 			updateRow := UpdateRow{
@@ -181,6 +192,7 @@ func TestService_Update(t *testing.T) {
 				require.Equal(t, extractQuestionIDs(t, workflowJSON), extractQuestionIDs(t, result.Workflow), "question IDs in condition rules must remain unchanged after update")
 				require.Equal(t, extractConditionRules(t, workflowJSON), extractConditionRules(t, result.Workflow), "condition rules in condition nodes must remain unchanged after update")
 				mockQuerier.AssertExpectations(t)
+				mfp.AssertExpectations(t)
 			}
 		})
 	}
@@ -286,8 +298,8 @@ func TestService_CreateNode(t *testing.T) {
 		name     string
 		params   Params
 		payload  NodePayload
-		setup    func(t *testing.T, mq *mockQuerier, formID, userID uuid.UUID, params Params, payload NodePayload)
-		validate func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload)
+		setup    func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, formID, userID uuid.UUID, params Params, payload NodePayload)
+		validate func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, result CreateNodeRow, err error, params Params, payload NodePayload)
 	}
 
 	testCases := []testCase{
@@ -299,7 +311,7 @@ func TestService_CreateNode(t *testing.T) {
 				questionStore: nil,
 			},
 			payload: payloadXY(0, 0),
-			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+			validate: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, result CreateNodeRow, err error, params Params, payload NodePayload) {
 				require.Error(t, err, "expected error but got nil")
 				require.Equal(t, CreateNodeRow{}, result)
 				mq.AssertNotCalled(t, "CreateNode")
@@ -313,7 +325,7 @@ func TestService_CreateNode(t *testing.T) {
 				questionStore: nil,
 			},
 			payload: payloadXY(0, 0),
-			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+			validate: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, result CreateNodeRow, err error, params Params, payload NodePayload) {
 				require.Error(t, err, "expected error but got nil")
 				require.Equal(t, CreateNodeRow{}, result)
 				mq.AssertNotCalled(t, "CreateNode")
@@ -327,7 +339,7 @@ func TestService_CreateNode(t *testing.T) {
 				questionStore: nil,
 			},
 			payload: payloadXY(0, 0),
-			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+			validate: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, result CreateNodeRow, err error, params Params, payload NodePayload) {
 				require.Error(t, err, "expected error but got nil")
 				require.Equal(t, CreateNodeRow{}, result)
 				mq.AssertNotCalled(t, "CreateNode")
@@ -341,7 +353,7 @@ func TestService_CreateNode(t *testing.T) {
 				questionStore: nil,
 			},
 			payload: payloadXY(0, 0),
-			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+			validate: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, result CreateNodeRow, err error, params Params, payload NodePayload) {
 				require.Error(t, err, "expected error but got nil")
 				require.Equal(t, CreateNodeRow{}, result)
 				mq.AssertNotCalled(t, "CreateNode")
@@ -355,7 +367,7 @@ func TestService_CreateNode(t *testing.T) {
 				questionStore: nil,
 			},
 			payload: payloadNil(),
-			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+			validate: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, result CreateNodeRow, err error, params Params, payload NodePayload) {
 				require.Error(t, err, "expected error but got nil")
 				require.Equal(t, CreateNodeRow{}, result)
 				mq.AssertNotCalled(t, "CreateNode")
@@ -369,7 +381,7 @@ func TestService_CreateNode(t *testing.T) {
 				questionStore: nil,
 			},
 			payload: payloadXY(0, 0),
-			setup: func(t *testing.T, mq *mockQuerier, formID, userID uuid.UUID, params Params, payload NodePayload) {
+			setup: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, formID, userID uuid.UUID, params Params, payload NodePayload) {
 				expectedRow := CreateNodeRow{
 					NodeID:    uuid.New(),
 					NodeType:  params.nodeType,
@@ -384,13 +396,17 @@ func TestService_CreateNode(t *testing.T) {
 					PayloadX:   *payload.X,
 					PayloadY:   *payload.Y,
 				}).Return(expectedRow, nil).Once()
+				mfp.On("PatchParams", mock.Anything, mock.MatchedBy(func(p form.PatchParams) bool {
+					return p.ID == formID && p.LastEditor == userID
+				})).Return(form.PatchRow{}, nil).Once()
 			},
-			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+			validate: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, result CreateNodeRow, err error, params Params, payload NodePayload) {
 				require.NoError(t, err, "unexpected error: %v", err)
 				require.NotEqual(t, uuid.Nil, result.NodeID)
 				require.Equal(t, params.nodeType, result.NodeType)
 				require.NotEmpty(t, result.Workflow)
 				mq.AssertExpectations(t)
+				mfp.AssertExpectations(t)
 			},
 		},
 		{
@@ -401,7 +417,7 @@ func TestService_CreateNode(t *testing.T) {
 				questionStore: nil,
 			},
 			payload: payloadXY(0, 0),
-			setup: func(t *testing.T, mq *mockQuerier, formID, userID uuid.UUID, params Params, payload NodePayload) {
+			setup: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, formID, userID uuid.UUID, params Params, payload NodePayload) {
 				expectedRow := CreateNodeRow{
 					NodeID:    uuid.New(),
 					NodeType:  params.nodeType,
@@ -416,13 +432,17 @@ func TestService_CreateNode(t *testing.T) {
 					PayloadX:   *payload.X,
 					PayloadY:   *payload.Y,
 				}).Return(expectedRow, nil).Once()
+				mfp.On("PatchParams", mock.Anything, mock.MatchedBy(func(p form.PatchParams) bool {
+					return p.ID == formID && p.LastEditor == userID
+				})).Return(form.PatchRow{}, nil).Once()
 			},
-			validate: func(t *testing.T, mq *mockQuerier, result CreateNodeRow, err error, params Params, payload NodePayload) {
+			validate: func(t *testing.T, mq *mockQuerier, mfp *mockFormStore, result CreateNodeRow, err error, params Params, payload NodePayload) {
 				require.NoError(t, err, "unexpected error: %v", err)
 				require.NotEqual(t, uuid.Nil, result.NodeID)
 				require.Equal(t, params.nodeType, result.NodeType)
 				require.NotEmpty(t, result.Workflow)
 				mq.AssertExpectations(t)
+				mfp.AssertExpectations(t)
 			},
 		},
 	}
@@ -438,17 +458,21 @@ func TestService_CreateNode(t *testing.T) {
 
 			mockQuerier := new(mockQuerier)
 			realValidator := NewValidator()
+			mfp := new(mockFormStore)
+			if tc.setup == nil {
+				mfp.On("PatchParams", mock.Anything, mock.Anything).Return(form.PatchRow{}, nil).Maybe()
+			}
 
-			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
+			service := NewServiceForTesting(logger, tracer, mockQuerier, mfp, realValidator, tc.params.questionStore)
 
 			if tc.setup != nil {
-				tc.setup(t, mockQuerier, formID, userID, tc.params, tc.payload)
+				tc.setup(t, mockQuerier, mfp, formID, userID, tc.params, tc.payload)
 			}
 
 			result, err := service.CreateNode(ctx, formID, tc.params.nodeType, tc.payload, userID)
 
 			if tc.validate != nil {
-				tc.validate(t, mockQuerier, result, err, tc.params, tc.payload)
+				tc.validate(t, mockQuerier, mfp, result, err, tc.params, tc.payload)
 			}
 		})
 	}
@@ -558,7 +582,11 @@ func TestService_DeleteNode(t *testing.T) {
 
 			mockQuerier := new(mockQuerier)
 			realValidator := NewValidator()
-			service := NewServiceForTesting(logger, tracer, mockQuerier, realValidator, tc.params.questionStore)
+			mfp := new(mockFormStore)
+			mfp.On("PatchParams", mock.Anything, mock.MatchedBy(func(p form.PatchParams) bool {
+				return p.ID == formID && p.LastEditor == userID
+			})).Return(form.PatchRow{}, nil).Once()
+			service := NewServiceForTesting(logger, tracer, mockQuerier, mfp, realValidator, tc.params.questionStore)
 
 			workflowJSON := tc.params.workflowJSON
 
@@ -577,6 +605,7 @@ func TestService_DeleteNode(t *testing.T) {
 				require.NoError(t, err, "unexpected error: %v", err)
 				require.Equal(t, workflowJSON, result)
 				mockQuerier.AssertExpectations(t)
+				mfp.AssertExpectations(t)
 			}
 		})
 	}

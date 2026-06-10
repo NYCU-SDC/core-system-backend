@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 
 	"github.com/google/uuid"
@@ -45,6 +46,16 @@ func (m *mockQuerier) DeleteNode(ctx context.Context, arg DeleteNodeParams) ([]b
 func (m *mockQuerier) Activate(ctx context.Context, arg ActivateParams) (ActivateRow, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).(ActivateRow), args.Error(1)
+}
+
+// mockFormStore implements FormStore (form queries Patch) for workflow tests.
+type mockFormStore struct {
+	mock.Mock
+}
+
+func (m *mockFormStore) PatchParams(ctx context.Context, params form.PatchParams) (form.PatchRow, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).(form.PatchRow), args.Error(1)
 }
 
 // mockValidator is a mock implementation of Validator interface
@@ -98,10 +109,13 @@ func (m *mockQuestionStore) ListSections(ctx context.Context, formID uuid.UUID) 
 	return nil, nil
 }
 
-// createTestService creates a Service with mocked dependencies
+// createTestService creates a Service with mocked dependencies.
+// PatchParams is stubbed with Maybe() so tests that do not update forms.last_editor need no extra setup.
 func createTestService(t *testing.T, logger *zap.Logger, tracer trace.Tracer, mockQuerier *mockQuerier, mockValidator *mockValidator, questionStore QuestionStore) *Service {
 	t.Helper()
-	return NewServiceForTesting(logger, tracer, mockQuerier, mockValidator, questionStore)
+	mfs := new(mockFormStore)
+	mfs.On("PatchParams", mock.Anything, mock.Anything).Return(form.PatchRow{}, nil).Maybe()
+	return NewServiceForTesting(logger, tracer, mockQuerier, mfs, mockValidator, questionStore)
 }
 
 // createWorkflowJSON marshals nodes to JSON and fails the test on error

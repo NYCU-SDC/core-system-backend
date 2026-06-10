@@ -197,7 +197,6 @@ type ShiftOrdersParams struct {
 	Order_2 int32
 }
 
-// delta should be +1 (to make room) or -1 (to close gap)
 func (q *Queries) ShiftOrders(ctx context.Context, arg ShiftOrdersParams) error {
 	_, err := q.db.Exec(ctx, shiftOrders, arg.FormID, arg.Order, arg.Order_2)
 	return err

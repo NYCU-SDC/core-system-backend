@@ -505,6 +505,7 @@ type Form struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      bool
 }
 
 type FormCover struct {

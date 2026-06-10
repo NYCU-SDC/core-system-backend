@@ -104,7 +104,8 @@ CREATE TABLE IF NOT EXISTS forms (
     dressing_color TEXT,
     dressing_header_font TEXT,
     dressing_question_font TEXT,
-    dressing_text_font TEXT
+    dressing_text_font TEXT,
+    allow_edit_response BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS form_covers (
