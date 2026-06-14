@@ -7,3 +7,5 @@ CREATE TABLE IF NOT EXISTS answers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(response_id, question_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_answers_question_id ON answers(question_id);

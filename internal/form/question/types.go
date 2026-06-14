@@ -52,6 +52,14 @@ var ChoiceTypes = []QuestionType{
 	QuestionTypeRanking,
 }
 
+// HighlightTypes lists question types that can be used for form highlights.
+var HighlightTypes = []QuestionType{
+	QuestionTypeSingleChoice,
+	QuestionTypeMultipleChoice,
+	QuestionTypeDropdown,
+	QuestionTypeDetailedMultipleChoice,
+}
+
 // NonChoiceTypes lists question types with text/date/URL values for pattern matching
 // Used for workflow condition nodes with source "nonChoice".
 var NonChoiceTypes = []QuestionType{
@@ -73,6 +81,10 @@ func ContainsType(types []QuestionType, typeToCheck QuestionType) bool {
 		}
 	}
 	return false
+}
+
+func IsHighlightSupportedType(questionType QuestionType) bool {
+	return ContainsType(HighlightTypes, questionType)
 }
 
 // FormatAllowedTypes formats a slice of question types for use in error messages.

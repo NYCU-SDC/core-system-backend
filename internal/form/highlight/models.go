@@ -2,7 +2,7 @@
 // versions:
 //   sqlc v1.30.0
 
-package jwt
+package highlight
 
 import (
 	"database/sql/driver"
