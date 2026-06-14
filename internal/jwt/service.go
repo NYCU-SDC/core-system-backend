@@ -103,6 +103,8 @@ type oauthFormClaims struct {
 	// RedirectURL is the final URL to send the user to after the OAuth flow completes.
 	RedirectURL string
 
+	UserID string
+
 	jwt.RegisteredClaims
 }
 
@@ -283,7 +285,7 @@ func (s Service) ParseState(ctx context.Context, tokenString string) (*OauthProx
 
 // NewFormState creates a signed JWT to be used as the OAuth state parameter for form-question OAuth flows.
 // The token encodes the callbackURL, responseID, questionID, and optional redirectURL.
-func (s Service) NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string) (string, error) {
+func (s Service) NewFormState(ctx context.Context, callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, userID uuid.UUID) (string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "NewFormState")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -294,6 +296,7 @@ func (s Service) NewFormState(ctx context.Context, callbackURL string, responseI
 		ResponseID:  responseID.String(),
 		QuestionID:  questionID.String(),
 		RedirectURL: redirectURL,
+		UserID:      userID.String(),
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    Issuer,
 			Subject:   id.String(),
@@ -316,7 +319,7 @@ func (s Service) NewFormState(ctx context.Context, callbackURL string, responseI
 }
 
 // ParseFormState parses a form-question OAuth state JWT and returns its contents.
-func (s Service) ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, err error) {
+func (s Service) ParseFormState(ctx context.Context, tokenString string) (callbackURL string, responseID uuid.UUID, questionID uuid.UUID, redirectURL string, userID uuid.UUID, err error) {
 	traceCtx, span := s.tracer.Start(ctx, "ParseFormState")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -331,42 +334,51 @@ func (s Service) ParseFormState(ctx context.Context, tokenString string) (callba
 		switch {
 		case errors.Is(parseErr, jwt.ErrTokenMalformed):
 			logger.Warn("Failed to parse form state token due to malformed structure", zap.String("error", parseErr.Error()))
-			return "", uuid.UUID{}, uuid.UUID{}, "", parseErr
+			return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, parseErr
 		case errors.Is(parseErr, jwt.ErrSignatureInvalid):
 			logger.Warn("Failed to parse form state token due to invalid signature", zap.String("error", parseErr.Error()))
-			return "", uuid.UUID{}, uuid.UUID{}, "", parseErr
+			return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, parseErr
 		case errors.Is(parseErr, jwt.ErrTokenExpired):
 			expiredTime, getErr := token.Claims.GetExpirationTime()
 			if getErr != nil {
 				logger.Error("Failed to parse form state token due to expired timestamp", zap.String("error", getErr.Error()))
-				return "", uuid.UUID{}, uuid.UUID{}, "", parseErr
+				return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, parseErr
 			}
 			logger.Warn("Failed to parse form state token due to expired timestamp", zap.String("error", parseErr.Error()), zap.Time("expired_at", expiredTime.Time))
-			return "", uuid.UUID{}, uuid.UUID{}, "", parseErr
+			return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, parseErr
 		case errors.Is(parseErr, jwt.ErrTokenNotValidYet):
 			notBeforeTime, getErr := token.Claims.GetNotBefore()
 			if getErr != nil {
 				logger.Error("Failed to parse form state token due to not valid yet timestamp", zap.String("error", getErr.Error()))
-				return "", uuid.UUID{}, uuid.UUID{}, "", parseErr
+				return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, parseErr
 			}
 			logger.Warn("Failed to parse form state token due to not valid yet timestamp", zap.String("error", parseErr.Error()), zap.Time("not_before", notBeforeTime.Time))
-			return "", uuid.UUID{}, uuid.UUID{}, "", parseErr
+			return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, parseErr
 		default:
 			logger.Error("Failed to parse form state token", zap.Error(parseErr))
-			return "", uuid.UUID{}, uuid.UUID{}, "", parseErr
+			return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, parseErr
 		}
 	}
 
 	parsedResponseID, err := uuid.Parse(tokenClaims.ResponseID)
 	if err != nil {
 		logger.Error("Failed to parse response_id from form state token", zap.String("response_id", tokenClaims.ResponseID), zap.Error(err))
-		return "", uuid.UUID{}, uuid.UUID{}, "", err
+		return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, err
 	}
 
 	parsedQuestionID, err := uuid.Parse(tokenClaims.QuestionID)
 	if err != nil {
 		logger.Error("Failed to parse question_id from form state token", zap.String("question_id", tokenClaims.QuestionID), zap.Error(err))
-		return "", uuid.UUID{}, uuid.UUID{}, "", err
+		return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, err
+	}
+
+	parsedUserID, err := uuid.Parse(tokenClaims.UserID)
+	if err != nil {
+		logger.Error("Failed to parse user_id from form state token",
+			zap.String("user_id", tokenClaims.UserID),
+			zap.Error(err),
+		)
+		return "", uuid.UUID{}, uuid.UUID{}, "", uuid.UUID{}, err
 	}
 
 	logger.Debug("Successfully parsed OAuth form state token",
@@ -374,7 +386,7 @@ func (s Service) ParseFormState(ctx context.Context, tokenString string) (callba
 		zap.String("question_id", tokenClaims.QuestionID),
 		zap.String("callback_url", tokenClaims.CallbackURL),
 	)
-	return tokenClaims.CallbackURL, parsedResponseID, parsedQuestionID, tokenClaims.RedirectURL, nil
+	return tokenClaims.CallbackURL, parsedResponseID, parsedQuestionID, tokenClaims.RedirectURL, parsedUserID, nil
 }
 
 // LinkClaims carries the OAuth identity that needs user confirmation before being linked to an existing account.

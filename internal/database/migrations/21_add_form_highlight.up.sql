@@ -6,3 +6,5 @@ CREATE TABLE IF NOT EXISTS form_highlights (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_answers_question_id ON answers(question_id);

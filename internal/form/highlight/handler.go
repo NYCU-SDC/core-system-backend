@@ -1,7 +1,6 @@
 package highlight
 
 import (
-	"NYCU-SDC/core-system-backend/internal"
 	"context"
 	"net/http"
 
@@ -16,8 +15,8 @@ import (
 )
 
 type setRequest struct {
-	QuestionID   *uuid.UUID `json:"questionId" validate:"required"`
-	DisplayTitle *string    `json:"displayTitle"`
+	QuestionID   uuid.UUID `json:"questionId" validate:"required"`
+	DisplayTitle *string   `json:"displayTitle"`
 }
 
 type patchRequest struct {
@@ -87,13 +86,8 @@ func (h *Handler) Put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.QuestionID == nil {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrInvalidRequestBody, logger)
-		return
-	}
-
 	response, err := h.store.Set(traceCtx, formID, Request{
-		QuestionID:   *req.QuestionID,
+		QuestionID:   req.QuestionID,
 		DisplayTitle: req.DisplayTitle,
 	})
 	if err != nil {
@@ -142,7 +136,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.Clear(traceCtx, formID); err != nil {
+	err = h.store.Clear(traceCtx, formID)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}

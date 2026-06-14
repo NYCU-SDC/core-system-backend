@@ -141,7 +141,7 @@ func (s *Service) Set(ctx context.Context, formID uuid.UUID, req Request) (Respo
 		return Response{}, err
 	}
 
-	if !isSupportedQuestionType(question.QuestionType(questionRow.Type)) {
+	if !question.IsHighlightSupportedType(question.QuestionType(questionRow.Type)) {
 		return Response{}, ErrUnsupportedHighlightQuestionType{
 			QuestionID:   questionRow.ID.String(),
 			QuestionType: string(questionRow.Type),
@@ -229,16 +229,6 @@ func (s *Service) Clear(ctx context.Context, formID uuid.UUID) error {
 		return internal.ErrFormNotFound
 	}
 
-	_, err = s.queries.GetByFormID(traceCtx, formID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return internal.ErrHighlightNotFound
-	}
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get form highlight")
-		span.RecordError(err)
-		return err
-	}
-
 	err = s.queries.DeleteByFormID(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete form highlight")
@@ -300,18 +290,6 @@ func normalizeDisplayTitle(displayTitle *string) pgtype.Text {
 		return pgtype.Text{}
 	}
 	return pgtype.Text{String: trimmed, Valid: true}
-}
-
-func isSupportedQuestionType(questionType question.QuestionType) bool {
-	switch questionType {
-	case question.QuestionTypeSingleChoice,
-		question.QuestionTypeMultipleChoice,
-		question.QuestionTypeDropdown,
-		question.QuestionTypeDetailedMultipleChoice:
-		return true
-	default:
-		return false
-	}
 }
 
 func countChoices(questionType question.QuestionType, choices []question.Choice, answerValues [][]byte) ([]ChoiceStat, error) {

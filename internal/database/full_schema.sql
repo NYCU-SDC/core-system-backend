@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS answers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(response_id, question_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_answers_question_id ON answers(question_id);
 CREATE TYPE response_progress AS ENUM (
     'draft',
     'submitted'
@@ -72,7 +74,6 @@ CREATE TABLE IF NOT EXISTS form_responses (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 CREATE TABLE IF NOT EXISTS form_highlights (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     form_id UUID NOT NULL UNIQUE REFERENCES forms(id) ON DELETE CASCADE,
@@ -113,7 +114,8 @@ CREATE TABLE IF NOT EXISTS forms (
     dressing_color TEXT,
     dressing_header_font TEXT,
     dressing_question_font TEXT,
-    dressing_text_font TEXT
+    dressing_text_font TEXT,
+    allow_edit_response BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS form_covers (
