@@ -86,10 +86,7 @@ func (h *Handler) Put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := h.store.Set(traceCtx, formID, Request{
-		QuestionID:   req.QuestionID,
-		DisplayTitle: req.DisplayTitle,
-	})
+	response, err := h.store.Set(traceCtx, formID, Request(req))
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
