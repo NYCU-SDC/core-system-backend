@@ -25,8 +25,8 @@ const (
 	bindingRequired
 )
 
-// GetByOAuthProvider returns the user ID for an existing (provider, providerID) auth row.
-func (s *Service) GetByOAuthProvider(ctx context.Context, provider, providerID string) (uuid.UUID, bool, error) {
+// getByOAuthProvider returns the user ID for an existing (provider, providerID) auth row.
+func (s *Service) getByOAuthProvider(ctx context.Context, provider, providerID string) (uuid.UUID, bool, error) {
 	userID, err := s.queries.GetIDByAuth(ctx, GetIDByAuthParams{
 		Provider:   provider,
 		ProviderID: providerID,
