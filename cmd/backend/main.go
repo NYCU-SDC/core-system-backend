@@ -160,13 +160,13 @@ func main() {
 	answerFileHandler := answer.NewFileResourceHandler(logger, answerQueries)
 	fileService := file.NewService(logger, dbPool, answerFileHandler)
 
-	setupImpl := config.SetupImpl{}
-	err = setupImpl.LoadSetupConfig(logger, cfg.SetupPath, cfg.SetupData)
+	setupCfg := config.Setup{}
+	err = setupCfg.LoadSetupConfig(logger, cfg.SetupPath, cfg.SetupData)
 	if err != nil {
 		logger.Fatal("Failed to load setup configuration", zap.Error(err))
 	}
 
-	userService := user.NewService(logger, dbPool, fileService, unitService, unitService, &setupImpl)
+	userService := user.NewService(logger, dbPool, fileService, unitService, unitService, &setupCfg)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
 	markdownService := markdown.NewService(logger)
@@ -179,7 +179,7 @@ func main() {
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
-	setupService := setup.NewService(logger, setupImpl, unitService, userService)
+	setupService := setup.NewService(logger, setupCfg, unitService, userService)
 	err = setupService.Setup(context.Background())
 	if err != nil {
 		logger.Fatal("Failed to setup", zap.Error(err))

@@ -624,7 +624,7 @@ type UserInboxMessage struct {
 	IsArchived bool
 }
 
-type UsersWithEmail struct {
+type UserWithEmails struct {
 	ID          uuid.UUID
 	Name        pgtype.Text
 	Username    pgtype.Text

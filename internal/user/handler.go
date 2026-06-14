@@ -15,31 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-func ConvertEmailsToSlice(emails interface{}) []string {
-	if emails == nil {
-		return []string{}
-	}
-
-	switch v := emails.(type) {
-	case []string:
-		if v == nil {
-			return []string{}
-		}
-		return v
-	case []interface{}:
-		// Handle PostgreSQL array returned as []interface{}
-		result := make([]string, 0, len(v))
-		for _, email := range v {
-			if str, ok := email.(string); ok {
-				result = append(result, str)
-			}
-		}
-		return result
-	default:
-		return []string{}
-	}
-}
-
 type ProfileResponse struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
@@ -48,7 +23,7 @@ type ProfileResponse struct {
 	Emails    []string  `json:"emails"`
 }
 
-// MeResponse represents the response format for /user/me endpoint
+// MeResponse represents the response format for /user/me endpoint.
 type MeResponse struct {
 	ID        string   `json:"id"`
 	Username  string   `json:"username"`
@@ -103,30 +78,23 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert roles array to comma-separated string
-	roleStr := ""
-	if len(currentUser.Role) > 0 {
-		roleStr = strings.Join(currentUser.Role, ",")
-	}
-
-	// Get user emails
-	emails, err := h.service.GetEmails(traceCtx, currentUser.ID)
+	user, err := h.service.Get(traceCtx, currentUser.ID)
 	if err != nil {
-		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
-		emails = []string{}
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
-	response := MeResponse{
-		ID:                currentUser.ID.String(),
-		Username:          currentUser.Username.String,
-		Name:              currentUser.Name.String,
-		AvatarUrl:         currentUser.AvatarUrl.String,
-		Role:              roleStr,
-		Emails:            emails,
+	meResponse := MeResponse{
+		ID:                user.ID.String(),
+		Username:          user.Username.String,
+		Name:              user.Name.String,
+		AvatarUrl:         user.AvatarUrl.String,
+		Role:              ConvertRoleToString(user.Role),
+		Emails:            ConvertEmailsToSlice(user.Emails),
 		RequireOnboarding: false,
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+	handlerutil.WriteJSONResponse(w, http.StatusOK, meResponse)
 }
 
 // Onboarding handles PUT /users/onboarding - update the user's name and username
@@ -136,7 +104,8 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	logger := logutil.WithContext(traceCtx, h.logger)
 
 	var req OnboardingRequest
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrValidationFailed, logger)
 		return
 	}
@@ -155,28 +124,54 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert roles array to comma-separated string
-	roleStr := ""
-	if len(newUser.Role) > 0 {
-		roleStr = strings.Join(newUser.Role, ",")
-	}
-
-	// Get user emails
-	emails, err := h.service.GetEmails(traceCtx, newUser.ID)
+	user, err := h.service.Get(traceCtx, newUser.ID)
 	if err != nil {
-		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", newUser.ID.String()))
-		emails = []string{}
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
 	}
 
-	response := MeResponse{
-		ID:                newUser.ID.String(),
-		Username:          newUser.Username.String,
-		Name:              newUser.Name.String,
-		AvatarUrl:         newUser.AvatarUrl.String,
-		Role:              roleStr,
-		Emails:            emails,
+	meResponse := MeResponse{
+		ID:                user.ID.String(),
+		Username:          user.Username.String,
+		Name:              user.Name.String,
+		AvatarUrl:         user.AvatarUrl.String,
+		Role:              ConvertRoleToString(user.Role),
+		Emails:            ConvertEmailsToSlice(user.Emails),
 		RequireOnboarding: false,
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+	handlerutil.WriteJSONResponse(w, http.StatusOK, meResponse)
+}
+
+func ConvertEmailsToSlice(emails interface{}) []string {
+	if emails == nil {
+		return []string{}
+	}
+
+	switch v := emails.(type) {
+	case []string:
+		if v == nil {
+			return []string{}
+		}
+		return v
+	case []interface{}:
+		// Handle PostgreSQL array returned as []interface{}
+		result := make([]string, 0, len(v))
+		for _, email := range v {
+			if str, ok := email.(string); ok {
+				result = append(result, str)
+			}
+		}
+		return result
+	default:
+		return []string{}
+	}
+}
+
+func ConvertRoleToString(roles []string) string {
+	if roles == nil {
+		return ""
+	}
+
+	return strings.Join(roles, ",")
 }

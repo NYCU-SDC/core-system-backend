@@ -2,53 +2,36 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS refresh_tokens (
+CREATE TABLE IF NOT EXISTS files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    is_active BOOLEAN DEFAULT TRUE,
-    expiration_date TIMESTAMPTZ NOT NULL
-);CREATE TYPE db_strategy AS ENUM ('shared', 'isolated');
-
-CREATE TABLE IF NOT EXISTS tenants
-(
-    id UUID PRIMARY KEY REFERENCES units(id) ON DELETE CASCADE,
-    db_strategy db_strategy NOT NULL,
-    owner_id UUID REFERENCES users(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS slug_history
-(
-    id SERIAL PRIMARY KEY,
-    slug TEXT NOT NULL,
-    org_id UUID REFERENCES units(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    ended_at TIMESTAMPTZ DEFAULT null
-);CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
-CREATE TYPE unit_type AS ENUM ('organization', 'unit');
-
-CREATE TABLE IF NOT EXISTS units (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID REFERENCES units(id),
-    parent_id UUID REFERENCES units(id) ON DELETE SET NULL,
-    type unit_type NOT NULL DEFAULT 'unit',
-    name VARCHAR(255),
-    description VARCHAR(255),
-    metadata JSONB,
+    original_filename VARCHAR(255) NOT NULL,
+    content_type VARCHAR(100) NOT NULL,
+    size BIGINT NOT NULL,
+    data BYTEA NOT NULL,
+    uploaded_by UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_units_parent_id ON units(parent_id);
+CREATE INDEX IF NOT EXISTS idx_files_uploaded_by ON files(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);
 
-CREATE TYPE unit_role AS ENUM ('admin', 'member');
-
-CREATE TABLE IF NOT EXISTS unit_members (
-    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
-    member_id UUID,
-    role unit_role NOT NULL DEFAULT 'member',
-    PRIMARY KEY (unit_id, member_id)
+CREATE TYPE resource_type AS ENUM(
+    'form_answer'
 );
+
+CREATE TABLE IF NOT EXISTS file_attachments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    resource_type resource_type NOT NULL,
+    resource_id UUID NOT NULL,
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(file_id, resource_type, resource_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_attachments_file_id ON file_attachments(file_id);
+CREATE INDEX IF NOT EXISTS idx_file_attachments_resource ON file_attachments(resource_type, resource_id);
 CREATE TABLE IF NOT EXISTS answers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     response_id UUID NOT NULL REFERENCES form_responses(id) ON DELETE CASCADE,
@@ -58,7 +41,36 @@ CREATE TABLE IF NOT EXISTS answers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(response_id, question_id)
 );
-CREATE TYPE response_progress AS ENUM (
+CREATE TYPE question_type AS ENUM(
+    'short_text',
+    'long_text',
+    'single_choice',
+    'multiple_choice',
+    'date',
+    'dropdown',
+    'detailed_multiple_choice',
+    'upload_file',
+    'linear_scale',
+    'rating',
+    'ranking',
+    'oauth_connect',
+    'hyperlink'
+);
+
+CREATE TABLE IF NOT EXISTS questions(
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    section_id UUID NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
+    required BOOLEAN NOT NULL,
+    type question_type NOT NULL,
+    title TEXT,
+    description_json JSONB NOT NULL DEFAULT '{"type":"doc","content":[{"type":"paragraph"}]}'::jsonb,
+    description_html TEXT NOT NULL DEFAULT '',
+    metadata JSONB DEFAULT '{}'::JSONB,
+    "order" INTEGER NOT NULL,
+    source_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);CREATE TYPE response_progress AS ENUM (
     'draft',
     'submitted'
 );
@@ -126,36 +138,7 @@ CREATE TABLE IF NOT EXISTS sections (
 
 CREATE INDEX idx_sections_form_id ON sections(form_id);
 
-CREATE TYPE question_type AS ENUM(
-    'short_text',
-    'long_text',
-    'single_choice',
-    'multiple_choice',
-    'date',
-    'dropdown',
-    'detailed_multiple_choice',
-    'upload_file',
-    'linear_scale',
-    'rating',
-    'ranking',
-    'oauth_connect',
-    'hyperlink'
-);
-
-CREATE TABLE IF NOT EXISTS questions(
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    section_id UUID NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
-    required BOOLEAN NOT NULL,
-    type question_type NOT NULL,
-    title TEXT,
-    description_json JSONB NOT NULL DEFAULT '{"type":"doc","content":[{"type":"paragraph"}]}'::jsonb,
-    description_html TEXT NOT NULL DEFAULT '',
-    metadata JSONB DEFAULT '{}'::JSONB,
-    "order" INTEGER NOT NULL,
-    source_id UUID,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);-- Node type enum for workflow nodes
+-- Node type enum for workflow nodes
 CREATE TYPE node_type AS ENUM(
     'section',
     'end',
@@ -204,36 +187,53 @@ CREATE TABLE IF NOT EXISTS user_inbox_messages (
 );
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS files (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    original_filename VARCHAR(255) NOT NULL,
-    content_type VARCHAR(100) NOT NULL,
-    size BIGINT NOT NULL,
-    data BYTEA NOT NULL,
-    uploaded_by UUID,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_active BOOLEAN DEFAULT TRUE,
+    expiration_date TIMESTAMPTZ NOT NULL
+);CREATE TYPE db_strategy AS ENUM ('shared', 'isolated');
+
+CREATE TABLE IF NOT EXISTS tenants
+(
+    id UUID PRIMARY KEY REFERENCES units(id) ON DELETE CASCADE,
+    db_strategy db_strategy NOT NULL,
+    owner_id UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS slug_history
+(
+    id SERIAL PRIMARY KEY,
+    slug TEXT NOT NULL,
+    org_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at TIMESTAMPTZ DEFAULT null
+);CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TYPE unit_type AS ENUM ('organization', 'unit');
+
+CREATE TABLE IF NOT EXISTS units (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID REFERENCES units(id),
+    parent_id UUID REFERENCES units(id) ON DELETE SET NULL,
+    type unit_type NOT NULL DEFAULT 'unit',
+    name VARCHAR(255),
+    description VARCHAR(255),
+    metadata JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_files_uploaded_by ON files(uploaded_by);
-CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);
+CREATE INDEX idx_units_parent_id ON units(parent_id);
 
-CREATE TYPE resource_type AS ENUM(
-    'form_answer'
+CREATE TYPE unit_role AS ENUM ('admin', 'member');
+
+CREATE TABLE IF NOT EXISTS unit_members (
+    unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+    member_id UUID,
+    role unit_role NOT NULL DEFAULT 'member',
+    PRIMARY KEY (unit_id, member_id)
 );
-
-CREATE TABLE IF NOT EXISTS file_attachments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-    resource_type resource_type NOT NULL,
-    resource_id UUID NOT NULL,
-    created_by UUID NOT NULL REFERENCES users(id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(file_id, resource_type, resource_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_file_attachments_file_id ON file_attachments(file_id);
-CREATE INDEX IF NOT EXISTS idx_file_attachments_resource ON file_attachments(resource_type, resource_id);
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
@@ -266,7 +266,7 @@ CREATE TABLE IF NOT EXISTS user_emails (
 );
 
 CREATE OR REPLACE VIEW users_with_emails AS
-SELECT 
+SELECT
     u.id,
     u.name,
     u.username,

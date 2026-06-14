@@ -2,7 +2,7 @@ package setup
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
-	config2 "NYCU-SDC/core-system-backend/internal/config"
+	"NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/unit"
 	"context"
 	"errors"
@@ -18,7 +18,7 @@ import (
 type Service struct {
 	logger      *zap.Logger
 	tracer      trace.Tracer
-	setupImpl   config2.SetupImpl
+	setupCfg    config.Setup
 	unitService UnitService
 	userService UserService
 }
@@ -36,11 +36,11 @@ type UserService interface {
 	FindOrCreateByEmail(ctx context.Context, email string, globalRole []string, userID *uuid.UUID) (uuid.UUID, error)
 }
 
-func NewService(logger *zap.Logger, setupImpl config2.SetupImpl, unitService UnitService, userService UserService) *Service {
+func NewService(logger *zap.Logger, setupCfg config.Setup, unitService UnitService, userService UserService) *Service {
 	service := &Service{
 		logger:      logger,
 		tracer:      otel.Tracer("setup"),
-		setupImpl:   setupImpl,
+		setupCfg:    setupCfg,
 		unitService: unitService,
 		userService: userService,
 	}
@@ -54,7 +54,7 @@ func (s *Service) Setup(ctx context.Context) error {
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	adminCount := make(map[string]int)
-	for _, user := range s.setupImpl.Config.Users {
+	for _, user := range s.setupCfg.Users {
 		for _, member := range user.OrgMember {
 			if member.OrgRole == "admin" {
 				adminCount[member.Slug]++
@@ -62,7 +62,7 @@ func (s *Service) Setup(ctx context.Context) error {
 		}
 	}
 
-	for _, org := range s.setupImpl.Config.Organizations {
+	for _, org := range s.setupCfg.Organizations {
 		if adminCount[org.Slug] < 1 {
 			logger.Error("The organization does not have the admin role", zap.String("org_name", org.Name))
 			err := fmt.Errorf("the organization %s does not have the admin role", org.Name)
@@ -71,7 +71,7 @@ func (s *Service) Setup(ctx context.Context) error {
 		}
 	}
 
-	for _, org := range s.setupImpl.Config.Organizations {
+	for _, org := range s.setupCfg.Organizations {
 		exist, err := s.unitService.SlugExists(traceCtx, org.Slug)
 		if err != nil {
 			logger.Error("Failed to check if the organization exists", zap.Error(err))
@@ -89,8 +89,8 @@ func (s *Service) Setup(ctx context.Context) error {
 	}
 	logger.Info("Successfully initialized organizations")
 
-	userIDs := make(map[string]uuid.UUID, len(s.setupImpl.Config.Users))
-	for _, user := range s.setupImpl.Config.Users {
+	userIDs := make(map[string]uuid.UUID, len(s.setupCfg.Users))
+	for _, user := range s.setupCfg.Users {
 		id, err := s.userService.FindOrCreateByEmail(traceCtx, user.Email, user.GlobalRole, user.UserID)
 		if err != nil {
 			logger.Error("Failed to find or create user", zap.String("email", user.Email), zap.Error(err))
@@ -101,7 +101,7 @@ func (s *Service) Setup(ctx context.Context) error {
 	}
 	logger.Info("Successfully initialized users")
 
-	for _, user := range s.setupImpl.Config.Users {
+	for _, user := range s.setupCfg.Users {
 		userID := userIDs[user.Email]
 		for _, org := range user.OrgMember {
 			orgID, err := s.unitService.GetOrgIDBySlug(traceCtx, org.Slug)
@@ -133,5 +133,5 @@ func (s *Service) Setup(ctx context.Context) error {
 }
 
 func (s *Service) AllowedOnboarding(userEmail string) bool {
-	return s.setupImpl.AllowedOnboarding(userEmail)
+	return s.setupCfg.AllowedOnboarding(userEmail)
 }
