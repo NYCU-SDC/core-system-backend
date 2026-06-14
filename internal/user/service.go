@@ -397,15 +397,15 @@ func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email strin
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	err := s.withTransaction(traceCtx, func(qtx *Queries) error {
-		_, err := qtx.GetIDByEmailForUpdate(ctx, email)
+		_, err := qtx.GetIDByEmailForUpdate(traceCtx, email)
 		if err == nil {
-			return validateEmailOwner(ctx, qtx, email, userID)
+			return validateEmailOwner(traceCtx, qtx, email, userID)
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 
-		return qtx.UpsertEmail(ctx, UpsertEmailParams{
+		return qtx.UpsertEmail(traceCtx, UpsertEmailParams{
 			UserID: userID,
 			Email:  email,
 		})
