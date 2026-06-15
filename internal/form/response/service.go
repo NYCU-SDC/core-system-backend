@@ -48,7 +48,7 @@ type AnswerStore interface {
 }
 
 type UserStore interface {
-	Get(ctx context.Context, id uuid.UUID) (user.UserWithEmails, error)
+	Get(ctx context.Context, id uuid.UUID) (user.UserDetail, error)
 }
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
@@ -188,7 +188,6 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 		if errors.Is(err, handlerutil.ErrNotFound) {
 			return nil, internal.ErrUserNotFound
 		}
-		err = databaseutil.WrapDBError(err, logger, "get user")
 		span.RecordError(err)
 		return nil, err
 	}
@@ -226,7 +225,6 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 		if errors.Is(err, handlerutil.ErrNotFound) {
 			return nil, internal.ErrUserNotFound
 		}
-		err = databaseutil.WrapDBError(err, logger, "get user")
 		span.RecordError(err)
 		return nil, err
 	}

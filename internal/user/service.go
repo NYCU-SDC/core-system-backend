@@ -75,6 +75,49 @@ type Profile struct {
 	Emails    []string
 }
 
+// UserDetail is the service-level representation of a user returned by Get.
+type UserDetail struct {
+	ID          uuid.UUID
+	Name        string
+	Username    string
+	AvatarURL   string
+	Role        []string
+	IsOnboarded bool
+	Emails      []string
+}
+
+func userDetailFromRow(row UserWithEmails) UserDetail {
+	return UserDetail{
+		ID:          row.ID,
+		Name:        row.Name.String,
+		Username:    row.Username.String,
+		AvatarURL:   row.AvatarUrl.String,
+		Role:        row.Role,
+		IsOnboarded: row.IsOnboarded,
+		Emails:      ConvertEmailsToSlice(row.Emails),
+	}
+}
+
+// ToJWTUser converts UserDetail to the sqlc User model expected by JWT issuance.
+func (d UserDetail) ToJWTUser() User {
+	return User{
+		ID: d.ID,
+		Name: pgtype.Text{
+			String: d.Name,
+			Valid:  d.Name != "",
+		},
+		Username: pgtype.Text{
+			String: d.Username,
+			Valid:  d.Username != "",
+		},
+		AvatarUrl: pgtype.Text{
+			String: d.AvatarURL,
+			Valid:  d.AvatarURL != "",
+		},
+		Role: d.Role,
+	}
+}
+
 type OrgMemberWriter interface {
 	AddMemberWithRole(
 		ctx context.Context,
@@ -123,18 +166,18 @@ func (s *Service) withTransaction(ctx context.Context, fn func(*Queries) error) 
 	})
 }
 
-func (s *Service) Get(ctx context.Context, id uuid.UUID) (UserWithEmails, error) {
+func (s *Service) Get(ctx context.Context, id uuid.UUID) (UserDetail, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	user, err := s.queries.Get(traceCtx, id)
+	row, err := s.queries.Get(traceCtx, id)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get user by id")
 		span.RecordError(err)
-		return UserWithEmails{}, err
+		return UserDetail{}, err
 	}
-	return user, nil
+	return userDetailFromRow(row), nil
 }
 
 func resolveAvatarURL(name, avatarURL string) string {
@@ -171,9 +214,8 @@ func (s *Service) FindOrCreate(ctx context.Context, params FindOrCreateParams) (
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	existingUserID, found, err := s.GetByOAuthProvider(traceCtx, params.OAuthProvider, params.OAuthProviderID)
+	existingUserID, found, err := s.getByOAuthProvider(traceCtx, params.OAuthProvider, params.OAuthProviderID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check user existence by auth")
 		span.RecordError(err)
 		return FindOrCreateResult{}, err
 	}
@@ -185,7 +227,6 @@ func (s *Service) FindOrCreate(ctx context.Context, params FindOrCreateParams) (
 	if params.Email != "" {
 		outcome, result, err := s.resolveOAuthByEmail(traceCtx, params)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "check user existence by email")
 			span.RecordError(err)
 			return FindOrCreateResult{}, err
 		}
@@ -203,7 +244,6 @@ func (s *Service) FindOrCreate(ctx context.Context, params FindOrCreateParams) (
 
 	result, createdNew, err := s.createWithAuth(traceCtx, params)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "create oauth user")
 		span.RecordError(err)
 		return FindOrCreateResult{}, err
 	}
@@ -399,16 +439,27 @@ func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email strin
 	err := s.withTransaction(traceCtx, func(qtx *Queries) error {
 		_, err := qtx.GetIDByEmailForUpdate(traceCtx, email)
 		if err == nil {
-			return validateEmailOwner(traceCtx, qtx, email, userID)
+			ownerErr := validateEmailOwner(traceCtx, qtx, email, userID)
+			if ownerErr != nil {
+				if errors.Is(ownerErr, internal.ErrEmailConflict) {
+					return ownerErr
+				}
+				return databaseutil.WrapDBError(ownerErr, logger, "validate email owner")
+			}
+			return nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
-			return err
+			return databaseutil.WrapDBError(err, logger, "lock email for create")
 		}
 
-		return qtx.UpsertEmail(traceCtx, UpsertEmailParams{
+		err = qtx.UpsertEmail(traceCtx, UpsertEmailParams{
 			UserID: userID,
 			Email:  email,
 		})
+		if err != nil {
+			return databaseutil.WrapDBError(err, logger, "upsert email")
+		}
+		return nil
 	})
 	if err != nil {
 		if errors.Is(err, internal.ErrEmailConflict) {
@@ -424,8 +475,6 @@ func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email strin
 			zap.String("user_id", userID.String()),
 			zap.String("email", email),
 			zap.Error(err))
-
-		err = databaseutil.WrapDBError(err, logger, "create email")
 		span.RecordError(err)
 		return err
 	}
@@ -466,7 +515,6 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 
 	userEmails, err := s.GetEmails(traceCtx, id)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get user emails by id")
 		span.RecordError(err)
 		return User{}, err
 	}
@@ -556,7 +604,6 @@ func (s *Service) createForEmail(ctx context.Context, email string, roles []stri
 			span.RecordError(err)
 			return uuid.UUID{}, err
 		}
-		err = databaseutil.WrapDBError(err, logger, "create user for email")
 		span.RecordError(err)
 
 		return uuid.UUID{}, err

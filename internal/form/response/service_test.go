@@ -16,10 +16,10 @@ import (
 )
 
 type stubUserStore struct {
-	getFn func(context.Context, uuid.UUID) (user.UserWithEmails, error)
+	getFn func(context.Context, uuid.UUID) (user.UserDetail, error)
 }
 
-func (s stubUserStore) Get(ctx context.Context, id uuid.UUID) (user.UserWithEmails, error) {
+func (s stubUserStore) Get(ctx context.Context, id uuid.UUID) (user.UserDetail, error) {
 	return s.getFn(ctx, id)
 }
 
@@ -30,8 +30,8 @@ func TestListBySubmittedBy_missingUser(t *testing.T) {
 		logger: zap.NewNop(),
 		tracer: otel.Tracer("response/service_test"),
 		userStore: stubUserStore{
-			getFn: func(context.Context, uuid.UUID) (user.UserWithEmails, error) {
-				return user.UserWithEmails{}, fmt.Errorf("%w", handlerutil.ErrNotFound)
+			getFn: func(context.Context, uuid.UUID) (user.UserDetail, error) {
+				return user.UserDetail{}, fmt.Errorf("%w", handlerutil.ErrNotFound)
 			},
 		},
 	}
@@ -47,8 +47,8 @@ func TestListByFormIDAndSubmittedBy_missingUser(t *testing.T) {
 		logger: zap.NewNop(),
 		tracer: otel.Tracer("response/service_test"),
 		userStore: stubUserStore{
-			getFn: func(context.Context, uuid.UUID) (user.UserWithEmails, error) {
-				return user.UserWithEmails{}, fmt.Errorf("%w", handlerutil.ErrNotFound)
+			getFn: func(context.Context, uuid.UUID) (user.UserDetail, error) {
+				return user.UserDetail{}, fmt.Errorf("%w", handlerutil.ErrNotFound)
 			},
 		},
 	}

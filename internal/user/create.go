@@ -6,6 +6,8 @@ import (
 
 	"NYCU-SDC/core-system-backend/internal"
 
+	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -17,9 +19,14 @@ func (s *Service) linkEmailTx(ctx context.Context, qtx *Queries, userID uuid.UUI
 		return nil
 	}
 
+	logger := logutil.WithContext(ctx, s.logger)
+
 	err := qtx.validateEmailFree(ctx, email)
 	if err != nil {
-		return err
+		if errors.Is(err, internal.ErrEmailConflict) {
+			return err
+		}
+		return databaseutil.WrapDBError(err, logger, "validate email availability")
 	}
 
 	err = qtx.UpsertEmail(ctx, UpsertEmailParams{
@@ -27,10 +34,18 @@ func (s *Service) linkEmailTx(ctx context.Context, qtx *Queries, userID uuid.UUI
 		Email:  email,
 	})
 	if err != nil {
-		return err
+		return databaseutil.WrapDBError(err, logger, "upsert email")
 	}
 
-	return validateEmailOwner(ctx, qtx, email, userID)
+	err = validateEmailOwner(ctx, qtx, email, userID)
+	if err != nil {
+		if errors.Is(err, internal.ErrEmailConflict) {
+			return err
+		}
+		return databaseutil.WrapDBError(err, logger, "validate email owner")
+	}
+
+	return nil
 }
 
 // createEmailOnlyTx creates an email-only user (no auth row) and links email within a transaction.
@@ -41,6 +56,7 @@ func (s *Service) createEmailOnlyTx(
 	roles []string,
 	userID *uuid.UUID,
 ) (uuid.UUID, error) {
+	logger := logutil.WithContext(ctx, s.logger)
 	var newUserID uuid.UUID
 
 	if userID != nil {
@@ -53,7 +69,7 @@ func (s *Service) createEmailOnlyTx(
 			IsOnboarded: false,
 		})
 		if err != nil {
-			return uuid.UUID{}, err
+			return uuid.UUID{}, databaseutil.WrapDBError(err, logger, "create user with id")
 		}
 
 		newUserID = newUser.ID
@@ -66,7 +82,7 @@ func (s *Service) createEmailOnlyTx(
 			IsOnboarded: false,
 		})
 		if err != nil {
-			return uuid.UUID{}, err
+			return uuid.UUID{}, databaseutil.WrapDBError(err, logger, "create user")
 		}
 
 		newUserID = newUser.ID
@@ -92,13 +108,15 @@ type createOAuthParams struct {
 
 // createOAuthTx creates the user, email link, and auth row inside the caller's transaction.
 func (s *Service) createOAuthTx(ctx context.Context, qtx *Queries, params createOAuthParams) (uuid.UUID, error) {
+	logger := logutil.WithContext(ctx, s.logger)
+
 	newUser, err := qtx.Create(ctx, CreateParams{
 		Name:      pgtype.Text{String: params.Name, Valid: params.Name != ""},
 		AvatarUrl: pgtype.Text{String: params.AvatarPlaceholder, Valid: true},
 		Role:      params.Roles,
 	})
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.UUID{}, databaseutil.WrapDBError(err, logger, "create oauth user")
 	}
 
 	err = s.linkEmailTx(ctx, qtx, newUser.ID, params.Email)
@@ -112,7 +130,7 @@ func (s *Service) createOAuthTx(ctx context.Context, qtx *Queries, params create
 		ProviderID: params.OAuthProviderID,
 	})
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.UUID{}, databaseutil.WrapDBError(err, logger, "create oauth auth")
 	}
 
 	return newUser.ID, nil
@@ -136,6 +154,7 @@ func (s *Service) createWithEmailOnly(
 	roles []string,
 	userID *uuid.UUID,
 ) (uuid.UUID, error) {
+	logger := logutil.WithContext(ctx, s.logger)
 	var newUserID uuid.UUID
 	err := s.withTransaction(ctx, func(qtx *Queries) error {
 		if userID != nil {
@@ -144,7 +163,7 @@ func (s *Service) createWithEmailOnly(
 				return internal.ErrUserIDAlreadyExists
 			}
 			if !errors.Is(err, pgx.ErrNoRows) {
-				return err
+				return databaseutil.WrapDBError(err, logger, "check user id exists")
 			}
 		}
 

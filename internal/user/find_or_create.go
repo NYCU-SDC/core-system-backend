@@ -27,6 +27,8 @@ const (
 
 // getByOAuthProvider returns the user ID for an existing (provider, providerID) auth row.
 func (s *Service) getByOAuthProvider(ctx context.Context, provider, providerID string) (uuid.UUID, bool, error) {
+	logger := logutil.WithContext(ctx, s.logger)
+
 	userID, err := s.queries.GetIDByAuth(ctx, GetIDByAuthParams{
 		Provider:   provider,
 		ProviderID: providerID,
@@ -35,7 +37,7 @@ func (s *Service) getByOAuthProvider(ctx context.Context, provider, providerID s
 		return uuid.UUID{}, false, nil
 	}
 	if err != nil {
-		return uuid.UUID{}, false, err
+		return uuid.UUID{}, false, databaseutil.WrapDBError(err, logger, "get user id by auth")
 	}
 
 	return userID, true, nil
@@ -69,16 +71,12 @@ func (s *Service) resolveOAuthByEmail(
 			return nil
 		}
 		if err != nil {
-			return err
+			return databaseutil.WrapDBError(err, logger, "lock email for oauth resolution")
 		}
 
 		existingUser, err := qtx.GetWithEarliestProviderByEmail(ctx, params.Email)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				outcome = emailNotFound
-				return nil
-			}
-			return err
+			return databaseutil.WrapDBError(err, logger, "get user with earliest provider by email")
 		}
 
 		if existingUser.Provider.Valid {
@@ -91,7 +89,7 @@ func (s *Service) resolveOAuthByEmail(
 
 			emails, emailErr := qtx.GetEmails(ctx, existingUser.ID)
 			if emailErr != nil {
-				return emailErr
+				return databaseutil.WrapDBError(emailErr, logger, "get emails for multi-provider check")
 			}
 
 			// Single-email accounts require binding confirmation before linking a second
@@ -151,8 +149,7 @@ func (s *Service) resolveOAuthByEmail(
 		return nil
 	})
 	if err != nil {
-		wrapped := databaseutil.WrapDBError(err, logger, "check user existence by email")
-		recovery, ok := s.recoverOAuthCreateConflict(ctx, wrapped, params.OAuthProvider, params.OAuthProviderID, params.Email)
+		recovery, ok := s.recoverOAuthCreateConflict(ctx, err, params.OAuthProvider, params.OAuthProviderID, params.Email)
 		if ok {
 			switch recovery.kind {
 			case oauthCreateConflictViaAuth:
@@ -173,7 +170,7 @@ func (s *Service) resolveOAuthByEmail(
 			}
 		}
 
-		return 0, FindOrCreateResult{}, wrapped
+		return 0, FindOrCreateResult{}, err
 	}
 
 	return outcome, result, nil
@@ -181,13 +178,15 @@ func (s *Service) resolveOAuthByEmail(
 
 // bindingResultIfEmailHasAuth returns binding details when the email is already tied to another OAuth provider.
 func (s *Service) bindingResultIfEmailHasAuth(ctx context.Context, email string) (FindOrCreateResult, bool, error) {
+	logger := logutil.WithContext(ctx, s.logger)
+
 	row, err := s.queries.GetWithEarliestProviderByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return FindOrCreateResult{}, false, nil
 		}
 
-		return FindOrCreateResult{}, false, err
+		return FindOrCreateResult{}, false, databaseutil.WrapDBError(err, logger, "get user with earliest provider by email")
 	}
 	if !row.Provider.Valid {
 		return FindOrCreateResult{}, false, nil

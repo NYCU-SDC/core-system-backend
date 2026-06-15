@@ -86,11 +86,11 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 
 	meResponse := MeResponse{
 		ID:                user.ID.String(),
-		Username:          user.Username.String,
-		Name:              user.Name.String,
-		AvatarUrl:         user.AvatarUrl.String,
+		Username:          user.Username,
+		Name:              user.Name,
+		AvatarUrl:         user.AvatarURL,
 		Role:              ConvertRoleToString(user.Role),
-		Emails:            ConvertEmailsToSlice(user.Emails),
+		Emails:            user.Emails,
 		RequireOnboarding: false,
 	}
 
@@ -132,11 +132,11 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 
 	meResponse := MeResponse{
 		ID:                user.ID.String(),
-		Username:          user.Username.String,
-		Name:              user.Name.String,
-		AvatarUrl:         user.AvatarUrl.String,
+		Username:          user.Username,
+		Name:              user.Name,
+		AvatarUrl:         user.AvatarURL,
 		Role:              ConvertRoleToString(user.Role),
-		Emails:            ConvertEmailsToSlice(user.Emails),
+		Emails:            user.Emails,
 		RequireOnboarding: false,
 	}
 
