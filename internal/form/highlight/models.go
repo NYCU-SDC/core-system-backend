@@ -646,6 +646,16 @@ type UsersWithEmail struct {
 	Emails      interface{}
 }
 
+type View struct {
+	ID        uuid.UUID
+	FormID    uuid.UUID
+	Title     string
+	Locked    bool
+	Order     int32
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type WorkflowVersion struct {
 	ID         uuid.UUID
 	FormID     uuid.UUID

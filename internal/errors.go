@@ -55,6 +55,9 @@ var (
 	ErrInvalidJWTToken         = errors.New("invalid JWT token")
 	ErrInvalidAuthUser         = errors.New("invalid authenticated user")
 
+	// Database Errors
+	ErrDBTransactionNotSupported = errors.New("database connection does not support transactions")
+
 	// User Errors
 	ErrUserNotFound         = errors.New("user not found")
 	ErrNoUserInContext      = errors.New("no user found in request context")
@@ -112,6 +115,11 @@ var (
 	ErrValidationFailed           = errors.New("validation failed")
 	ErrInvalidSourceIDWithChoices = errors.New("cannot specify both source_id and choices")
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
+
+	// View Errors
+	ErrViewNotFound      = errors.New("view not found")
+	ErrViewLocked        = errors.New("view is locked and cannot be deleted")
+	ErrViewNameDuplicate = errors.New("view name is already in use")
 
 	// Response Errors
 	ErrResponseNotFound       = errors.New("response not found")
@@ -321,6 +329,19 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewBadRequestProblem("cannot specify both source_id and choices")
 	case errors.Is(err, ErrInvalidSourceIDForType):
 		return problem.NewBadRequestProblem("source_id is not supported for this question type")
+
+	// View Errors
+	case errors.Is(err, ErrViewNotFound):
+		return problem.NewNotFoundProblem("view not found")
+	case errors.Is(err, ErrViewLocked):
+		return problem.Problem{
+			Title:  "Conflict",
+			Status: 409,
+			Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409",
+			Detail: "view is locked and cannot be deleted",
+		}
+	case errors.Is(err, ErrViewNameDuplicate):
+		return problem.NewBadRequestProblem("view name is already in use")
 
 	// Response Errors
 	case errors.Is(err, ErrResponseNotFound):
