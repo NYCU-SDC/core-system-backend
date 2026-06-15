@@ -131,7 +131,6 @@ func (o OAuthConnect) MatchesPattern(rawValue json.RawMessage, pattern string) (
 	if err != nil {
 		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
-
 	return match, nil
 }
 

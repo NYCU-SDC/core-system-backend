@@ -351,7 +351,6 @@ func (d Date) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, er
 	if err != nil {
 		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
-
 	return match, nil
 }
 

@@ -1,6 +1,7 @@
 package publish
 
 import (
+	"context"
 	"net/http"
 
 	"NYCU-SDC/core-system-backend/internal"
@@ -30,26 +31,30 @@ type Response struct {
 	Visibility string `json:"visibility"`
 }
 
+type Store interface {
+	PublishForm(ctx context.Context, formID uuid.UUID, editor uuid.UUID) (form.Visibility, error)
+}
+
 type Handler struct {
 	logger        *zap.Logger
 	tracer        trace.Tracer
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
-	service       *Service
+	store         Store
 }
 
 func NewHandler(
 	logger *zap.Logger,
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
-	service *Service,
+	store Store,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
 		tracer:        otel.Tracer("publish/handler"),
 		validator:     validator,
 		problemWriter: problemWriter,
-		service:       service,
+		store:         store,
 	}
 }
 
@@ -71,7 +76,7 @@ func (h *Handler) PublishForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	visibility, err := h.service.PublishForm(ctx, formID, currentUser.ID)
+	visibility, err := h.store.PublishForm(ctx, formID, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(ctx, w, err, logger)
 		return

@@ -2,6 +2,7 @@ package user
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"context"
 	"net/http"
 	"strings"
 
@@ -67,11 +68,16 @@ type OnboardingRequest struct {
 	Name     string `json:"name" validate:"required,max=15"`
 }
 
+type Store interface {
+	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
+	Onboarding(ctx context.Context, id uuid.UUID, name, username string) (User, error)
+}
+
 type Handler struct {
 	logger        *zap.Logger
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
-	service       *Service
+	store         Store
 	tracer        trace.Tracer
 }
 
@@ -79,13 +85,13 @@ func NewHandler(
 	logger *zap.Logger,
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
-	service *Service,
+	store Store,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
 		validator:     validator,
 		problemWriter: problemWriter,
-		service:       service,
+		store:         store,
 		tracer:        otel.Tracer("user/handler"),
 	}
 }
@@ -110,7 +116,7 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user emails
-	emails, err := h.service.GetEmails(traceCtx, currentUser.ID)
+	emails, err := h.store.GetEmails(traceCtx, currentUser.ID)
 	if err != nil {
 		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", currentUser.ID.String()))
 		emails = []string{}
@@ -149,7 +155,7 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Onboarding
-	newUser, err := h.service.Onboarding(traceCtx, currentUser.ID, req.Name, req.Username)
+	newUser, err := h.store.Onboarding(traceCtx, currentUser.ID, req.Name, req.Username)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -162,7 +168,7 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get user emails
-	emails, err := h.service.GetEmails(traceCtx, newUser.ID)
+	emails, err := h.store.GetEmails(traceCtx, newUser.ID)
 	if err != nil {
 		logger.Warn("Failed to get user emails", zap.Error(err), zap.String("user_id", newUser.ID.String()))
 		emails = []string{}

@@ -94,17 +94,12 @@ func (s ShortText) DisplayValue(rawValue json.RawMessage) (string, error) {
 }
 
 func (s ShortText) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
-	answer, err := s.DecodeStorage(rawValue)
+	display, err := s.DisplayValue(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
+		return false, err
 	}
 
-	shortTextAnswer, ok := answer.(shared.ShortTextAnswer)
-	if !ok {
-		return false, fmt.Errorf("%w: expected shared.ShortTextAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
-	}
-
-	match, err := matchPattern(shortTextAnswer.Value, pattern)
+	match, err := matchPattern(display, pattern)
 	if err != nil {
 		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
@@ -301,17 +296,12 @@ func (h Hyperlink) DisplayValue(rawValue json.RawMessage) (string, error) {
 }
 
 func (h Hyperlink) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
-	answer, err := h.DecodeStorage(rawValue)
+	display, err := h.DisplayValue(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
+		return false, err
 	}
 
-	hyperlinkAnswer, ok := answer.(shared.HyperlinkAnswer)
-	if !ok {
-		return false, fmt.Errorf("%w: expected shared.HyperlinkAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
-	}
-
-	match, err := matchPattern(hyperlinkAnswer.Value, pattern)
+	match, err := matchPattern(display, pattern)
 	if err != nil {
 		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}

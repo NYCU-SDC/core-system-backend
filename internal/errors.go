@@ -55,6 +55,9 @@ var (
 	ErrInvalidJWTToken         = errors.New("invalid JWT token")
 	ErrInvalidAuthUser         = errors.New("invalid authenticated user")
 
+	// Database Errors
+	ErrDBTransactionNotSupported = errors.New("database connection does not support transactions")
+
 	// User Errors
 	ErrUserNotFound         = errors.New("user not found")
 	ErrNoUserInContext      = errors.New("no user found in request context")
@@ -106,6 +109,9 @@ var (
 	ErrSectionNotFound                  = errors.New("section not found")
 	ErrQuestionRequired                 = errors.New("question is required but not answered")
 	ErrQuestionTypeMismatch             = errors.New("question type does not match the expected type")
+	ErrHighlightQuestionType            = errors.New("question type cannot be used for highlight")
+	ErrHighlightQuestionNotInForm       = errors.New("highlight question does not belong to form")
+	ErrHighlightNotFound                = errors.New("form highlight not found")
 	ErrValidationFailed                 = errors.New("validation failed")
 	ErrInvalidSourceIDWithChoices       = errors.New("cannot specify both source_id and choices")
 	ErrInvalidSourceIDForType           = errors.New("source_id is not supported for this question type")
@@ -114,11 +120,17 @@ var (
 	ErrQuestionAnswerDisplayValueFailed = errors.New("failed to get display value for question answer")
 	ErrQuestionAnswerPatternMatchFailed = errors.New("failed to match pattern for question answer")
 
+	// View Errors
+	ErrViewNotFound      = errors.New("view not found")
+	ErrViewLocked        = errors.New("view is locked and cannot be deleted")
+	ErrViewNameDuplicate = errors.New("view name is already in use")
+
 	// Response Errors
 	ErrResponseNotFound       = errors.New("response not found")
 	ErrResponseAlreadyExists  = errors.New("user already has a response for this form")
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 	ErrResponseNotOwned       = errors.New("response does not belong to the current user")
+	ErrResponseEditNotAllowed = errors.New("response is not allowed to be edited")
 
 	// Answer / Workflow: cannot answer questions in a section skipped by workflow
 	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
@@ -312,10 +324,29 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("question is required but not answered")
 	case errors.Is(err, ErrQuestionTypeMismatch):
 		return problem.NewValidateProblem("question type does not match the expected type")
+	case errors.Is(err, ErrHighlightQuestionType):
+		return problem.NewValidateProblem("question type cannot be used for highlight")
+	case errors.Is(err, ErrHighlightQuestionNotInForm):
+		return problem.NewNotFoundProblem("highlight question not found")
+	case errors.Is(err, ErrHighlightNotFound):
+		return problem.NewNotFoundProblem("form highlight not found")
 	case errors.Is(err, ErrInvalidSourceIDWithChoices):
 		return problem.NewBadRequestProblem("cannot specify both source_id and choices")
 	case errors.Is(err, ErrInvalidSourceIDForType):
 		return problem.NewBadRequestProblem("source_id is not supported for this question type")
+
+	// View Errors
+	case errors.Is(err, ErrViewNotFound):
+		return problem.NewNotFoundProblem("view not found")
+	case errors.Is(err, ErrViewLocked):
+		return problem.Problem{
+			Title:  "Conflict",
+			Status: 409,
+			Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409",
+			Detail: "view is locked and cannot be deleted",
+		}
+	case errors.Is(err, ErrViewNameDuplicate):
+		return problem.NewBadRequestProblem("view name is already in use")
 
 	// Response Errors
 	case errors.Is(err, ErrResponseNotFound):
@@ -324,6 +355,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("user already has a response for this form")
 	case errors.Is(err, ErrResponseNotOwned):
 		return problem.NewForbiddenProblem("response does not belong to the current user")
+	case errors.Is(err, ErrResponseEditNotAllowed):
+		return problem.NewForbiddenProblem("response is not allowed to be edited")
 
 	// Submit Errors
 	case errors.Is(err, ErrResponseNotComplete{}):

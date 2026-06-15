@@ -24,6 +24,11 @@ type DBTX interface {
 	QueryRow(context.Context, string, ...interface{}) pgx.Row
 }
 
+// TxBeginner can start a new database transaction (e.g. *pgxpool.Pool).
+type TxBeginner interface {
+	BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error)
+}
+
 func ParseUUID(value string) (uuid.UUID, error) {
 	parsedUUID, err := uuid.Parse(value)
 	if err != nil {

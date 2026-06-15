@@ -33,6 +33,7 @@ type formFields struct {
 	dressingHeaderFont     pgtype.Text
 	dressingQuestionFont   pgtype.Text
 	dressingTextFont       pgtype.Text
+	allowEditResponse      bool
 }
 
 func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore, request Request) (formFields, error) {
@@ -78,6 +79,7 @@ func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore
 	form.messageAfterSubmission = request.MessageAfterSubmission
 	form.visibility = visibilityFromAPIFormat(request.Visibility)
 	form.title = request.Title
+	form.allowEditResponse = request.AllowEditResponse
 
 	return form, nil
 }
