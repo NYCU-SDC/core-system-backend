@@ -46,10 +46,6 @@ type Querier interface {
 	WithTx(tx pgx.Tx) *Queries
 }
 
-type TxBeginner interface {
-	BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error)
-}
-
 type Service struct {
 	db          DBTX
 	logger      *zap.Logger
@@ -94,6 +90,12 @@ func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 		tracer:      otel.Tracer("unit/service"),
 		tenantStore: tenantStore,
 	}
+}
+
+func (s *Service) withTransaction(ctx context.Context, fn func(*Queries) error) error {
+	return internal.WithTransaction(ctx, s.db, s.logger, func(tx pgx.Tx) error {
+		return fn(s.queries.WithTx(tx))
+	})
 }
 
 func (s *Service) CreateOrganizationWithUserID(ctx context.Context, name string, description string, slug string, userID uuid.UUID, metadata []byte) (Unit, error) {
@@ -574,106 +576,64 @@ func (s *Service) UpdateUnitMemberRole(
 
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	var (
-		tx         pgx.Tx
-		err        error
-		needCommit bool
-	)
-
-	existingTx, ok := s.db.(pgx.Tx)
-	if ok {
-		// reuse
-		tx = existingTx
-	} else {
-		// build tx
-		beginner, ok := s.db.(TxBeginner)
-		if !ok {
-			return fmt.Errorf("db does not support transactions")
-		}
-
-		tx, err = beginner.BeginTx(traceCtx, pgx.TxOptions{})
+	return s.withTransaction(traceCtx, func(qtx *Queries) error {
+		// lock admins
+		_, err := qtx.LockAdminsForUnit(traceCtx, unitID)
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "begin tx")
+			err = databaseutil.WrapDBError(err, logger, "lock admin rows")
 			span.RecordError(err)
 			return err
 		}
 
-		needCommit = true
-
-		defer func() {
-			err := tx.Rollback(traceCtx)
-			if err != nil &&
-				!errors.Is(err, pgx.ErrTxClosed) {
-				logger.Error("rollback failed", zap.Error(err))
-			}
-		}()
-	}
-
-	qtx := s.queries.WithTx(tx)
-
-	// lock admins
-	_, err = qtx.LockAdminsForUnit(traceCtx, unitID)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "lock admin rows")
-		span.RecordError(err)
-		return err
-	}
-
-	currentRole, err := qtx.GetMemberRole(traceCtx, GetMemberRoleParams{
-		UnitID:   unitID,
-		MemberID: memberID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			span.RecordError(internal.ErrNotFound)
-			return internal.ErrNotFound
-		}
-		err = databaseutil.WrapDBError(err, logger, "get member role")
-		span.RecordError(err)
-		return err
-	}
-
-	if currentRole == newRole {
-		if needCommit {
-			return tx.Commit(traceCtx)
-		}
-		return nil
-	}
-
-	if currentRole == UnitRoleAdmin && newRole != UnitRoleAdmin {
-		count, err := qtx.CountMembersByRole(traceCtx, CountMembersByRoleParams{
-			UnitID: unitID,
-			Role:   UnitRoleAdmin,
+		currentRole, err := qtx.GetMemberRole(traceCtx, GetMemberRoleParams{
+			UnitID:   unitID,
+			MemberID: memberID,
 		})
 		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "count admin")
+			if errors.Is(err, pgx.ErrNoRows) {
+				span.RecordError(internal.ErrNotFound)
+				return internal.ErrNotFound
+			}
+			err = databaseutil.WrapDBError(err, logger, "get member role")
 			span.RecordError(err)
 			return err
 		}
 
-		if count <= 1 {
-			logger.Error("cannot remove last admin")
-			span.RecordError(internal.ErrCannotRemoveLastAdmin)
-			return internal.ErrCannotRemoveLastAdmin
+		if currentRole == newRole {
+			return nil
 		}
-	}
 
-	err = qtx.UpdateMemberRole(traceCtx, UpdateMemberRoleParams{
-		UnitID:   unitID,
-		MemberID: memberID,
-		Role:     newRole,
+		if currentRole == UnitRoleAdmin && newRole != UnitRoleAdmin {
+			count, err := qtx.CountMembersByRole(traceCtx, CountMembersByRoleParams{
+				UnitID: unitID,
+				Role:   UnitRoleAdmin,
+			})
+			if err != nil {
+				err = databaseutil.WrapDBError(err, logger, "count admin")
+				span.RecordError(err)
+				return err
+			}
+
+			if count <= 1 {
+				logger.Error("cannot remove last admin")
+				span.RecordError(internal.ErrCannotRemoveLastAdmin)
+				return internal.ErrCannotRemoveLastAdmin
+			}
+		}
+
+		err = qtx.UpdateMemberRole(traceCtx, UpdateMemberRoleParams{
+			UnitID:   unitID,
+			MemberID: memberID,
+			Role:     newRole,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "update member role")
+			span.RecordError(err)
+			return err
+		}
+
+		return nil
 	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "update member role")
-		span.RecordError(err)
-		return err
-	}
-
-	if needCommit {
-		return tx.Commit(traceCtx)
-	}
-
-	return nil
 }
 
 func (s *Service) SlugExists(ctx context.Context, slug string) (bool, error) {

@@ -55,6 +55,9 @@ var (
 	ErrInvalidJWTToken         = errors.New("invalid JWT token")
 	ErrInvalidAuthUser         = errors.New("invalid authenticated user")
 
+	// Database Errors
+	ErrDBTransactionNotSupported = errors.New("database connection does not support transactions")
+
 	// User Errors
 	ErrUserNotFound         = errors.New("user not found")
 	ErrNoUserInContext      = errors.New("no user found in request context")

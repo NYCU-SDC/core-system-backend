@@ -121,7 +121,16 @@ func (o OAuthConnect) DisplayValue(rawValue json.RawMessage) (string, error) {
 }
 
 func (o OAuthConnect) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
-	return false, errors.New("MatchesPattern is not supported for oauth_connect question type")
+	display, err := o.DisplayValue(rawValue)
+	if err != nil {
+		return false, err
+	}
+
+	match, err := matchPattern(display, pattern)
+	if err != nil {
+		return false, fmt.Errorf("failed to match pattern for oauth_connect answer: %w", err)
+	}
+	return match, nil
 }
 
 func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
