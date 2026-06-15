@@ -113,11 +113,17 @@ var (
 	ErrInvalidSourceIDWithChoices = errors.New("cannot specify both source_id and choices")
 	ErrInvalidSourceIDForType     = errors.New("source_id is not supported for this question type")
 
+	// View Errors
+	ErrViewNotFound      = errors.New("view not found")
+	ErrViewLocked        = errors.New("view is locked and cannot be deleted")
+	ErrViewNameDuplicate = errors.New("view name is already in use")
+
 	// Response Errors
 	ErrResponseNotFound       = errors.New("response not found")
 	ErrResponseAlreadyExists  = errors.New("user already has a response for this form")
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 	ErrResponseNotOwned       = errors.New("response does not belong to the current user")
+	ErrResponseEditNotAllowed = errors.New("response is not allowed to be edited")
 
 	// Answer / Workflow: cannot answer questions in a section skipped by workflow
 	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
@@ -315,6 +321,19 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrInvalidSourceIDForType):
 		return problem.NewBadRequestProblem("source_id is not supported for this question type")
 
+	// View Errors
+	case errors.Is(err, ErrViewNotFound):
+		return problem.NewNotFoundProblem("view not found")
+	case errors.Is(err, ErrViewLocked):
+		return problem.Problem{
+			Title:  "Conflict",
+			Status: 409,
+			Type:   "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409",
+			Detail: "view is locked and cannot be deleted",
+		}
+	case errors.Is(err, ErrViewNameDuplicate):
+		return problem.NewBadRequestProblem("view name is already in use")
+
 	// Response Errors
 	case errors.Is(err, ErrResponseNotFound):
 		return problem.NewNotFoundProblem("response not found")
@@ -322,6 +341,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("user already has a response for this form")
 	case errors.Is(err, ErrResponseNotOwned):
 		return problem.NewForbiddenProblem("response does not belong to the current user")
+	case errors.Is(err, ErrResponseEditNotAllowed):
+		return problem.NewForbiddenProblem("response is not allowed to be edited")
 
 	// Submit Errors
 	case errors.Is(err, ErrResponseNotComplete{}):

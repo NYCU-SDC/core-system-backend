@@ -99,6 +99,27 @@ func (q *Queries) Get(ctx context.Context, arg GetParams) (FormResponse, error) 
 	return i, err
 }
 
+const getEditInfo = `-- name: GetEditInfo :one
+SELECT
+    r.progress,
+    f.allow_edit_response
+FROM form_responses r
+         JOIN forms f ON f.id = r.form_id
+WHERE r.id = $1
+`
+
+type GetEditInfoRow struct {
+	Progress          ResponseProgress
+	AllowEditResponse bool
+}
+
+func (q *Queries) GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error) {
+	row := q.db.QueryRow(ctx, getEditInfo, id)
+	var i GetEditInfoRow
+	err := row.Scan(&i.Progress, &i.AllowEditResponse)
+	return i, err
+}
+
 const getFormID = `-- name: GetFormID :one
 SELECT form_id FROM form_responses
 WHERE id = $1

@@ -46,6 +46,13 @@ type ResourceHandler interface {
 	RemoveFileReference(ctx context.Context, fileID uuid.UUID, resourceID uuid.UUID) error
 }
 
+// TxResourceHandler is implemented by handlers that can run RemoveFileReference
+// on the same pgx.Tx as file.Service transactional operations.
+type TxResourceHandler interface {
+	ResourceHandler
+	WithTx(tx pgx.Tx) (ResourceHandler, error)
+}
+
 type Service struct {
 	logger           *zap.Logger
 	db               DBTX
@@ -85,9 +92,9 @@ func (s *Service) WithTx(tx pgx.Tx) *Service {
 // withTransaction runs fn inside a pgx transaction. If s.db is already a pgx.Tx, fn
 // runs on that transaction without begin/commit/rollback. Otherwise s.db must
 // implement TxBeginner.
-func (s *Service) withTransaction(ctx context.Context, fn func(*Queries) error) error {
+func (s *Service) withTransaction(ctx context.Context, fn func(tx pgx.Tx, qtx *Queries) error) error {
 	return internal.WithTransaction(ctx, s.db, s.logger, func(tx pgx.Tx) error {
-		return fn(s.queries.WithTx(tx))
+		return fn(tx, s.queries.WithTx(tx))
 	})
 }
 
@@ -163,7 +170,7 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 
 	var attachment FileAttachment
 	var existingRecord bool
-	err := s.withTransaction(traceCtx, func(qtx *Queries) error {
+	err := s.withTransaction(traceCtx, func(_ pgx.Tx, qtx *Queries) error {
 		_, err := qtx.LockFile(traceCtx, fileID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -368,7 +375,7 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	var attachmentCount int
-	err := s.withTransaction(traceCtx, func(qtx *Queries) error {
+	err := s.withTransaction(traceCtx, func(tx pgx.Tx, qtx *Queries) error {
 		_, err := qtx.LockFile(traceCtx, fileID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -394,8 +401,24 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 				span.RecordError(err)
 				return err
 			}
+			txHandler, ok := handler.(TxResourceHandler)
+			if ok {
+				var err error
+				handler, err = txHandler.WithTx(tx)
+				if err != nil {
+					err = fmt.Errorf(
+						"bind tx for resource type %s resource id %s: %w",
+						att.ResourceType,
+						att.ResourceID.String(),
+						err,
+					)
+					span.RecordError(err)
+					return err
+				}
+			}
 
-			if err := handler.RemoveFileReference(traceCtx, fileID, att.ResourceID); err != nil {
+			err := handler.RemoveFileReference(traceCtx, fileID, att.ResourceID)
+			if err != nil {
 				err = fmt.Errorf(
 					"remove file reference from resource type %s resource id %s: %w",
 					att.ResourceType,
@@ -406,7 +429,7 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 				return err
 			}
 
-			err := qtx.DeleteAttachment(traceCtx, att.ID)
+			err = qtx.DeleteAttachment(traceCtx, att.ID)
 			if err != nil {
 				err = databaseutil.WrapDBError(err, logger, "delete attachment after removing resource reference")
 				span.RecordError(err)

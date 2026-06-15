@@ -30,14 +30,15 @@ WITH created AS (
                        dressing_color,
                        dressing_header_font,
                        dressing_question_font,
-                       dressing_text_font
+                       dressing_text_font,
+                       allow_edit_response
                        )
     VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15, $16
+        $11, $12, $13, $14, $15, $16, $17
     )
-    RETURNING id, title, description_json, description_html, preview_message, message_after_submission, status, unit_id, created_by, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font
+    RETURNING id, title, description_json, description_html, preview_message, message_after_submission, status, unit_id, created_by, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font, allow_edit_response
 ),
 workflow_created AS (
     INSERT INTO workflow_versions (form_id, last_editor, workflow)
@@ -64,7 +65,7 @@ workflow_created AS (
     ) AS node_ids
 )
 SELECT
-    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
+    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
     creator.name as creator_name,
@@ -99,6 +100,7 @@ type CreateParams struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      bool
 }
 
 type CreateRow struct {
@@ -123,6 +125,7 @@ type CreateRow struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
 	CreatorName            pgtype.Text
@@ -153,6 +156,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, erro
 		arg.DressingHeaderFont,
 		arg.DressingQuestionFont,
 		arg.DressingTextFont,
+		arg.AllowEditResponse,
 	)
 	var i CreateRow
 	err := row.Scan(
@@ -177,6 +181,7 @@ func (q *Queries) Create(ctx context.Context, arg CreateParams) (CreateRow, erro
 		&i.DressingHeaderFont,
 		&i.DressingQuestionFont,
 		&i.DressingTextFont,
+		&i.AllowEditResponse,
 		&i.UnitName,
 		&i.OrgName,
 		&i.CreatorName,
@@ -213,7 +218,7 @@ func (q *Queries) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 
 const get = `-- name: Get :one
 SELECT
-    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
+    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
     creator.name as creator_name,
@@ -254,6 +259,7 @@ type GetRow struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
 	CreatorName            pgtype.Text
@@ -291,6 +297,7 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
 		&i.DressingHeaderFont,
 		&i.DressingQuestionFont,
 		&i.DressingTextFont,
+		&i.AllowEditResponse,
 		&i.UnitName,
 		&i.OrgName,
 		&i.CreatorName,
@@ -307,7 +314,7 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
 
 const getByIDs = `-- name: GetByIDs :many
 SELECT
-    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
+    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
     creator.name as creator_name,
@@ -348,6 +355,7 @@ type GetByIDsRow struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
 	CreatorName            pgtype.Text
@@ -391,6 +399,7 @@ func (q *Queries) GetByIDs(ctx context.Context, dollar_1 []uuid.UUID) ([]GetByID
 			&i.DressingHeaderFont,
 			&i.DressingQuestionFont,
 			&i.DressingTextFont,
+			&i.AllowEditResponse,
 			&i.UnitName,
 			&i.OrgName,
 			&i.CreatorName,
@@ -491,7 +500,7 @@ func (q *Queries) GetUnitIDBySectionID(ctx context.Context, id uuid.UUID) (pgtyp
 
 const list = `-- name: List :many
 SELECT
-    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
+    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
     creator.name as creator_name,
@@ -541,6 +550,7 @@ type ListRow struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
 	CreatorName            pgtype.Text
@@ -584,6 +594,7 @@ func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
 			&i.DressingHeaderFont,
 			&i.DressingQuestionFont,
 			&i.DressingTextFont,
+			&i.AllowEditResponse,
 			&i.UnitName,
 			&i.OrgName,
 			&i.CreatorName,
@@ -607,7 +618,7 @@ func (q *Queries) List(ctx context.Context, arg ListParams) ([]ListRow, error) {
 
 const listByUnit = `-- name: ListByUnit :many
 SELECT
-    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
+    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
     creator.name as creator_name,
@@ -655,6 +666,7 @@ type ListByUnitRow struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
 	CreatorName            pgtype.Text
@@ -698,6 +710,7 @@ func (q *Queries) ListByUnit(ctx context.Context, arg ListByUnitParams) ([]ListB
 			&i.DressingHeaderFont,
 			&i.DressingQuestionFont,
 			&i.DressingTextFont,
+			&i.AllowEditResponse,
 			&i.UnitName,
 			&i.OrgName,
 			&i.CreatorName,
@@ -737,12 +750,13 @@ WITH updated AS (
         dressing_header_font = COALESCE($12::text, forms.dressing_header_font),
         dressing_question_font = COALESCE($13::text, forms.dressing_question_font),
         dressing_text_font = COALESCE($14::text, forms.dressing_text_font),
+        allow_edit_response = COALESCE($15::boolean, forms.allow_edit_response),
         updated_at = now()
-    WHERE forms.id = $15
-    RETURNING id, title, description_json, description_html, preview_message, message_after_submission, status, unit_id, created_by, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font
+    WHERE forms.id = $16
+    RETURNING id, title, description_json, description_html, preview_message, message_after_submission, status, unit_id, created_by, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font, allow_edit_response
 )
 SELECT
-    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font,
+    f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
     u.name as unit_name,
     o.name as org_name,
     creator.name as creator_name,
@@ -775,6 +789,7 @@ type PatchParams struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      pgtype.Bool
 	ID                     uuid.UUID
 }
 
@@ -800,6 +815,7 @@ type PatchRow struct {
 	DressingHeaderFont     pgtype.Text
 	DressingQuestionFont   pgtype.Text
 	DressingTextFont       pgtype.Text
+	AllowEditResponse      bool
 	UnitName               pgtype.Text
 	OrgName                pgtype.Text
 	CreatorName            pgtype.Text
@@ -828,6 +844,7 @@ func (q *Queries) Patch(ctx context.Context, arg PatchParams) (PatchRow, error) 
 		arg.DressingHeaderFont,
 		arg.DressingQuestionFont,
 		arg.DressingTextFont,
+		arg.AllowEditResponse,
 		arg.ID,
 	)
 	var i PatchRow
@@ -853,6 +870,7 @@ func (q *Queries) Patch(ctx context.Context, arg PatchParams) (PatchRow, error) 
 		&i.DressingHeaderFont,
 		&i.DressingQuestionFont,
 		&i.DressingTextFont,
+		&i.AllowEditResponse,
 		&i.UnitName,
 		&i.OrgName,
 		&i.CreatorName,
@@ -871,7 +889,7 @@ const setStatus = `-- name: SetStatus :one
 UPDATE forms
 SET status = $2, last_editor = $3, updated_at = now()
 WHERE id = $1
-RETURNING id, title, description_json, description_html, preview_message, message_after_submission, status, unit_id, created_by, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font
+RETURNING id, title, description_json, description_html, preview_message, message_after_submission, status, unit_id, created_by, last_editor, deadline, created_at, updated_at, visibility, google_sheet_url, publish_time, cover_image_url, dressing_color, dressing_header_font, dressing_question_font, dressing_text_font, allow_edit_response
 `
 
 type SetStatusParams struct {
@@ -905,6 +923,7 @@ func (q *Queries) SetStatus(ctx context.Context, arg SetStatusParams) (Form, err
 		&i.DressingHeaderFont,
 		&i.DressingQuestionFont,
 		&i.DressingTextFont,
+		&i.AllowEditResponse,
 	)
 	return i, err
 }

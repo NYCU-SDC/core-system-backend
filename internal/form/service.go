@@ -47,10 +47,12 @@ const (
 )
 
 type UserForm struct {
-	FormID   uuid.UUID
-	Title    string
-	Deadline pgtype.Timestamptz
-	Status   UserFormStatus
+	FormID            uuid.UUID
+	Title             string
+	Deadline          pgtype.Timestamptz
+	Status            UserFormStatus
+	ResponseIDs       []uuid.UUID
+	AllowEditResponse bool
 }
 
 type Service struct {
@@ -102,6 +104,7 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 		DressingHeaderFont:     fields.dressingHeaderFont,
 		DressingQuestionFont:   fields.dressingQuestionFont,
 		DressingTextFont:       fields.dressingTextFont,
+		AllowEditResponse:      fields.allowEditResponse,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create form")
@@ -167,6 +170,11 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.DressingHeaderFont = nonEmptyText(d.HeaderFont)
 		params.DressingQuestionFont = nonEmptyText(d.QuestionFont)
 		params.DressingTextFont = nonEmptyText(d.TextFont)
+	}
+
+	a := request.AllowEditResponse
+	if a != nil {
+		params.AllowEditResponse = pgtype.Bool{Bool: *a, Valid: true}
 	}
 
 	return s.PatchParams(ctx, params)

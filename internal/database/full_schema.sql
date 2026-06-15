@@ -116,7 +116,8 @@ CREATE TABLE IF NOT EXISTS forms (
     dressing_color TEXT,
     dressing_header_font TEXT,
     dressing_question_font TEXT,
-    dressing_text_font TEXT
+    dressing_text_font TEXT,
+    allow_edit_response BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS form_covers (
@@ -138,6 +139,19 @@ CREATE TABLE IF NOT EXISTS sections (
 
 CREATE INDEX idx_sections_form_id ON sections(form_id);
 
+CREATE TABLE IF NOT EXISTS views (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    form_id    UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    title      TEXT NOT NULL,
+    locked     BOOLEAN NOT NULL DEFAULT FALSE,
+    "order"    INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+CREATE INDEX idx_views_form_id ON views(form_id);
+CREATE UNIQUE INDEX idx_views_form_id_title ON views(form_id, title);
 -- Node type enum for workflow nodes
 CREATE TYPE node_type AS ENUM(
     'section',
