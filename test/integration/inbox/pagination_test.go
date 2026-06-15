@@ -205,17 +205,11 @@ func TestInboxService_ListWithPagination(t *testing.T) {
 					// Calculate expected length based on pagination
 					nonArchivedCount := tc.params.totalMessages - tc.params.archivedCount
 					startIdx := (pt.pageNumber - 1) * tc.params.pageSize
-					endIdx := startIdx + tc.params.pageSize
-					if endIdx > nonArchivedCount {
-						endIdx = nonArchivedCount
-					}
+					endIdx := min(startIdx+tc.params.pageSize, nonArchivedCount)
 
-					expectedLength := endIdx - startIdx
-
-					// if expectedLength is negative, means the page is empty
-					if expectedLength < 0 {
-						expectedLength = 0
-					}
+					expectedLength := max(
+						// if expectedLength is negative, means the page is empty
+						endIdx-startIdx, 0)
 
 					require.Len(t, result, expectedLength,
 						"Page %d with size %d should return %d items",

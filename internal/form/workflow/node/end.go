@@ -9,10 +9,10 @@ import (
 
 // EndNode represents an end node
 type EndNode struct {
-	node map[string]interface{}
+	node map[string]any
 }
 
-func NewEndNode(node map[string]interface{}) (Validatable, error) {
+func NewEndNode(node map[string]any) (Validatable, error) {
 	return &EndNode{node: node}, nil
 }
 

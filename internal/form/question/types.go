@@ -2,6 +2,7 @@ package question
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -75,12 +76,7 @@ var NonChoiceTypes = []QuestionType{
 
 // ContainsType returns true if typeToCheck is in the types slice.
 func ContainsType(types []QuestionType, typeToCheck QuestionType) bool {
-	for _, t := range types {
-		if t == typeToCheck {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(types, typeToCheck)
 }
 
 func IsHighlightSupportedType(questionType QuestionType) bool {

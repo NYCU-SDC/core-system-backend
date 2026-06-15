@@ -125,7 +125,7 @@ func (h *Handler) mapToResponse(ctx context.Context, message ListRow) (Response,
 
 // extractStringField extracts a string field from the database result.
 // fieldName is used in traces and logs only; field values are never logged to avoid PII in observability.
-func (h *Handler) extractStringField(ctx context.Context, fieldName string, field interface{}) string {
+func (h *Handler) extractStringField(ctx context.Context, fieldName string, field any) string {
 	traceCtx, span := h.tracer.Start(ctx, "extractStringField", trace.WithAttributes(
 		attribute.String("field", fieldName),
 	))

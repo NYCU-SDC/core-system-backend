@@ -39,7 +39,7 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 	}
 
 	// Parse workflow JSON into nodes
-	var nodes []map[string]interface{}
+	var nodes []map[string]any
 	err = json.Unmarshal(workflowRow.Workflow, &nodes)
 	if err != nil {
 		span.RecordError(err)
@@ -47,7 +47,7 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 	}
 
 	// Build node map for quick lookup
-	nodeMap := make(map[string]map[string]interface{})
+	nodeMap := make(map[string]map[string]any)
 	for _, node := range nodes {
 		id, ok := node["id"].(string)
 		if ok {
@@ -144,7 +144,7 @@ func (s *Service) ResolveSections(ctx context.Context, formID uuid.UUID, answers
 // evaluateCondition evaluates a condition node and returns the next node ID to follow.
 // Returns (nextNodeID, canEvaluate, error).
 // If canEvaluate is false, it means the answer needed for evaluation doesn't exist.
-func (s *Service) evaluateCondition(conditionNode map[string]interface{}, answerMap map[string][]byte, answerableMap map[string]question.Answerable) (string, bool, error) {
+func (s *Service) evaluateCondition(conditionNode map[string]any, answerMap map[string][]byte, answerableMap map[string]question.Answerable) (string, bool, error) {
 	// Extract conditionRule
 	conditionRuleRaw, ok := conditionNode["conditionRule"]
 	if !ok {

@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func ConvertEmailsToSlice(emails interface{}) []string {
+func ConvertEmailsToSlice(emails any) []string {
 	if emails == nil {
 		return []string{}
 	}
@@ -27,7 +27,7 @@ func ConvertEmailsToSlice(emails interface{}) []string {
 			return []string{}
 		}
 		return v
-	case []interface{}:
+	case []any:
 		// Handle PostgreSQL array returned as []interface{}
 		result := make([]string, 0, len(v))
 		for _, email := range v {

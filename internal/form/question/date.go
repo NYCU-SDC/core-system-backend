@@ -51,8 +51,8 @@ type DateOption struct {
 	HasYear  bool      `json:"hasYear"`
 	HasMonth bool      `json:"hasMonth"`
 	HasDay   bool      `json:"hasDay"`
-	MinDate  DateField `json:"minDate,omitempty"`
-	MaxDate  DateField `json:"maxDate,omitempty"`
+	MinDate  DateField `json:"minDate"`
+	MaxDate  DateField `json:"maxDate"`
 }
 
 type DateMetadata struct {

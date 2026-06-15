@@ -2,8 +2,9 @@ package shared
 
 import "testing"
 
+//go:fix inline
 func intPtr(v int) *int {
-	return &v
+	return new(v)
 }
 
 func TestDateAnswer_String(t *testing.T) {
@@ -19,62 +20,62 @@ func TestDateAnswer_String(t *testing.T) {
 		},
 		{
 			name:     "Should format year only as YYYY",
-			input:    DateAnswer{Year: intPtr(2026)},
+			input:    DateAnswer{Year: new(2026)},
 			expected: "2026",
 		},
 		{
 			name:     "Should format year-month as YYYY-MM",
-			input:    DateAnswer{Year: intPtr(2026), Month: intPtr(2)},
+			input:    DateAnswer{Year: new(2026), Month: new(2)},
 			expected: "2026-02",
 		},
 		{
 			name:     "Should format full date as YYYY-MM-DD",
-			input:    DateAnswer{Year: intPtr(2026), Month: intPtr(2), Day: intPtr(15)},
+			input:    DateAnswer{Year: new(2026), Month: new(2), Day: new(15)},
 			expected: "2026-02-15",
 		},
 		{
 			name:     "Should format month-day as MM-DD when year is nil",
-			input:    DateAnswer{Month: intPtr(2), Day: intPtr(15)},
+			input:    DateAnswer{Month: new(2), Day: new(15)},
 			expected: "02-15",
 		},
 		{
 			name:     "Should format month only as MM",
-			input:    DateAnswer{Month: intPtr(2)},
+			input:    DateAnswer{Month: new(2)},
 			expected: "02",
 		},
 		{
 			name:     "Should format day only as DD",
-			input:    DateAnswer{Day: intPtr(15)},
+			input:    DateAnswer{Day: new(15)},
 			expected: "15",
 		},
 		{
 			name:     "Should format year-day as YYYY-DD when month is nil",
-			input:    DateAnswer{Year: intPtr(2026), Day: intPtr(15)},
+			input:    DateAnswer{Year: new(2026), Day: new(15)},
 			expected: "2026-15",
 		},
 		{
 			name:     "Should pad single digit month with zero",
-			input:    DateAnswer{Year: intPtr(2026), Month: intPtr(1)},
+			input:    DateAnswer{Year: new(2026), Month: new(1)},
 			expected: "2026-01",
 		},
 		{
 			name:     "Should pad single digit day with zero",
-			input:    DateAnswer{Year: intPtr(2026), Month: intPtr(12), Day: intPtr(5)},
+			input:    DateAnswer{Year: new(2026), Month: new(12), Day: new(5)},
 			expected: "2026-12-05",
 		},
 		{
 			name:     "Should handle double digit month and day",
-			input:    DateAnswer{Year: intPtr(2026), Month: intPtr(12), Day: intPtr(31)},
+			input:    DateAnswer{Year: new(2026), Month: new(12), Day: new(31)},
 			expected: "2026-12-31",
 		},
 		{
 			name:     "Should handle minimum year value with zero padding",
-			input:    DateAnswer{Year: intPtr(1), Month: intPtr(1), Day: intPtr(1)},
+			input:    DateAnswer{Year: new(1), Month: new(1), Day: new(1)},
 			expected: "0001-01-01",
 		},
 		{
 			name:     "Should handle maximum year value",
-			input:    DateAnswer{Year: intPtr(9999), Month: intPtr(12), Day: intPtr(31)},
+			input:    DateAnswer{Year: new(9999), Month: new(12), Day: new(31)},
 			expected: "9999-12-31",
 		},
 	}

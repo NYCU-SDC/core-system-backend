@@ -40,7 +40,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 			name: "section and condition labels enriched",
 			setup: func(t *testing.T) ([]byte, QuestionStore) {
 				t.Helper()
-				workflow := marshalWorkflow(t, []map[string]interface{}{
+				workflow := marshalWorkflow(t, []map[string]any{
 					{
 						"id":    startID,
 						"type":  nodeTypeToUppercase(NodeTypeStart),
@@ -59,7 +59,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 						"label":     "Old Condition Label",
 						"nextTrue":  endID,
 						"nextFalse": endID,
-						"conditionRule": map[string]interface{}{
+						"conditionRule": map[string]any{
 							"source":   "CHOICE",
 							"question": questionID.String(),
 							"pattern":  "^yes$",
@@ -93,7 +93,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 			name: "nil deps leaves workflow unchanged",
 			setup: func(t *testing.T) ([]byte, QuestionStore) {
 				t.Helper()
-				workflow := marshalWorkflow(t, []map[string]interface{}{{
+				workflow := marshalWorkflow(t, []map[string]any{{
 					"id":    startIDNilDeps,
 					"type":  nodeTypeToUppercase(NodeTypeStart),
 					"label": "Start",
@@ -107,7 +107,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 			name: "section missing from map keeps original label",
 			setup: func(t *testing.T) ([]byte, QuestionStore) {
 				t.Helper()
-				workflow := marshalWorkflow(t, []map[string]interface{}{
+				workflow := marshalWorkflow(t, []map[string]any{
 					{
 						"id":    sectionIDMissing,
 						"type":  nodeTypeToUppercase(NodeTypeSection),
@@ -142,7 +142,7 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 				return
 			}
 
-			var nodes []map[string]interface{}
+			var nodes []map[string]any
 			require.NoError(t, json.Unmarshal(enriched, &nodes))
 			assertNodeLabels(t, nodesByID(nodes), tc.expectedLabels)
 		})
@@ -152,14 +152,14 @@ func TestEnrichWorkflow_Labels(t *testing.T) {
 func TestConditionLabel_Rule(t *testing.T) {
 	testCases := []struct {
 		name     string
-		node     map[string]interface{}
+		node     map[string]any
 		store    QuestionStore
 		expected string
 	}{
 		{
 			name: "no question in rule keeps fallback",
-			node: map[string]interface{}{
-				"conditionRule": map[string]interface{}{
+			node: map[string]any{
+				"conditionRule": map[string]any{
 					"pattern": "^x$",
 				},
 			},
@@ -177,7 +177,7 @@ func TestConditionLabel_Rule(t *testing.T) {
 }
 
 // marshalWorkflow marshals workflow nodes to JSON and fails the test on error.
-func marshalWorkflow(t *testing.T, nodes []map[string]interface{}) []byte {
+func marshalWorkflow(t *testing.T, nodes []map[string]any) []byte {
 	t.Helper()
 	b, err := json.Marshal(nodes)
 	require.NoError(t, err)
@@ -185,8 +185,8 @@ func marshalWorkflow(t *testing.T, nodes []map[string]interface{}) []byte {
 }
 
 // nodesByID returns a map of node ID to node for quick lookup.
-func nodesByID(nodes []map[string]interface{}) map[string]map[string]interface{} {
-	byID := make(map[string]map[string]interface{}, len(nodes))
+func nodesByID(nodes []map[string]any) map[string]map[string]any {
+	byID := make(map[string]map[string]any, len(nodes))
 	for _, n := range nodes {
 		id, ok := n["id"].(string)
 		if ok {
@@ -197,7 +197,7 @@ func nodesByID(nodes []map[string]interface{}) map[string]map[string]interface{}
 }
 
 // assertNodeLabels asserts that each node in byID has the expected label.
-func assertNodeLabels(t *testing.T, byID map[string]map[string]interface{}, expectedLabels map[string]string) {
+func assertNodeLabels(t *testing.T, byID map[string]map[string]any, expectedLabels map[string]string) {
 	t.Helper()
 	for nodeID, expectedLabel := range expectedLabels {
 		n, ok := byID[nodeID]

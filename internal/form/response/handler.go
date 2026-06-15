@@ -352,7 +352,7 @@ func (h *Handler) toGetFormResponse(ctx context.Context, formResponse FormRespon
 				}
 
 				// Build answer payload with proper question type and value
-				answerPayload := map[string]interface{}{
+				answerPayload := map[string]any{
 					"questionId":   questionID,
 					"questionType": strings.ToUpper(string(answerable.Question().Type)),
 					"value":        payload,

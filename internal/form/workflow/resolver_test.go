@@ -116,7 +116,7 @@ func buildSimpleSetup(t *testing.T) setupParams {
 	sectionBID := uuid.New()
 	endID := uuid.New()
 
-	workflowJSON := createWorkflowJSON(t, []map[string]interface{}{
+	workflowJSON := createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -168,7 +168,7 @@ func buildChoiceConditionTrueNextTrueSetup(t *testing.T) setupParams {
 	choiceID := uuid.New()
 	responseID := uuid.New()
 
-	workflowJSON := createWorkflowJSON(t, []map[string]interface{}{
+	workflowJSON := createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -187,7 +187,7 @@ func buildChoiceConditionTrueNextTrueSetup(t *testing.T) setupParams {
 			"label":     "Condition",
 			"nextTrue":  sectionBID.String(),
 			"nextFalse": sectionCID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   "choice",
 				"question": questionID.String(),
 				"pattern":  "^" + choiceID.String() + "$",
@@ -250,7 +250,7 @@ func buildMultipleChoiceConditionMatchNextTrueSetup(t *testing.T) setupParams {
 	otherChoiceID := uuid.New()
 	responseID := uuid.New()
 
-	workflowJSON := createWorkflowJSON(t, []map[string]interface{}{
+	workflowJSON := createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -269,7 +269,7 @@ func buildMultipleChoiceConditionMatchNextTrueSetup(t *testing.T) setupParams {
 			"label":     "Condition",
 			"nextTrue":  sectionBID.String(),
 			"nextFalse": sectionCID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   "choice",
 				"question": questionID.String(),
 				"pattern":  "^" + targetChoiceID.String() + "$",
@@ -343,7 +343,7 @@ func buildDetailedMultiChoiceMismatchNextFalseSetup(t *testing.T) setupParams {
 	choiceCID := uuid.New()
 	responseID := uuid.New()
 
-	workflowJSON := createWorkflowJSON(t, []map[string]interface{}{
+	workflowJSON := createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -362,7 +362,7 @@ func buildDetailedMultiChoiceMismatchNextFalseSetup(t *testing.T) setupParams {
 			"label":     "Condition",
 			"nextTrue":  sectionBID.String(),
 			"nextFalse": sectionCID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   "choice",
 				"question": questionID.String(),
 				"pattern":  choiceBID.String(),
@@ -456,8 +456,8 @@ func buildAnswer(t *testing.T, questionID, responseID uuid.UUID, value any) answ
 
 // Helper function to create a SingleChoice answerable for testing
 func createSingleChoiceAnswerable(t *testing.T, questionID, sectionID, formID, choiceID uuid.UUID) question.Answerable {
-	choiceMetadata, err := json.Marshal(map[string]interface{}{
-		"choice": []map[string]interface{}{
+	choiceMetadata, err := json.Marshal(map[string]any{
+		"choice": []map[string]any{
 			{
 				"id":          choiceID.String(),
 				"name":        "Option A",
@@ -485,16 +485,16 @@ func createSingleChoiceAnswerable(t *testing.T, questionID, sectionID, formID, c
 
 // Helper function to create a MultipleChoice answerable for testing
 func createMultipleChoiceAnswerable(t *testing.T, questionID, sectionID, formID uuid.UUID, choiceIDs ...uuid.UUID) question.Answerable {
-	choices := make([]map[string]interface{}, len(choiceIDs))
+	choices := make([]map[string]any, len(choiceIDs))
 	for i, choiceID := range choiceIDs {
-		choices[i] = map[string]interface{}{
+		choices[i] = map[string]any{
 			"id":          choiceID.String(),
 			"name":        "Option",
 			"description": "",
 		}
 	}
 
-	choiceMetadata, err := json.Marshal(map[string]interface{}{
+	choiceMetadata, err := json.Marshal(map[string]any{
 		"choice": choices,
 	})
 	require.NoError(t, err)

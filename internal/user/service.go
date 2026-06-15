@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"slices"
 	"strings"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
@@ -553,13 +554,7 @@ func (s *Service) Onboarding(ctx context.Context, id uuid.UUID, name, username s
 		span.RecordError(err)
 		return User{}, err
 	}
-	isAllowed := false
-	for _, userEmail := range userEmails {
-		if s.onboardingChecker.AllowedOnboarding(userEmail) {
-			isAllowed = true
-			break
-		}
-	}
+	isAllowed := slices.ContainsFunc(userEmails, s.onboardingChecker.AllowedOnboarding)
 	if !isAllowed {
 		err := internal.ErrUserNotInAllowedList
 		logger.Warn(fmt.Sprintf("%s: user_id=%s", err.Error(), id.String()))

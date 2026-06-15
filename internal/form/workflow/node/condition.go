@@ -15,10 +15,10 @@ import (
 
 // ConditionNode represents a condition node
 type ConditionNode struct {
-	node map[string]interface{}
+	node map[string]any
 }
 
-func NewConditionNode(node map[string]interface{}) (Validatable, error) {
+func NewConditionNode(node map[string]any) (Validatable, error) {
 	return &ConditionNode{node: node}, nil
 }
 

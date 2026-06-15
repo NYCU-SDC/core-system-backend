@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"testing"
 
@@ -201,7 +202,7 @@ func TestService_Update(t *testing.T) {
 // extractNodeIDs returns sorted node IDs from workflow JSON (for comparison in tests).
 func extractNodeIDs(t *testing.T, workflowJSON []byte) []string {
 	t.Helper()
-	var nodes []map[string]interface{}
+	var nodes []map[string]any
 	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
 
 	// Extract node IDs from nodes
@@ -221,14 +222,14 @@ func extractNodeIDs(t *testing.T, workflowJSON []byte) []string {
 // extractQuestionIDs returns sorted question IDs from condition rules in workflow JSON.
 func extractQuestionIDs(t *testing.T, workflowJSON []byte) []string {
 	t.Helper()
-	var nodes []map[string]interface{}
+	var nodes []map[string]any
 	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
 
 	// Extract question IDs from condition rules
 	var ids []string
 	for _, n := range nodes {
 		// Extract condition rule from node
-		cr, ok := n["conditionRule"].(map[string]interface{})
+		cr, ok := n["conditionRule"].(map[string]any)
 		if !ok || cr == nil {
 			continue
 		}
@@ -247,13 +248,13 @@ func extractQuestionIDs(t *testing.T, workflowJSON []byte) []string {
 // conditionRuleEntry holds a condition node ID and its conditionRule for comparison.
 type conditionRuleEntry struct {
 	NodeID string
-	Rule   map[string]interface{}
+	Rule   map[string]any
 }
 
 // extractConditionRules returns condition rules from workflow JSON, sorted by node ID, for comparison.
 func extractConditionRules(t *testing.T, workflowJSON []byte) []conditionRuleEntry {
 	t.Helper()
-	var nodes []map[string]interface{}
+	var nodes []map[string]any
 	require.NoError(t, json.Unmarshal(workflowJSON, &nodes))
 	var out []conditionRuleEntry
 	for _, n := range nodes {
@@ -263,16 +264,14 @@ func extractConditionRules(t *testing.T, workflowJSON []byte) []conditionRuleEnt
 		}
 
 		// Extract condition rule from node
-		cr, ok := n["conditionRule"].(map[string]interface{})
+		cr, ok := n["conditionRule"].(map[string]any)
 		if !ok || cr == nil {
 			continue
 		}
 
 		// Clone so we don't mutate the original
-		rule := make(map[string]interface{}, len(cr))
-		for questionID, pattern := range cr {
-			rule[questionID] = pattern
-		}
+		rule := make(map[string]any, len(cr))
+		maps.Copy(rule, cr)
 
 		// Add condition rule to output
 		out = append(out, conditionRuleEntry{

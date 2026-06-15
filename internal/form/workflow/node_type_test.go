@@ -112,7 +112,7 @@ func TestWorkflow_ToAPIFormat(t *testing.T) {
 			}
 
 			// Unmarshal both to compare structure
-			var resultNodes, expectedNodes []map[string]interface{}
+			var resultNodes, expectedNodes []map[string]any
 			err = json.Unmarshal(result, &resultNodes)
 			if err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
@@ -176,7 +176,7 @@ func TestWorkflow_FromAPIFormat(t *testing.T) {
 				t.Fatalf("workflowFromAPIFormat() error = %v", err)
 			}
 
-			var resultNodes, expectedNodes []map[string]interface{}
+			var resultNodes, expectedNodes []map[string]any
 			err = json.Unmarshal(result, &resultNodes)
 			if err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
@@ -184,12 +184,12 @@ func TestWorkflow_FromAPIFormat(t *testing.T) {
 
 			if tc.expected == "" {
 				// conditionRule preserved as-is (validation accepts source case-insensitive)
-				var nodes []map[string]interface{}
+				var nodes []map[string]any
 				if err := json.Unmarshal(result, &nodes); err != nil {
 					t.Fatalf("unmarshal result: %v", err)
 				}
 				for _, n := range nodes {
-					rule, _ := n["conditionRule"].(map[string]interface{})
+					rule, _ := n["conditionRule"].(map[string]any)
 					if rule == nil {
 						continue
 					}

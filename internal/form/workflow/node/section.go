@@ -9,10 +9,10 @@ import (
 
 // SectionNode represents a section node
 type SectionNode struct {
-	node map[string]interface{}
+	node map[string]any
 }
 
-func NewSectionNode(node map[string]interface{}) (Validatable, error) {
+func NewSectionNode(node map[string]any) (Validatable, error) {
 	return &SectionNode{node: node}, nil
 }
 

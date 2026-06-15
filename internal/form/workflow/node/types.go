@@ -47,7 +47,7 @@ const (
 
 // NewNode creates a Validatable instance based on node type.
 // Returns the node type as a string to avoid circular dependency.
-func New(node map[string]interface{}) (Validatable, string, error) {
+func New(node map[string]any) (Validatable, string, error) {
 	nodeType, ok := node["type"].(string)
 	if !ok || nodeType == "" {
 		return nil, "", fmt.Errorf("node missing required field 'type'")
