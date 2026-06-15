@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- **Go**: 1.24.2 or higher
+- **Go**: 1.26.2 or higher
 - **PostgreSQL**: 18
 - **Docker** (optional): for running PostgreSQL container
 - **SQLC**: for code generation
