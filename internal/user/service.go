@@ -431,60 +431,6 @@ func (s *Service) CreateAuth(ctx context.Context, userID uuid.UUID, provider, pr
 	return nil
 }
 
-func (s *Service) CreateEmail(ctx context.Context, userID uuid.UUID, email string) error {
-	traceCtx, span := s.tracer.Start(ctx, "CreateEmail")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	err := s.withTransaction(traceCtx, func(qtx *Queries) error {
-		_, err := qtx.GetIDByEmailForUpdate(traceCtx, email)
-		if err == nil {
-			ownerErr := validateEmailOwner(traceCtx, qtx, email, userID)
-			if ownerErr != nil {
-				if errors.Is(ownerErr, internal.ErrEmailConflict) {
-					return ownerErr
-				}
-				return databaseutil.WrapDBError(ownerErr, logger, "validate email owner")
-			}
-			return nil
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return databaseutil.WrapDBError(err, logger, "lock email for create")
-		}
-
-		err = qtx.UpsertEmail(traceCtx, UpsertEmailParams{
-			UserID: userID,
-			Email:  email,
-		})
-		if err != nil {
-			return databaseutil.WrapDBError(err, logger, "upsert email")
-		}
-		return nil
-	})
-	if err != nil {
-		if errors.Is(err, internal.ErrEmailConflict) {
-			logger.Warn("Email belongs to another user",
-				zap.String("user_id", userID.String()),
-				zap.String("email", email),
-				zap.Error(err))
-			span.RecordError(err)
-			return err
-		}
-
-		logger.Error("Failed to create email record",
-			zap.String("user_id", userID.String()),
-			zap.String("email", email),
-			zap.Error(err))
-		span.RecordError(err)
-		return err
-	}
-
-	logger.Info("Successfully created email record",
-		zap.String("user_id", userID.String()),
-		zap.String("email", email))
-	return nil
-}
-
 func (s *Service) GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetEmailsByID")
 	defer span.End()
