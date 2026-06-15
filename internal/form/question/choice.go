@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
@@ -129,12 +130,12 @@ func (s SingleChoice) EncodeRequest(answer any) (json.RawMessage, error) {
 func (s SingleChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	singleChoiceAnswer, ok := answer.(shared.SingleChoiceAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.SingleChoiceAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.SingleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	if singleChoiceAnswer.Snapshot.OtherText != "" {
@@ -146,12 +147,12 @@ func (s SingleChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (s SingleChoice) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := s.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode single choice answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	singleChoiceAnswer, ok := answer.(shared.SingleChoiceAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.SingleChoiceAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.SingleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	return matchChoiceID(singleChoiceAnswer.ChoiceID, pattern)
@@ -283,12 +284,12 @@ func (m MultiChoice) EncodeRequest(answer any) (json.RawMessage, error) {
 func (m MultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := m.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	multiChoiceAnswer, ok := answer.(shared.MultipleChoiceAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.MultipleChoiceAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.MultipleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	if len(multiChoiceAnswer.Choices) == 0 {
@@ -309,12 +310,12 @@ func (m MultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (m MultiChoice) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := m.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode multiple choice answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	multiChoiceAnswer, ok := answer.(shared.MultipleChoiceAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.MultipleChoiceAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.MultipleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	// Check if any choice ID matches the pattern
@@ -452,12 +453,12 @@ func (m DetailedMultiChoice) EncodeRequest(answer any) (json.RawMessage, error) 
 func (m DetailedMultiChoice) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := m.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	detailedMultiChoiceAnswer, ok := answer.(shared.DetailedMultipleChoiceAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.DetailedMultipleChoiceAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.DetailedMultipleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	if len(detailedMultiChoiceAnswer.Choices) == 0 {
@@ -478,12 +479,12 @@ func (m DetailedMultiChoice) DisplayValue(rawValue json.RawMessage) (string, err
 func (m DetailedMultiChoice) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := m.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode detailed multiple choice answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	detailedMultiChoiceAnswer, ok := answer.(shared.DetailedMultipleChoiceAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.DetailedMultipleChoiceAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.DetailedMultipleChoiceAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	// Check if any choice ID matches the pattern
@@ -690,12 +691,12 @@ func (r Ranking) EncodeRequest(answer any) (json.RawMessage, error) {
 func (r Ranking) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := r.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	rankingAnswer, ok := answer.(shared.RankingAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.RankingAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.RankingAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	if len(rankingAnswer.RankedChoices) == 0 {
@@ -740,12 +741,12 @@ func (r Ranking) DisplayValue(rawValue json.RawMessage) (string, error) {
 func (r Ranking) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
 	answer, err := r.DecodeStorage(rawValue)
 	if err != nil {
-		return false, fmt.Errorf("failed to decode ranking answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
 	rankingAnswer, ok := answer.(shared.RankingAnswer)
 	if !ok {
-		return false, fmt.Errorf("expected shared.RankingAnswer, got %T", answer)
+		return false, fmt.Errorf("%w: expected shared.RankingAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	// Check if any choice ID matches the pattern
@@ -928,7 +929,7 @@ func encodeChoiceIDsToRequest(choiceIDs []uuid.UUID) (json.RawMessage, error) {
 func matchChoiceID(choiceID uuid.UUID, pattern string) (bool, error) {
 	match, err := matchPattern(choiceID.String(), pattern)
 	if err != nil {
-		return false, fmt.Errorf("failed to match choice ID: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
 	return match, nil
 }
