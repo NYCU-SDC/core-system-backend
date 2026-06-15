@@ -77,7 +77,8 @@ func setupPostgres(pool dockertest.ClosablePool, logger *zap.Logger) (*pgxpool.P
 	cleanup := func() {
 		dbPool.Close()
 
-		if err := resource.Close(ctx); err != nil {
+		err := resource.Close(ctx)
+		if err != nil {
 			logger.Error("Failed to close resource", zap.Error(err))
 		} else {
 			logger.Info("Successfully closed resource")
