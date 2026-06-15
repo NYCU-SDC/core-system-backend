@@ -2,6 +2,7 @@ package user
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"context"
 	"net/http"
 	"strings"
 
@@ -42,11 +43,16 @@ type OnboardingRequest struct {
 	Name     string `json:"name" validate:"required,max=15"`
 }
 
+type Store interface {
+	Get(ctx context.Context, id uuid.UUID) (UserDetail, error)
+	Onboarding(ctx context.Context, id uuid.UUID, name, username string) (User, error)
+}
+
 type Handler struct {
 	logger        *zap.Logger
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
-	service       *Service
+	store         Store
 	tracer        trace.Tracer
 }
 
@@ -54,13 +60,13 @@ func NewHandler(
 	logger *zap.Logger,
 	validator *validator.Validate,
 	problemWriter *problem.HttpWriter,
-	service *Service,
+	store Store,
 ) *Handler {
 	return &Handler{
 		logger:        logger,
 		validator:     validator,
 		problemWriter: problemWriter,
-		service:       service,
+		store:         store,
 		tracer:        otel.Tracer("user/handler"),
 	}
 }
@@ -78,7 +84,7 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.service.Get(traceCtx, currentUser.ID)
+	user, err := h.store.Get(traceCtx, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -118,13 +124,13 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Onboarding
-	newUser, err := h.service.Onboarding(traceCtx, currentUser.ID, req.Name, req.Username)
+	newUser, err := h.store.Onboarding(traceCtx, currentUser.ID, req.Name, req.Username)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	user, err := h.service.Get(traceCtx, newUser.ID)
+	user, err := h.store.Get(traceCtx, newUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return

@@ -41,6 +41,16 @@ CREATE TABLE IF NOT EXISTS answers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(response_id, question_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_answers_question_id ON answers(question_id);
+CREATE TABLE IF NOT EXISTS form_highlights (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    form_id UUID NOT NULL UNIQUE REFERENCES forms(id) ON DELETE CASCADE,
+    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    display_title TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TYPE question_type AS ENUM(
     'short_text',
     'long_text',
