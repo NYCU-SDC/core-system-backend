@@ -17,13 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Helper function to create bool pointer
-//
-//go:fix inline
-func boolPtr(b bool) *bool {
-	return new(b)
-}
-
 func TestInboxService_ListWithFilters(t *testing.T) {
 	type Params struct {
 		userID             uuid.UUID

@@ -417,11 +417,6 @@ func TestDate_EncodeRequest(t *testing.T) {
 
 // Helper functions
 
-//go:fix inline
-func intPtr(i int) *int {
-	return new(i)
-}
-
 func compareDateAnswers(a, b shared.DateAnswer) bool {
 	if (a.Year == nil) != (b.Year == nil) {
 		return false
@@ -620,11 +615,6 @@ func TestExtractDateMetadata(t *testing.T) {
 			}
 		})
 	}
-}
-
-//go:fix inline
-func timePtr(t time.Time) *time.Time {
-	return new(t)
 }
 
 func TestDate_ValidateWithDateRange(t *testing.T) {

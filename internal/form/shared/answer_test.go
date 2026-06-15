@@ -2,11 +2,6 @@ package shared
 
 import "testing"
 
-//go:fix inline
-func intPtr(v int) *int {
-	return new(v)
-}
-
 func TestDateAnswer_String(t *testing.T) {
 	tests := []struct {
 		name     string
