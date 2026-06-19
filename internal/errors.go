@@ -104,7 +104,7 @@ var (
 	ErrArchivedForm       = errors.New("archived form should not accept new response")
 	ErrCloseForm          = errors.New("close form should not accept new response")
 	ErrInvalidStatus      = errors.New("invalid form status")
-	ErrExpiredForm        = errors.New("Expired form should not accept new response")
+	ErrExpiredForm        = errors.New("expired form should not accept new response")
 
 	// Question Errors
 	ErrQuestionNotFound                 = errors.New("question not found")
@@ -305,7 +305,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrInvalidStatus):
 		return problem.NewValidateProblem("invalid form status")
 	case errors.Is(err, ErrExpiredForm):
-		return problem.NewBadRequestProblem("Expired form should not accept new response")
+		return problem.NewBadRequestProblem("expired form should not accept new response")
 
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):
