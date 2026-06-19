@@ -365,6 +365,7 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/unarchive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.UnarchiveHandler))
 	mux.Handle("POST /api/forms/{formId}/archive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.ArchiveHandler))
 	mux.Handle("POST /api/forms/{formId}/publish", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(publishHandler.PublishForm))
+	mux.Handle("POST /api/forms/{formId}/close", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(formHandler.CloseHandler))
 	mux.Handle("GET /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Get))
 	mux.Handle("PUT /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Put))
 	mux.Handle("PATCH /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Patch))
