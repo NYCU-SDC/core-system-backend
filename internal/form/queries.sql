@@ -249,3 +249,8 @@ WHERE id = $1;
 SELECT form_id
 FROM sections
 WHERE id = $1;
+
+-- name: GetDeadline :one
+SELECT deadline
+FROM forms
+WHERE id = $1;

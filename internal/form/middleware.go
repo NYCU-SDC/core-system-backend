@@ -4,17 +4,20 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth/resolver"
 	"context"
+	"net/http"
+
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/NYCU-SDC/summer/pkg/problem"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"net/http"
 )
 
 type FormService interface {
 	IsArchived(ctx context.Context, id uuid.UUID) (bool, error)
+	IsClose(ctx context.Context, id uuid.UUID) (bool, error)
+	IsDeadlineExpired(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type Middleware struct {
@@ -36,18 +39,18 @@ func NewMiddleware(logger *zap.Logger, service FormService, problemWriter *probl
 func (m *Middleware) Require(formIDResolver resolver.FormIDResolver) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			m.CheckArchived(formIDResolver, next, w, r)
+			m.CheckAvailable(formIDResolver, next, w, r)
 		}
 	}
 }
 
-func (m *Middleware) CheckArchived(
+func (m *Middleware) CheckAvailable(
 	resolver resolver.FormIDResolver,
 	next http.HandlerFunc,
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	traceCtx, span := m.tracer.Start(r.Context(), "CheckArchived")
+	traceCtx, span := m.tracer.Start(r.Context(), "CheckAvailable")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, m.logger)
 
@@ -66,6 +69,28 @@ func (m *Middleware) CheckArchived(
 
 	if archived {
 		m.problemWriter.WriteError(traceCtx, w, internal.ErrArchivedForm, logger)
+		return
+	}
+
+	closed, err := m.service.IsClose(traceCtx, formID)
+	if err != nil {
+		m.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if closed {
+		m.problemWriter.WriteError(traceCtx, w, internal.ErrCloseForm, logger)
+		return
+	}
+
+	expired, err := m.service.IsDeadlineExpired(traceCtx, formID)
+	if err != nil {
+		m.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	if expired {
+		m.problemWriter.WriteError(traceCtx, w, internal.ErrExpiredForm, logger)
 		return
 	}
 
