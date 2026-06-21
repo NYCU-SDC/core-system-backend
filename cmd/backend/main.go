@@ -349,23 +349,23 @@ func main() {
 
 	// Form Management
 	// ----------------------
-	mux.Handle("GET /api/forms", authMiddleware.HandlerFunc(formHandler.ListHandler))
-	mux.Handle("GET /api/forms/{formId}", authMiddleware.HandlerFunc(formHandler.GetHandler))
-	mux.Handle("GET /api/orgs/{slug}/forms", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(formHandler.ListByOrgHandler))
-	mux.Handle("POST /api/orgs/{slug}/forms", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(formHandler.CreateUnderOrgHandler))
-	mux.Handle("PATCH /api/forms/{formId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).Append(availableByForm).HandlerFunc(formHandler.PatchHandler))
-	mux.Handle("DELETE /api/forms/{formId}", authMiddleware.Append(formOwner).HandlerFunc(formHandler.DeleteHandler))
+	mux.Handle("GET /api/forms", authMiddleware.HandlerFunc(formHandler.List))
+	mux.Handle("GET /api/forms/{formId}", authMiddleware.HandlerFunc(formHandler.Get))
+	mux.Handle("GET /api/orgs/{slug}/forms", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(formHandler.ListByOrg))
+	mux.Handle("POST /api/orgs/{slug}/forms", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(formHandler.CreateUnderOrg))
+	mux.Handle("PATCH /api/forms/{formId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).Append(availableByForm).HandlerFunc(formHandler.Patch))
+	mux.Handle("DELETE /api/forms/{formId}", authMiddleware.Append(formOwner).HandlerFunc(formHandler.Delete))
 
 	// Form Resource
-	mux.Handle("GET /api/forms/fonts", authMiddleware.HandlerFunc(formHandler.GetFontsHandler))
-	mux.Handle("GET /api/forms/{formId}/cover", authMiddleware.HandlerFunc(formHandler.GetCoverImageHandler))
-	mux.Handle("POST /api/forms/{formId}/cover", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).Append(availableByForm).HandlerFunc(formHandler.UploadCoverImageHandler))
+	mux.Handle("GET /api/forms/fonts", authMiddleware.HandlerFunc(formHandler.GetFonts))
+	mux.Handle("GET /api/forms/{formId}/cover", authMiddleware.HandlerFunc(formHandler.GetCoverImage))
+	mux.Handle("POST /api/forms/{formId}/cover", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).Append(availableByForm).HandlerFunc(formHandler.UploadCoverImage))
 
 	// Form Operations
-	mux.Handle("POST /api/forms/{formId}/unarchive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.UnarchiveHandler))
-	mux.Handle("POST /api/forms/{formId}/archive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.ArchiveHandler))
+	mux.Handle("POST /api/forms/{formId}/unarchive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.Unarchive))
+	mux.Handle("POST /api/forms/{formId}/archive", authMiddleware.Append(unitRole.Require(auth.RoleAdmin, formResolver)).HandlerFunc(formHandler.Archive))
 	mux.Handle("POST /api/forms/{formId}/publish", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(publishHandler.PublishForm))
-	mux.Handle("POST /api/forms/{formId}/close", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(formHandler.CloseHandler))
+	mux.Handle("POST /api/forms/{formId}/close", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(formHandler.Close))
 	mux.Handle("GET /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Get))
 	mux.Handle("PUT /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Put))
 	mux.Handle("PATCH /api/forms/{formId}/highlight", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(highlightHandler.Patch))
@@ -376,7 +376,7 @@ func main() {
 	// --- (Get sections will also return questions)
 	mux.Handle("GET /api/forms/{formId}/sections", authMiddleware.HandlerFunc(questionHandler.ListHandler))
 	// --- (Create sections via the workflow endpoint, not a direct sections API call)
-	mux.Handle("PATCH /api/forms/{formId}/sections/{sectionId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, sectionResolver)).Append(availableByForm).HandlerFunc(formHandler.UpdateSectionHandler))
+	mux.Handle("PATCH /api/forms/{formId}/sections/{sectionId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, sectionResolver)).Append(availableByForm).HandlerFunc(formHandler.UpdateSection))
 
 	// Question Management
 	// ----------------------
