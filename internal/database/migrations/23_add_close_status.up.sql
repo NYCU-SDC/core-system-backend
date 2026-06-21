@@ -1,2 +1,2 @@
 ALTER TYPE status
-    ADD VALUE IF NOT EXISTS 'close';
+    ADD VALUE IF NOT EXISTS 'closed';

@@ -102,7 +102,7 @@ var (
 	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
 	ErrFormDeadlinePassed = errors.New("form deadline has passed")
 	ErrArchivedForm       = errors.New("archived form should not accept new response")
-	ErrCloseForm          = errors.New("close form should not accept new response")
+	ErrCloseForm          = errors.New("closed form should not accept new response")
 	ErrInvalidStatus      = errors.New("invalid form status")
 	ErrExpiredForm        = errors.New("expired form should not accept new response")
 
@@ -301,7 +301,7 @@ func ErrorHandler(err error) problem.Problem {
 	case errors.Is(err, ErrArchivedForm):
 		return problem.NewBadRequestProblem("archived form should not accept new response")
 	case errors.Is(err, ErrCloseForm):
-		return problem.NewBadRequestProblem("close form should not accept new response")
+		return problem.NewBadRequestProblem("closed form should not accept new response")
 	case errors.Is(err, ErrInvalidStatus):
 		return problem.NewValidateProblem("invalid form status")
 	case errors.Is(err, ErrExpiredForm):

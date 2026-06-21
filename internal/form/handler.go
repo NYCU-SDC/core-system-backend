@@ -130,8 +130,8 @@ func statusToUppercase(s Status) string {
 		return "PUBLISHED"
 	case StatusArchived:
 		return "ARCHIVED"
-	case StatusClose:
-		return "CLOSE"
+	case StatusClosed:
+		return "CLOSED"
 	default:
 		return string(s)
 	}
@@ -797,8 +797,8 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) CloseHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "CloseHandler")
+func (h *Handler) Close(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Close")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -815,7 +815,7 @@ func (h *Handler) CloseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.store.SetStatus(traceCtx, id, StatusClose, currentUser.ID)
+	_, err = h.store.SetStatus(traceCtx, id, StatusClosed, currentUser.ID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -918,8 +918,8 @@ func ParseStatus(status string) (Status, error) {
 		return StatusPublished, nil
 	case "ARCHIVED":
 		return StatusArchived, nil
-	case "CLOSE":
-		return StatusClose, nil
+	case "CLOSED":
+		return StatusClosed, nil
 	default:
 		return "", internal.ErrInvalidStatus
 	}

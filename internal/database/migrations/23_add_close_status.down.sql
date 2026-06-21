@@ -5,10 +5,13 @@ CREATE TYPE status_new AS ENUM (
 );
 
 ALTER TABLE forms
+ALTER COLUMN status DROP DEFAULT;
+
+ALTER TABLE forms
 ALTER COLUMN status TYPE status_new
 USING (
     CASE
-        WHEN status::text = 'close' THEN 'archived'
+        WHEN status::text = 'closed' THEN 'archived'
         ELSE status::text
     END
 )::status_new;
@@ -16,3 +19,6 @@ USING (
 DROP TYPE status;
 
 ALTER TYPE status_new RENAME TO status;
+
+ALTER TABLE forms
+ALTER COLUMN status SET DEFAULT 'draft';
