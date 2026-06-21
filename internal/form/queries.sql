@@ -254,3 +254,10 @@ WHERE id = $1;
 SELECT deadline
 FROM forms
 WHERE id = $1;
+
+-- name: GetAvailabilityInfo :one
+SELECT
+    status,
+    deadline
+FROM forms
+WHERE id = $1;

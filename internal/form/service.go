@@ -37,6 +37,7 @@ type Querier interface {
 	GetCreator(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetDeadline(ctx context.Context, id uuid.UUID) (pgtype.Timestamptz, error)
+	GetAvailabilityInfo(ctx context.Context, id uuid.UUID) (GetAvailabilityInfoRow, error)
 }
 
 type UserFormStatus string
@@ -457,7 +458,7 @@ func (s *Service) IsClose(ctx context.Context, id uuid.UUID) (bool, error) {
 		return false, err
 	}
 
-	return status == StatusClose, nil
+	return status == StatusClosed, nil
 }
 
 func (s *Service) IsDeadlineExpired(ctx context.Context, id uuid.UUID) (bool, error) {
@@ -476,4 +477,30 @@ func (s *Service) IsDeadlineExpired(ctx context.Context, id uuid.UUID) (bool, er
 	}
 
 	return time.Now().After(deadline.Time), nil
+}
+
+func (s *Service) CheckAvailable(ctx context.Context, id uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "CheckAvailable")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	form, err := s.queries.GetAvailabilityInfo(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get availability info")
+		return err
+	}
+
+	if form.Status == StatusArchived {
+		return internal.ErrArchivedForm
+	}
+
+	if form.Status == StatusClosed {
+		return internal.ErrCloseForm
+	}
+
+	if form.Deadline.Valid && time.Now().After(form.Deadline.Time) {
+		return internal.ErrExpiredForm
+	}
+
+	return nil
 }

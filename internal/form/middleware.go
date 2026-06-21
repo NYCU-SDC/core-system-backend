@@ -1,7 +1,6 @@
 package form
 
 import (
-	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/auth/resolver"
 	"context"
 	"net/http"
@@ -15,9 +14,7 @@ import (
 )
 
 type FormService interface {
-	IsArchived(ctx context.Context, id uuid.UUID) (bool, error)
-	IsClose(ctx context.Context, id uuid.UUID) (bool, error)
-	IsDeadlineExpired(ctx context.Context, id uuid.UUID) (bool, error)
+	CheckAvailable(ctx context.Context, id uuid.UUID) error
 }
 
 type Middleware struct {
@@ -61,36 +58,9 @@ func (m *Middleware) CheckAvailable(
 		return
 	}
 
-	archived, err := m.service.IsArchived(traceCtx, formID)
+	err = m.service.CheckAvailable(traceCtx, formID)
 	if err != nil {
 		m.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	if archived {
-		m.problemWriter.WriteError(traceCtx, w, internal.ErrArchivedForm, logger)
-		return
-	}
-
-	closed, err := m.service.IsClose(traceCtx, formID)
-	if err != nil {
-		m.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	if closed {
-		m.problemWriter.WriteError(traceCtx, w, internal.ErrCloseForm, logger)
-		return
-	}
-
-	expired, err := m.service.IsDeadlineExpired(traceCtx, formID)
-	if err != nil {
-		m.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	if expired {
-		m.problemWriter.WriteError(traceCtx, w, internal.ErrExpiredForm, logger)
 		return
 	}
 

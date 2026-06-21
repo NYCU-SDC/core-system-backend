@@ -312,6 +312,26 @@ func (q *Queries) Get(ctx context.Context, id uuid.UUID) (GetRow, error) {
 	return i, err
 }
 
+const getAvailabilityInfo = `-- name: GetAvailabilityInfo :one
+SELECT
+    status,
+    deadline
+FROM forms
+WHERE id = $1
+`
+
+type GetAvailabilityInfoRow struct {
+	Status   Status
+	Deadline pgtype.Timestamptz
+}
+
+func (q *Queries) GetAvailabilityInfo(ctx context.Context, id uuid.UUID) (GetAvailabilityInfoRow, error) {
+	row := q.db.QueryRow(ctx, getAvailabilityInfo, id)
+	var i GetAvailabilityInfoRow
+	err := row.Scan(&i.Status, &i.Deadline)
+	return i, err
+}
+
 const getByIDs = `-- name: GetByIDs :many
 SELECT
     f.id, f.title, f.description_json, f.description_html, f.preview_message, f.message_after_submission, f.status, f.unit_id, f.created_by, f.last_editor, f.deadline, f.created_at, f.updated_at, f.visibility, f.google_sheet_url, f.publish_time, f.cover_image_url, f.dressing_color, f.dressing_header_font, f.dressing_question_font, f.dressing_text_font, f.allow_edit_response,
