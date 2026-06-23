@@ -44,6 +44,7 @@ type Request struct {
 	Visibility             string           `json:"visibility" validate:"required,oneof=PUBLIC PRIVATE"`
 	CoverImageURL          string           `json:"coverImageUrl"`
 	Dressing               *DressingRequest `json:"dressing"`
+	AllowEditResponse      bool             `json:"allowEditResponse"`
 }
 
 type PatchRequest struct {
@@ -57,6 +58,7 @@ type PatchRequest struct {
 	Visibility             *string            `json:"visibility" validate:"omitempty,oneof=PUBLIC PRIVATE"`
 	CoverImageURL          *string            `json:"coverImageUrl"`
 	Dressing               *DressingRequest   `json:"dressing"`
+	AllowEditResponse      *bool              `json:"allowEditResponse"`
 }
 
 type Response struct {
@@ -67,6 +69,7 @@ type Response struct {
 	PreviewMessage         string               `json:"previewMessage"`
 	Status                 string               `json:"status"`
 	UnitID                 string               `json:"unitId"`
+	Creator                user.ProfileResponse `json:"creator"`
 	LastEditor             user.ProfileResponse `json:"lastEditor"`
 	Deadline               *time.Time           `json:"deadline"`
 	CreatedAt              time.Time            `json:"createdAt"`
@@ -77,6 +80,7 @@ type Response struct {
 	Visibility             string               `json:"visibility"`
 	CoverImage             string               `json:"coverImage"`
 	Dressing               DressingRequest      `json:"dressing"`
+	AllowEditResponse      bool                 `json:"allowEditResponse"`
 }
 
 type CoverUploadResponse struct {
@@ -145,7 +149,13 @@ func VisibilityToUppercase(v Visibility) string {
 
 // ToResponse converts a Form storage model into an API Response.
 // Ensures deadline, publishTime is null when empty/invalid.
-func ToResponse(form Form, unitName string, orgName string, editor user.User, emails []string) Response {
+func ToResponse(
+	form Form,
+	creator user.User,
+	creatorEmails []string,
+	lastEditor user.User,
+	lastEditorEmails []string,
+) Response {
 	var deadline *time.Time
 
 	if form.Deadline.Valid {
@@ -170,12 +180,19 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 		PreviewMessage:  form.PreviewMessage.String,
 		Status:          statusToUppercase(form.Status),
 		UnitID:          form.UnitID.String(),
+		Creator: user.ProfileResponse{
+			ID:        creator.ID,
+			Name:      creator.Name.String,
+			Username:  creator.Username.String,
+			Emails:    creatorEmails,
+			AvatarURL: creator.AvatarUrl.String,
+		},
 		LastEditor: user.ProfileResponse{
-			ID:        editor.ID,
-			Name:      editor.Name.String,
-			Username:  editor.Username.String,
-			Emails:    emails,
-			AvatarURL: editor.AvatarUrl.String,
+			ID:        lastEditor.ID,
+			Name:      lastEditor.Name.String,
+			Username:  lastEditor.Username.String,
+			Emails:    lastEditorEmails,
+			AvatarURL: lastEditor.AvatarUrl.String,
 		},
 		Deadline:               deadline,
 		CreatedAt:              form.CreatedAt.Time,
@@ -191,6 +208,7 @@ func ToResponse(form Form, unitName string, orgName string, editor user.User, em
 			QuestionFont: form.DressingQuestionFont.String,
 			TextFont:     form.DressingTextFont.String,
 		},
+		AllowEditResponse: form.AllowEditResponse,
 	}
 }
 
@@ -257,15 +275,6 @@ func NewHandler(
 	}
 }
 
-func editorFromFormRow(lastEditor uuid.UUID, name pgtype.Text, username pgtype.Text, avatar pgtype.Text) user.User {
-	return user.User{
-		ID:        lastEditor,
-		Name:      name,
-		Username:  username,
-		AvatarUrl: avatar,
-	}
-}
-
 func formFromCreateRow(r CreateRow) Form {
 	return Form{
 		ID:                     r.ID,
@@ -289,6 +298,7 @@ func formFromCreateRow(r CreateRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -315,6 +325,7 @@ func formFromGetRow(r GetRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -341,6 +352,7 @@ func formFromPatchRow(r PatchRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -367,6 +379,7 @@ func formFromListRow(r ListRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -393,6 +406,7 @@ func formFromListByUnitRow(r ListByUnitRow) Form {
 		DressingHeaderFont:     r.DressingHeaderFont,
 		DressingQuestionFont:   r.DressingQuestionFont,
 		DressingTextFont:       r.DressingTextFont,
+		AllowEditResponse:      r.AllowEditResponse,
 	}
 }
 
@@ -428,10 +442,10 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ToResponse(
 		formFromPatchRow(currentForm),
-		currentForm.UnitName.String,
-		currentForm.OrgName.String,
-		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
+		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 	)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -477,10 +491,10 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ToResponse(
 		formFromGetRow(currentForm),
-		currentForm.UnitName.String,
-		currentForm.OrgName.String,
-		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
+		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 	)
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
@@ -500,10 +514,10 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	for _, form := range forms {
 		responses = append(responses, ToResponse(
 			formFromListRow(form),
-			form.UnitName.String,
-			form.OrgName.String,
-			editorFromFormRow(form.LastEditor, form.LastEditorName, form.LastEditorUsername, form.LastEditorAvatarUrl),
-			user.ConvertEmailsToSlice(form.LastEditorEmail),
+			UserFromProfileFields(form.CreatedBy, form.CreatorName, form.CreatorUsername, form.CreatorAvatarUrl),
+			user.ConvertEmailsToSlice(form.CreatorEmails),
+			UserFromProfileFields(form.LastEditor, form.LastEditorName, form.LastEditorUsername, form.LastEditorAvatarUrl),
+			user.ConvertEmailsToSlice(form.LastEditorEmails),
 		))
 	}
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
@@ -546,10 +560,10 @@ func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) 
 
 	response := ToResponse(
 		formFromCreateRow(newForm),
-		newForm.UnitName.String,
-		newForm.OrgName.String,
-		editorFromFormRow(newForm.LastEditor, newForm.LastEditorName, newForm.LastEditorUsername, newForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(newForm.LastEditorEmail),
+		UserFromProfileFields(newForm.CreatedBy, newForm.CreatorName, newForm.CreatorUsername, newForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(newForm.CreatorEmails),
+		UserFromProfileFields(newForm.LastEditor, newForm.LastEditorName, newForm.LastEditorUsername, newForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(newForm.LastEditorEmails),
 	)
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
 }
@@ -600,10 +614,10 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 	for i, currentForm := range forms {
 		responses[i] = ToResponse(
 			formFromListByUnitRow(currentForm),
-			currentForm.UnitName.String,
-			currentForm.OrgName.String,
-			editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-			user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+			UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+			user.ConvertEmailsToSlice(currentForm.CreatorEmails),
+			UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+			user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 		)
 	}
 
@@ -731,10 +745,10 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ToResponse(
 		formFromGetRow(currentForm),
-		currentForm.UnitName.String,
-		currentForm.OrgName.String,
-		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
+		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 	)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
@@ -772,10 +786,10 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 
 	response := ToResponse(
 		formFromGetRow(currentForm),
-		currentForm.UnitName.String,
-		currentForm.OrgName.String,
-		editorFromFormRow(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmail),
+		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
+		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
 	)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)

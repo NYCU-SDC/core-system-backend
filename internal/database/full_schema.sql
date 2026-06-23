@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS answers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(response_id, question_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_answers_question_id ON answers(question_id);
 CREATE TYPE response_progress AS ENUM (
     'draft',
     'submitted'
@@ -69,6 +71,14 @@ CREATE TABLE IF NOT EXISTS form_responses (
     submitted_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     submitted_at TIMESTAMPTZ DEFAULT NULL,
     progress response_progress NOT NULL DEFAULT 'draft',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS form_highlights (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    form_id UUID NOT NULL UNIQUE REFERENCES forms(id) ON DELETE CASCADE,
+    question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+    display_title TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -104,7 +114,8 @@ CREATE TABLE IF NOT EXISTS forms (
     dressing_color TEXT,
     dressing_header_font TEXT,
     dressing_question_font TEXT,
-    dressing_text_font TEXT
+    dressing_text_font TEXT,
+    allow_edit_response BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS form_covers (
@@ -180,6 +191,19 @@ CREATE INDEX idx_workflow_versions_is_active ON workflow_versions(form_id, is_ac
 CREATE INDEX idx_workflow_versions_latest ON workflow_versions(form_id, updated_at DESC);
 
 CREATE INDEX idx_workflow_versions_seq ON workflow_versions(form_id, seq DESC);
+CREATE TABLE IF NOT EXISTS views (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    form_id    UUID NOT NULL REFERENCES forms(id) ON DELETE CASCADE,
+    title      TEXT NOT NULL,
+    locked     BOOLEAN NOT NULL DEFAULT FALSE,
+    "order"    INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+
+CREATE INDEX idx_views_form_id ON views(form_id);
+CREATE UNIQUE INDEX idx_views_form_id_title ON views(form_id, title);
 CREATE TYPE content_type AS ENUM(
     'text',
     'form'

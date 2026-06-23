@@ -146,9 +146,16 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 		return []form.UserForm{}, err
 	}
 
-	// Map form ID to user form status for quick lookup
+	// Map form ID to user form status for quick lookup, and collect response ids
+	// per form in ListBySubmittedBy iteration order.
 	formStatusMap := make(map[uuid.UUID]form.UserFormStatus)
+	formResponseIDs := make(map[uuid.UUID][]uuid.UUID)
 	for _, currentResponse := range responses {
+		formResponseIDs[currentResponse.FormID] = append(
+			formResponseIDs[currentResponse.FormID],
+			currentResponse.ID,
+		)
+
 		status := form.UserFormStatusInProgress
 		if currentResponse.SubmittedAt.Valid {
 			status = form.UserFormStatusCompleted
@@ -187,10 +194,11 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 		}
 		for _, f := range completedForms {
 			allForms[f.ID] = form.ListRow{
-				ID:       f.ID,
-				Title:    f.Title,
-				Deadline: f.Deadline,
-				Status:   f.Status,
+				ID:                f.ID,
+				Title:             f.Title,
+				Deadline:          f.Deadline,
+				Status:            f.Status,
+				AllowEditResponse: f.AllowEditResponse,
 			}
 		}
 	}
@@ -202,11 +210,18 @@ func (s *Service) ListFormsOfUser(ctx context.Context, userID uuid.UUID) ([]form
 			status = form.UserFormStatusNotStarted
 		}
 
+		responseIDs := formResponseIDs[formID]
+		if responseIDs == nil {
+			responseIDs = []uuid.UUID{}
+		}
+
 		userForms = append(userForms, form.UserForm{
-			FormID:   formID,
-			Title:    row.Title,
-			Deadline: row.Deadline,
-			Status:   status,
+			FormID:            formID,
+			Title:             row.Title,
+			Deadline:          row.Deadline,
+			Status:            status,
+			ResponseIDs:       responseIDs,
+			AllowEditResponse: row.AllowEditResponse,
 		})
 	}
 

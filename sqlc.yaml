@@ -67,6 +67,19 @@ sql:
               import: "github.com/google/uuid"
               type: "UUID"
   - engine: "postgresql"
+    queries: "./internal/form/highlight/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "highlight"
+        out: "./internal/form/highlight"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
     queries: "./internal/form/question/queries.sql"
     schema: "./internal/database/full_schema.sql"
     gen:
@@ -86,6 +99,19 @@ sql:
       go:
         package: "workflow"
         out: "./internal/form/workflow"
+        sql_package: "pgx/v5"
+        overrides:
+          - db_type: "uuid"
+            go_type:
+              import: "github.com/google/uuid"
+              type: "UUID"
+  - engine: "postgresql"
+    queries: "./internal/form/view/queries.sql"
+    schema: "./internal/database/full_schema.sql"
+    gen:
+      go:
+        package: "view"
+        out: "./internal/form/view"
         sql_package: "pgx/v5"
         overrides:
           - db_type: "uuid"

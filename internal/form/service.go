@@ -47,26 +47,12 @@ const (
 )
 
 type UserForm struct {
-	FormID   uuid.UUID
-	Title    string
-	Deadline pgtype.Timestamptz
-	Status   UserFormStatus
-}
-
-type formFields struct {
-	title                  string
-	descriptionJSON        []byte
-	descriptionHTML        string
-	previewMessage         pgtype.Text
-	deadline               pgtype.Timestamptz
-	publishTime            pgtype.Timestamptz
-	googleSheetURL         pgtype.Text
-	messageAfterSubmission string
-	visibility             Visibility
-	dressingColor          pgtype.Text
-	dressingHeaderFont     pgtype.Text
-	dressingQuestionFont   pgtype.Text
-	dressingTextFont       pgtype.Text
+	FormID            uuid.UUID
+	Title             string
+	Deadline          pgtype.Timestamptz
+	Status            UserFormStatus
+	ResponseIDs       []uuid.UUID
+	AllowEditResponse bool
 }
 
 type Service struct {
@@ -88,71 +74,6 @@ func NewService(logger *zap.Logger, db DBTX, markdownStore MarkdownStore) *Servi
 		tracer:        otel.Tracer("forms/service"),
 		markdownStore: markdownStore,
 	}
-}
-
-// visibilityFromAPIFormat converts API visibility format (uppercase) to database format (lowercase).
-func visibilityFromAPIFormat(v string) Visibility {
-	switch v {
-	case "PUBLIC":
-		return VisibilityPublic
-	case "PRIVATE":
-		return VisibilityPrivate
-	default:
-		// Fallback for backward compatibility
-		return Visibility(v)
-	}
-}
-
-func buildFormFieldsFromRequest(ctx context.Context, markdownStore MarkdownStore, request Request) (formFields, error) {
-	form := formFields{}
-
-	if request.Deadline != nil {
-		form.deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
-	} else {
-		form.deadline = pgtype.Timestamptz{Valid: false}
-	}
-
-	if request.PublishTime != nil {
-		form.publishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
-	} else {
-		form.publishTime = pgtype.Timestamptz{Valid: false}
-	}
-
-	descJSON, descHTML, err := markdownStore.ProcessAPIText(ctx, []byte(request.Description))
-	if err != nil {
-		return formFields{}, err
-	}
-	form.descriptionJSON = descJSON
-	form.descriptionHTML = descHTML
-
-	preview := request.PreviewMessage
-	if preview == "" {
-		snip, err := markdownStore.PreviewSnippet(ctx, descJSON, 25)
-		if err != nil {
-			return formFields{}, err
-		}
-		preview = snip
-	}
-
-	if request.Dressing != nil {
-		form.dressingColor = pgtype.Text{String: request.Dressing.Color, Valid: request.Dressing.Color != ""}
-		form.dressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: request.Dressing.HeaderFont != ""}
-		form.dressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: request.Dressing.QuestionFont != ""}
-		form.dressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: request.Dressing.TextFont != ""}
-	} else {
-		form.dressingColor = pgtype.Text{Valid: false}
-		form.dressingHeaderFont = pgtype.Text{Valid: false}
-		form.dressingQuestionFont = pgtype.Text{Valid: false}
-		form.dressingTextFont = pgtype.Text{Valid: false}
-	}
-
-	form.previewMessage = pgtype.Text{String: preview, Valid: preview != ""}
-	form.googleSheetURL = pgtype.Text{String: request.GoogleSheetURL, Valid: request.GoogleSheetURL != ""}
-	form.messageAfterSubmission = request.MessageAfterSubmission
-	form.visibility = visibilityFromAPIFormat(request.Visibility)
-	form.title = request.Title
-
-	return form, nil
 }
 
 func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID, userID uuid.UUID) (CreateRow, error) {
@@ -183,6 +104,7 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 		DressingHeaderFont:     fields.dressingHeaderFont,
 		DressingQuestionFont:   fields.dressingQuestionFont,
 		DressingTextFont:       fields.dressingTextFont,
+		AllowEditResponse:      fields.allowEditResponse,
 	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create form")
@@ -193,18 +115,35 @@ func (s *Service) Create(ctx context.Context, request Request, unitID uuid.UUID,
 	return newForm, nil
 }
 
+// PatchParams applies a form row patch built from sql-level params (used by workflow for last_editor sync, etc.).
+func (s *Service) PatchParams(ctx context.Context, params PatchParams) (PatchRow, error) {
+	ctx, span := s.tracer.Start(ctx, "PatchParams")
+	defer span.End()
+
+	logger := logutil.WithContext(ctx, s.logger)
+	row, err := s.queries.Patch(ctx, params)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "patch form")
+		span.RecordError(err)
+		return PatchRow{}, err
+	}
+
+	return row, nil
+}
+
 func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest, userID uuid.UUID) (PatchRow, error) {
 	ctx, span := s.tracer.Start(ctx, "Patch")
 	defer span.End()
-	logger := logutil.WithContext(ctx, s.logger)
 
 	params := PatchParams{
-		ID:         id,
-		LastEditor: userID,
-	}
-
-	if request.Title != nil {
-		params.Title = pgtype.Text{String: *request.Title, Valid: true}
+		ID:                     id,
+		LastEditor:             userID,
+		Title:                  optionalPtrText(request.Title),
+		PreviewMessage:         optionalPtrText(request.PreviewMessage),
+		Deadline:               optionalPtrTimestamptz(request.Deadline),
+		PublishTime:            optionalPtrTimestamptz(request.PublishTime),
+		MessageAfterSubmission: optionalPtrText(request.MessageAfterSubmission),
+		GoogleSheetUrl:         optionalPtrText(request.GoogleSheetURL),
 	}
 
 	if request.Description.Set {
@@ -217,56 +156,28 @@ func (s *Service) Patch(ctx context.Context, id uuid.UUID, request PatchRequest,
 		params.DescriptionHtml = pgtype.Text{String: descHTML, Valid: true}
 	}
 
-	if request.PreviewMessage != nil {
-		params.PreviewMessage = pgtype.Text{String: *request.PreviewMessage, Valid: true}
-	}
-
-	if request.Deadline != nil {
-		params.Deadline = pgtype.Timestamptz{Time: *request.Deadline, Valid: true}
-	}
-
-	if request.PublishTime != nil {
-		params.PublishTime = pgtype.Timestamptz{Time: *request.PublishTime, Valid: true}
-	}
-
-	if request.MessageAfterSubmission != nil {
-		params.MessageAfterSubmission = pgtype.Text{String: *request.MessageAfterSubmission, Valid: true}
-	}
-
-	if request.GoogleSheetURL != nil {
-		params.GoogleSheetUrl = pgtype.Text{String: *request.GoogleSheetURL, Valid: true}
-	}
-
-	if request.Visibility != nil {
+	v := request.Visibility
+	if v != nil {
 		params.Visibility = NullVisibility{
-			Visibility: visibilityFromAPIFormat(*request.Visibility),
+			Visibility: visibilityFromAPIFormat(*v),
 			Valid:      true,
 		}
 	}
 
-	if request.Dressing != nil {
-		if request.Dressing.Color != "" {
-			params.DressingColor = pgtype.Text{String: request.Dressing.Color, Valid: true}
-		}
-		if request.Dressing.HeaderFont != "" {
-			params.DressingHeaderFont = pgtype.Text{String: request.Dressing.HeaderFont, Valid: true}
-		}
-		if request.Dressing.QuestionFont != "" {
-			params.DressingQuestionFont = pgtype.Text{String: request.Dressing.QuestionFont, Valid: true}
-		}
-		if request.Dressing.TextFont != "" {
-			params.DressingTextFont = pgtype.Text{String: request.Dressing.TextFont, Valid: true}
-		}
+	d := request.Dressing
+	if d != nil {
+		params.DressingColor = nonEmptyText(d.Color)
+		params.DressingHeaderFont = nonEmptyText(d.HeaderFont)
+		params.DressingQuestionFont = nonEmptyText(d.QuestionFont)
+		params.DressingTextFont = nonEmptyText(d.TextFont)
 	}
 
-	patchedForm, err := s.queries.Patch(ctx, params)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "patch form")
-		span.RecordError(err)
-		return PatchRow{}, err
+	a := request.AllowEditResponse
+	if a != nil {
+		params.AllowEditResponse = pgtype.Bool{Bool: *a, Valid: true}
 	}
 
-	return patchedForm, nil
+	return s.PatchParams(ctx, params)
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {

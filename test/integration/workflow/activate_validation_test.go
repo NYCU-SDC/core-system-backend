@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"NYCU-SDC/core-system-backend/internal"
+	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/question"
 	"NYCU-SDC/core-system-backend/internal/form/workflow"
 	"NYCU-SDC/core-system-backend/internal/markdown"
@@ -387,11 +388,10 @@ func TestWorkflowService_ActivateValidation(t *testing.T) {
 				ctx = tc.setup(t, &params, db)
 			}
 
-			// Create question service to satisfy QuestionStore interface
-			questionService := question.NewService(logger, db, nil, markdown.NewService(logger))
-
-			// Create workflow service with real dependencies
-			workflowService := workflow.NewService(logger, db, questionService)
+			md := markdown.NewService(logger)
+			formService := form.NewService(logger, db, md)
+			questionService := question.NewService(logger, db, formService, md)
+			workflowService := workflow.NewService(logger, db, formService, questionService)
 
 			// Call service.Activate which runs validation
 			result, err := workflowService.Activate(ctx, params.formID, params.userID, params.workflowJSON)
