@@ -209,6 +209,9 @@ jobs:
   ScenarioQA:
     needs: Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     env:
       QA_BASE_URL: http://localhost:18080/api
       QA_LOGIN_USER_ID: 4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e
@@ -230,6 +233,33 @@ jobs:
           path: core-system-api
           ref: CORE-236-parse-and-publish-httpyac-result
 
+      - name: Collect PR changed files for QA selector
+        id: qa-changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100
+            });
+
+            const changedFiles = {
+              files: files.map((file) => ({
+                path: file.filename,
+                previousPath: file.previous_filename || '',
+                status: file.status
+              }))
+            };
+
+            const labels = (context.payload.pull_request.labels || []).map((label) => label.name);
+
+            fs.writeFileSync('changed-files.json', JSON.stringify(changedFiles, null, 2));
+            core.setOutput('labels', JSON.stringify(labels));
+
       - name: Prepare reports dir
         run: mkdir -p reports
 
@@ -238,6 +268,11 @@ jobs:
         uses: NYCU-SDC/httpyac-action
         with:
           scenarios-path: './core-system-api/scenarios/user-journey'
+          smoke-path: './core-system-api/scenarios/smoke'
+          run-mode: affected
+          manifest-path: './core-system-api/scenarios/manifest.yaml'
+          changed-files-path: './changed-files.json'
+          labels: ${{ steps.qa-changes.outputs.labels }}
           output-dir: './reports'
           env: |
             BASE_URL=${{ env.QA_BASE_URL }}
