@@ -231,7 +231,7 @@ jobs:
         with:
           repository: NYCU-SDC/core-system-api
           path: core-system-api
-          ref: CORE-367-qa-test-selection
+          ref: feat/CORE-367-qa-test-selection
 
       - name: Collect PR changed files for QA selector
         id: qa-changes
@@ -265,11 +265,9 @@ jobs:
 
       - name: Run httpYac Tests
         id: httpyac-tests
-        uses: NYCU-SDC/httpyac-action@CORE-367-qa-test-selection
+        uses: NYCU-SDC/httpyac-action@feat/CORE-367-qa-test-selection
         with:
-          scenarios-path: "./core-system-api/scenarios/user-journey"
-          smoke-path: "./core-system-api/scenarios/smoke"
-          manifest-path: "./core-system-api/scenarios/manifest.yaml"
+          scenarios-path: "./core-system-api/scenarios"
           changed-files-path: "./changed-files.json"
           labels: ${{ steps.qa-changes.outputs.labels }}
           output-dir: "./reports"
