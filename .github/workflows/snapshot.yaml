@@ -248,7 +248,14 @@ jobs:
               }))
             };
 
-            const labels = (context.payload.pull_request.labels || []).map((label) => label.name);
+            const issueLabels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              per_page: 100
+            });
+
+            const labels = issueLabels.map((label) => label.name);
 
             fs.writeFileSync('changed-files.json', JSON.stringify(changedFiles, null, 2));
             core.setOutput('labels', JSON.stringify(labels));
