@@ -16,6 +16,8 @@ defaults:
     - .github/**
     - .deploy/**
     - sqlc.yaml
+    - scenarios/**/*.example
+    - scenarios/**/*.md
 
 domains:
   access-control:
