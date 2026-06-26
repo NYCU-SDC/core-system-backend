@@ -25,6 +25,11 @@ func TestStatus_ToUppercase(t *testing.T) {
 			input:    StatusArchived,
 			expected: "ARCHIVED",
 		},
+		{
+			name:     "closed to CLOSED",
+			input:    StatusClosed,
+			expected: "CLOSED",
+		},
 	}
 
 	for _, tc := range testCases {
