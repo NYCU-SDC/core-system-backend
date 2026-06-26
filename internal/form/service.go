@@ -36,7 +36,6 @@ type Querier interface {
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
 	GetCreator(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	GetIDBySectionID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
-	GetDeadline(ctx context.Context, id uuid.UUID) (pgtype.Timestamptz, error)
 	GetAvailabilityInfo(ctx context.Context, id uuid.UUID) (GetAvailabilityInfoRow, error)
 }
 
@@ -445,38 +444,6 @@ func (s *Service) IsArchived(ctx context.Context, id uuid.UUID) (bool, error) {
 	}
 
 	return status == StatusArchived, nil
-}
-
-func (s *Service) IsClose(ctx context.Context, id uuid.UUID) (bool, error) {
-	traceCtx, span := s.tracer.Start(ctx, "IsArchived")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	status, err := s.queries.GetStatus(traceCtx, id)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get status")
-		return false, err
-	}
-
-	return status == StatusClosed, nil
-}
-
-func (s *Service) IsDeadlineExpired(ctx context.Context, id uuid.UUID) (bool, error) {
-	traceCtx, span := s.tracer.Start(ctx, "IsDeadlineExpired")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, s.logger)
-
-	deadline, err := s.queries.GetDeadline(traceCtx, id)
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "get deadline")
-		return false, err
-	}
-
-	if !deadline.Valid {
-		return false, nil
-	}
-
-	return time.Now().After(deadline.Time), nil
 }
 
 func (s *Service) CheckAvailable(ctx context.Context, id uuid.UUID) error {

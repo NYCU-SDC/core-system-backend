@@ -465,19 +465,6 @@ func (q *Queries) GetCreator(ctx context.Context, id uuid.UUID) (uuid.UUID, erro
 	return created_by, err
 }
 
-const getDeadline = `-- name: GetDeadline :one
-SELECT deadline
-FROM forms
-WHERE id = $1
-`
-
-func (q *Queries) GetDeadline(ctx context.Context, id uuid.UUID) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, getDeadline, id)
-	var deadline pgtype.Timestamptz
-	err := row.Scan(&deadline)
-	return deadline, err
-}
-
 const getIDBySectionID = `-- name: GetIDBySectionID :one
 SELECT form_id
 FROM sections

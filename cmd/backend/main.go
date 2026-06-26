@@ -402,7 +402,7 @@ func main() {
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}", authMiddleware.HandlerFunc(answerHandler.GetQuestionResponse))
 	mux.Handle("PATCH /api/responses/{responseId}/answers", authMiddleware.Append(availableByResponse).HandlerFunc(answerHandler.UpdateFormResponse))
 	mux.Handle("POST /api/responses/{responseId}/questions/{questionId}/files", authMiddleware.Append(availableByResponse).HandlerFunc(answerHandler.UploadQuestionFiles))
-	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", authMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
+	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", authMiddleware.Append(availableByResponse).HandlerFunc(answerHandler.ConnectOAuthAccountStart))
 	mux.Handle("GET /api/oauth/questions/{provider}/callback", authMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
 
 	// Workflow Management

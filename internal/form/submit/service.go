@@ -32,6 +32,7 @@ type FormStore interface {
 	Get(ctx context.Context, id uuid.UUID) (form.GetRow, error)
 	List(ctx context.Context, status form.Status, visibility form.Visibility, excludeExpired bool) ([]form.ListRow, error)
 	GetByIDs(ctx context.Context, ids []uuid.UUID) ([]form.GetByIDsRow, error)
+	CheckAvailable(ctx context.Context, id uuid.UUID) error
 }
 
 type FormResponseStore interface {
@@ -80,6 +81,13 @@ func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []sh
 		return response.FormResponse{}, []error{err}
 	}
 
+	// Check form availability before modifying answers or submitting
+	err = s.formStore.CheckAvailable(traceCtx, formID)
+	if err != nil {
+		logger.Warn("form is not available for submit", zap.String("formID", formID.String()), zap.Error(err))
+		return response.FormResponse{}, []error{err}
+	}
+
 	// Upsert all provided answers
 	_, _, errs := s.answerStore.Upsert(traceCtx, formID, responseID, answers)
 	if len(errs) > 0 {
@@ -124,7 +132,7 @@ func (s *Service) Submit(ctx context.Context, responseID uuid.UUID, answers []sh
 	}
 
 	// Mark the response as submitted
-	formResponse, err := s.responseStore.UpdateSubmitted(ctx, responseID)
+	formResponse, err := s.responseStore.UpdateSubmitted(traceCtx, responseID)
 	if err != nil {
 		logger.Error("failed to update response to submitted", zap.Error(err))
 		return response.FormResponse{}, []error{err}
