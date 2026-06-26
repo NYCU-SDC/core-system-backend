@@ -1,0 +1,120 @@
+# ============================================
+# Negative Form Creation - Error paths for form CRUD
+# ============================================
+# Import 01-setup (auth, verifyOrg). Then 02-form-creation for variables.
+
+# @import ../form-lifecycle/01-setup.http
+# @import ../form-lifecycle/02-form-creation.http
+
+###
+
+# ============================================
+# Create form with invalid body - missing title (expect 400)
+# ============================================
+# @name createFormMissingTitle
+# @ref verifyOrg
+POST {{BASE_URL}}/orgs/{{orgSlug}}/forms
+Content-Type: application/json
+
+{
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{ "type": "text", "text": "No title provided" }]
+            }
+        ]
+    },
+    "visibility": "PUBLIC"
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Error', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Error');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create form with invalid visibility (expect 400)
+# ============================================
+# @name createFormInvalidVisibility
+# @ref verifyOrg
+POST {{BASE_URL}}/orgs/{{orgSlug}}/forms
+Content-Type: application/json
+
+{
+    "title": "Invalid visibility test",
+    "visibility": "INVALID_VISIBILITY"
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Error', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Error');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Get form with non-existent form ID (expect 404)
+# ============================================
+# @name getFormNonExistent
+# @ref createForm
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Update form with non-existent form ID (expect 404)
+# ============================================
+# @name updateFormNonExistent
+# @ref createForm
+PATCH {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+
+{
+    "title": "Should Not Update",
+    "visibility": "PUBLIC"
+}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}

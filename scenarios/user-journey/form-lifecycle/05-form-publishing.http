@@ -1,0 +1,269 @@
+# ============================================
+# Phase 5: Form Publishing
+# ============================================
+# This file tests the form publishing lifecycle:
+# - Verify form status before publishing (should be DRAFT)
+# - Publish the form (status changes from DRAFT to PUBLISHED)
+# - Verify form is published and accessible
+# - Test that published form appears in listing
+
+# Import setup from Phase 4
+# @import ./04-question-management.http
+
+###
+
+# ============================================
+# Get Form Status Before Publishing
+# ============================================
+# @name getFormBeforePublish
+# @ref verifyQuestionDeletion
+GET {{BASE_URL}}/forms/{{formId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form is in DRAFT status before publishing', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'DRAFT', 'Status should be DRAFT before publishing');
+        equal(data.title, 'Form Lifecycle Test Form (Updated)', 'Title should match');
+        
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+        console.log('Title:', data.title);
+        console.log('Visibility:', data.visibility);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Workflow is Valid Before Publishing
+# ============================================
+# @name verifyWorkflowBeforePublish
+# @ref getFormBeforePublish
+GET {{BASE_URL}}/forms/{{formId}}/workflow
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Workflow is valid before publishing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data.workflow), true, 'Workflow should be an array');
+        equal(data.workflow.length, 3, 'Workflow should have 3 nodes (START, Section, END)');
+        equal(Array.isArray(data.info), true, 'Info should be an array');
+        equal(data.info.length, 0, 'There should be no validation errors');
+        
+        console.log('Workflow is valid and ready for publishing');
+    });
+}}
+
+###
+
+# ============================================
+# Verify Questions Exist Before Publishing
+# ============================================
+# @name verifyQuestionsBeforePublish
+# @ref verifyWorkflowBeforePublish
+GET {{BASE_URL}}/forms/{{formId}}/sections
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form has questions before publishing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        
+        // Find our section
+        const ourSection = data.find(s => s.section.id === defaultSectionId);
+        equal(ourSection !== undefined, true, 'Our section should exist');
+        equal(Array.isArray(ourSection.questions), true, 'Questions should be an array');
+        equal(ourSection.questions.length >= 1, true, 'Should have at least 1 question');
+        
+        console.log('Form has', ourSection.questions.length, 'questions ready for publishing');
+    });
+}}
+
+###
+
+# ============================================
+# Publish Form
+# ============================================
+# @name publishForm
+# @ref verifyQuestionsBeforePublish
+POST {{BASE_URL}}/forms/{{formId}}/publish
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form published successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.visibility !== undefined, true, 'Response should contain visibility');
+        equal(typeof data.visibility, 'string', 'Visibility should be a string');
+        
+        console.log('Form visibility:', data.visibility);
+    });
+
+    const data = JSON.parse(response.body);
+    exports.formVisibility = data.visibility;
+}}
+
+###
+
+# ============================================
+# Get Form After Publishing
+# ============================================
+# @name getFormAfterPublish
+# @ref publishForm
+GET {{BASE_URL}}/forms/{{formId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form status changed to PUBLISHED', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'PUBLISHED', 'Status should be PUBLISHED after publishing');
+        equal(data.visibility, formVisibility, 'Visibility should match');
+        
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+        console.log('Title:', data.title);
+        console.log('Form visibility:', data.visibility);
+        console.log('Publish Time:', data.publishTime);
+        console.log('Deadline:', data.deadline);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Published Form Appears in Listing
+# ============================================
+# @name verifyFormInListing
+# @ref getFormAfterPublish
+GET {{BASE_URL}}/forms
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Published form appears in forms listing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        
+        // Find our published form
+        const publishedForm = data.find(f => f.id === formId);
+        equal(publishedForm !== undefined, true, 'Published form should appear in listing');
+        equal(publishedForm.status, 'PUBLISHED', 'Form status should be PUBLISHED in listing');
+        
+        console.log('Published form found in listing with status:', publishedForm.status);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Published Form in Default View of Organization Listing
+# ============================================
+# @name verifyFormInOrgListing
+# @ref verifyFormInListing
+GET {{BASE_URL}}/orgs/{{orgSlug}}/forms
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Published form appears in organization forms listing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        
+        // Find our published form
+        const publishedForm = data.find(f => f.id === formId);
+        equal(publishedForm !== undefined, true, 'Published form should appear in org listing');
+        equal(publishedForm.status, 'PUBLISHED', 'Form status should be PUBLISHED in org listing');
+        
+        console.log('Published form found in organization listing');
+    });
+}}
+
+###
+
+# ============================================
+# Try Publishing Again (Should Be Idempotent or Return Error)
+# ============================================
+# @name publishFormAgain
+# @ref verifyFormInOrgListing
+POST {{BASE_URL}}/forms/{{formId}}/publish
+
+{{
+    // Publishing an already published form should either:
+    // 1. Return 200 with same visibility (idempotent)
+    // 2. Return 4xx error indicating form is already published
+    
+    const statusCode = response.statusCode;
+    const isSuccess = statusCode === 200;
+    const isClientError = statusCode >= 400 && statusCode < 500;
+    
+    const { equal } = require('assert');
+    
+    test('Publishing again returns expected response', () => {
+        const data = JSON.parse(response.body);
+
+        equal(data.title, 'Validation Problem', 'Response should indicate validation problem');
+    });
+}}
+
+###
+
+# ============================================
+# Get Form Final State
+# ============================================
+# @name getFormFinalState
+# @ref publishFormAgain
+GET {{BASE_URL}}/forms/{{formId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form remains in PUBLISHED state', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'PUBLISHED', 'Status should remain PUBLISHED');
+        
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+        console.log('Title:', data.title);
+        console.log('Description (ProseMirror doc):', data.description?.type);
+        console.log('Description HTML:', data.descriptionHtml);
+        console.log('Form visibility:', data.visibility);
+        console.log('Publish Time:', data.publishTime);
+        console.log('Deadline:', data.deadline);
+        console.log('Cover Image:', data.coverImage || '(none)');
+        console.log('Google Sheet URL:', data.googleSheetUrl || '(none)');
+        console.log('Created At:', data.createdAt);
+        console.log('Updated At:', data.updatedAt);
+    });
+}}

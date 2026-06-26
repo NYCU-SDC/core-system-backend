@@ -1,0 +1,10 @@
+name: "Organization Lifecycle"
+description: "Positive coverage for creating a temporary organization, restoring membership, and deleting it cleanly."
+cases:
+  - name: "Create And Delete Organization"
+    description: "Create the temporary organization used by negative tests, restore user membership, and delete it."
+    domains:
+      - access-control
+      - unit
+    path: "02-organization-deletion.http"
+    test: "deleteOrg"

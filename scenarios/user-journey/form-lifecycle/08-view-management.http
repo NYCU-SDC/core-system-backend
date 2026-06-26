@@ -1,0 +1,430 @@
+# ============================================
+# Phase 8: View Management - View CRUD & Operations
+# ============================================
+# This file covers view management operations:
+# - Create view (default title generation)
+# - List views
+# - Get view by ID
+# - Update view title
+# - Update view order
+# - Lock and unlock view
+# - Duplicate view (inserted after original)
+# - Delete view
+
+# Import setup from Phase 6
+# @import ./06-response-creation.http
+
+###
+
+# ============================================
+# Create First View
+# ============================================
+# @name createFirstView
+# @ref listFormResponses
+POST {{BASE_URL}}/forms/{{formId}}/views
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('First view created with default title', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'View ID should exist');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(data.title, '尚未命名的分頁', 'First view title should be default');
+        equal(data.locked, false, 'View should not be locked by default');
+        equal(data.order, 0, 'First view order should be 0');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.firstViewId = data.id;
+    exports.firstViewOrder = data.order;
+}}
+
+###
+
+# ============================================
+# Create Second View (default title with suffix)
+# ============================================
+# @name createSecondView
+# @ref createFirstView
+POST {{BASE_URL}}/forms/{{formId}}/views
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Second view created with incremented default title', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'View ID should exist');
+        equal(data.title, '尚未命名的分頁（1）', 'Second view title should have suffix');
+        equal(data.order, 1, 'Second view order should be 1');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.secondViewId = data.id;
+    exports.secondViewOrder = data.order;
+}}
+
+###
+
+# ============================================
+# Create Third View (default title with suffix 2)
+# ============================================
+# @name createThirdView
+# @ref createSecondView
+POST {{BASE_URL}}/forms/{{formId}}/views
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Third view created with incremented default title', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'View ID should exist');
+        equal(data.title, '尚未命名的分頁（2）', 'Third view title should have suffix 2');
+        equal(data.order, 2, 'Third view order should be 2');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.thirdViewId = data.id;
+    exports.thirdViewOrder = data.order;
+}}
+
+###
+
+# ============================================
+# List Views
+# ============================================
+# @name listViews
+# @ref createThirdView
+GET {{BASE_URL}}/forms/{{formId}}/views
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Views list contains all created views in order', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        equal(data.length, 3, 'Should have 3 views');
+        equal(data[0].id, firstViewId, 'First view should be first in list');
+        equal(data[1].id, secondViewId, 'Second view should be second in list');
+        equal(data[2].id, thirdViewId, 'Third view should be third in list');
+        equal(data[0].order < data[1].order, true, 'Views should be ordered ascending');
+        equal(data[1].order < data[2].order, true, 'Views should be ordered ascending');
+    });
+}}
+
+###
+
+# ============================================
+# Get View by ID
+# ============================================
+# @name getFirstView
+# @ref listViews
+GET {{BASE_URL}}/forms/{{formId}}/views/{{firstViewId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('View retrieved successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, firstViewId, 'View ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(data.title, '尚未命名的分頁', 'Title should match');
+        equal(data.locked, false, 'Locked should be false');
+    });
+}}
+
+###
+
+# ============================================
+# Update View Title
+# ============================================
+# @name updateFirstViewTitle
+# @ref getFirstView
+PATCH {{BASE_URL}}/forms/{{formId}}/views/{{firstViewId}}
+Content-Type: application/json
+
+{
+    "title": "Core System"
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('View title updated successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, firstViewId, 'View ID should match');
+        equal(data.title, 'Core System', 'Title should be updated');
+        equal(data.order, firstViewOrder, 'Order should remain unchanged');
+    });
+}}
+
+###
+
+# ============================================
+# Update View Order (move first view to order 2)
+# ============================================
+# @name updateFirstViewOrder
+# @ref updateFirstViewTitle
+PATCH {{BASE_URL}}/forms/{{formId}}/views/{{firstViewId}}
+Content-Type: application/json
+
+{
+    "order": 2
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('View order updated successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, firstViewId, 'View ID should match');
+        equal(data.order, 2, 'Order should be updated to 2');
+        equal(data.title, 'Core System', 'Title should remain unchanged');
+    });
+}}
+
+###
+
+# ============================================
+# Verify order after update
+# ============================================
+# @name verifyViewOrderAfterUpdate
+# @ref updateFirstViewOrder
+GET {{BASE_URL}}/forms/{{formId}}/views
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('View order correctly shifted after update', () => {
+        const data = JSON.parse(response.body);
+        const views = data.slice().sort((a, b) => a.order - b.order);
+        equal(views[0].id, secondViewId, 'Second view order should be 0');
+        equal(views[0].order, 0, 'Second view order should be 0');
+        equal(views[1].id, thirdViewId, 'Third view order should be 1');
+        equal(views[1].order, 1, 'Third view order should be 1');
+        equal(views[2].id, firstViewId, 'First view should now be last');
+        equal(views[2].order, 2, 'First view order should be 2');
+    });
+}}
+
+###
+
+# ============================================
+# Lock View
+# ============================================
+# @name lockSecondView
+# @ref verifyViewOrderAfterUpdate
+POST {{BASE_URL}}/forms/{{formId}}/views/{{secondViewId}}/lock
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('View locked successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, secondViewId, 'View ID should match');
+        equal(data.locked, true, 'View should be locked');
+    });
+}}
+
+###
+
+# ============================================
+# Unlock View
+# ============================================
+# @name unlockSecondView
+# @ref lockSecondView
+POST {{BASE_URL}}/forms/{{formId}}/views/{{secondViewId}}/unlock
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('View unlocked successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, secondViewId, 'View ID should match');
+        equal(data.locked, false, 'View should be unlocked');
+    });
+}}
+
+###
+
+# ============================================
+# Duplicate View (should be inserted after original)
+# ============================================
+# @name duplicateFirstView
+# @ref unlockSecondView
+POST {{BASE_URL}}/forms/{{formId}}/views/{{firstViewId}}/duplicate
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('View duplicated with correct title and order', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Duplicated view ID should exist');
+        equal(data.id !== firstViewId, true, 'Duplicated view should have a new ID');
+        equal(data.title, '「Core System」的副本', 'Duplicated view title should have suffix');
+        equal(data.locked, false, 'Duplicated view should not be locked');
+        equal(data.order, 3, 'Duplicated view should be placed after original (order 2 + 1 = 3)');
+        equal(data.formId, formId, 'Form ID should match');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.duplicatedViewId = data.id;
+}}
+
+###
+
+# ============================================
+# Verify list after duplicate (duplicated view is right after original)
+# ============================================
+# @name verifyListAfterDuplicate
+# @ref duplicateFirstView
+GET {{BASE_URL}}/forms/{{formId}}/views
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Duplicated view is placed immediately after original', () => {
+        const data = JSON.parse(response.body);
+        equal(data.length, 4, 'Should now have 4 views');
+
+        const views = data.slice().sort((a, b) => a.order - b.order);
+        const originalIndex = views.findIndex(v => v.id === firstViewId);
+        const duplicateIndex = views.findIndex(v => v.id === duplicatedViewId);
+        equal(duplicateIndex, originalIndex + 1, 'Duplicate should be immediately after original');
+    });
+}}
+
+###
+
+# ============================================
+# Duplicate First View Again (should generate incremented copy title)
+# ============================================
+# @name duplicateFirstViewAgain
+# @ref verifyListAfterDuplicate
+POST {{BASE_URL}}/forms/{{formId}}/views/{{firstViewId}}/duplicate
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Second duplicate of same view gets incremented title', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Duplicated view ID should exist');
+        equal(data.id !== firstViewId, true, 'Duplicated view should have a new ID');
+        equal(data.id !== duplicatedViewId, true, 'Should be a different view from first duplicate');
+        equal(data.title, '「Core System」的副本（1）', 'Second duplicate title should have numeric suffix');
+        equal(data.locked, false, 'Duplicated view should not be locked');
+        equal(data.formId, formId, 'Form ID should match');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.duplicatedViewId2 = data.id;
+}}
+
+###
+
+# ============================================
+# Verify list after second duplicate
+# ============================================
+# @name verifyListAfterSecondDuplicate
+# @ref duplicateFirstViewAgain
+GET {{BASE_URL}}/forms/{{formId}}/views
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Both duplicates are present and placed after original', () => {
+        const data = JSON.parse(response.body);
+        equal(data.length, 5, 'Should now have 5 views');
+
+        // Verify exact order values for each view
+        const secondView = views.find(v => v.id === secondViewId);
+        const thirdView = views.find(v => v.id === thirdViewId);
+        const firstView = views.find(v => v.id === firstViewId);
+        const dup2View = views.find(v => v.id === duplicatedViewId2);
+        const dup1View = views.find(v => v.id === duplicatedViewId);
+        equal(secondView.order, 0, 'Second view should have order 0');
+        equal(thirdView.order, 1, 'Third view should have order 1');
+        equal(firstView.order, 2, 'First view should have order 2');
+        equal(dup2View.order, 3, 'Second duplicate should have order 3 (inserted right after original)');
+        equal(dup1View.order, 4, 'First duplicate should have order 4 (pushed up by second duplicate)');
+    });
+}}
+
+###
+
+# ============================================
+# Delete View
+# ============================================
+# @name deleteThirdView
+# @ref verifyListAfterSecondDuplicate
+DELETE {{BASE_URL}}/forms/{{formId}}/views/{{thirdViewId}}
+
+{{
+    test.status(204);
+
+    console.log('Deleted view:', thirdViewId);
+}}
+
+###
+
+# ============================================
+# Verify deletion (third view no longer in list)
+# ============================================
+# @name verifyViewDeletion
+# @ref deleteThirdView
+GET {{BASE_URL}}/forms/{{formId}}/views
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Deleted view is no longer in list', () => {
+        const data = JSON.parse(response.body);
+        equal(data.length, 4, 'Should now have 4 views');
+        equal(data.some(v => v.id === thirdViewId), false, 'Deleted view should not appear in list');
+    });
+}}

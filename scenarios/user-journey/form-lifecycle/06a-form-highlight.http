@@ -1,0 +1,208 @@
+# ============================================
+# Phase 6a: Form Highlight Lifecycle
+# ============================================
+# This file tests form highlight configuration and statistics:
+# - Get the unconfigured highlight state
+# - Set a choice-based question as the highlight
+# - Verify per-choice response counts
+# - Patch the display title
+# - Clear the highlight
+
+# Import setup from Phase 6
+# @import ./06-response-creation.http
+
+###
+
+# ============================================
+# Get Highlight Before Configuration
+# ============================================
+# @name getHighlightBeforeConfiguration
+# @ref listFormResponses
+GET {{BASE_URL}}/forms/{{formId}}/highlight
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Unconfigured highlight returns null fields and empty choices', () => {
+        const data = JSON.parse(response.body);
+        equal(data.questionId, null, 'questionId should be null before configuration');
+        equal(data.questionTitle, null, 'questionTitle should be null before configuration');
+        equal(data.displayTitle, null, 'displayTitle should be null before configuration');
+        equal(Array.isArray(data.choices), true, 'choices should be an array');
+        equal(data.choices.length, 0, 'choices should be empty before configuration');
+    });
+}}
+
+###
+
+# ============================================
+# Set Form Highlight
+# ============================================
+# @name setFormHighlight
+# @ref getHighlightBeforeConfiguration
+PUT {{BASE_URL}}/forms/{{formId}}/highlight
+Content-Type: application/json
+
+{
+    "questionId": "{{singleChoiceQuestionId}}",
+    "displayTitle": "Work Location Highlight"
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Choice-based question is configured as highlight', () => {
+        const data = JSON.parse(response.body);
+        equal(data.questionId, singleChoiceQuestionId, 'Highlight question should match request');
+        equal(data.questionTitle, 'What is your preferred work location?', 'questionTitle should come from the question');
+        equal(data.displayTitle, 'Work Location Highlight', 'displayTitle should use the configured title');
+        equal(Array.isArray(data.choices), true, 'choices should be an array');
+        equal(data.choices.length, singleChoiceOptions.length, 'choices should include all options');
+
+        const remote = data.choices.find(c => c.choiceId === singleChoiceOptions[0].id);
+        const onSite = data.choices.find(c => c.choiceId === singleChoiceOptions[1].id);
+        const hybrid = data.choices.find(c => c.choiceId === singleChoiceOptions[2].id);
+
+        equal(remote !== undefined, true, 'Remote choice should be present');
+        equal(remote.name, 'Remote', 'Remote choice name should match');
+        equal(remote.count, 1, 'Remote should have one response');
+
+        equal(onSite !== undefined, true, 'On-site choice should be present');
+        equal(onSite.name, 'On-site', 'On-site choice name should match');
+        equal(onSite.count, 0, 'On-site should have no responses');
+
+        equal(hybrid !== undefined, true, 'Hybrid choice should be present');
+        equal(hybrid.name, 'Hybrid', 'Hybrid choice name should match');
+        equal(hybrid.count, 0, 'Hybrid should have no responses');
+    });
+}}
+
+###
+
+# ============================================
+# Get Configured Form Highlight
+# ============================================
+# @name getConfiguredFormHighlight
+# @ref setFormHighlight
+GET {{BASE_URL}}/forms/{{formId}}/highlight
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Configured highlight persists and returns response statistics', () => {
+        const data = JSON.parse(response.body);
+        equal(data.questionId, singleChoiceQuestionId, 'Highlight question should persist');
+        equal(data.questionTitle, 'What is your preferred work location?', 'questionTitle should match');
+        equal(data.displayTitle, 'Work Location Highlight', 'displayTitle should persist');
+        equal(Array.isArray(data.choices), true, 'choices should be an array');
+        equal(data.choices.length, singleChoiceOptions.length, 'choices should include all options');
+
+        const totalChoiceCount = data.choices.reduce((sum, choice) => sum + choice.count, 0);
+        equal(totalChoiceCount, 1, 'Choice counts should include the submitted response once');
+    });
+}}
+
+###
+
+# ============================================
+# Patch Form Highlight Display Title
+# ============================================
+# @name patchFormHighlightTitle
+# @ref getConfiguredFormHighlight
+PATCH {{BASE_URL}}/forms/{{formId}}/highlight
+Content-Type: application/json
+
+{
+    "displayTitle": "Updated Work Location Highlight"
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Highlight display title is updated without changing question', () => {
+        const data = JSON.parse(response.body);
+        equal(data.questionId, singleChoiceQuestionId, 'Highlight question should not change');
+        equal(data.questionTitle, 'What is your preferred work location?', 'questionTitle should still come from the question');
+        equal(data.displayTitle, 'Updated Work Location Highlight', 'displayTitle should be updated');
+    });
+}}
+
+###
+
+# ============================================
+# Patch Form Highlight Display Title to Null
+# ============================================
+# @name patchFormHighlightTitleToNull
+# @ref patchFormHighlightTitle
+PATCH {{BASE_URL}}/forms/{{formId}}/highlight
+Content-Type: application/json
+
+{
+    "displayTitle": null
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Null display title falls back to question title', () => {
+        const data = JSON.parse(response.body);
+        equal(data.questionId, singleChoiceQuestionId, 'Highlight question should not change');
+        equal(data.questionTitle, 'What is your preferred work location?', 'questionTitle should match');
+        equal(data.displayTitle, 'What is your preferred work location?', 'displayTitle should fall back to questionTitle');
+    });
+}}
+
+###
+
+# ============================================
+# Clear Form Highlight
+# ============================================
+# @name clearFormHighlight
+# @ref patchFormHighlightTitleToNull
+DELETE {{BASE_URL}}/forms/{{formId}}/highlight
+
+{{
+    test.status(204);
+}}
+
+###
+
+# ============================================
+# Get Highlight After Clear
+# ============================================
+# @name getHighlightAfterClear
+# @ref clearFormHighlight
+GET {{BASE_URL}}/forms/{{formId}}/highlight
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Cleared highlight returns unconfigured state', () => {
+        const data = JSON.parse(response.body);
+        equal(data.questionId, null, 'questionId should be null after clearing');
+        equal(data.questionTitle, null, 'questionTitle should be null after clearing');
+        equal(data.displayTitle, null, 'displayTitle should be null after clearing');
+        equal(Array.isArray(data.choices), true, 'choices should be an array');
+        equal(data.choices.length, 0, 'choices should be empty after clearing');
+    });
+}}
+
+###

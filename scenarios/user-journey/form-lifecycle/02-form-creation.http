@@ -1,0 +1,565 @@
+# ============================================
+# Phase 2: Form Creation - Form CRUD & Metadata
+# ============================================
+# This file covers form creation and basic CRUD operations:
+# - Create form
+# - Get form by ID
+# - Update form metadata
+# - List forms
+# - List current user's forms (GET /forms/me, UserForm.responseIds always an array)
+# - Get available fonts
+# - Upload cover image (optional)
+
+# Import setup from Phase 1
+# @import ./01-setup.http
+
+###
+
+# ============================================
+# Add User to Organization (if not already a member)
+# ============================================
+# @name addUserToOrg
+# @ref verifyOrg
+POST {{BASE_URL}}/orgs/{{orgSlug}}/members
+Content-Type: application/json
+{
+    "email": "{{userEmail}}"
+}
+?? status <= 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('User added to organization successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.member.id, userId, 'User ID should match');
+        equal(data.orgId, orgId, 'Organization ID should match');
+    });
+}}
+
+
+###
+
+# ============================================
+# List Forms of Current User (Should be empty initially)
+# ============================================
+# @name listUserForms
+# @ref addUserToOrg
+GET {{BASE_URL}}/forms/me
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    const data = JSON.parse(response.body);
+
+    test('GET /forms/me returns a JSON array (UserFormListResponse)', () => {
+        equal(Array.isArray(data), true, 'Response must be a bare array of user forms');
+    });
+
+    test('each UserForm row has required shape (responseIds always present as array)', () => {
+        const allowedStatus = new Set(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED']);
+        for (const row of data) {
+            equal(typeof row.id, 'string', 'id must be present');
+            equal(typeof row.title, 'string', 'title must be present');
+            equal(allowedStatus.has(row.status), true, `status must be a UserFormStatus value, got: ${row.status}`);
+            equal(Array.isArray(row.responseIds), true, 'responseIds must always be an array');
+            for (const rid of row.responseIds) {
+                equal(typeof rid, 'string', 'each responseIds entry must be a string UUID');
+            }
+        }
+    });
+}}
+
+###
+
+# ============================================
+# Get Available Fonts
+# ============================================
+# @name getFonts
+# @ref listUserForms
+GET {{BASE_URL}}/forms/fonts
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Fonts array is returned', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        equal(data.length > 0, true, 'Fonts array should not be empty');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.firstFontId = data[0].id;
+}}
+
+###
+
+# ============================================
+# Create Form
+# ============================================
+# @name createForm
+# @ref addUserToOrg
+POST {{BASE_URL}}/orgs/{{orgSlug}}/forms
+Content-Type: application/json
+
+{
+    "title": "Form Lifecycle Test Form",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "This is a comprehensive test form covering all question types and form lifecycle operations. It demonstrates form creation, question management, workflow setup, and response handling."
+                    }
+                ]
+            }
+        ]
+    },
+    "previewMessage": "Complete test form",
+    "messageAfterSubmission": "Thank you for completing this test form! Your response has been recorded.",
+    "visibility": "PUBLIC"
+}
+
+?? status <= 201
+{{
+    test.hasResponseBody();
+
+    const { equal, deepStrictEqual } = require('assert');
+
+    const expectedDescriptionParagraph = {
+        type: 'paragraph',
+        content: [
+            {
+                type: 'text',
+                text: 'This is a comprehensive test form covering all question types and form lifecycle operations. It demonstrates form creation, question management, workflow setup, and response handling.'
+            }
+        ]
+    };
+
+    test('Form created with correct properties', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Form ID should exist');
+        equal(data.title, 'Form Lifecycle Test Form', 'Form title should match');
+        equal(data.description?.type, 'doc', 'Form description should be rich text doc');
+        deepStrictEqual(data.description?.content?.[0], expectedDescriptionParagraph, 'Form description paragraph should match');
+        equal(typeof data.descriptionHtml, 'string', 'Form descriptionHtml should be a string');
+        equal(data.descriptionHtml.includes('<p>'), true, 'Form descriptionHtml should contain <p>');
+        equal(data.previewMessage, 'Complete test form', 'Preview message should match');
+        equal(data.messageAfterSubmission, 'Thank you for completing this test form! Your response has been recorded.', 'Message after submission should match');
+        equal(data.visibility, 'PUBLIC', 'Form visibility should be PUBLIC');
+        equal(data.status, 'DRAFT', 'Form status should be DRAFT');
+        equal(data.lastEditor.id, userId, 'Last editor should be the current user');
+        equal(data.unitId, orgId, 'Organization ID should match');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.formId = data.id;
+}}
+
+###
+
+# ============================================
+# Get Form by ID
+# ============================================
+# @name getForm
+# @ref createForm
+GET {{BASE_URL}}/forms/{{formId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form retrieved successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.title, 'Form Lifecycle Test Form', 'Form title should match');
+        equal(data.status, 'DRAFT', 'Form status should be DRAFT');
+    });
+}}
+
+###
+
+# ============================================
+# List Forms
+# ============================================
+# @name listForms
+# @ref getForm
+GET {{BASE_URL}}/forms
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Forms list contains created form', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        equal(data.some(f => f.id === formId), true, 'Created form should be in the list');
+    });
+}}
+
+###
+
+# ============================================
+# Update Form - Add Dressing & Metadata
+# ============================================
+# @name updateForm
+# @ref listForms
+PATCH {{BASE_URL}}/forms/{{formId}}
+Content-Type: application/json
+
+{
+    "title": "Form Lifecycle Test Form (Updated)",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "This is an updated comprehensive test form covering all question types and form lifecycle operations. Updated to test form editing capabilities."
+                    }
+                ]
+            }
+        ]
+    },
+    "previewMessage": "Updated test form - complete all sections",
+    "messageAfterSubmission": "Thank you for your submission! We will review your response shortly.",
+    "visibility": "PUBLIC",
+    "dressing": {
+        "color": "#0066cc",
+        "headerFont": "BoutiqueBitmap7x7CircleDot",
+        "questionFont": "BoutiqueBitmap7x7SquareDot",
+        "textFont": "ChillBitmap16px"
+    },
+    "deadline": "2026-12-31T23:59:59Z",
+    "publishTime": "2026-02-01T00:00:00Z"
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal, deepStrictEqual } = require('assert');
+
+    const expectedDescriptionParagraph = {
+        type: 'paragraph',
+        content: [
+            {
+                type: 'text',
+                text: 'This is an updated comprehensive test form covering all question types and form lifecycle operations. Updated to test form editing capabilities.'
+            }
+        ]
+    };
+
+    test('Form updated with correct properties', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Form Lifecycle Test Form (Updated)', 'Form title should be updated');
+        equal(data.description?.type, 'doc', 'Updated description should be rich text doc');
+        deepStrictEqual(data.description?.content?.[0], expectedDescriptionParagraph, 'Updated description paragraph should match');
+        equal(typeof data.descriptionHtml, 'string', 'Updated descriptionHtml should be a string');
+        equal(data.descriptionHtml.includes('<p>'), true, 'Updated descriptionHtml should contain <p>');
+        equal(data.dressing !== undefined, true, 'Dressing should exist');
+        equal(data.dressing.color, '#0066cc', 'Dressing color should match');
+        equal(data.dressing.headerFont, 'BoutiqueBitmap7x7CircleDot', 'Dressing header font should match');
+        equal(data.dressing.questionFont, 'BoutiqueBitmap7x7SquareDot', 'Dressing question font should match');
+        equal(data.dressing.textFont, 'ChillBitmap16px', 'Dressing text font should match');
+        equal(data.deadline !== null, true, 'Deadline should be set');
+        equal(data.publishTime !== null, true, 'Publish time should be set');
+    });
+}}
+
+###
+
+# ============================================
+# Update Form Description - nodeRenderers smoke coverage
+# ============================================
+# This step exercises the expected default nodeRenderers keys:
+# paragraph, blockquote, horizontal_rule, heading, code_block, text, hard_break,
+# ordered_list, bullet_list, list_item, variable, strong, em, link,
+# underline, code (inline), emoji (text), nested blockquote+list,
+# extra heading levels, mixed marks, link variants, code_block multiline,
+# blockquote multi-paragraph, nested list depth, multiple variables, html sanitization text
+# @name updateFormDescriptionNodeRenderers
+# @ref updateForm
+PATCH {{BASE_URL}}/forms/{{formId}}
+Content-Type: application/json
+
+{
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "heading",
+                "attrs": { "level": 2 },
+                "content": [{ "type": "text", "text": "NodeRenderers Coverage" }]
+            },
+            {
+                "type": "heading",
+                "attrs": { "level": 1 },
+                "content": [{ "type": "text", "text": "H1 title" }]
+            },
+            {
+                "type": "heading",
+                "attrs": { "level": 3 },
+                "content": [{ "type": "text", "text": "H3 subtitle" }]
+            },
+            {
+                "type": "heading",
+                "attrs": { "level": 4 },
+                "content": [{ "type": "text", "text": "H4 section" }]
+            },
+            {
+                "type": "heading",
+                "attrs": { "level": 5 },
+                "content": [{ "type": "text", "text": "H5 section" }]
+            },
+            {
+                "type": "heading",
+                "attrs": { "level": 6 },
+                "content": [{ "type": "text", "text": "H6 section" }]
+            },
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "paragraph + " },
+                    { "type": "text", "marks": [{ "type": "bold" }], "text": "strong" },
+                    { "type": "text", "text": " + " },
+                    { "type": "text", "marks": [{ "type": "italic" }], "text": "em" },
+                    { "type": "text", "text": " + " },
+                    { "type": "text", "marks": [{ "type": "link", "attrs": { "href": "https://example.com" } }], "text": "link" },
+                    { "type": "text", "text": " + " },
+                    { "type": "text", "marks": [{ "type": "underline" }], "text": "underline" },
+                    { "type": "text", "text": " + " },
+                    { "type": "text", "marks": [{ "type": "code" }], "text": "inline_code" }
+                ]
+            },
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "mixed marks: " },
+                    {
+                        "type": "text",
+                        "marks": [
+                            { "type": "bold" },
+                            { "type": "italic" },
+                            { "type": "link", "attrs": { "href": "https://example.com/relative/path" } }
+                        ],
+                        "text": "bold+italic+relative_link"
+                    },
+                    { "type": "text", "text": " and " },
+                    { "type": "text", "marks": [{ "type": "link", "attrs": { "href": "mailto:test@example.com" } }], "text": "mailto" },
+                    { "type": "text", "text": " and " },
+                    { "type": "text", "marks": [{ "type": "link", "attrs": { "href": "#hash" } }], "text": "hash" },
+                    { "type": "text", "marks": [{ "type": "link", "attrs": { "href": "https://example.com/#hash" } }], "text": "hash" }
+                ]
+            },
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "line1" },
+                    { "type": "hard_break" },
+                    { "type": "text", "text": "line2" }
+                ]
+            },
+            { "type": "horizontal_rule" },
+            {
+                "type": "blockquote",
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [{ "type": "text", "text": "blockquote text" }]
+                    },
+                    {
+                        "type": "paragraph",
+                        "content": [{ "type": "text", "text": "blockquote second paragraph" }]
+                    },
+                    {
+                        "type": "bullet_list",
+                        "content": [
+                            {
+                                "type": "list_item",
+                                "content": [
+                                    { "type": "paragraph", "content": [{ "type": "text", "text": "nested bullet item" }] }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "code_block",
+                "content": [{ "type": "text", "text": "line1\nline2\nconsole.log('code_block'); // <> & \" '" }]
+            },
+            {
+                "type": "bullet_list",
+                "content": [
+                    {
+                        "type": "list_item",
+                        "content": [
+                            { "type": "paragraph", "content": [{ "type": "text", "text": "bullet_list item" }] },
+                            {
+                                "type": "bullet_list",
+                                "content": [
+                                    {
+                                        "type": "list_item",
+                                        "content": [
+                                            { "type": "paragraph", "content": [{ "type": "text", "text": "nested ul depth-2 item" }] }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "ordered_list",
+                "attrs": { "order": 1 },
+                "content": [
+                    {
+                        "type": "list_item",
+                        "content": [
+                            { "type": "paragraph", "content": [{ "type": "text", "text": "ordered_list item" }] }
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "variable: " },
+                    { "type": "variable", "attrs": { "name": "VAR_TEST" } },
+                    { "type": "text", "text": ", variable2=" },
+                    { "type": "variable", "attrs": { "name": "VAR_TEST_2" } }
+                ]
+            },
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "emoji text 😀 👨‍👩‍👧‍👦 (unicode) is supported." }
+                ]
+            }
+            ,
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "sanitize check: <script>alert(1)</script>" }
+                ]
+            }
+        ]
+    }
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('nodeRenderers smoke: descriptionHtml renders expected fragments', () => {
+        equal(data.description?.type, 'doc', 'Description should still be a rich text doc');
+        equal(typeof data.descriptionHtml, 'string', 'descriptionHtml should be a string');
+
+        const html = data.descriptionHtml;
+        equal(html.includes('<p>'), true, 'Should render paragraph');
+        equal(html.includes('<blockquote'), true, 'Should render blockquote');
+        equal(html.includes('<hr'), true, 'Should render horizontal_rule');
+        equal(html.includes('<h1'), true, 'Should render heading level 1');
+        equal(html.includes('<h2'), true, 'Should render heading level 2');
+        equal(html.includes('<h3'), true, 'Should render heading level 3');
+        equal(html.includes('<h4'), true, 'Should render heading level 4');
+        equal(html.includes('<h5'), true, 'Should render heading level 5');
+        equal(html.includes('<h6'), true, 'Should render heading level 6');
+        equal(html.includes('<pre'), true, 'Should render code_block (pre)');
+        equal(html.includes('<code'), true, 'Should render code_block (code)');
+        equal(html.includes('<br'), true, 'Should render hard_break');
+        equal(html.includes('<ol'), true, 'Should render ordered_list');
+        equal(html.includes('<ul'), true, 'Should render bullet_list');
+        equal(html.includes('<li'), true, 'Should render list_item');
+        equal(html.includes('<strong>'), true, 'Should render strong');
+        equal(html.includes('<em>'), true, 'Should render em');
+        equal(html.includes('<a'), true, 'Should render link');
+        equal(html.includes('https://example.com'), true, 'Link href should be present');
+        equal(html.includes('VAR_TEST'), true, 'Should include variable name');
+        equal(html.includes('VAR_TEST_2'), true, 'Should include second variable name');
+
+        equal(html.includes('<u>') || html.includes('text-decoration'), true, 'Should render underline');
+        equal(html.includes('inline_code'), true, 'Should include inline_code text');
+        equal(html.includes('bold+italic+relative_link'), true, 'Should include mixed marks text');
+        equal(html.includes('https://example.com/relative/path'), true, 'Should include link href (relative path variant)');
+        equal(html.includes('mailto:test@example.com'), true, 'Should include mailto link href');
+        equal(html.includes('#hash'), true, 'Should include pure hash link href');
+        equal(html.includes('https://example.com/#hash'), true, 'Should include hash link href');
+
+        equal(html.includes('nested bullet item'), true, 'Should render nested list inside blockquote');
+        equal(html.includes('nested ul depth-2 item'), true, 'Should render nested list depth-2');
+        equal(html.includes('😀'), true, 'Should include emoji unicode text');
+
+        // Sanitization: ensure script tags are not rendered as HTML elements.
+        equal(html.includes('<script'), false, 'Should not render script tag');
+        equal(html.includes('alert(1)'), true, 'Should preserve text content for sanitize check');
+    });
+}}
+
+###
+
+# ============================================
+# Get Updated Form
+# ============================================
+# @name getUpdatedForm
+# @ref updateFormDescriptionNodeRenderers
+GET {{BASE_URL}}/forms/{{formId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form update persisted', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Form Lifecycle Test Form (Updated)', 'Updated title should persist');
+        equal(data.dressing.color, '#0066cc', 'Dressing color should persist');
+        equal(data.dressing.headerFont, 'BoutiqueBitmap7x7CircleDot', 'Dressing header font should persist');
+        equal(data.dressing.questionFont, 'BoutiqueBitmap7x7SquareDot', 'Dressing question font should persist');
+        equal(data.dressing.textFont, 'ChillBitmap16px', 'Dressing text font should persist');
+    });
+}}
+
+###
+
+# ============================================
+# List Forms by Organization
+# ============================================
+# @name listFormsByOrg
+# @ref getUpdatedForm
+GET {{BASE_URL}}/orgs/{{orgSlug}}/forms
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Organization forms list contains created form', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        equal(data.some(f => f.id === formId), true, 'Created form should be in organization forms list');
+    });
+}}

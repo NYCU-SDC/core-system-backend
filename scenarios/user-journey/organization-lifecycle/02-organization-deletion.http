@@ -1,0 +1,74 @@
+# ============================================
+# Organization Lifecycle - Delete org created for negative tests
+# ============================================
+# Cleanup: add user back as member, then delete the org created in 01-organization-creation.http
+
+# @import ./01-organization-creation.http
+
+###
+
+# ============================================
+# Verify Organization For Deletion
+# ============================================
+# @name verifyOrgForDeletion
+# @ref getOrgFor403Test
+GET {{BASE_URL}}/orgs/{{orgSlugNotMember}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    
+    const { equal } = require('assert');
+    
+    test('Organization exists', () => {
+        const data = JSON.parse(response.body);
+        equal(data.slug, orgSlugNotMember, 'Organization slug should match request slug');
+    });
+    
+    const data = JSON.parse(response.body);
+    exports.orgSlugNotMember = data.slug;
+    exports.newOrgId = data.id;
+}}
+
+###
+
+# ============================================
+# Get User Email
+# ============================================
+# @name getUserEmail
+# @ref verifyOrgForDeletion
+GET {{BASE_URL}}/users/me
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    exports.userEmail = data.emails[0];
+}}
+
+###
+
+# ============================================
+# Add User to Organization
+# ============================================
+# @name addUserBackToOrg
+# @ref getUserEmail
+POST {{BASE_URL}}/orgs/{{orgSlugNotMember}}/members
+Content-Type: application/json
+
+{
+    "email": "{{userEmail}}"
+}
+
+?? status <= 201
+
+###
+
+# ============================================
+# Delete Organization
+# ============================================
+# @name deleteOrg
+# @ref addUserBackToOrg
+DELETE {{BASE_URL}}/orgs/{{orgSlugNotMember}}
+
+?? status == 204

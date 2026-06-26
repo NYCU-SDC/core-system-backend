@@ -1,0 +1,31 @@
+# ============================================
+# Negative Setup - Error paths for auth & org
+# ============================================
+# Variables (orgId, orgSlug, userId, userEmail) come from the positive setup.
+# This file runs the positive setup first, then only negative cases.
+
+# @import ../shared/common.http
+
+###
+
+# ============================================
+# Get organization with invalid slug (expect 404)
+# ============================================
+# @name getOrgInvalidSlug
+# @ref userLogin
+GET {{BASE_URL}}/orgs/NONEXISTENT_ORG
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###

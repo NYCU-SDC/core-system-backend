@@ -1,0 +1,13 @@
+# @title Check Health Status
+# @name health
+GET {{BASE_URL}}/healthz
+
+{{
+  test.status(200);
+
+  const { equal } = require('assert');
+
+  test('Health endpoint returns OK', () => {
+    equal(response.body, 'OK');
+  });
+}}
