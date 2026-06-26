@@ -269,7 +269,6 @@ jobs:
         with:
           scenarios-path: './core-system-api/scenarios/user-journey'
           smoke-path: './core-system-api/scenarios/smoke'
-          run-mode: affected
           manifest-path: './core-system-api/scenarios/manifest.yaml'
           changed-files-path: './changed-files.json'
           labels: ${{ steps.qa-changes.outputs.labels }}
