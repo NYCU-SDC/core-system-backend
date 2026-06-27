@@ -20,24 +20,25 @@ type reader interface {
 }
 
 type Middleware struct {
-	tracer       trace.Tracer
-	logger       *zap.Logger
-	masterDBPool *pgxpool.Pool
-
-	reader reader
+	tracer        trace.Tracer
+	logger        *zap.Logger
+	masterDBPool  *pgxpool.Pool
+	problemWriter *problem.HttpWriter
+	reader        reader
 }
 
 func NewMiddleware(
 	logger *zap.Logger,
 	masterDBPool *pgxpool.Pool,
-
+	problemWriter *problem.HttpWriter,
 	reader reader,
 ) *Middleware {
 	return &Middleware{
-		tracer:       otel.Tracer("tenant/middleware"),
-		logger:       logger,
-		reader:       reader,
-		masterDBPool: masterDBPool,
+		tracer:        otel.Tracer("tenant/middleware"),
+		logger:        logger,
+		reader:        reader,
+		masterDBPool:  masterDBPool,
+		problemWriter: problemWriter,
 	}
 }
 
@@ -50,25 +51,25 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 		slug := r.PathValue("slug")
 		if slug == "" {
 			logger.Error("User slug is empty", zap.String("path", r.URL.Path))
-			problem.New().WriteError(traceCtx, w, handlerutil.ErrInternalServer, logger)
+			m.problemWriter.WriteError(traceCtx, w, handlerutil.ErrInternalServer, logger)
 			return
 		}
 
 		exists, orgID, err := m.reader.GetSlugStatus(traceCtx, slug)
 		if err != nil {
 			span.RecordError(err)
-			problem.New().WriteError(traceCtx, w, err, logger)
+			m.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 		if !exists {
-			problem.New().WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
+			m.problemWriter.WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
 			return
 		}
 
 		tenant, err := m.reader.Get(traceCtx, orgID)
 		if err != nil {
 			span.RecordError(err)
-			problem.New().WriteError(traceCtx, w, err, logger)
+			m.problemWriter.WriteError(traceCtx, w, err, logger)
 			return
 		}
 
@@ -77,7 +78,7 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			conn = m.masterDBPool
 		} else {
 			logger.Error("unsupported tenant database strategy", zap.String("strategy", string(tenant.DbStrategy)))
-			problem.New().WriteError(traceCtx, w, handlerutil.ErrInternalServer, logger)
+			m.problemWriter.WriteError(traceCtx, w, handlerutil.ErrInternalServer, logger)
 			return
 		}
 
