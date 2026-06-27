@@ -396,6 +396,7 @@ func main() {
 
 	// Response Operations
 	mux.Handle("POST /api/responses/{responseId}/submit", authMiddleware.Append(availableByResponse).HandlerFunc(submitHandler.SubmitHandler))
+	mux.Handle("POST /api/responses/{responseId}/cancel", authMiddleware.Append(availableByResponse).HandlerFunc(responseHandler.Cancel))
 
 	// Answer Management
 	// ----------------------
