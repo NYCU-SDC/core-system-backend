@@ -215,7 +215,7 @@ func main() {
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
 	corsMiddleware := cors.NewMiddleware(logger, cfg.AllowOrigins)
 	jwtMiddleware := jwt.NewMiddleware(logger, validator, problemWriter, jwtService)
-	tenantMiddleware := tenant.NewMiddleware(logger, dbPool, tenantService)
+	tenantMiddleware := tenant.NewMiddleware(logger, dbPool, problemWriter, tenantService)
 	formMiddleware := form.NewMiddleware(logger, formService, problemWriter)
 
 	// Basic Middleware (Tracing and Recovery)
