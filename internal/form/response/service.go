@@ -104,8 +104,7 @@ func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionSto
 	}
 }
 
-// Create creates an empty response (draft) for a given form and user
-// Returns an error if the user already has a response for the form
+// Create creates an empty response (draft) for a given form and user.
 func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
@@ -119,24 +118,6 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 	}
 	if !formExists {
 		return FormResponse{}, internal.ErrFormNotFound
-	}
-
-	// Check if user already has a response for this form
-	exists, err := s.queries.ExistsByFormIDAndSubmittedBy(traceCtx, ExistsByFormIDAndSubmittedByParams{
-		FormID:      formID,
-		SubmittedBy: userID,
-	})
-	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check if response exists")
-		span.RecordError(err)
-		return FormResponse{}, err
-	}
-
-	if exists {
-		err = fmt.Errorf("user already has a response for this form")
-		logger.Error("Failed to create empty response", zap.Error(err), zap.String("formID", formID.String()), zap.String("userID", userID.String()))
-		span.RecordError(err)
-		return FormResponse{}, internal.ErrResponseAlreadyExists
 	}
 
 	// Create empty response
