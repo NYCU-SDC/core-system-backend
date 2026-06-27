@@ -11,7 +11,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// DateField parses minDate/maxDate from JSON and returns a validation error on invalid format.
+// DateField wraps an optional date bound for DateOption.MinDate / DateOption.MaxDate
+// from JSON and returns a validation error on invalid format
 type DateField struct {
 	Time *time.Time
 }
@@ -47,20 +48,34 @@ func (o DateField) MarshalJSON() ([]byte, error) {
 	return o.Time.MarshalJSON()
 }
 
+// DateOption is the API wire shape for date-question config.
+// Used on Request.date (create/update) and Response.date (ToResponse; DATE questions only).
+//
+// MinDate and MaxDate use DateField (not *time.Time) for lenient client input and explicit
+// JSON null on output. GenerateDateMetadata copies DateField.Time into DateMetadata for DB.
+//
+// Empty bounds (Time nil): accepted on input; stored without that key; marshaled as JSON null
+// on output. Only one side may be set. min <= max is checked only when both are set.
 type DateOption struct {
 	HasYear  bool      `json:"hasYear"`
 	HasMonth bool      `json:"hasMonth"`
 	HasDay   bool      `json:"hasDay"`
-	MinDate  DateField `json:"minDate"`
-	MaxDate  DateField `json:"maxDate"`
+	MinDate  DateField `json:"minDate"` // optional lower bound; nil Time = no minimum
+	MaxDate  DateField `json:"maxDate"` // optional upper bound; nil Time = no maximum
 }
 
+// DateMetadata is the persisted shape inside question.Metadata, nested as {"date": ...}.
+// Written by GenerateDateMetadata from DateOption; read by ExtractDateMetadata and NewDate.
+//
+// Uses plain *time.Time (not DateField): internal storage only, no custom JSON rules.
+// MinDate and MaxDate nil = no bound; omitempty drops unset keys from stored JSON.
+// ToResponse maps these back to DateOption DateField values for API output.
 type DateMetadata struct {
 	HasYear  bool       `json:"hasYear"`
 	HasMonth bool       `json:"hasMonth"`
 	HasDay   bool       `json:"hasDay"`
-	MinDate  *time.Time `json:"minDate,omitempty"`
-	MaxDate  *time.Time `json:"maxDate,omitempty"`
+	MinDate  *time.Time `json:"minDate,omitempty"` // nil = no minimum date constraint
+	MaxDate  *time.Time `json:"maxDate,omitempty"` // nil = no maximum date constraint
 }
 
 type Date struct {
