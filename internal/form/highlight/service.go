@@ -229,6 +229,16 @@ func (s *Service) Clear(ctx context.Context, formID uuid.UUID) error {
 		return internal.ErrFormNotFound
 	}
 
+	_, err = s.queries.GetByFormID(traceCtx, formID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return internal.ErrHighlightNotFound
+	}
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "get form highlight")
+		span.RecordError(err)
+		return err
+	}
+
 	err = s.queries.DeleteByFormID(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete form highlight")
