@@ -37,6 +37,12 @@ SET submitted_at = now(), progress = 'submitted'
 WHERE id = $1
 RETURNING *;
 
+-- name: RevertSubmission :one
+UPDATE form_responses
+SET submitted_at = NULL, progress = 'draft', updated_at = now()
+WHERE id = $1
+RETURNING *;
+
 -- name: Delete :exec
 DELETE FROM form_responses
 WHERE id = $1;

@@ -112,6 +112,7 @@ type Store interface {
 	Delete(ctx context.Context, responseID uuid.UUID) error
 	ExportPreview(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (ExportPreviewResponse, error)
 	ExportDownload(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]byte, string, error)
+	CancelSubmission(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 }
 
 type QuestionStore interface {
@@ -425,6 +426,34 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, CreateResponse{
 		ID: newResponse.ID.String(),
 	})
+}
+
+// Cancel reverts a submitted response back to draft.
+func (h *Handler) Cancel(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Cancel")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	responseIDStr := r.PathValue("responseId")
+	responseID, err := handlerutil.ParseUUID(responseIDStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	err = h.store.CancelSubmission(traceCtx, responseID, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) ExportPreview(w http.ResponseWriter, r *http.Request) {

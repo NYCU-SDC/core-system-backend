@@ -33,6 +33,7 @@ type Querier interface {
 	ListByFormIDAndSubmittedBy(ctx context.Context, arg ListByFormIDAndSubmittedByParams) ([]FormResponse, error)
 	ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error)
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error)
+	RevertSubmission(ctx context.Context, id uuid.UUID) (FormResponse, error)
 	ListSubmittedByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error)
 }
@@ -761,6 +762,32 @@ func (s Service) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormRespons
 	}
 
 	return formResponse, nil
+}
+
+func (s Service) CancelSubmission(ctx context.Context, id uuid.UUID, userID uuid.UUID) error {
+	traceCtx, span := s.tracer.Start(ctx, "CancelSubmission")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formResponse, err := s.GetByID(traceCtx, id)
+	if err != nil {
+		return err
+	}
+	if formResponse.SubmittedBy != userID {
+		return internal.ErrResponseNotOwned
+	}
+	if formResponse.Progress != ResponseProgressSubmitted {
+		return internal.ErrResponseNotSubmitted
+	}
+
+	_, err = s.queries.RevertSubmission(traceCtx, id)
+	if err != nil {
+		err = databaseutil.WrapDBErrorWithKeyValue(err, "response", "id", id.String(), logger, "revert response submission")
+		span.RecordError(err)
+		return err
+	}
+
+	return nil
 }
 
 // ResolveWorkflowSectionsForResponse runs ResolveSections and builds sectionActiveMap when a workflow exists.
