@@ -54,10 +54,14 @@ func (m *Middleware) Middleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		_, orgID, err := m.reader.GetSlugStatus(traceCtx, slug)
+		exists, orgID, err := m.reader.GetSlugStatus(traceCtx, slug)
 		if err != nil {
 			span.RecordError(err)
 			problem.New().WriteError(traceCtx, w, err, logger)
+			return
+		}
+		if !exists {
+			problem.New().WriteError(traceCtx, w, internal.ErrOrgSlugNotFound, logger)
 			return
 		}
 
