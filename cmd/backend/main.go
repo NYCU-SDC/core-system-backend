@@ -307,7 +307,7 @@ func main() {
 	mux.Handle("GET /api/orgs/{slug}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.GetOrgByID))
 	mux.Handle("POST /api/orgs", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.CreateOrg))
 	mux.Handle("PUT /api/orgs/{slug}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.UpdateOrg))
-	mux.Handle("DELETE /api/orgs/{slug}", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.DeleteOrg))
+	mux.Handle("DELETE /api/orgs/{slug}", tenantAuthMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.DeleteOrg))
 
 	// Organization Relations
 	// ----------------------
