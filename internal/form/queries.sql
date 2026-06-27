@@ -175,7 +175,7 @@ LEFT JOIN users_with_emails creator ON f.created_by = creator.id
 LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE (sqlc.narg(status)::status IS NULL OR f.status = sqlc.narg(status)::status)
 AND (sqlc.narg(visibility)::visibility IS NULL OR f.visibility = sqlc.narg(visibility)::visibility)
-AND (sqlc.narg(deadline_after)::timestamptz IS NULL OR f.deadline >= sqlc.narg(deadline_after)::timestamptz)
+AND (sqlc.narg(deadline_after)::timestamptz IS NULL OR f.deadline IS NULL OR f.deadline >= sqlc.narg(deadline_after)::timestamptz)
 ORDER BY f.updated_at DESC;
 
 -- name: ListByUnit :many
