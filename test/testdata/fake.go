@@ -2,6 +2,7 @@ package testdata
 
 import (
 	"github.com/brianvoe/gofakeit/v7"
+	"github.com/google/uuid"
 )
 
 func RandomEmail() string {
@@ -13,7 +14,7 @@ func RandomFullName() string {
 }
 
 func RandomName() string {
-	return gofakeit.Sentence(1)
+	return gofakeit.Sentence(1) + "-" + uuid.New().String()[:8]
 }
 
 func RandomDescription() string {
@@ -25,5 +26,5 @@ func RandomURL() string {
 }
 
 func RandomSlug() string {
-	return gofakeit.Sentence(1)
+	return gofakeit.Sentence(1) + "-" + uuid.New().String()[:8]
 }
