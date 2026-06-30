@@ -101,7 +101,9 @@ var (
 	ErrFormNotDraft       = fmt.Errorf("form is not in draft status")
 	ErrFormDeadlinePassed = errors.New("form deadline has passed")
 	ErrArchivedForm       = errors.New("archived form should not accept new response")
+	ErrCloseForm          = errors.New("closed form should not accept new response")
 	ErrInvalidStatus      = errors.New("invalid form status")
+	ErrExpiredForm        = errors.New("expired form should not accept new response")
 
 	// Question Errors
 	ErrQuestionNotFound                 = errors.New("question not found")
@@ -295,8 +297,12 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewValidateProblem("image format is invalid")
 	case errors.Is(err, ErrArchivedForm):
 		return problem.NewBadRequestProblem("archived form should not accept new response")
+	case errors.Is(err, ErrCloseForm):
+		return problem.NewBadRequestProblem("closed form should not accept new response")
 	case errors.Is(err, ErrInvalidStatus):
 		return problem.NewValidateProblem("invalid form status")
+	case errors.Is(err, ErrExpiredForm):
+		return problem.NewBadRequestProblem("expired form should not accept new response")
 
 	// Inbox Errors
 	case errors.Is(err, ErrInvalidIsReadParameter):

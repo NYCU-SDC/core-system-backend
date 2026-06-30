@@ -130,6 +130,8 @@ func statusToUppercase(s Status) string {
 		return "PUBLISHED"
 	case StatusArchived:
 		return "ARCHIVED"
+	case StatusClosed:
+		return "CLOSED"
 	default:
 		return string(s)
 	}
@@ -410,8 +412,8 @@ func formFromListByUnitRow(r ListByUnitRow) Form {
 	}
 }
 
-func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "PatchHandler")
+func (h *Handler) Patch(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Patch")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -450,8 +452,8 @@ func (h *Handler) PatchHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "DeleteHandler")
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Delete")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -471,8 +473,8 @@ func (h *Handler) DeleteHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusNoContent, nil)
 }
 
-func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetHandler")
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -499,8 +501,8 @@ func (h *Handler) GetHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ListHandler")
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "List")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -523,8 +525,8 @@ func (h *Handler) ListHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
 }
 
-func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnderOrgHandler")
+func (h *Handler) CreateUnderOrg(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "CreateUnderOrg")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -568,8 +570,8 @@ func (h *Handler) CreateUnderOrgHandler(w http.ResponseWriter, r *http.Request) 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, response)
 }
 
-func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ListByOrgHandler")
+func (h *Handler) ListByOrg(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "ListByOrg")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -624,8 +626,8 @@ func (h *Handler) ListByOrgHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, responses)
 }
 
-func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UploadCoverImageHandler")
+func (h *Handler) UploadCoverImage(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UploadCoverImage")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -687,8 +689,8 @@ func (h *Handler) UploadCoverImageHandler(w http.ResponseWriter, r *http.Request
 	handlerutil.WriteJSONResponse(w, http.StatusOK, CoverUploadResponse{ImageURL: coverImageURL})
 }
 
-func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetCoverImageHandler")
+func (h *Handler) GetCoverImage(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetCoverImage")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -713,8 +715,8 @@ func (h *Handler) GetCoverImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "ArchiveHandler")
+func (h *Handler) Archive(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Archive")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -754,8 +756,8 @@ func (h *Handler) ArchiveHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UnarchiveHandler")
+func (h *Handler) Unarchive(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Unarchive")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -795,8 +797,49 @@ func (h *Handler) UnarchiveHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "GetFontsHandler")
+func (h *Handler) Close(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "Close")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	idStr := r.PathValue("formId")
+	id, err := handlerutil.ParseUUID(idStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentUser, ok := user.GetFromContext(traceCtx)
+	if !ok {
+		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
+		return
+	}
+
+	_, err = h.store.SetStatus(traceCtx, id, StatusClosed, currentUser.ID)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	currentForm, err := h.store.Get(traceCtx, id)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	response := ToResponse(
+		formFromGetRow(currentForm),
+		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
+		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
+		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
+	)
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
+}
+
+func (h *Handler) GetFonts(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "GetFonts")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -809,8 +852,8 @@ func (h *Handler) GetFontsHandler(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, fonts)
 }
 
-func (h *Handler) UpdateSectionHandler(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "UpdateSectionHandler")
+func (h *Handler) UpdateSection(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), "UpdateSection")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
@@ -875,6 +918,8 @@ func ParseStatus(status string) (Status, error) {
 		return StatusPublished, nil
 	case "ARCHIVED":
 		return StatusArchived, nil
+	case "CLOSED":
+		return StatusClosed, nil
 	default:
 		return "", internal.ErrInvalidStatus
 	}

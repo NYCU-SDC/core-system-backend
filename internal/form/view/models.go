@@ -282,6 +282,7 @@ const (
 	StatusDraft     Status = "draft"
 	StatusPublished Status = "published"
 	StatusArchived  Status = "archived"
+	StatusClosed    Status = "closed"
 )
 
 func (e *Status) Scan(src interface{}) error {
