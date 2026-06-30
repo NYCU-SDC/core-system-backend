@@ -44,7 +44,7 @@ type linkMarkOption struct{}
 
 type variableNodeOption struct{}
 
-func (variableNodeOption) RenderBefore(_ int, attrs map[string]interface{}) string {
+func (variableNodeOption) RenderBefore(_ int, attrs map[string]any) string {
 	name, _ := attrs["name"].(string)
 	name = html.EscapeString(name)
 	// Render as visible placeholder text to keep it copyable and searchable in HTML.
@@ -53,11 +53,11 @@ func (variableNodeOption) RenderBefore(_ int, attrs map[string]interface{}) stri
 	return `{{` + name + `}}`
 }
 
-func (variableNodeOption) RenderAfter(_ int, _ map[string]interface{}) string {
+func (variableNodeOption) RenderAfter(_ int, _ map[string]any) string {
 	return ""
 }
 
-func (linkMarkOption) RenderBefore(_ int, attrs map[string]interface{}) string {
+func (linkMarkOption) RenderBefore(_ int, attrs map[string]any) string {
 	href := ""
 	if v, ok := attrs["href"].(string); ok {
 		href = html.EscapeString(v)
@@ -76,6 +76,6 @@ func (linkMarkOption) RenderBefore(_ int, attrs map[string]interface{}) string {
 	return fmt.Sprintf(`<a href="%s"%s%s>`, href, titleAttr, targetAttr)
 }
 
-func (linkMarkOption) RenderAfter(_ int, _ map[string]interface{}) string {
+func (linkMarkOption) RenderAfter(_ int, _ map[string]any) string {
 	return "</a>"
 }

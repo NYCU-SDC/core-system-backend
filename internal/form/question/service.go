@@ -150,10 +150,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Answerable, er
 	count := len(orders)
 
 	// Clamp requested order to [1, count+1]
-	effectiveOrder := input.Order
-	if effectiveOrder < 1 {
-		effectiveOrder = 1
-	}
+	effectiveOrder := max(input.Order, 1)
 	if effectiveOrder > int32(count+1) {
 		effectiveOrder = int32(count + 1)
 	}

@@ -335,19 +335,19 @@ func TestWorkflowService_Update_NoNewVersionWhenOnlyLabelsChange(t *testing.T) {
 	require.Equal(t, 1, versionCountBefore, "should have exactly one workflow version after activate")
 
 	// Same structure as initialWorkflow but different labels only
-	labelOnlyWorkflow, err := json.Marshal([]map[string]interface{}{
+	labelOnlyWorkflow, err := json.Marshal([]map[string]any{
 		{
 			"id":      startID.String(),
 			"type":    "start",
 			"label":   "Updated Start Label",
 			"next":    endID.String(),
-			"payload": map[string]interface{}{"x": 0, "y": 0},
+			"payload": map[string]any{"x": 0, "y": 0},
 		},
 		{
 			"id":      endID.String(),
 			"type":    "end",
 			"label":   "Updated End Label",
-			"payload": map[string]interface{}{"x": 0, "y": 0},
+			"payload": map[string]any{"x": 0, "y": 0},
 		},
 	})
 	require.NoError(t, err)

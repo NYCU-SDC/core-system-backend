@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"NYCU-SDC/core-system-backend/internal"
@@ -293,12 +294,7 @@ func isValidFileType(ft FileType) bool {
 		FileTypeZip,
 	}
 
-	for _, valid := range validTypes {
-		if ft == valid {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(validTypes, ft)
 }
 
 func ExtractUploadFile(data []byte) (UploadFileMetadata, error) {

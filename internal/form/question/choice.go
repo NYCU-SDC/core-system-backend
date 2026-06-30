@@ -764,7 +764,7 @@ func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) (
 	if len(choiceOptions) == 0 {
 		return nil, ErrMetadataValidate{
 			QuestionID: questionType,
-			RawData:    []byte(fmt.Sprintf("%v", choiceOptions)),
+			RawData:    fmt.Appendf(nil, "%v", choiceOptions),
 			Message:    "no choices provided for choice question",
 		}
 	}
@@ -780,7 +780,7 @@ func GenerateChoiceMetadata(questionType string, choiceOptions []ChoiceOption) (
 			if name == "" {
 				return nil, ErrMetadataValidate{
 					QuestionID: questionType,
-					RawData:    []byte(fmt.Sprintf("%v", choiceOptions)),
+					RawData:    fmt.Appendf(nil, "%v", choiceOptions),
 					Message:    "choice name cannot be empty",
 				}
 			}

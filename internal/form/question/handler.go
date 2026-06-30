@@ -27,9 +27,9 @@ type Request struct {
 	Description  json.RawMessage  `json:"description"`
 	Order        int32            `json:"order" validate:"required,min=1"`
 	Choices      []ChoiceOption   `json:"choices,omitempty" validate:"omitempty,required_if=Type SINGLE_CHOICE,required_if=Type MULTIPLE_CHOICE,required_if=Type DETAILED_MULTIPLE_CHOICE,required_if=Type DROPDOWN,required_if=Type RANKING,dive"`
-	Scale        ScaleOption      `json:"scale,omitempty" validate:"omitempty,required_if=Type LINEAR_SCALE,required_if=Type RATING"`
-	UploadFile   UploadFileOption `json:"uploadFile,omitempty" validate:"omitempty,required_if=Type UPLOAD_FILE"`
-	Date         DateOption       `json:"date,omitempty"`
+	Scale        ScaleOption      `json:"scale" validate:"omitempty,required_if=Type LINEAR_SCALE,required_if=Type RATING"`
+	UploadFile   UploadFileOption `json:"uploadFile" validate:"omitempty,required_if=Type UPLOAD_FILE"`
+	Date         DateOption       `json:"date"`
 	OauthConnect string           `json:"oauthConnect,omitempty" validate:"required_if=Type OAUTH_CONNECT"`
 	SourceID     uuid.UUID        `json:"sourceId,omitempty"`
 }

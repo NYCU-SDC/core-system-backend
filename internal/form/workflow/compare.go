@@ -56,8 +56,8 @@ func structurallyEqual(current, incoming []byte) (bool, error) {
 	return true, nil
 }
 
-func parseForCompare(workflow []byte) ([]map[string]interface{}, error) {
-	var nodes []map[string]interface{}
+func parseForCompare(workflow []byte) ([]map[string]any, error) {
+	var nodes []map[string]any
 	err := json.Unmarshal(workflow, &nodes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal workflow: %w", err)
@@ -65,7 +65,7 @@ func parseForCompare(workflow []byte) ([]map[string]interface{}, error) {
 	return nodes, nil
 }
 
-func buildNodeStructureMap(nodes []map[string]interface{}) map[string]nodeStructure {
+func buildNodeStructureMap(nodes []map[string]any) map[string]nodeStructure {
 	out := make(map[string]nodeStructure)
 	for _, node := range nodes {
 		id, _ := node["id"].(string)
@@ -84,7 +84,7 @@ func buildNodeStructureMap(nodes []map[string]interface{}) map[string]nodeStruct
 		nextFalse, _ := node["nextFalse"].(string)
 
 		rule := conditionRuleStructure{}
-		cr, ok := node["conditionRule"].(map[string]interface{})
+		cr, ok := node["conditionRule"].(map[string]any)
 		if ok {
 			rule.Source = strVal(cr, "source")
 			rule.Question = strVal(cr, "question")
@@ -104,7 +104,7 @@ func buildNodeStructureMap(nodes []map[string]interface{}) map[string]nodeStruct
 	return out
 }
 
-func strVal(m map[string]interface{}, key string) string {
+func strVal(m map[string]any, key string) string {
 	v, ok := m[key]
 	if !ok {
 		return ""

@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/ory/dockertest/v3"
+	"github.com/ory/dockertest/v4"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -17,11 +17,10 @@ type ResourceManager struct {
 	mu     sync.Mutex
 	logger *zap.Logger
 
-	pool     *dockertest.Pool
+	pool     dockertest.ClosablePool
 	postgres *pgxpool.Pool
 
-	resources map[string]*dockertest.Resource
-	cleanups  []func()
+	cleanups []func()
 }
 
 // SetupPostgres ensures that a PostgreSQL container is running and returns a new transaction.
@@ -44,7 +43,6 @@ func (r *ResourceManager) SetupPostgres() (pgx.Tx, func(), error) {
 		}
 
 		r.postgres = pool
-		r.resources = make(map[string]*dockertest.Resource)
 		r.cleanups = append(r.cleanups, cleanup)
 	}
 
@@ -90,28 +88,36 @@ func (r *ResourceManager) WithPostgresTx(t *testing.T, fn func(tx pgx.Tx)) {
 }
 
 func (r *ResourceManager) Cleanup() {
-	for _, c := range r.cleanups {
-		c()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.postgres != nil {
+		r.postgres.Close()
+		r.postgres = nil
 	}
 
-	for _, resource := range r.resources {
-		err := r.pool.Purge(resource)
-		if err != nil {
-			r.logger.Error("Failed to purge resource", zap.Error(err))
+	for i := len(r.cleanups) - 1; i >= 0; i-- {
+		r.cleanups[i]()
+	}
+	r.cleanups = nil
+
+	if r.pool != nil {
+		if err := r.pool.Close(context.Background()); err != nil {
+			r.logger.Error("Failed to close pool", zap.Error(err))
 		}
 	}
 }
 
 func NewResourceManager(logger *zap.Logger) (*ResourceManager, error) {
-	pool, err := dockertest.NewPool("")
+	ctx := context.Background()
+	pool, err := dockertest.NewPool(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 
 	return &ResourceManager{
-		pool:      pool,
-		logger:    logger,
-		resources: make(map[string]*dockertest.Resource),
-		cleanups:  make([]func(), 0),
+		pool:     pool,
+		logger:   logger,
+		cleanups: make([]func(), 0),
 	}, nil
 }

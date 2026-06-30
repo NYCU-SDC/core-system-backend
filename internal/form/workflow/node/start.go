@@ -9,10 +9,10 @@ import (
 
 // StartNode represents a start node
 type StartNode struct {
-	node map[string]interface{}
+	node map[string]any
 }
 
-func NewStartNode(node map[string]interface{}) (Validatable, error) {
+func NewStartNode(node map[string]any) (Validatable, error) {
 	return &StartNode{node: node}, nil
 }
 

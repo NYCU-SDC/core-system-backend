@@ -17,11 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Helper function to create bool pointer
-func boolPtr(b bool) *bool {
-	return &b
-}
-
 func TestInboxService_ListWithFilters(t *testing.T) {
 	type Params struct {
 		userID             uuid.UUID
@@ -31,7 +26,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 	testCases := []struct {
 		name        string
 		params      Params
-		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context
+		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context
 		expectedErr bool
 	}{
 		{
@@ -39,7 +34,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 			params: Params{
 				filter: nil, // No filter
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -94,10 +89,10 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 			name: "Filter by isRead=true should return only read messages",
 			params: Params{
 				filter: &inbox.FilterRequest{
-					IsRead: boolPtr(true),
+					IsRead: new(true),
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -143,10 +138,10 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 			name: "Filter by isArchived=true should return only archived messages",
 			params: Params{
 				filter: &inbox.FilterRequest{
-					IsArchived: boolPtr(true),
+					IsArchived: new(true),
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -192,10 +187,10 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 			name: "Filter by isStarred=true should return only starred messages",
 			params: Params{
 				filter: &inbox.FilterRequest{
-					IsStarred: boolPtr(true),
+					IsStarred: new(true),
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -241,11 +236,11 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 			name: "Combined filters: isRead=true AND isStarred=true should return only read and starred messages",
 			params: Params{
 				filter: &inbox.FilterRequest{
-					IsRead:    boolPtr(true),
-					IsStarred: boolPtr(true),
+					IsRead:    new(true),
+					IsStarred: new(true),
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -303,7 +298,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "important",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -349,7 +344,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "delta",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -398,7 +393,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "hotfix",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -448,7 +443,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "signal",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -507,7 +502,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "重要",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -553,7 +548,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "報告",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -602,7 +597,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "修復",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -652,7 +647,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "系統",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -711,7 +706,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "API",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -769,7 +764,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "@gmail.com",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -815,7 +810,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "(測試)",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -864,7 +859,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "!@#$",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -914,7 +909,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "#!/bin/bash",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -974,7 +969,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "++",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -1033,7 +1028,7 @@ func TestInboxService_ListWithFilters(t *testing.T) {
 					Search: "'; DROP TABLE",
 				},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)

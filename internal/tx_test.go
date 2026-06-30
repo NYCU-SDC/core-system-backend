@@ -14,15 +14,15 @@ import (
 // stubDB implements DBTX but not TxBeginner, used to test unsupported-db handling.
 type stubDB struct{}
 
-func (stubDB) Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error) {
+func (stubDB) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
 	return pgconn.CommandTag{}, nil
 }
 
-func (stubDB) Query(context.Context, string, ...interface{}) (pgx.Rows, error) {
+func (stubDB) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	return nil, nil
 }
 
-func (stubDB) QueryRow(context.Context, string, ...interface{}) pgx.Row {
+func (stubDB) QueryRow(context.Context, string, ...any) pgx.Row {
 	return nil
 }
 
@@ -85,15 +85,15 @@ type mockBeginner struct {
 	beginCall int
 }
 
-func (m *mockBeginner) Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error) {
+func (m *mockBeginner) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
 	return pgconn.CommandTag{}, nil
 }
 
-func (m *mockBeginner) Query(context.Context, string, ...interface{}) (pgx.Rows, error) {
+func (m *mockBeginner) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	return nil, nil
 }
 
-func (m *mockBeginner) QueryRow(context.Context, string, ...interface{}) pgx.Row {
+func (m *mockBeginner) QueryRow(context.Context, string, ...any) pgx.Row {
 	return nil
 }
 

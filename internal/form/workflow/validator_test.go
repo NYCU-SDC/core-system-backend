@@ -18,7 +18,7 @@ func createWorkflow_SimpleValid_WithoutNodePayload(t *testing.T) []byte {
 	startID := uuid.New()
 	endID := uuid.New()
 
-	workflowJSON, err := json.Marshal([]map[string]interface{}{
+	workflowJSON, err := json.Marshal([]map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -68,7 +68,7 @@ func TestActivate(t *testing.T) {
 		},
 		{
 			name:         "valid payload object",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1, "y": 2}),
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]any{"x": 1, "y": 2}),
 			expectedErr:  false,
 		},
 		{
@@ -83,22 +83,22 @@ func TestActivate(t *testing.T) {
 		},
 		{
 			name:         "invalid payload shape (missing y)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1}),
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]any{"x": 1}),
 			expectedErr:  true,
 		},
 		{
 			name:         "invalid payload shape (x out of float64 range)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1e1000"), "y": json.Number("2")}),
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]any{"x": json.Number("1e1000"), "y": json.Number("2")}),
 			expectedErr:  true,
 		},
 		{
 			name:         "invalid payload shape (y out of float64 range)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1"), "y": json.Number("1e1000")}),
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]any{"x": json.Number("1"), "y": json.Number("1e1000")}),
 			expectedErr:  true,
 		},
 		{
 			name:         "valid payload shape (float64 max value)",
-			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": json.Number("1.7976931348623157e+308"), "y": json.Number("2")}),
+			workflowJSON: createWorkflow_SimpleValid_WithNodePayload(t, map[string]any{"x": json.Number("1.7976931348623157e+308"), "y": json.Number("2")}),
 			expectedErr:  false,
 		},
 		{
@@ -157,7 +157,7 @@ func TestValidateConditionSectionOrder_ConditionBranchTraversalWithMissingSiblin
 		},
 	}
 
-	nodes := []map[string]interface{}{
+	nodes := []map[string]any{
 		{"id": startID.String(), "type": "start", "label": "Start", "next": conditionAID.String()},
 		{"id": conditionAID.String(), "type": "condition", "label": "Condition A", "nextTrue": conditionBID.String()},
 		{
@@ -166,7 +166,7 @@ func TestValidateConditionSectionOrder_ConditionBranchTraversalWithMissingSiblin
 			"label":     "Condition B",
 			"nextTrue":  endID.String(),
 			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"question": questionID.String(),
 			},
 		},
@@ -517,7 +517,7 @@ func TestValidateUpdateNodeIDs(t *testing.T) {
 			setup: func(t *testing.T) ([]byte, []byte) {
 				// Create workflow with section and extract IDs
 				currentWorkflow := createWorkflow_WithSection(t)
-				var currentNodes []map[string]interface{}
+				var currentNodes []map[string]any
 				require.NoError(t, json.Unmarshal(currentWorkflow, &currentNodes))
 
 				// Extract IDs from current workflow
@@ -526,7 +526,7 @@ func TestValidateUpdateNodeIDs(t *testing.T) {
 				endID := currentNodes[2]["id"].(string)
 
 				// Create modified workflow with same IDs
-				modifiedWorkflow := createWorkflowJSON(t, []map[string]interface{}{
+				modifiedWorkflow := createWorkflowJSON(t, []map[string]any{
 					{
 						"id":    startID,
 						"type":  "start",
@@ -662,7 +662,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "invalid workflow - invalid node payload shape (missing y)",
 			setup: func() ([]byte, QuestionStore) {
-				return createWorkflow_SimpleValid_WithNodePayload(t, map[string]interface{}{"x": 1}), nil
+				return createWorkflow_SimpleValid_WithNodePayload(t, map[string]any{"x": 1}), nil
 			},
 			expectedErr: true,
 		},

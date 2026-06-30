@@ -18,7 +18,7 @@ import (
 )
 
 // nodeIDString returns n["id"] as a non-empty string or fails the test (avoids panics from type assertions).
-func nodeIDString(t *testing.T, n map[string]interface{}) string {
+func nodeIDString(t *testing.T, n map[string]any) string {
 	t.Helper()
 	raw, ok := n["id"]
 	require.True(t, ok, "node must have id")
@@ -29,7 +29,7 @@ func nodeIDString(t *testing.T, n map[string]interface{}) string {
 }
 
 // assertNoIncomingEdgesFromOthers fails if any node other than targetID references targetID via next / nextTrue / nextFalse.
-func assertNoIncomingEdgesFromOthers(t *testing.T, targetID string, byID map[string]map[string]interface{}) {
+func assertNoIncomingEdgesFromOthers(t *testing.T, targetID string, byID map[string]map[string]any) {
 	t.Helper()
 	for fromID, n := range byID {
 		if fromID == targetID {
@@ -76,19 +76,19 @@ func TestWorkflowService_Update(t *testing.T) {
 				fullJSON, startID, sectionID, endID := builder.CreateStartSectionEndWorkflow()
 				builder.CreateDraftWorkflow(data.FormRow.ID, data.User, fullJSON)
 
-				partialJSON, err := json.Marshal([]map[string]interface{}{
+				partialJSON, err := json.Marshal([]map[string]any{
 					{
 						"id":      startID.String(),
 						"type":    "start",
 						"label":   "Start",
 						"next":    endID.String(),
-						"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+						"payload": map[string]any{"x": 0.0, "y": 0.0},
 					},
 					{
 						"id":      endID.String(),
 						"type":    "end",
 						"label":   "End",
-						"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+						"payload": map[string]any{"x": 0.0, "y": 0.0},
 					},
 				})
 				require.NoError(t, err)
@@ -116,26 +116,26 @@ func TestWorkflowService_Update(t *testing.T) {
 				initialJSON, startID, sectionID, endID := builder.CreateStartSectionEndWorkflow()
 				builder.CreateDraftWorkflow(data.FormRow.ID, data.User, initialJSON)
 
-				updatedJSON, err := json.Marshal([]map[string]interface{}{
+				updatedJSON, err := json.Marshal([]map[string]any{
 					{
 						"id":      startID.String(),
 						"type":    "start",
 						"label":   "Start relabeled",
 						"next":    sectionID.String(),
-						"payload": map[string]interface{}{"x": 1.0, "y": 2.0},
+						"payload": map[string]any{"x": 1.0, "y": 2.0},
 					},
 					{
 						"id":      sectionID.String(),
 						"type":    "section",
 						"label":   "Section relabeled",
 						"next":    endID.String(),
-						"payload": map[string]interface{}{"x": 1.0, "y": 2.0},
+						"payload": map[string]any{"x": 1.0, "y": 2.0},
 					},
 					{
 						"id":      endID.String(),
 						"type":    "end",
 						"label":   "End relabeled",
-						"payload": map[string]interface{}{"x": 1.0, "y": 2.0},
+						"payload": map[string]any{"x": 1.0, "y": 2.0},
 					},
 				})
 				require.NoError(t, err)
@@ -159,7 +159,7 @@ func TestWorkflowService_Update(t *testing.T) {
 				require.JSONEq(t, string(result.Workflow), string(row.Workflow),
 					"GET latest workflow should match what Update returned")
 
-				var nodes []map[string]interface{}
+				var nodes []map[string]any
 				require.NoError(t, json.Unmarshal(row.Workflow, &nodes))
 				require.Len(t, nodes, 3, "GET after full-graph update must still contain all nodes")
 				seen := map[string]bool{}
@@ -170,7 +170,7 @@ func TestWorkflowService_Update(t *testing.T) {
 				require.True(t, seen[params.sectionNodeID.String()])
 				require.True(t, seen[params.endNodeID.String()])
 
-				byID := map[string]map[string]interface{}{}
+				byID := map[string]map[string]any{}
 				for _, n := range nodes {
 					byID[nodeIDString(t, n)] = n
 				}
@@ -218,9 +218,9 @@ func TestWorkflowService_Update(t *testing.T) {
 				require.NoError(t, err)
 				require.JSONEq(t, string(result.Workflow), string(row.Workflow))
 
-				var nodes []map[string]interface{}
+				var nodes []map[string]any
 				require.NoError(t, json.Unmarshal(result.Workflow, &nodes))
-				byID := map[string]map[string]interface{}{}
+				byID := map[string]map[string]any{}
 				for _, n := range nodes {
 					byID[nodeIDString(t, n)] = n
 				}
@@ -242,19 +242,19 @@ func TestWorkflowService_Update(t *testing.T) {
 				activeVersionID := builder.GetActiveVersionID(data.FormRow.ID)
 				require.Equal(t, 1, countWorkflowVersions(t, db, data.FormRow.ID), "should have exactly one workflow version after activate")
 
-				labelOnlyWorkflow, err := json.Marshal([]map[string]interface{}{
+				labelOnlyWorkflow, err := json.Marshal([]map[string]any{
 					{
 						"id":      startID.String(),
 						"type":    "start",
 						"label":   "Updated Start Label",
 						"next":    endID.String(),
-						"payload": map[string]interface{}{"x": 0, "y": 0},
+						"payload": map[string]any{"x": 0, "y": 0},
 					},
 					{
 						"id":      endID.String(),
 						"type":    "end",
 						"label":   "Updated End Label",
-						"payload": map[string]interface{}{"x": 0, "y": 0},
+						"payload": map[string]any{"x": 0, "y": 0},
 					},
 				})
 				require.NoError(t, err)
@@ -345,26 +345,26 @@ func TestWorkflowService_Update(t *testing.T) {
 // node references the section (stable IDs from the caller).
 func marshalOrphanSectionWorkflow(t *testing.T, startID, sectionID, endID uuid.UUID) []byte {
 	t.Helper()
-	b, err := json.Marshal([]map[string]interface{}{
+	b, err := json.Marshal([]map[string]any{
 		{
 			"id":      startID.String(),
 			"type":    "start",
 			"label":   "Start",
 			"next":    endID.String(),
-			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+			"payload": map[string]any{"x": 0.0, "y": 0.0},
 		},
 		{
 			"id":      sectionID.String(),
 			"type":    "section",
 			"label":   "Section",
 			"next":    endID.String(),
-			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+			"payload": map[string]any{"x": 0.0, "y": 0.0},
 		},
 		{
 			"id":      endID.String(),
 			"type":    "end",
 			"label":   "End",
-			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+			"payload": map[string]any{"x": 0.0, "y": 0.0},
 		},
 	})
 	require.NoError(t, err)

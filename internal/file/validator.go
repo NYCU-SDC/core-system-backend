@@ -4,6 +4,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"fmt"
 	"io"
+	"slices"
 )
 
 // ValidatorOption is a function that configures validation rules
@@ -48,13 +49,7 @@ func (v *Validator) ValidateStream(stream io.Reader, contentType string, opts ..
 
 	// Validate content type
 	if len(config.allowedTypes) > 0 {
-		allowed := false
-		for _, t := range config.allowedTypes {
-			if t == contentType {
-				allowed = true
-				break
-			}
-		}
+		allowed := slices.Contains(config.allowedTypes, contentType)
 		if !allowed {
 			return nil, internal.ErrInvalidFileType
 		}

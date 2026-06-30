@@ -80,9 +80,9 @@ func TestDate_DecodeRequest(t *testing.T) {
 			name:     "Should decode ISO 8601 date format",
 			rawValue: `"2024-12-31"`,
 			expected: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(12),
-				Day:   intPtr(31),
+				Year:  new(2024),
+				Month: new(12),
+				Day:   new(31),
 			},
 			expectedError: false,
 		},
@@ -90,9 +90,9 @@ func TestDate_DecodeRequest(t *testing.T) {
 			name:     "Should decode RFC3339 datetime format",
 			rawValue: `"2024-12-31T00:00:00Z"`,
 			expected: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(12),
-				Day:   intPtr(31),
+				Year:  new(2024),
+				Month: new(12),
+				Day:   new(31),
 			},
 			expectedError: false,
 		},
@@ -100,9 +100,9 @@ func TestDate_DecodeRequest(t *testing.T) {
 			name:     "Should decode RFC3339 with timezone",
 			rawValue: `"2024-05-06T12:20:00-12:00"`,
 			expected: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(5),
-				Day:   intPtr(6),
+				Year:  new(2024),
+				Month: new(5),
+				Day:   new(6),
 			},
 			expectedError: false,
 		},
@@ -164,9 +164,9 @@ func TestDate_DecodeStorage(t *testing.T) {
 			},
 			rawValue: `{"year":2024,"month":12,"day":31}`,
 			expected: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(12),
-				Day:   intPtr(31),
+				Year:  new(2024),
+				Month: new(12),
+				Day:   new(31),
 			},
 			expectedError: false,
 		},
@@ -179,7 +179,7 @@ func TestDate_DecodeStorage(t *testing.T) {
 			},
 			rawValue: `{"year":2024}`,
 			expected: shared.DateAnswer{
-				Year: intPtr(2024),
+				Year: new(2024),
 			},
 			expectedError: false,
 		},
@@ -192,8 +192,8 @@ func TestDate_DecodeStorage(t *testing.T) {
 			},
 			rawValue: `{"year":2024,"month":5}`,
 			expected: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(5),
+				Year:  new(2024),
+				Month: new(5),
 			},
 			expectedError: false,
 		},
@@ -295,9 +295,9 @@ func TestDate_EncodeRequest(t *testing.T) {
 				HasDay:   true,
 			},
 			answer: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(12),
-				Day:   intPtr(31),
+				Year:  new(2024),
+				Month: new(12),
+				Day:   new(31),
 			},
 			expected:      `"2024-12-31T00:00:00Z"`,
 			expectedError: false,
@@ -310,7 +310,7 @@ func TestDate_EncodeRequest(t *testing.T) {
 				HasDay:   false,
 			},
 			answer: shared.DateAnswer{
-				Year: intPtr(2024),
+				Year: new(2024),
 			},
 			expected:      `"2024-01-01T00:00:00Z"`, // Defaults to Jan 1
 			expectedError: false,
@@ -323,8 +323,8 @@ func TestDate_EncodeRequest(t *testing.T) {
 				HasDay:   false,
 			},
 			answer: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(5),
+				Year:  new(2024),
+				Month: new(5),
 			},
 			expected:      `"2024-05-01T00:00:00Z"`, // Defaults to day 1
 			expectedError: false,
@@ -337,8 +337,8 @@ func TestDate_EncodeRequest(t *testing.T) {
 				HasDay:   true,
 			},
 			answer: shared.DateAnswer{
-				Month: intPtr(12),
-				Day:   intPtr(31),
+				Month: new(12),
+				Day:   new(31),
 			},
 			expectedError: true,
 		},
@@ -350,8 +350,8 @@ func TestDate_EncodeRequest(t *testing.T) {
 				HasDay:   true,
 			},
 			answer: shared.DateAnswer{
-				Year: intPtr(2024),
-				Day:  intPtr(31),
+				Year: new(2024),
+				Day:  new(31),
 			},
 			expectedError: true,
 		},
@@ -363,8 +363,8 @@ func TestDate_EncodeRequest(t *testing.T) {
 				HasDay:   true,
 			},
 			answer: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(12),
+				Year:  new(2024),
+				Month: new(12),
 			},
 			expectedError: true,
 		},
@@ -416,10 +416,6 @@ func TestDate_EncodeRequest(t *testing.T) {
 }
 
 // Helper functions
-
-func intPtr(i int) *int {
-	return &i
-}
 
 func compareDateAnswers(a, b shared.DateAnswer) bool {
 	if (a.Year == nil) != (b.Year == nil) {
@@ -485,8 +481,8 @@ func TestGenerateDateMetadata(t *testing.T) {
 				HasYear:  true,
 				HasMonth: true,
 				HasDay:   true,
-				MinDate:  DateField{Time: timePtr(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))},
-				MaxDate:  DateField{Time: timePtr(time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC))},
+				MinDate:  DateField{Time: new(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))},
+				MaxDate:  DateField{Time: new(time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC))},
 			},
 			expectedError: false,
 		},
@@ -505,8 +501,8 @@ func TestGenerateDateMetadata(t *testing.T) {
 				HasYear:  true,
 				HasMonth: true,
 				HasDay:   true,
-				MinDate:  DateField{Time: timePtr(time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC))},
-				MaxDate:  DateField{Time: timePtr(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))},
+				MinDate:  DateField{Time: new(time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC))},
+				MaxDate:  DateField{Time: new(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))},
 			},
 			expectedError: true,
 		},
@@ -619,10 +615,6 @@ func TestExtractDateMetadata(t *testing.T) {
 			}
 		})
 	}
-}
-
-func timePtr(t time.Time) *time.Time {
-	return &t
 }
 
 func TestDate_ValidateWithDateRange(t *testing.T) {
@@ -772,7 +764,7 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 			},
 			rawValue: `"2024-06-15"`,
 			expected: shared.DateAnswer{
-				Year: intPtr(2024),
+				Year: new(2024),
 			},
 			expectedError: false,
 		},
@@ -785,8 +777,8 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 			},
 			rawValue: `"2024-06-15"`,
 			expected: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(6),
+				Year:  new(2024),
+				Month: new(6),
 			},
 			expectedError: false,
 		},
@@ -799,9 +791,9 @@ func TestDate_DecodeRequestWithPartialComponents(t *testing.T) {
 			},
 			rawValue: `"2024-06-15"`,
 			expected: shared.DateAnswer{
-				Year:  intPtr(2024),
-				Month: intPtr(6),
-				Day:   intPtr(15),
+				Year:  new(2024),
+				Month: new(6),
+				Day:   new(15),
 			},
 			expectedError: false,
 		},
