@@ -130,6 +130,7 @@ var (
 	ErrResponseFormIDMismatch = errors.New("response form ID does not match the expected form ID")
 	ErrResponseNotOwned       = errors.New("response does not belong to the current user")
 	ErrResponseEditNotAllowed = errors.New("response is not allowed to be edited")
+	ErrResponseNotSubmitted   = errors.New("response is not submitted")
 
 	// Answer / Workflow: cannot answer questions in a section skipped by workflow
 	ErrAnswerSectionSkipped = errors.New("cannot answer questions in a section that is skipped by the form workflow")
@@ -354,6 +355,8 @@ func ErrorHandler(err error) problem.Problem {
 		return problem.NewForbiddenProblem("response does not belong to the current user")
 	case errors.Is(err, ErrResponseEditNotAllowed):
 		return problem.NewForbiddenProblem("response is not allowed to be edited")
+	case errors.Is(err, ErrResponseNotSubmitted):
+		return problem.NewBadRequestProblem("response is not submitted")
 
 	// Submit Errors
 	case errors.Is(err, ErrResponseNotComplete{}):
