@@ -215,7 +215,7 @@ func main() {
 	traceMiddleware := trace.NewMiddleware(logger, cfg.Debug)
 	corsMiddleware := cors.NewMiddleware(logger, cfg.AllowOrigins)
 	jwtMiddleware := jwt.NewMiddleware(logger, validator, problemWriter, jwtService)
-	tenantMiddleware := tenant.NewMiddleware(logger, dbPool, tenantService)
+	tenantMiddleware := tenant.NewMiddleware(logger, dbPool, problemWriter, tenantService)
 	formMiddleware := form.NewMiddleware(logger, formService, problemWriter)
 
 	// Basic Middleware (Tracing and Recovery)
@@ -307,7 +307,7 @@ func main() {
 	mux.Handle("GET /api/orgs/{slug}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleMember, slugResolver)).HandlerFunc(unitHandler.GetOrgByID))
 	mux.Handle("POST /api/orgs", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.CreateOrg))
 	mux.Handle("PUT /api/orgs/{slug}", tenantAuthMiddleware.Append(unitRole.Require(auth.RoleAdmin, slugResolver)).HandlerFunc(unitHandler.UpdateOrg))
-	mux.Handle("DELETE /api/orgs/{slug}", authMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.DeleteOrg))
+	mux.Handle("DELETE /api/orgs/{slug}", tenantAuthMiddleware.Append(globalAdmin).HandlerFunc(unitHandler.DeleteOrg))
 
 	// Organization Relations
 	// ----------------------
