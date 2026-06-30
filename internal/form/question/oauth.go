@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/shared"
 
 	"github.com/google/uuid"
@@ -109,7 +110,7 @@ func (o OAuthConnect) EncodeRequest(answer any) (json.RawMessage, error) {
 func (o OAuthConnect) DisplayValue(rawValue json.RawMessage) (string, error) {
 	var v shared.OAuthConnectAnswer
 	if err := json.Unmarshal(rawValue, &v); err != nil {
-		return "", fmt.Errorf("failed to decode oauth_connect answer for display: %w", err)
+		return "", fmt.Errorf("%w: failed to decode oauth_connect answer for display: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 	if v.Username != "" && v.Email != "" {
 		return fmt.Sprintf("%s(%s)", v.Username, v.Email), nil
@@ -128,7 +129,7 @@ func (o OAuthConnect) MatchesPattern(rawValue json.RawMessage, pattern string) (
 
 	match, err := matchPattern(display, pattern)
 	if err != nil {
-		return false, fmt.Errorf("failed to match pattern for oauth_connect answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
 	return match, nil
 }

@@ -339,12 +339,12 @@ func (d Date) EncodeRequest(answer any) (json.RawMessage, error) {
 func (d Date) DisplayValue(rawValue json.RawMessage) (string, error) {
 	answer, err := d.DecodeStorage(rawValue)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDisplayValueFailed, err)
 	}
 
 	dateAnswer, ok := answer.(shared.DateAnswer)
 	if !ok {
-		return "", fmt.Errorf("expected shared.DateAnswer, got %T", answer)
+		return "", fmt.Errorf("%w: expected shared.DateAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
 	}
 
 	// Use the String() method from shared.DateAnswer which formats based on available components
@@ -352,14 +352,19 @@ func (d Date) DisplayValue(rawValue json.RawMessage) (string, error) {
 }
 
 func (d Date) MatchesPattern(rawValue json.RawMessage, pattern string) (bool, error) {
-	display, err := d.DisplayValue(rawValue)
+	answer, err := d.DecodeStorage(rawValue)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerDecodeFailed, err)
 	}
 
-	match, err := matchPattern(display, pattern)
+	dateAnswer, ok := answer.(shared.DateAnswer)
+	if !ok {
+		return false, fmt.Errorf("%w: expected shared.DateAnswer, got %T", internal.ErrQuestionAnswerUnexpectedType, answer)
+	}
+
+	match, err := matchPattern(dateAnswer.String(), pattern)
 	if err != nil {
-		return false, fmt.Errorf("failed to match pattern for date answer: %w", err)
+		return false, fmt.Errorf("%w: %w", internal.ErrQuestionAnswerPatternMatchFailed, err)
 	}
 	return match, nil
 }
