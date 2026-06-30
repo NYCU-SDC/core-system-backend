@@ -1,0 +1,11 @@
+name: "Form Workflow Condition"
+description: "Positive end-to-end coverage for conditional workflow routing, section progress, and response completion."
+cases:
+  - name: "Conditional Routing"
+    description: "Verify conditional workflow setup, branched section progression, and final response listing."
+    domains:
+      - form-question
+      - form-workflow
+      - form-response
+    path: "04-response-creation.http"
+    test: "listFormResponses"

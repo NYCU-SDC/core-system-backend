@@ -1,0 +1,8 @@
+@loginUserId = {{LOGIN_USER_ID}}
+
+###
+# @name userLogin
+POST {{BASE_URL}}/auth/login/internal
+{
+    "uid": "{{loginUserId}}"
+}

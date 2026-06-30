@@ -1,0 +1,484 @@
+# ============================================
+# Response Creation and Answer Submission (form-workflow-condition)
+# ============================================
+# Section A: 1 question (condition). Section B: 1 (SHORT_TEXT). Section C: 1 (LONG_TEXT).
+# This response: user chooses both B and C, then answers Section B and Section C questions.
+
+# Import form publishing from this journey
+# @import ./03-form-publishing.http
+
+###
+
+# ============================================
+# Verify Form is Published Before Creating Response
+# ============================================
+# @name verifyFormPublished
+# @ref getFormFinalState
+GET {{BASE_URL}}/forms/{{formId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form must be published before accepting responses', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'PUBLISHED', 'Status should be PUBLISHED');
+        
+        console.log('Form is published and ready for responses');
+    });
+}}
+
+###
+
+# ============================================
+# Create Form Response
+# ============================================
+# @name createFormResponse
+# @ref verifyFormPublished
+POST {{BASE_URL}}/forms/{{formId}}/responses
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response created successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Response ID should exist');
+        
+        console.log('Created response:', data.id);
+    });
+
+    const data = JSON.parse(response.body);
+    exports.responseId = data.id;
+}}
+
+###
+
+# ============================================
+# GET /forms/me — UserForm.responseIds includes new draft response
+# ============================================
+# @name listUserFormsAfterResponseCreate
+# @ref createFormResponse
+GET {{BASE_URL}}/forms/me
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('GET /forms/me lists this form with responseIds containing the new response', () => {
+        equal(Array.isArray(data), true, 'Response must be a bare array');
+        const row = data.find((r) => r.id === formId);
+        equal(row !== undefined, true, 'Current user form list should include this form');
+        equal(Array.isArray(row.responseIds), true, 'responseIds must always be an array');
+        equal(row.responseIds.includes(responseId), true, 'responseIds should include the created response id');
+        equal(row.status, 'IN_PROGRESS', 'UserForm status should be IN_PROGRESS while response is draft');
+    });
+}}
+
+###
+
+# ============================================
+# Verify progress before patching answers
+# ============================================
+# @name verifyProgressBeforePatching
+# @ref listUserFormsAfterResponseCreate
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response progress is DRAFT and section progress is present', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(data.progress, 'DRAFT', 'Progress should be DRAFT before any answers');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        equal(data.sections.length, 3, 'Should have 3 sections (A, B, C)');
+
+        const sectionProgressChecks = [
+            { index: 0, progress: 'NOT_STARTED', label: 'Section A' },
+            { index: 1, progress: 'SKIPPED', label: 'Section B' },
+            { index: 2, progress: 'SKIPPED', label: 'Section C' },
+        ];
+        for (const s of sectionProgressChecks) {
+            equal(data.sections[s.index].progress, s.progress, 'Progress should be ' + s.progress + ' for ' + s.label);
+        }
+        console.log('Progress is SKIPPED for Section B and Section C before patching answers');
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - User chooses both B and C (condition + Section B + Section C)
+# ============================================
+# @name saveDraftAnswers
+# @ref verifyProgressBeforePatching
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{sectionAQuestionId}}",
+            "questionType": "DETAILED_MULTIPLE_CHOICE",
+            "value": ["{{sectionAChoiceSectionBId}}", "{{sectionAChoiceSectionCId}}"]
+        }
+    ]
+}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response has 2 answers (condition choose B and C) and Section B and Section C are not started', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 1, 'Should have 1 answer for Section A');
+    });
+
+    test('Condition answer (choose B and C) is correct', () => {
+        const a = data.answers.find(x => x.answer.questionId === sectionAQuestionId);
+        equal(a !== undefined, true, 'Condition answer should exist');
+        equal(a.answer.questionType, 'DETAILED_MULTIPLE_CHOICE', 'Type should be DETAILED_MULTIPLE_CHOICE');
+        equal(Array.isArray(a.answer.value), true, 'Value should be array');
+        equal(a.answer.value.length, 2, 'Should have chosen B and C');
+        equal(a.answer.value.includes(sectionAChoiceSectionBId), true, 'Should include Section B choice');
+        equal(a.answer.value.includes(sectionAChoiceSectionCId), true, 'Should include Section C choice');
+    });
+
+
+}}
+
+###
+
+# ============================================
+# Verify progress = DRAFT after saving answers
+# ============================================
+# @name verifyProgressDraftAfterAnswers
+# @ref saveDraftAnswers
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response progress remains DRAFT', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(data.progress, 'DRAFT', 'Progress should be DRAFT');
+        const sectionProgressChecks = [
+            { index: 0, progress: 'COMPLETED', label: 'Section A' },
+            { index: 1, progress: 'NOT_STARTED', label: 'Section B' },
+            { index: 2, progress: 'NOT_STARTED', label: 'Section C' },
+        ];
+        for (const s of sectionProgressChecks) {
+            equal(data.sections[s.index].progress, s.progress, 'Progress should be ' + s.progress + ' for ' + s.label);
+        }
+        console.log('Progress is DRAFT after draft answers');
+    });
+}}
+
+###
+
+# ============================================
+# Patch Section A question (condition) answer only
+# ============================================
+# @name patchSectionAAnswer
+# @ref verifyProgressDraftAfterAnswers
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{sectionAQuestionId}}",
+            "questionType": "DETAILED_MULTIPLE_CHOICE",
+            "value": ["{{sectionAChoiceSectionCId}}"]
+        }
+    ]
+}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+    test('Section A answer patched', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 1, 'Should have 1 answer (Section A choose C only)');
+        equal(data.answers[0].answer.questionId, sectionAQuestionId, 'Should be Section A question');
+        equal(data.answers[0].answer.value.length, 1, 'Should still have C selected');
+        equal(data.answers[0].answer.value.includes(sectionAChoiceSectionCId), true, 'Should include Section C choice');
+    });
+}}
+
+###
+
+# ============================================
+# Verify section progress again after patching Section A
+# ============================================
+# @name verifySectionProgressAfterPatchSectionA
+# @ref patchSectionAAnswer
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Section progress still correct after patch Section A', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        equal(data.sections.length, 3, 'Should have 3 sections (A, B, C)');
+        const sectionProgressChecks = [
+            { index: 0, progress: 'COMPLETED', label: 'Section A (condition)' },
+            { index: 1, progress: 'NOT_STARTED', label: 'Section C' },
+            { index: 2, progress: 'SKIPPED', label: 'Section B' },
+        ];
+        for (const c of sectionProgressChecks) {
+            equal(data.sections[c.index].progress, c.progress, c.label + ' should be ' + c.progress);
+        }
+        console.log('Section progress verified after patching Section A answer');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH Section B answer
+# ============================================
+# @name patchSectionBAnswer
+# @ref verifySectionProgressAfterPatchSectionA
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{sectionBQuestionId}}",
+            "questionType": "SHORT_TEXT",
+            "value": "John Doe"
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Section B answer patched but should be skipped', () => {
+        equal(data.status, 400, 'Status should be 400');
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH Section C answer
+# ============================================
+# @name patchSectionCAnswer
+# @ref patchSectionBAnswer
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{sectionCQuestionId}}",
+            "questionType": "LONG_TEXT",
+            "value": "I chose both branches and want to provide feedback for Section C as well."
+        }
+    ]
+}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Section C answer patched', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 1, 'Should have 1 answer');
+        const a = data.answers[0];
+        equal(a.answer.questionId, sectionCQuestionId, 'questionId should match');
+        equal(a.answer.questionType, 'LONG_TEXT', 'Question type should be LONG_TEXT');
+        equal(a.answer.value.includes('both branches'), true, 'Value should contain expected text');
+    });
+}}
+
+###
+
+# ============================================
+# Verify section progress before submit (all 3 sections completed)
+# ============================================
+# @name verifySectionProgress
+# @ref patchSectionCAnswer
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Sections A, B and C progress is COMPLETED', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        equal(data.sections.length, 3, 'Should have 3 sections (A, B, C)');
+        const sectionProgressChecks = [
+            { index: 0, progress: 'COMPLETED', label: 'Section A (condition)' },
+            { index: 1, progress: 'COMPLETED', label: 'Section B' },
+            { index: 2, progress: 'SKIPPED', label: 'Section C' },
+        ];
+        for (const s of sectionProgressChecks) {
+            equal(data.sections[s.index].progress, s.progress, s.label + ' should be ' + s.progress);
+        }
+        console.log('Sections A (condition) COMPLETED, Section B SKIPPED, Section C COMPLETED after patching answers');
+    });
+}}
+
+###
+
+# ============================================
+# Submit Response with Final Answers (user chose C only)
+# ============================================
+# @name submitResponse
+# @ref verifySectionProgress
+POST {{BASE_URL}}/responses/{{responseId}}/submit
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{sectionAQuestionId}}",
+            "questionType": "DETAILED_MULTIPLE_CHOICE",
+            "value": ["{{sectionAChoiceSectionCId}}"]
+        },
+        {
+            "questionId": "{{sectionCQuestionId}}",
+            "questionType": "LONG_TEXT",
+            "value": "I chose both branches and want to provide feedback for Section C as well."
+        }
+    ]
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+    test('Response submitted successfully', () => {
+        console.log('Response submitted successfully (user chose C only)');
+    });
+}}
+
+###
+
+# ============================================
+# Get Response After Submission
+# ============================================
+# @name getResponseAfterSubmit
+# @ref submitResponse
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response status changed to SUBMITTED', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(data.progress, 'SUBMITTED', 'Progress should be SUBMITTED after submission');
+
+        const sectionChecks = [{ 
+            index: 0,
+            progress: 'COMPLETED', 
+            hasPayload: true, 
+            progressLabel: 'Section A (condition)', 
+            payloadMsg: 'Section A (condition) should exist with 1 question and 1 answer with payload' 
+        },
+        { 
+            index: 1, 
+            progress: 'COMPLETED', 
+            hasPayload: true, 
+            progressLabel: 'Section C', 
+            payloadMsg: 'Section C should exist with 1 question and 1 answer with payload' 
+        },
+        { 
+            index: 2, 
+            progress: 'SKIPPED', 
+            hasPayload: false, 
+            progressLabel: 'Section B', 
+            payloadMsg: 'Section B should exist with 1 question but 0 answer' 
+        }];
+        for (const s of sectionChecks) {
+            equal(data.sections[s.index].progress, s.progress, s.progressLabel + ' should be ' + s.progress);
+            const hasPayload = data.sections[s.index].answerDetails[0].payload !== undefined && data.sections[s.index].answerDetails[0].payload !== null;
+            equal(hasPayload, s.hasPayload, s.payloadMsg);
+        }
+
+        console.log('Response ID:', data.id);
+        console.log('Progress:', data.progress);
+        console.log('Section A (condition) COMPLETED, Section B SKIPPED, Section C COMPLETED after submission');
+    });
+}}
+
+###
+
+# ============================================
+# List All Form Responses
+# ============================================
+# @name listFormResponses
+# @ref getResponseAfterSubmit
+GET {{BASE_URL}}/forms/{{formId}}/responses
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form responses listed', () => {
+        const data = JSON.parse(response.body);
+        equal(data.formId, formId, 'Form ID should match');
+        equal(typeof data.totalCount, 'number', 'totalCount should be a number');
+        equal(typeof data.draftCount, 'number', 'draftCount should be a number');
+        equal(typeof data.submittedCount, 'number', 'submittedCount should be a number');
+        equal(data.totalCount, data.draftCount + data.submittedCount, 'totalCount should equal draftCount + submittedCount');
+        equal(data.submittedCount >= 1, true, 'Should have at least one submitted response');
+        equal(Array.isArray(data.responses), true, 'Responses should be an array');
+        equal(data.responses.length >= 1, true, 'Should have at least one response');
+        
+        const submittedResponse = data.responses.find(r => r.id === responseId);
+        equal(submittedResponse !== undefined, true, 'Our response should be in the list');
+        equal(submittedResponse.submittedBy !== undefined, true, 'Should have submittedBy field');
+        
+        console.log('Total responses:', data.responses.length);
+    });
+}}

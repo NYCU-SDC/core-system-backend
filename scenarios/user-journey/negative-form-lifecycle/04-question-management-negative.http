@@ -1,0 +1,1029 @@
+# ============================================
+# Negative Question Management - Error paths for question CRUD
+# ============================================
+# Variables (formId, sectionNodeId, shortTextQuestionId, etc.) come from the positive flow.
+
+# @import ../form-lifecycle/04-question-management.http
+
+###
+
+# ============================================
+# Create question with non-existent section ID (expect 404)
+# ============================================
+# @name createQuestionNonExistentSection
+# @ref verifyQuestionDeletion
+POST {{BASE_URL}}/sections/00000000-0000-0000-0000-000000000000/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "title": "Should Not Be Created",
+    "description": "Non-existent section",
+    "order": 1
+}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Create question with invalid type (expect 400)
+# ============================================
+# @name createQuestionInvalidType
+# @ref createQuestionNonExistentSection
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "INVALID_QUESTION_TYPE",
+    "title": "Invalid type test",
+    "order": 1
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question with missing required fields (expect 400)
+# ============================================
+# @name createQuestionMissingTitle
+# @ref createQuestionInvalidType
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "order": 1
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question with missing type (expect 400)
+# ============================================
+# @name createQuestionMissingType
+# @ref createQuestionMissingTitle
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "title": "No type provided",
+    "order": 1
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: SINGLE_CHOICE without choices (expect 400)
+# ============================================
+# Choice-based type requires choices array.
+# @name createQuestionSingleChoiceMissingChoices
+# @ref createQuestionMissingType
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SINGLE_CHOICE",
+    "title": "Pick one",
+    "description": "Missing choices for single choice",
+    "order": 1
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: SINGLE_CHOICE with empty choices (expect 400)
+# ============================================
+# @name createQuestionSingleChoiceEmptyChoices
+# @ref createQuestionSingleChoiceMissingChoices
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SINGLE_CHOICE",
+    "title": "Pick one",
+    "description": "Empty choices",
+    "order": 1,
+    "choices": []
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: SINGLE_CHOICE with invalid choice structure (expect 400)
+# ============================================
+# Choices must have "name"; wrong structure should be rejected.
+# @name createQuestionInvalidChoiceStructure
+# @ref createQuestionSingleChoiceEmptyChoices
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SINGLE_CHOICE",
+    "title": "Pick one",
+    "description": "Invalid choice structure",
+    "order": 1,
+    "choices": [
+        { "label": "Option A" },
+        { "value": "Option B" }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: LINEAR_SCALE scale not in 1~10 - maxVal > 10 (expect 400)
+# ============================================
+# ScaleOption maxVal must be between 2 and 10.
+# @name createQuestionLinearScaleOutOfRange
+# @ref createQuestionInvalidChoiceStructure
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "LINEAR_SCALE",
+    "title": "Rate 1-20",
+    "description": "Invalid: maxVal 20 not in 1~10",
+    "order": 1,
+    "scale": {
+        "minVal": 1,
+        "maxVal": 20,
+        "minValueLabel": "Low",
+        "maxValueLabel": "High"
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: LINEAR_SCALE minVal invalid (expect 400)
+# ============================================
+# minVal can be 0 or 1 only; minVal > maxVal is invalid.
+# @name createQuestionLinearScaleInvalidMinMax
+# @ref createQuestionLinearScaleOutOfRange
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "LINEAR_SCALE",
+    "title": "Invalid range",
+    "description": "minVal 5 > maxVal 3",
+    "order": 1,
+    "scale": {
+        "minVal": 5,
+        "maxVal": 3
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: RATING icon not found (expect 400)
+# ============================================
+# Invalid or unsupported icon name for rating question.
+# @name createQuestionRatingIconNotFound
+# @ref createQuestionLinearScaleInvalidMinMax
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "RATING",
+    "title": "Rate with invalid icon",
+    "description": "Icon not found",
+    "order": 1,
+    "scale": {
+        "icon": "nonexistent_icon_xyz",
+        "minVal": 1,
+        "maxVal": 5
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: UPLOAD_FILE maxFileAmount out of range (expect 400)
+# ============================================
+# maxFileAmount must be 1-10.
+# @name createQuestionUploadFileInvalidMaxAmount
+# @ref createQuestionRatingIconNotFound
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": false,
+    "type": "UPLOAD_FILE",
+    "title": "Upload",
+    "description": "Invalid maxFileAmount",
+    "order": 1,
+    "uploadFile": {
+        "allowedFileTypes": ["PDF"],
+        "maxFileAmount": 0,
+        "maxFileSizeLimit": 1000000
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: UPLOAD_FILE maxFileSizeLimit zero (expect 400)
+# ============================================
+# @name createQuestionUploadFileSizeLimitZero
+# @ref createQuestionUploadFileInvalidMaxAmount
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": false,
+    "type": "UPLOAD_FILE",
+    "title": "Upload",
+    "description": "Invalid maxFileSizeLimit zero",
+    "order": 1,
+    "uploadFile": {
+        "allowedFileTypes": ["PDF"],
+        "maxFileAmount": 1,
+        "maxFileSizeLimit": 0
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Create question: UPLOAD_FILE maxFileSizeLimit over 10MB (expect 400)
+# ============================================
+# @name createQuestionUploadFileInvalidSizeLimit
+# @ref createQuestionUploadFileSizeLimitZero
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": false,
+    "type": "UPLOAD_FILE",
+    "title": "Upload",
+    "description": "Invalid maxFileSizeLimit",
+    "order": 1,
+    "uploadFile": {
+        "allowedFileTypes": ["PDF"],
+        "maxFileAmount": 1,
+        "maxFileSizeLimit": 10485761
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Create question: UPLOAD_FILE invalid allowedFileTypes (expect 400)
+# ============================================
+# @name createQuestionUploadFileInvalidTypes
+# @ref createQuestionUploadFileInvalidSizeLimit
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": false,
+    "type": "UPLOAD_FILE",
+    "title": "Upload",
+    "description": "Invalid allowedFileTypes",
+    "order": 1,
+    "uploadFile": {
+        "allowedFileTypes": ["INVALID_TYPE"],
+        "maxFileAmount": 1,
+        "maxFileSizeLimit": 1000000
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Create question: DATE minDate > maxDate (expect 400)
+# ============================================
+# @name createQuestionDateInvalidRange
+# @ref createQuestionUploadFileInvalidTypes
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "DATE",
+    "title": "When?",
+    "description": "Invalid date range",
+    "order": 1,
+    "date": {
+        "hasYear": true,
+        "hasMonth": true,
+        "hasDay": true,
+        "minDate": "2026-12-31T00:00:00Z",
+        "maxDate": "2025-01-01T00:00:00Z"
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: DATE invalid date format (expect 400)
+# ============================================
+# @name createQuestionDateInvalidFormat
+# @ref createQuestionDateInvalidRange
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "DATE",
+    "title": "When?",
+    "description": "Invalid date format",
+    "order": 1,
+    "date": {
+        "hasYear": true,
+        "hasMonth": true,
+        "hasDay": true,
+        "minDate": "not-a-date",
+        "maxDate": "2026-12-31T23:59:59Z"
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Create question: RANKING invalid sourceId (expect 400 or 404)
+# ============================================
+# sourceId must reference an existing question.
+# @name createQuestionRankingInvalidSourceId
+# @ref createQuestionDateInvalidFormat
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "RANKING",
+    "title": "Rank",
+    "description": "Invalid sourceId",
+    "order": 1,
+    "sourceId": "00000000-0000-0000-0000-000000000000"
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: DATE with scale - option does not match type (expect 400)
+# ============================================
+# @name createQuestionDateWithScale
+# @ref createQuestionRankingInvalidSourceId
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "DATE",
+    "title": "When?",
+    "description": "Invalid: scale for date type",
+    "order": 1,
+    "scale": {
+        "minVal": 1,
+        "maxVal": 5
+    }
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Create question: UPLOAD_FILE with choices - option does not match type (expect 400)
+# ============================================
+# @name createQuestionUploadFileWithChoices
+# @ref createQuestionDateWithScale
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": false,
+    "type": "UPLOAD_FILE",
+    "title": "Upload",
+    "description": "Invalid: choices for upload type",
+    "order": 1,
+    "choices": [
+        { "name": "Option A" }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Create question: LINEAR_SCALE without scale (expect 400)
+# ============================================
+# Type requires scale option.
+# @name createQuestionLinearScaleMissingScale
+# @ref createQuestionUploadFileWithChoices
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "LINEAR_SCALE",
+    "title": "Rate 1-10",
+    "description": "Missing scale",
+    "order": 1
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Create question: negative order (expect 400 if validated)
+# ============================================
+# @name createQuestionNegativeOrder
+# @ref createQuestionLinearScaleMissingScale
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "title": "Name",
+    "description": "Invalid order",
+    "order": -1
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: order zero (expect 400 if order must be positive)
+# ============================================
+# @name createQuestionOrderZero
+# @ref createQuestionNegativeOrder
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "title": "Order zero",
+    "description": "Invalid order",
+    "order": 0
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+
+    test('Error body indicates Validation Problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Get question list length before jump order create
+# ============================================
+# @name getQuestionCountBeforeJumpOrder
+# @ref createQuestionOrderZero
+GET {{BASE_URL}}/forms/{{formId}}/sections
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    const ourSection = data.find(s => s.section.id === sectionNodeId);
+    if (ourSection && Array.isArray(ourSection.questions)) {
+        exports.questionCountBeforeJumpOrder = ourSection.questions.length;
+    }
+}}
+
+###
+
+# ============================================
+# Create question: jump order
+# ============================================
+# Creating with order questionCountBeforeJumpOrder + 2 so we jump order (section already has 1, 2, 3, ...).
+# When creation succeeds (201), verify question is at questionCountBeforeJumpOrder + 1 position.
+# @name createQuestionJumpOrder
+# @ref getQuestionCountBeforeJumpOrder
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "title": "Jump order",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{ "type": "text", "text": "Order 100" }]
+            }
+        ]
+    },
+    "order": 100
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    if (data.id) {
+        exports.jumpOrderQuestionId = data.id;
+    }
+}}
+
+
+###
+
+# ============================================
+# Create question: correct order (order N+10) after jump order (order N+50)
+# ============================================
+# Create with order questionCountBeforeJumpOrder + 10; should be placed after the jump-order question (order N+50).
+# @name createQuestionCorrectOrder
+# @ref createQuestionJumpOrder
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "title": "Correct order",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{ "type": "text", "text": "Order 50" }]
+            }
+        ]
+    },
+    "order": 50
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    if (data.id) {
+        exports.correctOrderQuestionId = data.id;
+    }
+}}
+
+###
+
+# ============================================
+# Verify order after correct-order creation
+# ============================================
+# Orders: 1..N, 100, 50. So jump-order question at index N, correct-order question at N+1.
+# @name verifyOrderAfterCorrectOrder
+# @ref createQuestionCorrectOrder
+GET {{BASE_URL}}/forms/{{formId}}/sections
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Count is N+2; jump-order question at index N, correct-order question at index N+1', () => {
+        const data = JSON.parse(response.body);
+        const ourSection = data.find(s => s.section.id === sectionNodeId);
+        equal(ourSection !== undefined, true, 'Our section should exist');
+        equal(ourSection.questions.length, questionCountBeforeJumpOrder + 2, 'Question count should be N+2');
+        equal(ourSection.questions[questionCountBeforeJumpOrder].id, jumpOrderQuestionId, 'Jump order question should be at index N');
+        equal(ourSection.questions[questionCountBeforeJumpOrder + 1].id, correctOrderQuestionId, 'Correct order question should be at index N+1');
+    });
+}}
+
+###
+
+# ============================================
+# Create question: duplicate order (API pushes others to 2..N+1)
+# ============================================
+# Section already has a question with order 1 from the positive flow; creating another with order 1.
+# API should accept and push existing questions back so orders become 2, 3, ..., N+1.
+# @name createQuestionDuplicateOrder
+# @ref verifyOrderAfterCorrectOrder
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "title": "Duplicate order",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "Same order as existing question - API pushes others to 2..N+1" }
+                ]
+            }
+        ]
+    },
+    "order": 1
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    if (data.id) {
+        exports.duplicateOrderQuestionId = data.id;
+    }
+}}
+
+###
+
+# ============================================
+# Verify order after duplicate-order create (new at 1, others at 2..N+1)
+# ============================================
+# @name verifyOrderAfterDuplicateOrder
+# @ref createQuestionDuplicateOrder
+GET {{BASE_URL}}/forms/{{formId}}/sections
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('New question at order 1 (index 0), previous order-1 question at index 1, count N+3', () => {
+        const data = JSON.parse(response.body);
+        const ourSection = data.find(s => s.section.id === sectionNodeId);
+        equal(ourSection !== undefined, true, 'Our section should exist');
+        equal(ourSection.questions.length, questionCountBeforeJumpOrder + 3, 'Question count should be N+3 after duplicate-order create');
+        equal(ourSection.questions[0].id, duplicateOrderQuestionId, 'New question (order 1) should be at index 0');
+        equal(ourSection.questions[1].id, longTextQuestionId, 'Previous order-1 question (LONG_TEXT) should be pushed to index 1 (order 2)');
+    });
+}}
+
+###
+
+# ============================================
+# Update question with non-existent section ID (expect 404)
+# ============================================
+# @name updateQuestionNonExistentSection
+# @ref verifyOrderAfterDuplicateOrder
+PUT {{BASE_URL}}/sections/00000000-0000-0000-0000-000000000000/questions/{{shortTextQuestionId}}
+Content-Type: application/json
+
+{
+    "required": false,
+    "type": "SHORT_TEXT",
+    "title": "Should Not Update",
+    "order": 1
+}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Update question with non-existent question ID (expect 404)
+# ============================================
+# @name updateQuestionNonExistentQuestion
+# @ref updateQuestionNonExistentSection
+PUT {{BASE_URL}}/sections/{{sectionNodeId}}/questions/00000000-0000-0000-0000-000000000000
+Content-Type: application/json
+
+{
+    "required": false,
+    "type": "SHORT_TEXT",
+    "title": "Should Not Update",
+    "order": 1
+}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Delete question with non-existent section ID (expect 204 - idempotent)
+# ============================================
+# API returns 204 No Content even when section/question does not exist.
+# @name deleteQuestionNonExistentSection
+# @ref updateQuestionNonExistentQuestion
+DELETE {{BASE_URL}}/sections/00000000-0000-0000-0000-000000000000/questions/{{shortTextQuestionId}}
+
+?? status == 404
+
+###
+
+# ============================================
+# Delete question with non-existent question ID (expect 204 - idempotent)
+# ============================================
+# API returns 204 No Content even when question does not exist.
+# @name deleteQuestionNonExistentQuestion
+# @ref deleteQuestionNonExistentSection
+DELETE {{BASE_URL}}/sections/{{sectionNodeId}}/questions/00000000-0000-0000-0000-000000000000
+
+?? status == 204
+
+###
+
+# ============================================
+# Get sections for non-existent form ID (expect 404)
+# ============================================
+# @name getSectionsNonExistentForm
+# @ref deleteQuestionNonExistentQuestion
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/sections
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}

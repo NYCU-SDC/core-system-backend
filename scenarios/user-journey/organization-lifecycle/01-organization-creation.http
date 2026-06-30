@@ -1,0 +1,72 @@
+# ============================================
+# Organization Lifecycle - Create org for negative tests
+# ============================================
+# Creates a new org and removes the current user so we have an org that exists
+# but the user is not a member (for "create form before member" 403 test).
+
+# @import ../shared/common.http
+
+###
+
+# @name getMeFor403Test
+# @ref userLogin
+GET {{BASE_URL}}/users/me
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('User info contains expected properties', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'User ID should exist');
+        equal(data.emails !== undefined, true, 'User email should exist');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.userId = data.id;
+    exports.userEmail = data.emails[0];
+}}
+
+###
+
+# ============================================
+# Create Organization
+# ============================================
+# Slug used by negative-form-lifecycle for "create form before member" (403) test.
+# If org already exists, get it instead.
+# @name createOrgFor403Test
+# @ref getMeFor403Test
+POST {{BASE_URL}}/orgs
+Content-Type: application/json
+{
+    "name": "Org For 403 Test",
+    "description": "Created for negative-form-lifecycle createFormBeforeMember test",
+    "slug": "org-403-test"
+}
+
+?? status <= 201
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    exports.orgSlugNotMember = data.slug;
+    exports.newOrgId = data.id;
+}}
+
+###
+
+# ============================================
+# Get Organization if Creation Failed (org already exists)
+# ============================================
+# @name getOrgFor403Test
+# @ref createOrgFor403Test
+GET {{BASE_URL}}/orgs/org-403-test
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    exports.orgSlugNotMember = data.slug;
+    exports.newOrgId = data.id;
+}}

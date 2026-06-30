@@ -1,0 +1,178 @@
+# ============================================
+# Negative Workflow - Error paths for workflow operations
+# ============================================
+# Variables (formId, sectionNodeId, startNodeId, endNodeId, etc.) come from the positive flow.
+
+# @import ../form-lifecycle/03-workflow-basic.http
+
+###
+
+# ============================================
+# Get workflow for non-existent form ID (expect 404)
+# ============================================
+# @name getWorkflowNonExistentForm
+# @ref getFinalWorkflow
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/workflow
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Create workflow node with non-existent form ID (expect 404)
+# ============================================
+# @name createNodeNonExistentForm
+# @ref getWorkflowNonExistentForm
+POST {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "SECTION"
+}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Create workflow node with invalid type (expect 400)
+# ============================================
+# @name createNodeInvalidType
+# @ref createNodeNonExistentForm
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "INVALID_NODE_TYPE"
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Bad Request', () => {
+        const data = JSON.parse(response.body);
+        equal(['Bad Request', 'Validation Problem'].includes(data.title), true, 'Response title should indicate validation error');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Create workflow node with missing type (expect 400)
+# ============================================
+# @name createNodeMissingType
+# @ref createNodeInvalidType
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Update workflow with non-existent form ID (expect 404)
+# ============================================
+# @name updateWorkflowNonExistentForm
+# @ref createNodeMissingType
+PUT {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/workflow
+Content-Type: application/json
+
+[
+    {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "label": "Test",
+        "payload": { "x": 0.0, "y": 0.0 },
+        "next": "00000000-0000-0000-0000-000000000002"
+    }
+]
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Update workflow with invalid node IDs (expect 400)
+# ============================================
+# @name updateWorkflowInvalidNodeIds
+# @ref updateWorkflowNonExistentForm
+PUT {{BASE_URL}}/forms/{{formId}}/workflow
+Content-Type: application/json
+
+[
+    {
+        "id": "00000000-0000-0000-0000-000000000999",
+        "label": "Invalid Node",
+        "payload": { "x": 0.0, "y": 0.0 },
+        "next": "00000000-0000-0000-0000-000000000998"
+    }
+]
+
+?? status == 400
+{{
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Get sections for non-existent form ID (expect 404)
+# ============================================
+# @name getSectionsNonExistentForm
+# @ref updateWorkflowInvalidNodeIds
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/sections
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}

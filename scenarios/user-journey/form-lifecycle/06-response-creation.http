@@ -1,0 +1,1229 @@
+# ============================================
+# Phase 6: Response Creation and Answer Submission
+# ============================================
+# This file tests the form response lifecycle:
+# - Create a new response for the published form
+# - Submit answers for all question types
+# - Verify response status and content
+# - Test draft saving (auto-save) functionality
+# - Test final submission
+
+# Import setup from Phase 5
+# @import ./05-form-publishing.http
+
+###
+
+# ============================================
+# Verify Form is Published Before Creating Response
+# ============================================
+# @name verifyFormPublished
+# @ref getFormFinalState
+GET {{BASE_URL}}/forms/{{formId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form must be published before accepting responses', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'PUBLISHED', 'Status should be PUBLISHED');
+        
+        console.log('Form is published and ready for responses');
+    });
+}}
+
+###
+
+# ============================================
+# Create Form Response
+# ============================================
+# @name createFormResponse
+# @ref verifyFormPublished
+POST {{BASE_URL}}/forms/{{formId}}/responses
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response created successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Response ID should exist');
+        
+        console.log('Created response:', data.id);
+    });
+
+    const data = JSON.parse(response.body);
+    exports.responseId = data.id;
+}}
+
+###
+
+# ============================================
+# GET /forms/me — UserForm.responseIds includes new draft response
+# ============================================
+# @name listUserFormsAfterResponseCreate
+# @ref createFormResponse
+GET {{BASE_URL}}/forms/me
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('GET /forms/me lists this form with responseIds containing the new response', () => {
+        equal(Array.isArray(data), true, 'Response must be a bare array');
+        const row = data.find((r) => r.id === formId);
+        equal(row !== undefined, true, 'Current user form list should include this form');
+        equal(Array.isArray(row.responseIds), true, 'responseIds must always be an array');
+        equal(row.responseIds.includes(responseId), true, 'responseIds should include the created response id');
+        equal(row.status, 'IN_PROGRESS', 'UserForm status should be IN_PROGRESS while response is draft');
+    });
+}}
+
+###
+
+# ============================================
+# Verify progress before patching answers
+# ============================================
+# @name verifyProgressBeforePatching
+# @ref listUserFormsAfterResponseCreate
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+?? status == 200
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response progress is DRAFT and section progress is present', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(data.progress, 'DRAFT', 'Progress should be DRAFT before any answers');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        equal(data.sections.length, 1, 'Should have 1 section');
+
+        equal(data.sections[0].progress, 'NOT_STARTED', 'Progress should be NOT_STARTED');
+        console.log('Progress is NOT_STARTED before patching answers');
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Text Questions (Auto-save Simulation)
+# ============================================
+# @name saveDraftTextAnswers
+# @ref verifyProgressBeforePatching
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{shortTextQuestionId}}",
+            "questionType": "SHORT_TEXT",
+            "value": "John Doe456"
+        },
+        {
+            "questionId": "{{longTextQuestionId}}",
+            "questionType": "LONG_TEXT",
+            "value": "I have a Bachelor's degree in Computer Science from National Yang Ming Chiao Tung University. I have been working as a full-stack developer for 3 years, specializing in React, Node.js, and cloud infrastructure."
+        },
+        {
+            "questionId": "{{hyperlinkQuestionId}}",
+            "questionType": "HYPERLINK",
+            "value": "https://github.com/johndoe"
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response structure is correct', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 3, 'Should have 3 answers');
+        
+        console.log('Saved 3 text answers (auto-save)');
+    });
+
+    test('Each answer has required metadata fields', () => {
+        data.answers.forEach((answer, index) => {
+            equal(answer.createdAt !== undefined, true, `Answer ${index + 1} should have createdAt`);
+            equal(answer.updatedAt !== undefined, true, `Answer ${index + 1} should have updatedAt`);
+            equal(answer.responseId, responseId, `Answer ${index + 1} responseId should match`);
+            equal(answer.answer.questionId !== undefined, true, `Answer ${index + 1} should have questionId`);
+        });
+
+        console.log('All answers have required metadata fields');
+    });
+
+    test('Each answer has correct nested answer structure', () => {
+        data.answers.forEach((answer, index) => {
+            equal(answer.answer !== undefined, true, `Answer ${index + 1} should have nested answer object`);
+            equal(answer.answer.questionType !== undefined, true, `Answer ${index + 1} should have questionType`);
+            equal(answer.answer.value !== undefined, true, `Answer ${index + 1} should have value`);
+            equal(answer.displayValue !== undefined, true, `Answer ${index + 1} should have displayValue`);
+        });
+        
+        console.log('All answers have correct nested structure');
+    });
+
+    test('Short text answer content is correct', () => {
+        const shortTextAnswer = data.answers.find(a => a.answer.questionId === shortTextQuestionId);
+        equal(shortTextAnswer !== undefined, true, 'Short text answer should exist');
+        equal(shortTextAnswer.answer.questionId, shortTextQuestionId, 'Nested questionId should match');
+        equal(shortTextAnswer.answer.questionType, 'SHORT_TEXT', 'Question type should be SHORT_TEXT');
+        equal(shortTextAnswer.answer.value, 'John Doe456', 'Value should match');
+        equal(shortTextAnswer.displayValue, 'John Doe456', 'Display value should match');
+        
+        console.log('Short text answer:', shortTextAnswer.displayValue);
+    });
+
+    test('Long text answer content is correct', () => {
+        const longTextAnswer = data.answers.find(a => a.answer.questionId === longTextQuestionId);
+        equal(longTextAnswer !== undefined, true, 'Long text answer should exist');
+        equal(longTextAnswer.answer.questionId, longTextQuestionId, 'Nested questionId should match');
+        equal(longTextAnswer.answer.questionType, 'LONG_TEXT', 'Question type should be LONG_TEXT');
+        equal(longTextAnswer.answer.value.includes('Bachelor'), true, 'Value should contain expected text');
+        equal(longTextAnswer.displayValue.endsWith('...'), true, 'Display value should be truncated');
+        
+        console.log('Long text answer (truncated):', longTextAnswer.displayValue);
+    });
+
+    test('Hyperlink answer content is correct', () => {
+        const hyperlinkAnswer = data.answers.find(a => a.answer.questionId === hyperlinkQuestionId);
+        equal(hyperlinkAnswer !== undefined, true, 'Hyperlink answer should exist');
+        equal(hyperlinkAnswer.answer.questionId, hyperlinkQuestionId, 'Nested questionId should match');
+        equal(hyperlinkAnswer.answer.questionType, 'HYPERLINK', 'Question type should be HYPERLINK');
+        equal(hyperlinkAnswer.answer.value, 'https://github.com/johndoe', 'Value should match');
+        equal(hyperlinkAnswer.displayValue, 'https://github.com/johndoe', 'Display value should match');
+        
+        console.log('Hyperlink answer:', hyperlinkAnswer.displayValue);
+    });
+}}
+
+###
+
+# ============================================
+# Verify progress = DRAFT after saving text answers
+# ============================================
+# @name verifyProgressDraftAfterTextAnswers
+# @ref saveDraftTextAnswers
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response progress remains DRAFT after text answers', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(data.progress, 'DRAFT', 'Progress should be DRAFT after saving draft text answers');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        console.log('Progress is DRAFT after text answers');
+    });
+}}
+
+###
+
+# ============================================
+# Get Specific Question Answer
+# ============================================
+# @name getShortTextAnswer
+# @ref verifyProgressDraftAfterTextAnswers
+GET {{BASE_URL}}/responses/{{responseId}}/questions/{{shortTextQuestionId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const answer = JSON.parse(response.body);
+
+    test('Answer has required metadata fields', () => {
+        equal(answer.createdAt !== undefined, true, 'Should have createdAt');
+        equal(answer.updatedAt !== undefined, true, 'Should have updatedAt');
+        equal(answer.responseId, responseId, 'responseId should match');
+        equal(answer.answer.questionId, shortTextQuestionId, 'questionId should match');
+        
+        console.log('Answer metadata verified');
+    });
+
+    test('Answer has correct nested answer structure', () => {
+        equal(answer.answer !== undefined, true, 'Should have nested answer object');
+        equal(answer.answer.questionId, shortTextQuestionId, 'Nested questionId should match');
+        equal(answer.answer.questionType, 'SHORT_TEXT', 'Question type should be SHORT_TEXT');
+        equal(answer.answer.value !== undefined, true, 'Should have value');
+        equal(answer.displayValue !== undefined, true, 'Should have displayValue');
+        
+        console.log('Nested answer structure verified');
+    });
+
+    test('Answer content is correct', () => {
+        equal(answer.answer.value, 'John Doe456', 'Value should match saved answer');
+        equal(answer.displayValue, 'John Doe456', 'Display value should match');
+        
+        console.log('Retrieved answer:', answer.displayValue);
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Choice Questions
+# ============================================
+# @name saveDraftChoiceAnswers
+# @ref getShortTextAnswer
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{singleChoiceQuestionId}}",
+            "questionType": "SINGLE_CHOICE",
+            "value": ["{{singleChoiceOptions[0].id}}"]
+        },
+        {
+            "questionId": "{{multipleChoiceQuestionId}}",
+            "questionType": "MULTIPLE_CHOICE",
+            "value": ["{{multipleChoiceOptions[0].id}}", "{{multipleChoiceOptions[1].id}}"]
+        },
+        {
+            "questionId": "{{dropdownQuestionId}}",
+            "questionType": "DROPDOWN",
+            "value": ["{{dropdownOptions[1].id}}"]
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response structure is correct', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 3, 'Should have 3 answers');
+        
+        console.log('Saved 3 choice answers (auto-save)');
+    });
+
+    test('Each answer has required metadata fields', () => {
+        data.answers.forEach((answer, index) => {
+            equal(answer.createdAt !== undefined, true, `Answer ${index + 1} should have createdAt`);
+            equal(answer.updatedAt !== undefined, true, `Answer ${index + 1} should have updatedAt`);
+            equal(answer.responseId, responseId, `Answer ${index + 1} responseId should match`);
+            equal(answer.answer.questionId !== undefined, true, `Answer ${index + 1} should have questionId`);
+        });
+
+        console.log('All answers have required metadata fields');
+    });
+
+    test('Each answer has correct nested answer structure', () => {
+        data.answers.forEach((answer, index) => {
+            equal(answer.answer !== undefined, true, `Answer ${index + 1} should have nested answer object`);
+            equal(answer.answer.questionType !== undefined, true, `Answer ${index + 1} should have questionType`);
+            equal(Array.isArray(answer.answer.value), true, `Answer ${index + 1} value should be an array for choice questions`);
+            equal(answer.displayValue !== undefined, true, `Answer ${index + 1} should have displayValue`);
+        });
+        
+        console.log('All answers have correct nested structure');
+    });
+
+    test('Single choice answer content is correct', () => {
+        const singleChoiceAnswer = data.answers.find(a => a.answer.questionId === singleChoiceQuestionId);
+        equal(singleChoiceAnswer !== undefined, true, 'Single choice answer should exist');
+        equal(singleChoiceAnswer.answer.questionId, singleChoiceQuestionId, 'Nested questionId should match');
+        equal(singleChoiceAnswer.answer.questionType, 'SINGLE_CHOICE', 'Question type should be SINGLE_CHOICE');
+        equal(singleChoiceAnswer.answer.value.length, 1, 'Should have exactly 1 selected option');
+        equal(singleChoiceAnswer.answer.value[0], singleChoiceOptions[0].id, 'Selected option ID should match');
+        equal(singleChoiceAnswer.displayValue, 'Remote', 'Display value should match option text');
+        
+        console.log('Single choice answer:', singleChoiceAnswer.displayValue);
+    });
+
+    test('Multiple choice answer content is correct', () => {
+        const multipleChoiceAnswer = data.answers.find(a => a.answer.questionId === multipleChoiceQuestionId);
+        equal(multipleChoiceAnswer !== undefined, true, 'Multiple choice answer should exist');
+        equal(multipleChoiceAnswer.answer.questionId, multipleChoiceQuestionId, 'Nested questionId should match');
+        equal(multipleChoiceAnswer.answer.questionType, 'MULTIPLE_CHOICE', 'Question type should be MULTIPLE_CHOICE');
+        equal(multipleChoiceAnswer.answer.value.length, 2, 'Should have 2 selected options');
+        equal(multipleChoiceAnswer.answer.value.includes(multipleChoiceOptions[0].id), true, 'Should include first selected option');
+        equal(multipleChoiceAnswer.answer.value.includes(multipleChoiceOptions[1].id), true, 'Should include second selected option');
+        equal(multipleChoiceAnswer.displayValue, 'JavaScript, TypeScript', 'Display value should show comma-separated options');
+        
+        console.log('Multiple choice answer:', multipleChoiceAnswer.displayValue);
+    });
+
+    test('Dropdown answer content is correct', () => {
+        const dropdownAnswer = data.answers.find(a => a.answer.questionId === dropdownQuestionId);
+        equal(dropdownAnswer !== undefined, true, 'Dropdown answer should exist');
+        equal(dropdownAnswer.answer.questionId, dropdownQuestionId, 'Nested questionId should match');
+        equal(dropdownAnswer.answer.questionType, 'DROPDOWN', 'Question type should be DROPDOWN');
+        equal(dropdownAnswer.answer.value.length, 1, 'Should have exactly 1 selected option');
+        equal(dropdownAnswer.answer.value[0], dropdownOptions[1].id, 'Selected option ID should match');
+        equal(dropdownAnswer.displayValue, 'Intermediate (1-3 years)', 'Display value should match option text');
+        
+        console.log('Dropdown answer:', dropdownAnswer.displayValue);
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Choice With Other Questions
+# ============================================
+# @name saveDraftChoiceWithOtherAnswers
+# @ref saveDraftChoiceAnswers
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{singleChoiceWithOtherQuestionId}}",
+            "questionType": "SINGLE_CHOICE",
+            "value": ["{{singleChoiceWithOtherOptions[3].id}}"],
+            "otherText": "Digital Nomad"
+        },
+        {
+            "questionId": "{{multipleChoiceWithOtherQuestionId}}",
+            "questionType": "MULTIPLE_CHOICE",
+            "value": ["{{multipleChoiceWithOtherOptions[0].id}}", "{{multipleChoiceWithOtherOptions[5].id}}"],
+            "otherText": "Swift"
+        },
+        {
+            "questionId": "{{dropdownWithOtherQuestionId}}",
+            "questionType": "DROPDOWN",
+            "value": ["{{dropdownWithOtherOptions[4].id}}"],
+            "otherText": "Expert (7+ years)"
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response structure is correct', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 3, 'Should have 3 answers');
+        
+        console.log('Saved 3 choice-with-other answers (auto-save)');
+    });
+
+    test('Each answer has required metadata fields', () => {
+        data.answers.forEach((answer, index) => {
+            equal(answer.createdAt !== undefined, true, `Answer ${index + 1} should have createdAt`);
+            equal(answer.updatedAt !== undefined, true, `Answer ${index + 1} should have updatedAt`);
+            equal(answer.responseId, responseId, `Answer ${index + 1} responseId should match`);
+            equal(answer.answer.questionId !== undefined, true, `Answer ${index + 1} should have questionId`);
+        });
+
+        console.log('All answers have required metadata fields');
+    });
+
+    test('Single choice with other answer content is correct', () => {
+        const answer = data.answers.find(a => a.answer.questionId === singleChoiceWithOtherQuestionId);
+        equal(answer !== undefined, true, 'Single choice with other answer should exist');
+        equal(answer.answer.questionType, 'SINGLE_CHOICE', 'Question type should be SINGLE_CHOICE');
+        equal(answer.answer.value.length, 1, 'Should have 1 selected option');
+        equal(answer.answer.value[0], singleChoiceWithOtherOptions[3].id, 'Should select the Other option');
+        equal(answer.answer.otherText, 'Digital Nomad', 'otherText should match');
+        equal(answer.displayValue, 'Digital Nomad', 'Display value should show otherText');
+        
+        console.log('Single choice with other answer:', answer.displayValue);
+    });
+
+    test('Multiple choice with other answer content is correct', () => {
+        const answer = data.answers.find(a => a.answer.questionId === multipleChoiceWithOtherQuestionId);
+        equal(answer !== undefined, true, 'Multiple choice with other answer should exist');
+        equal(answer.answer.questionType, 'MULTIPLE_CHOICE', 'Question type should be MULTIPLE_CHOICE');
+        equal(answer.answer.value.length, 2, 'Should have 2 selected options');
+        equal(answer.answer.value.includes(multipleChoiceWithOtherOptions[0].id), true, 'Should include JavaScript');
+        equal(answer.answer.value.includes(multipleChoiceWithOtherOptions[5].id), true, 'Should include Other option');
+        equal(answer.answer.otherText, 'Swift', 'otherText should match');
+        equal(answer.displayValue.includes('Swift'), true, 'Display value should include otherText');
+        
+        console.log('Multiple choice with other answer:', answer.displayValue);
+    });
+
+    test('Dropdown with other answer content is correct', () => {
+        const answer = data.answers.find(a => a.answer.questionId === dropdownWithOtherQuestionId);
+        equal(answer !== undefined, true, 'Dropdown with other answer should exist');
+        equal(answer.answer.questionType, 'DROPDOWN', 'Question type should be DROPDOWN');
+        equal(answer.answer.value.length, 1, 'Should have 1 selected option');
+        equal(answer.answer.value[0], dropdownWithOtherOptions[4].id, 'Should select the Other option');
+        equal(answer.answer.otherText, 'Expert (7+ years)', 'otherText should match');
+        equal(answer.displayValue, 'Expert (7+ years)', 'Display value should show otherText');
+        
+        console.log('Dropdown with other answer:', answer.displayValue);
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Scale Questions
+# ============================================
+# @name saveDraftScaleAnswers
+# @ref saveDraftChoiceWithOtherAnswers
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{linearScaleQuestionId}}",
+            "questionType": "LINEAR_SCALE",
+            "value": 8
+        },
+        {
+            "questionId": "{{ratingQuestionId}}",
+            "questionType": "RATING",
+            "value": 4
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Draft scale answers saved', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data.answers), true, 'Answers should be an array');
+        equal(data.answers.length, 2, 'Should have 2 answers');
+        
+        // Verify LINEAR_SCALE answer
+        const linearScaleAnswer = data.answers.find(a => a.answer.questionId === linearScaleQuestionId);
+        equal(linearScaleAnswer !== undefined, true, 'LINEAR_SCALE answer should exist');
+        equal(linearScaleAnswer.responseId, responseId, 'Response ID should match');
+        equal(linearScaleAnswer.answer.questionId, linearScaleQuestionId, 'Question ID should match');
+        equal(linearScaleAnswer.answer.questionType, 'LINEAR_SCALE', 'Question type should be LINEAR_SCALE');
+        equal(linearScaleAnswer.answer.value, 8, 'Value should be 8');
+        equal(linearScaleAnswer.displayValue, '8 (1-10)', 'Display value should be formatted correctly');
+        
+        // Verify RATING answer
+        const ratingAnswer = data.answers.find(a => a.answer.questionId === ratingQuestionId);
+        equal(ratingAnswer !== undefined, true, 'RATING answer should exist');
+        equal(ratingAnswer.responseId, responseId, 'Response ID should match');
+        equal(ratingAnswer.answer.questionId, ratingQuestionId, 'Question ID should match');
+        equal(ratingAnswer.answer.questionType, 'RATING', 'Question type should be RATING');
+        equal(ratingAnswer.answer.value, 4, 'Value should be 4');
+        equal(ratingAnswer.displayValue, '4 (1-5)', 'Display value should be formatted correctly');
+        
+        console.log('Saved scale answers (auto-save)');
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Date Question
+# ============================================
+# @name saveDraftDateAnswer
+# @ref saveDraftScaleAnswers
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{dateQuestionId}}",
+            "questionType": "DATE",
+            "value": "2024-06-15T00:00:00Z"
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Draft date answer saved', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data.answers), true, 'Answers should be an array');
+        
+        const dateAnswer = data.answers.find(a => a.answer.questionId === dateQuestionId);
+        equal(dateAnswer.responseId, responseId, 'Response ID should match');
+        equal(dateAnswer !== undefined, true, 'Date answer should exist');
+        equal(dateAnswer.answer.questionType, 'DATE', 'Question type should be DATE');
+        
+        console.log('Saved date answer (auto-save)');
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Ranking Question
+# ============================================
+# @name saveDraftRankingAnswer
+# @ref saveDraftDateAnswer
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{rankingQuestionId}}",
+            "questionType": "RANKING",
+            "value": ["{{rankingOptions[2].id}}", "{{rankingOptions[0].id}}", "{{rankingOptions[1].id}}"]
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response structure is correct', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 1, 'Should have 1 answer');
+        
+        console.log('Saved 1 ranking answer (auto-save)');
+    });
+
+    test('Answer has required metadata fields', () => {
+        const answer = data.answers[0];
+        equal(answer.createdAt !== undefined, true, 'Answer should have createdAt');
+        equal(answer.updatedAt !== undefined, true, 'Answer should have updatedAt');
+        equal(answer.responseId, responseId, 'Answer responseId should match');
+        equal(answer.answer.questionId !== undefined, true, 'Answer should have questionId');
+
+        console.log('Answer has required metadata fields');
+    });
+
+    test('Answer has correct nested answer structure', () => {
+        const answer = data.answers[0];
+        equal(answer.answer !== undefined, true, 'Should have nested answer object');
+        equal(answer.answer.questionType !== undefined, true, 'Should have questionType');
+        equal(Array.isArray(answer.answer.value), true, 'Value should be an array for ranking question');
+        equal(answer.displayValue !== undefined, true, 'Should have displayValue');
+        
+        console.log('Answer has correct nested structure');
+    });
+
+    test('Ranking answer content is correct', () => {
+        const rankingAnswer = data.answers[0];
+        equal(rankingAnswer !== undefined, true, 'Ranking answer should exist');
+        equal(rankingAnswer.answer.questionId, rankingQuestionId, 'Nested questionId should match');
+        equal(rankingAnswer.answer.questionType, 'RANKING', 'Question type should be RANKING');
+        equal(rankingAnswer.answer.value.length, 3, 'Should have 3 ranked options');
+        equal(rankingAnswer.answer.value[0], rankingOptions[2].id, 'First ranked option should match');
+        equal(rankingAnswer.answer.value[1], rankingOptions[0].id, 'Second ranked option should match');
+        equal(rankingAnswer.answer.value[2], rankingOptions[1].id, 'Third ranked option should match');
+        equal(rankingAnswer.displayValue.includes('>'), true, 'Display value should show ranking with > separator');
+        
+        console.log('Ranking answer:', rankingAnswer.displayValue);
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Ranking With Other Question
+# ============================================
+# @name saveDraftRankingWithOtherAnswer
+# @ref saveDraftRankingAnswer
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{rankingWithOtherQuestionId}}",
+            "questionType": "RANKING",
+            "value": ["{{rankingWithOtherOptions[2].id}}", "{{rankingWithOtherOptions[0].id}}", "{{rankingWithOtherOptions[1].id}}", "{{rankingWithOtherOptions[3].id}}"],
+            "otherText": "Fully Distributed"
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response structure is correct', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 1, 'Should have 1 answer');
+        
+        console.log('Saved 1 ranking-with-other answer (auto-save)');
+    });
+
+    test('Ranking with other answer content is correct', () => {
+        const answer = data.answers[0];
+        equal(answer !== undefined, true, 'Ranking with other answer should exist');
+        equal(answer.responseId, responseId, 'Response ID should match');
+        equal(answer.answer.questionId, rankingWithOtherQuestionId, 'Nested questionId should match');
+        equal(answer.answer.questionType, 'RANKING', 'Question type should be RANKING');
+        equal(answer.answer.value.length, 4, 'Should have 4 ranked options');
+        equal(answer.answer.value[0], rankingWithOtherOptions[2].id, 'First ranked option should be Hybrid');
+        equal(answer.answer.value[1], rankingWithOtherOptions[0].id, 'Second ranked option should be Remote');
+        equal(answer.answer.value[2], rankingWithOtherOptions[1].id, 'Third ranked option should be On-site');
+        equal(answer.answer.value[3], rankingWithOtherOptions[3].id, 'Fourth ranked option should be Other');
+        equal(answer.answer.otherText, 'Fully Distributed', 'otherText should match');
+        equal(answer.displayValue.includes('>'), true, 'Display value should show ranking with > separator');
+        equal(answer.displayValue.includes('Fully Distributed'), true, 'Display value should include otherText');
+        
+        console.log('Ranking with other answer:', answer.displayValue);
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Detailed Multiple Choice Question
+# ============================================
+# @name saveDraftDetailedMultipleChoiceAnswer
+# @ref saveDraftRankingWithOtherAnswer
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{detailedMultipleChoiceQuestionId}}",
+            "questionType": "DETAILED_MULTIPLE_CHOICE",
+            "value": ["{{detailedMultipleChoiceOptions[0].id}}", "{{detailedMultipleChoiceOptions[2].id}}"]
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response structure is correct', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 1, 'Should have 1 answer');
+        
+        console.log('Saved 1 detailed multiple choice answer (auto-save)');
+    });
+
+    test('Answer has required metadata fields', () => {
+        const answer = data.answers[0];
+        equal(answer.createdAt !== undefined, true, 'Answer should have createdAt');
+        equal(answer.updatedAt !== undefined, true, 'Answer should have updatedAt');
+        equal(answer.responseId, responseId, 'Answer responseId should match');
+        equal(answer.answer.questionId !== undefined, true, 'Answer should have questionId');
+
+        console.log('Answer has required metadata fields');
+    });
+
+    test('Answer has correct nested answer structure', () => {
+        const answer = data.answers[0];
+        equal(answer.answer !== undefined, true, 'Should have nested answer object');
+        equal(answer.answer.questionType !== undefined, true, 'Should have questionType');
+        equal(Array.isArray(answer.answer.value), true, 'Value should be an array for detailed multiple choice question');
+        equal(answer.displayValue !== undefined, true, 'Should have displayValue');
+        
+        console.log('Answer has correct nested structure');
+    });
+
+    test('Detailed multiple choice answer content is correct', () => {
+        const detailedAnswer = data.answers[0];
+        equal(detailedAnswer !== undefined, true, 'Detailed multiple choice answer should exist');
+        equal(detailedAnswer.answer.questionId, detailedMultipleChoiceQuestionId, 'Nested questionId should match');
+        equal(detailedAnswer.answer.questionType, 'DETAILED_MULTIPLE_CHOICE', 'Question type should be DETAILED_MULTIPLE_CHOICE');
+        equal(detailedAnswer.answer.value.length, 2, 'Should have 2 selected options');
+        equal(detailedAnswer.answer.value.includes(detailedMultipleChoiceOptions[0].id), true, 'Should include first selected option');
+        equal(detailedAnswer.answer.value.includes(detailedMultipleChoiceOptions[2].id), true, 'Should include second selected option');
+        equal(detailedAnswer.displayValue.includes(','), true, 'Display value should show comma-separated options');
+        
+        console.log('Detailed multiple choice answer:', detailedAnswer.displayValue);
+    });
+}}
+
+###
+
+# ============================================
+# Save Draft Answers - Detailed Multiple Choice With Other Question
+# ============================================
+# @name saveDraftDetailedMultipleChoiceWithOtherAnswer
+# @ref saveDraftDetailedMultipleChoiceAnswer
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{detailedMultipleChoiceWithOtherQuestionId}}",
+            "questionType": "DETAILED_MULTIPLE_CHOICE",
+            "value": ["{{detailedMultipleChoiceWithOtherOptions[0].id}}", "{{detailedMultipleChoiceWithOtherOptions[2].id}}", "{{detailedMultipleChoiceWithOtherOptions[4].id}}"],
+            "otherText": "Mobile Development"
+        }
+    ]
+}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response structure is correct', () => {
+        equal(Array.isArray(data.answers), true, 'Response should have answers array');
+        equal(data.answers.length, 1, 'Should have 1 answer');
+        
+        console.log('Saved 1 detailed-multiple-choice-with-other answer (auto-save)');
+    });
+
+    test('Detailed multiple choice with other answer content is correct', () => {
+        const answer = data.answers[0];
+        equal(answer !== undefined, true, 'Detailed multiple choice with other answer should exist');
+        equal(answer.responseId, responseId, 'Response ID should match');
+        equal(answer.answer.questionId, detailedMultipleChoiceWithOtherQuestionId, 'Nested questionId should match');
+        equal(answer.answer.questionType, 'DETAILED_MULTIPLE_CHOICE', 'Question type should be DETAILED_MULTIPLE_CHOICE');
+        equal(answer.answer.value.length, 3, 'Should have 3 selected options');
+        equal(answer.answer.value.includes(detailedMultipleChoiceWithOtherOptions[0].id), true, 'Should include Frontend Development');
+        equal(answer.answer.value.includes(detailedMultipleChoiceWithOtherOptions[2].id), true, 'Should include DevOps');
+        equal(answer.answer.value.includes(detailedMultipleChoiceWithOtherOptions[4].id), true, 'Should include Other option');
+        equal(answer.answer.otherText, 'Mobile Development', 'otherText should match');
+        equal(answer.displayValue.includes('Mobile Development'), true, 'Display value should include otherText');
+        
+        console.log('Detailed multiple choice with other answer:', answer.displayValue);
+    });
+}}
+
+###
+
+# ============================================
+# Upload Files for File Upload Question
+# ============================================
+# @name uploadQuestionFiles
+# @ref saveDraftDetailedMultipleChoiceWithOtherAnswer
+POST {{BASE_URL}}/responses/{{responseId}}/questions/{{uploadFileQuestionId}}/files
+Content-Type: multipart/form-data; boundary=WebKitFormBoundary
+
+--WebKitFormBoundary
+Content-Disposition: form-data; name="files"; filename="resume1.pdf"
+Content-Type: application/pdf
+
+%PDF-1.4 Mock PDF content for testing 1
+--WebKitFormBoundary
+Content-Disposition: form-data; name="files"; filename="resume2.pdf"
+Content-Type: application/pdf
+
+%PDF-1.4 Mock PDF content for testing 2
+--WebKitFormBoundary--
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+    test('Files uploaded successfully', () => {
+        equal(Array.isArray(data.files), true, 'Response should have a files array');
+        equal(data.files.length, 2, 'Should have exactly 2 uploaded files');
+    });
+
+    test('First Uploaded file metadata is correct', () => {
+        const file1 = data.files[0];
+        equal(file1.fileId !== undefined, true, 'First file should have a fileId');
+        equal(file1.originalFilename, 'resume1.pdf', 'First original filename should match');
+        equal(file1.contentType !== undefined, true, 'First file should have a contentType');
+        equal(typeof file1.size === 'number', true, 'First file size should be a number');
+
+        console.log('First file uploaded successfully:', file1.originalFilename);
+        console.log('First file ID:', file1.fileId);
+    });
+
+    test('Second Uploaded file metadata is correct', () => {
+        const file2 = data.files[1];
+        equal(file2.fileId !== undefined, true, 'Second file should have a fileId');
+        equal(file2.originalFilename, 'resume2.pdf', 'Second original filename should match');
+        equal(file2.contentType !== undefined, true, 'Second file should have a contentType');
+        equal(typeof file2.size === 'number', true, 'Second file size should be a number');
+
+        console.log('Second file uploaded successfully:', file2.originalFilename);
+        console.log('Second file ID:', file2.fileId);
+    });
+
+    exports.fileIdToDelete = data.files[0].fileId;
+    exports.remainingFileId = data.files[1].fileId;
+    exports.remainingFileName = data.files[1].originalFilename;
+    exports.remainingFileContentType = data.files[1].contentType;
+    exports.remainingFileSize = data.files[1].size;
+}}
+
+###
+
+# ============================================
+# Delete One Uploaded File
+# ============================================
+# @name deleteQuestionFile
+# @ref uploadQuestionFiles
+DELETE {{BASE_URL}}/files/{{fileIdToDelete}}
+
+{{
+    test.status(204);
+    
+    test('File deleted successfully', () => {
+        console.log('Deleted file ID:', fileIdToDelete);
+        console.log('Expected remaining file ID:', remainingFileId);
+    });
+}}
+
+###
+
+# ============================================
+# Get Full Response Preview Before Submission
+# ============================================
+# @name getResponsePreview
+# @ref deleteQuestionFile
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response preview retrieved', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(data.progress, 'DRAFT', 'Progress should still be DRAFT before submission');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        equal(data.sections.length > 0, true, 'Should have at least one section');
+
+        console.log('Response ID:', data.id);
+        console.log('Form ID:', data.formId);
+        console.log('Progress:', data.progress);
+        console.log('Number of sections:', data.sections.length);
+    });
+
+    test('Remaining file is preserved after deletion', () => {
+        const data = JSON.parse(response.body);
+        let uploadAnswerDetail;
+
+        for (const section of data.sections || []) {
+            for (const detail of section.answerDetails || []) {
+                if (
+                    detail.payload &&
+                    detail.payload.answer &&
+                    detail.payload.answer.questionId === uploadFileQuestionId
+                ) {
+                    uploadAnswerDetail = detail;
+                    break;
+                }
+            }
+            if (uploadAnswerDetail) break;
+        }
+
+        equal(uploadAnswerDetail !== undefined, true, 'Upload file answer should exist');
+
+        const files = uploadAnswerDetail.payload.answer.value;
+
+        equal(Array.isArray(files), true, 'Upload file answer should contain files array');
+        equal(files.length, 1, 'Only one file should remain after deletion');
+        equal(files[0].fileId, remainingFileId, 'Remaining file ID should match expected file');
+        equal(files[0].fileId !== fileIdToDelete, true, 'Deleted file ID should not remain');
+        equal(files[0].originalFilename, remainingFileName, 'Remaining file name should match expected file');
+    });
+}}
+
+###
+
+# ============================================
+# Verify section progress before submit
+# ============================================
+# @name verifySectionProgress
+# @ref getResponsePreview
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Section progress is COMPLETED', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        equal(data.sections.length, 1, 'Should have 1 section');
+        equal(data.sections[0].progress, 'COMPLETED', 'Progress should be COMPLETED');
+        console.log('Progress is COMPLETED after patching answers');
+    });
+}}
+
+###
+
+# ============================================
+# Submit Response with Final Answers
+# ============================================
+# NOTE: This sends all answers again as per the design
+# @name submitResponse
+# @ref verifySectionProgress
+POST {{BASE_URL}}/responses/{{responseId}}/submit
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{shortTextQuestionId}}",
+            "questionType": "SHORT_TEXT",
+            "value": "John Doe"
+        },
+        {
+            "questionId": "{{longTextQuestionId}}",
+            "questionType": "LONG_TEXT",
+            "value": "I have a Bachelor's degree in Computer Science from National Yang Ming Chiao Tung University. I have been working as a full-stack developer for 3 years, specializing in React, Node.js, and cloud infrastructure."
+        },
+        {
+            "questionId": "{{hyperlinkQuestionId}}",
+            "questionType": "HYPERLINK",
+            "value": "https://github.com/johndoe"
+        },
+        {
+            "questionId": "{{singleChoiceQuestionId}}",
+            "questionType": "SINGLE_CHOICE",
+            "value": ["{{singleChoiceOptions[0].id}}"]
+        },
+        {
+            "questionId": "{{multipleChoiceQuestionId}}",
+            "questionType": "MULTIPLE_CHOICE",
+            "value": ["{{multipleChoiceOptions[0].id}}", "{{multipleChoiceOptions[1].id}}"]
+        },
+        {
+            "questionId": "{{dropdownQuestionId}}",
+            "questionType": "DROPDOWN",
+            "value": ["{{dropdownOptions[1].id}}"]
+        },
+        {
+            "questionId": "{{detailedMultipleChoiceQuestionId}}",
+            "questionType": "DETAILED_MULTIPLE_CHOICE",
+            "value": ["{{detailedMultipleChoiceOptions[0].id}}", "{{detailedMultipleChoiceOptions[2].id}}"]
+        },
+        {
+            "questionId": "{{dateQuestionId}}",
+            "questionType": "DATE",
+            "value": "2024-06-15"
+        },
+        {
+            "questionId": "{{uploadFileQuestionId}}",
+            "questionType": "UPLOAD_FILE",
+            "value": {
+                "files": [
+                    {
+                    "fileId": "{{remainingFileId}}",
+                    "originalFilename": "{{remainingFileName}}",
+                    "contentType": "{{remainingFileContentType}}",
+                    "size": {{remainingFileSize}}
+                    }
+                ]
+            }
+        },
+        {
+            "questionId": "{{linearScaleQuestionId}}",
+            "questionType": "LINEAR_SCALE",
+            "value": 8
+        },
+        {
+            "questionId": "{{ratingQuestionId}}",
+            "questionType": "RATING",
+            "value": 4
+        },
+        {
+            "questionId": "{{rankingQuestionId}}",
+            "questionType": "RANKING",
+            "value": ["{{rankingOptions[2].id}}", "{{rankingOptions[0].id}}", "{{rankingOptions[1].id}}"]
+        },
+        {
+            "questionId": "{{singleChoiceWithOtherQuestionId}}",
+            "questionType": "SINGLE_CHOICE",
+            "value": ["{{singleChoiceWithOtherOptions[3].id}}"],
+            "otherText": "Digital Nomad"
+        },
+        {
+            "questionId": "{{multipleChoiceWithOtherQuestionId}}",
+            "questionType": "MULTIPLE_CHOICE",
+            "value": ["{{multipleChoiceWithOtherOptions[0].id}}", "{{multipleChoiceWithOtherOptions[5].id}}"],
+            "otherText": "Swift"
+        },
+        {
+            "questionId": "{{dropdownWithOtherQuestionId}}",
+            "questionType": "DROPDOWN",
+            "value": ["{{dropdownWithOtherOptions[4].id}}"],
+            "otherText": "Expert (7+ years)"
+        },
+        {
+            "questionId": "{{detailedMultipleChoiceWithOtherQuestionId}}",
+            "questionType": "DETAILED_MULTIPLE_CHOICE",
+            "value": ["{{detailedMultipleChoiceWithOtherOptions[0].id}}", "{{detailedMultipleChoiceWithOtherOptions[2].id}}", "{{detailedMultipleChoiceWithOtherOptions[4].id}}"],
+            "otherText": "Mobile Development"
+        },
+        {
+            "questionId": "{{rankingWithOtherQuestionId}}",
+            "questionType": "RANKING",
+            "value": ["{{rankingWithOtherOptions[2].id}}", "{{rankingWithOtherOptions[0].id}}", "{{rankingWithOtherOptions[1].id}}", "{{rankingWithOtherOptions[3].id}}"],
+            "otherText": "Fully Distributed"
+        }
+    ]
+}
+
+{{
+    test.status(201);
+
+    const { equal } = require('assert');
+
+    test('Response submitted successfully', () => {
+        console.log('Response submitted successfully');
+    });
+}}
+
+###
+
+# ============================================
+# Get Response After Submission
+# ============================================
+# @name getResponseAfterSubmit
+# @ref submitResponse
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response status changed to SUBMITTED', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(data.progress, 'SUBMITTED', 'Progress should be SUBMITTED after submission');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        
+        console.log('Response ID:', data.id);
+        console.log('Progress:', data.progress);
+        console.log('Form ID:', data.formId);
+    });
+}}
+
+###
+
+# ============================================
+# List All Form Responses
+# ============================================
+# @name listFormResponses
+# @ref getResponseAfterSubmit
+GET {{BASE_URL}}/forms/{{formId}}/responses
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form responses listed', () => {
+        const data = JSON.parse(response.body);
+        equal(data.formId, formId, 'Form ID should match');
+        equal(typeof data.totalCount, 'number', 'totalCount should be a number');
+        equal(typeof data.draftCount, 'number', 'draftCount should be a number');
+        equal(typeof data.submittedCount, 'number', 'submittedCount should be a number');
+        equal(data.totalCount, data.draftCount + data.submittedCount, 'totalCount should equal draftCount + submittedCount');
+        equal(data.submittedCount >= 1, true, 'Should have at least one submitted response');
+        equal(Array.isArray(data.responses), true, 'Responses should be an array');
+        equal(data.responses.length >= 1, true, 'Should have at least one response');
+        
+        // Find our submitted response
+        const submittedResponse = data.responses.find(r => r.id === responseId);
+        equal(submittedResponse !== undefined, true, 'Our response should be in the list');
+        equal(submittedResponse.submittedBy !== undefined, true, 'Should have submittedBy field');
+        equal(submittedResponse.createdAt !== undefined, true, 'Should have createdAt field');
+        equal(submittedResponse.updatedAt !== undefined, true, 'Should have updatedAt field');
+        
+        console.log('Total responses:', data.responses.length);
+        console.log('Our response ID:', submittedResponse.id);
+        console.log('Submitted by:', submittedResponse.submittedBy);
+        console.log('Created at:', submittedResponse.createdAt);
+        console.log('Updated at:', submittedResponse.updatedAt);
+    });
+}}
+
+###
+
+# ============================================
+# Cancel Submitted Response
+# ============================================
+# @name cancelSubmittedResponse
+# @ref listFormResponses
+POST {{BASE_URL}}/responses/{{responseId}}/cancel
+
+{{
+    test.status(200);
+
+    test('Response submission canceled successfully', () => {
+        console.log('Response submission canceled successfully');
+    });
+}}
+
+###
+
+# ============================================
+# Get Response After Cancel
+# ============================================
+# @name getResponseAfterCancel
+# @ref cancelSubmittedResponse
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Response status changed back to DRAFT', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, responseId, 'Response ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(data.progress, 'DRAFT', 'Progress should be DRAFT after cancellation');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+
+        console.log('Response ID:', data.id);
+        console.log('Progress:', data.progress);
+        console.log('Form ID:', data.formId);
+    });
+}}
+
+###

@@ -1,0 +1,248 @@
+# ============================================
+# Phase 2: Form Creation - Form, Section & Questions
+# ============================================
+# This file creates a form with:
+# - A DETAILED_MULTIPLE_CHOICE question with 4 choices
+# - A RANKING question with sourceId pointing to the DetailedMultiChoice question
+#   (no static choices — options are resolved dynamically from the DMC answer)
+
+# Import setup from Phase 1
+# @import ./01-setup.http
+
+###
+
+# ============================================
+# Create Form
+# ============================================
+# @name createForm
+# @ref addUserToOrg
+POST {{BASE_URL}}/orgs/{{orgSlug}}/forms
+Content-Type: application/json
+
+{
+    "title": "Ranking from Source ID Test Form",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Tests that a RANKING question resolves its choices dynamically from a DETAILED_MULTIPLE_CHOICE answer."
+                    }
+                ]
+            }
+        ]
+    },
+    "previewMessage": "Please answer both questions.",
+    "messageAfterSubmission": "Thank you for your response!",
+    "visibility": "PUBLIC"
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form created with correct properties', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Form ID should exist');
+        equal(data.title, 'Ranking from Source ID Test Form', 'Form title should match');
+        equal(data.status, 'DRAFT', 'Form status should be DRAFT');
+        equal(data.unitId, orgId, 'Organization ID should match');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.formId = data.id;
+}}
+
+###
+
+# ============================================
+# Get Initial Workflow (obtain START/END node IDs)
+# ============================================
+# @name getInitialWorkflow
+# @ref createForm
+GET {{BASE_URL}}/forms/{{formId}}/workflow
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const data = JSON.parse(response.body);
+    exports.startNodeId = data.workflow.find(n => n.type === 'START').id;
+    exports.endNodeId   = data.workflow.find(n => n.type === 'END').id;
+}}
+
+###
+
+# ============================================
+# Create Section Node
+# ============================================
+# @name createSectionNode
+# @ref getInitialWorkflow
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "SECTION",
+    "payload": { "x": 0.0, "y": 0.0 }
+}
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Section node created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Section node ID should exist');
+        equal(data.type, 'SECTION', 'Node type should be SECTION');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.sectionNodeId    = data.id;
+    exports.sectionNodeLabel = data.label;
+}}
+
+###
+
+# ============================================
+# Link Workflow: START -> Section -> END
+# ============================================
+# @name updateWorkflow
+# @ref createSectionNode
+PUT {{BASE_URL}}/forms/{{formId}}/workflow
+Content-Type: application/json
+
+[
+    {
+        "id": "{{startNodeId}}",
+        "label": "開始",
+        "payload": { "x": 0.0, "y": 0.0 },
+        "next": "{{sectionNodeId}}"
+    },
+    {
+        "id": "{{sectionNodeId}}",
+        "label": "{{sectionNodeLabel}}",
+        "payload": { "x": 1.0, "y": 2.0 },
+        "next": "{{endNodeId}}"
+    },
+    {
+        "id": "{{endNodeId}}",
+        "label": "確認/送出",
+        "payload": { "x": 0.0, "y": 1.0 }
+    }
+]
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Workflow linked successfully', () => {
+        const data = JSON.parse(response.body);
+        const startNode = data.find(n => n.id === startNodeId);
+        equal(startNode.next, sectionNodeId, 'START should point to Section');
+    });
+}}
+
+###
+
+# ============================================
+# Create Question 1: DETAILED_MULTIPLE_CHOICE
+# (4 technology areas — user will select some of these)
+# ============================================
+# @name createDetailedMultiChoiceQuestion
+# @ref updateWorkflow
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "DETAILED_MULTIPLE_CHOICE",
+    "title": "Which technology areas interest you?",
+    "description": "Select all areas that interest you. Your selections will define the options in the next ranking question.",
+    "order": 1,
+    "choices": [
+        {
+            "name": "Frontend",
+            "description": "React, Vue, Angular, and modern UI frameworks"
+        },
+        {
+            "name": "Backend",
+            "description": "Node.js, Go, Python, and server-side technologies"
+        },
+        {
+            "name": "DevOps",
+            "description": "CI/CD, Docker, Kubernetes, cloud infrastructure"
+        },
+        {
+            "name": "Data Science",
+            "description": "Machine learning, data analysis, and AI"
+        }
+    ]
+}
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('DETAILED_MULTIPLE_CHOICE question created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Question ID should exist');
+        equal(data.type, 'DETAILED_MULTIPLE_CHOICE', 'Type should be DETAILED_MULTIPLE_CHOICE');
+        equal(data.choices.length, 4, 'Should have 4 choices');
+        equal(data.choices.every(c => c.description), true, 'All choices should have descriptions');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.dmcQuestionId = data.id;
+    exports.dmcChoices    = data.choices;
+    // dmcChoices[0] = Frontend, [1] = Backend, [2] = DevOps, [3] = Data Science
+}}
+
+###
+
+# ============================================
+# Create Question 2: RANKING with sourceId
+# (no static choices — resolved from DMC answer at runtime)
+# ============================================
+# @name createRankingWithSourceId
+# @ref createDetailedMultiChoiceQuestion
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": false,
+    "type": "RANKING",
+    "title": "Rank your selected technology areas by preference",
+    "description": "Order the areas you selected above from most to least preferred.",
+    "order": 2,
+    "sourceId": "{{dmcQuestionId}}"
+}
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('RANKING question created with sourceId', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Question ID should exist');
+        equal(data.type, 'RANKING', 'Type should be RANKING');
+        equal(data.sourceId, dmcQuestionId, 'sourceId should reference the DMC question');
+        // No static choices expected — choices come from the DMC answer
+        equal(!data.choices || data.choices.length === 0, true, 'Should have no static choices');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.rankingQuestionId = data.id;
+}}

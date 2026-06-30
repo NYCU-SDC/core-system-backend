@@ -1,0 +1,18 @@
+name: "Form Ranking From Source ID"
+description: "Positive coverage for ranking questions whose available choices are resolved dynamically from a source question."
+cases:
+  - name: "Same-Batch Resolution"
+    description: "Verify ranking choice resolution and persisted order when source and ranking answers are submitted in one batch."
+    domains:
+      - form-question
+      - form-response
+    path: "04-verify-response.http"
+    test: "getResponseA"
+
+  - name: "Stored-Answer Resolution"
+    description: "Verify ranking choice resolution and persisted order when ranking choices are resolved from a previously saved source answer."
+    domains:
+      - form-question
+      - form-response
+    path: "04-verify-response.http"
+    test: "getResponseB"

@@ -1,0 +1,92 @@
+# ============================================
+# Phase 1: Setup - Prerequisites & Auth
+# ============================================
+# This file sets up the necessary prerequisites for ranking sourceId testing:
+# - Authentication (using shared common.http)
+# - Organization setup
+# - Store IDs for subsequent tests
+
+# Import common auth setup
+# @import  ../shared/common.http
+
+###
+
+# ============================================
+# Check if SDC Organization Exists
+# ============================================
+# @name getSDCOrg
+# @ref userLogin
+GET {{BASE_URL}}/orgs/SDC
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('SDC org exists', () => {
+        const data = JSON.parse(response.body);
+        equal(data.slug, 'SDC', 'Organization slug should be SDC');
+    });
+
+    test('Organization ID is valid UUID', () => {
+        const data = JSON.parse(response.body);
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        equal(uuidRegex.test(data.id), true, 'Organization ID should be a valid UUID');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.orgSlug = "SDC";
+    exports.orgId = data.id;
+}}
+
+###
+
+# ============================================
+# Get Current User Info
+# ============================================
+# @name getMe
+# @ref getSDCOrg
+GET {{BASE_URL}}/users/me
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('User info contains expected properties', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'User ID should exist');
+        equal(data.emails !== undefined, true, 'User email should exist');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.userId = data.id;
+    exports.userEmail = data.emails[0];
+}}
+
+###
+
+# ============================================
+# Add User to Organization (if not already a member)
+# ============================================
+# @name addUserToOrg
+# @ref getMe
+POST {{BASE_URL}}/orgs/{{orgSlug}}/members
+Content-Type: application/json
+{
+    "email": "{{userEmail}}"
+}
+?? status <= 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('User added to organization successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.member.id, userId, 'User ID should match');
+        equal(data.orgId, orgId, 'Organization ID should match');
+    });
+}}

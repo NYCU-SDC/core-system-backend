@@ -1,0 +1,150 @@
+# ============================================
+# Question Management - Simplified (form-workflow-condition)
+# ============================================
+# Section A: only 1 question (the condition "Go to branch B or C?" from 01).
+# Section B and Section C: add one question each so branches have content.
+
+# Import condition workflow (formId, sectionNodeId, sectionBNodeId, sectionCNodeId, getFinalWorkflowWithCondition)
+# @import ./01-workflow-condition.http
+
+###
+
+# ============================================
+# Create Question in Section B (SHORT_TEXT)
+# ============================================
+# @name createSectionBQuestion
+# @ref getFinalWorkflowWithCondition
+POST {{BASE_URL}}/sections/{{sectionBNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "title": "Branch B: What is your name?",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{ "type": "text", "text": "You chose Section B" }]
+            }
+        ]
+    },
+    "order": 1
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Section B question created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Question ID should exist');
+        equal(data.type, 'SHORT_TEXT', 'Type should be SHORT_TEXT');
+        equal(data.required, true, 'Section B question should be required');
+        equal(data.sectionId, sectionBNodeId, 'Section ID should match');
+        equal(data.description?.type, 'doc', 'Description should be rich text doc');
+        equal(typeof data.descriptionHtml, 'string', 'descriptionHtml should be a string');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.sectionBQuestionId = data.id;
+}}
+
+###
+
+# ============================================
+# Create Question in Section C (LONG_TEXT)
+# ============================================
+# @name createSectionCQuestion
+# @ref createSectionBQuestion
+POST {{BASE_URL}}/sections/{{sectionCNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "LONG_TEXT",
+    "title": "Branch C: Tell us more",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [{ "type": "text", "text": "You chose Section C" }]
+            }
+        ]
+    },
+    "order": 1
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Section C question created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Question ID should exist');
+        equal(data.type, 'LONG_TEXT', 'Type should be LONG_TEXT');
+        equal(data.required, true, 'Section C question should be required');
+        equal(data.sectionId, sectionCNodeId, 'Section ID should match');
+        equal(data.description?.type, 'doc', 'Description should be rich text doc');
+        equal(typeof data.descriptionHtml, 'string', 'descriptionHtml should be a string');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.sectionCQuestionId = data.id;
+}}
+
+###
+
+# ============================================
+# Verify Questions in All Sections
+# ============================================
+# @name verifyQuestionDeletion
+# @ref createSectionCQuestion
+GET {{BASE_URL}}/forms/{{formId}}/sections
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Sections have expected questions', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+
+        const sectionChecks = [{ 
+            nodeId: sectionNodeId, 
+            label: 'Section A', 
+            expectedCount: 1, 
+            countDesc: '1 question (condition only)', 
+            requiredLabel: 'Section A (condition)' 
+        },
+        { 
+            nodeId: sectionBNodeId, 
+            label: 'Section B', 
+            expectedCount: 1, 
+            countDesc: '1 question', 
+            requiredLabel: 'Section B' 
+        },
+        { 
+            nodeId: sectionCNodeId, 
+            label: 'Section C', 
+            expectedCount: 1, 
+            countDesc: '1 question', 
+            requiredLabel: 'Section C' 
+        }];
+        for (const c of sectionChecks) {
+            const section = data.find(s => s.section.id === c.nodeId);
+            equal(section !== undefined, true, c.label + ' should exist');
+            equal(Array.isArray(section.questions), true, c.label + ' questions should be array');
+            equal(section.questions.length, c.expectedCount, c.label + ' should have ' + c.countDesc + ', got ' + section.questions.length);
+            equal(section.questions[0].required, true, c.requiredLabel + ' question should be required');
+        }
+    });
+}}

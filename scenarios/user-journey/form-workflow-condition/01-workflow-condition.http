@@ -1,0 +1,596 @@
+# ============================================
+# Workflow Condition Node with Branches
+# ============================================
+# Choice-option UUID validation in condition patterns is enforced on activation validation (see GET workflow `info` / publish), not necessarily on every draft PUT.
+# Builds on form-lifecycle Phase 3 (03-workflow-basic). Tests condition nodes with branching:
+# START -> Section A -> Condition1 (ref Section A question)
+#   - choose B -> nextTrue  -> Section B -> END
+#   - else      -> nextFalse -> Condition2
+#     - choose C -> nextTrue  -> Section C -> END
+#     - else     -> nextFalse -> END
+# - Create a question in Section A (DETAILED_MULTIPLE_CHOICE) with 2 choices: Section B, Section C (else = no match → END, error handling)
+# - Create Section B and Section C nodes; create two CONDITION nodes
+# - Update workflow and verify structure
+
+# Import setup from form-lifecycle Phase 3 (formId, startNodeId, endNodeId, sectionNodeId as sectionA, sectionNodeLabel as sectionALabel)
+# @import ../form-lifecycle/03-workflow-basic.http
+
+###
+
+# ============================================
+# Create Question in Section A (for condition rule)
+# ============================================
+# DETAILED_MULTIPLE_CHOICE: B -> Section B, C -> Section C; else (no match / error) -> END via second condition
+# Condition rule CHOICE source matches selected option ID; one selection routes to B or C.
+# @name createSectionAQuestion
+# @ref getFinalWorkflow
+POST {{BASE_URL}}/sections/{{sectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "DETAILED_MULTIPLE_CHOICE",
+    "title": "Choose Team B / C",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "Select one to choose which section to go to" }
+                ]
+            }
+        ]
+    },
+    "order": 1,
+    "choices": [
+        { "name": "Team B", "description": "Go to Section B" },
+        { "name": "Team C", "description": "Go to Section C" }
+    ]
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Section A question created for condition', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Question ID should exist');
+        equal(data.type, 'DETAILED_MULTIPLE_CHOICE', 'Type should be DETAILED_MULTIPLE_CHOICE');
+        equal(Array.isArray(data.choices), true, 'Choices should be an array');
+        equal(data.choices.length, 2, 'Should have 2 choices (Team B, Team C)');
+        const hasDescriptions = data.choices.every(c => c.description !== undefined && c.description !== '');
+        equal(hasDescriptions, true, 'All choices should have descriptions');
+        equal(data.description?.type, 'doc', 'Description should be rich text doc');
+        equal(typeof data.descriptionHtml, 'string', 'descriptionHtml should be a string');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.sectionAQuestionId = data.id;
+    exports.sectionAChoiceSectionBId = data.choices[0].id;
+    exports.sectionAChoiceSectionCId = data.choices[1].id;
+}}
+
+###
+
+# ============================================
+# Create Section B and Section C Nodes
+# ============================================
+# @name createSectionBNode
+# @ref createSectionAQuestion
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "SECTION",
+    "payload": { "x": 1.0, "y": 2.0 }
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    test('Section B node created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Section B node ID should exist');
+        equal(data.type, 'SECTION', 'Node type should be SECTION');
+    });
+    const data = JSON.parse(response.body);
+    exports.sectionBNodeId = data.id;
+}}
+
+###
+
+# @name createSectionCNode
+# @ref createSectionBNode
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "SECTION",
+    "payload": { "x": 1.0, "y": 2.0 }
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    test('Section C node created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Section C node ID should exist');
+        equal(data.type, 'SECTION', 'Node type should be SECTION');
+    });
+    const data = JSON.parse(response.body);
+    exports.sectionCNodeId = data.id;
+}}
+
+###
+
+# ============================================
+# Create Condition Node
+# ============================================
+# @name createConditionNode
+# @ref createSectionCNode
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "CONDITION",
+    "payload": { "x": 2.0, "y": 2.0 }
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    test('Condition node created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Condition node ID should exist');
+        equal(data.type, 'CONDITION', 'Node type should be CONDITION');
+    });
+    const data = JSON.parse(response.body);
+    exports.conditionNodeId = data.id;
+}}
+
+###
+
+# ============================================
+# Create Second Condition Node (for C vs else->END)
+# ============================================
+# @name createCondition2Node
+# @ref createConditionNode
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "CONDITION",
+    "payload": { "x": 3.0, "y": 2.0 }
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    test('Condition 2 node created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Condition 2 node ID should exist');
+        equal(data.type, 'CONDITION', 'Node type should be CONDITION');
+    });
+    const data = JSON.parse(response.body);
+    exports.condition2NodeId = data.id;
+}}
+
+###
+
+# ============================================
+# Update Workflow: START -> Section A -> Condition1 -> [Section B / Condition2] -> Condition2 -> [Section C / END]
+# ============================================
+# Condition1: pattern includes choice B id -> nextTrue Section B, else nextFalse Condition2
+# Condition2: pattern includes choice C id -> nextTrue Section C, else nextFalse END (error handling)
+# Pattern is "include" (no ^ $): matches when value contains the choice id
+# @name updateWorkflowWithConditionBranches
+# @ref createCondition2Node
+PUT {{BASE_URL}}/forms/{{formId}}/workflow
+Content-Type: application/json
+
+[
+    {
+        "id": "{{startNodeId}}",
+        "label": "開始表單",
+        "payload": { "x": 0.0, "y": 0.0 },
+        "next": "{{sectionNodeId}}"
+    },
+    {
+        "id": "{{sectionNodeId}}",
+        "label": "{{sectionNodeLabel}}",
+        "payload": { "x": 1.0, "y": 2.0 },
+        "next": "{{conditionNodeId}}"
+    },
+    {
+        "id": "{{conditionNodeId}}",
+        "label": "If choose Team B",
+        "payload": { "x": 2.0, "y": 2.0 },
+        "conditionRule": {
+            "source": "CHOICE",
+            "question": "{{sectionAQuestionId}}",
+            "pattern": "{{sectionAChoiceSectionBId}}"
+        },
+        "nextTrue": "{{sectionBNodeId}}",
+        "nextFalse": "{{condition2NodeId}}"
+    },
+    {
+        "id": "{{condition2NodeId}}",
+        "label": "If choose Team C",
+        "payload": { "x": 3.0, "y": 2.0 },
+        "conditionRule": {
+            "source": "CHOICE",
+            "question": "{{sectionAQuestionId}}",
+            "pattern": "{{sectionAChoiceSectionCId}}"
+        },
+        "nextTrue": "{{sectionCNodeId}}",
+        "nextFalse": "{{endNodeId}}"
+    },
+    {
+        "id": "{{sectionBNodeId}}",
+        "label": "Section B",
+        "payload": { "x": 2.0, "y": 3.0 },
+        "next": "{{condition2NodeId}}"
+    },
+    {
+        "id": "{{sectionCNodeId}}",
+        "label": "Section C",
+        "payload": { "x": 3.0, "y": 3.0 },
+        "next": "{{endNodeId}}"
+    },
+    {
+        "id": "{{endNodeId}}",
+        "label": "確認/送出",
+        "payload": { "x": 0.0, "y": 1.0 }
+    }
+]
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Workflow updated with condition branches', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        equal(data.length, 7, 'Workflow should have 7 nodes (START, Section A, Cond1, Cond2, Section B, Section C, END)');
+
+        const startNode = data.find(n => n.id === startNodeId);
+        const sectionANode = data.find(n => n.id === sectionNodeId);
+        const conditionNode = data.find(n => n.id === conditionNodeId);
+        const condition2Node = data.find(n => n.id === condition2NodeId);
+        const sectionBNode = data.find(n => n.id === sectionBNodeId);
+        const sectionCNode = data.find(n => n.id === sectionCNodeId);
+        const endNode = data.find(n => n.id === endNodeId);
+
+        equal(startNode !== undefined, true, 'START node should exist');
+        equal(sectionANode !== undefined, true, 'Section A should exist');
+        equal(conditionNode !== undefined, true, 'Condition 1 should exist');
+        equal(condition2Node !== undefined, true, 'Condition 2 should exist');
+        equal(sectionBNode !== undefined, true, 'Section B should exist');
+        equal(sectionCNode !== undefined, true, 'Section C should exist');
+        equal(endNode !== undefined, true, 'END node should exist');
+
+        equal(startNode.next, sectionNodeId, 'START -> Section A');
+        equal(sectionANode.next, conditionNodeId, 'Section A -> Condition 1');
+        equal(conditionNode.nextTrue, sectionBNodeId, 'Condition 1 nextTrue -> Section B');
+        equal(conditionNode.nextFalse, condition2NodeId, 'Condition 1 nextFalse -> Condition 2');
+        equal(condition2Node.nextTrue, sectionCNodeId, 'Condition 2 nextTrue -> Section C');
+        equal(condition2Node.nextFalse, endNodeId, 'Condition 2 nextFalse -> END (error handling)');
+        equal(sectionBNode.next, condition2NodeId, 'Section B -> Condition 2 (so both B and C can be visited)');
+        equal(sectionCNode.next, endNodeId, 'Section C -> END');
+
+        equal(conditionNode.conditionRule !== undefined, true, 'Condition 1 should have conditionRule');
+        equal(conditionNode.conditionRule.question, sectionAQuestionId, 'Condition 1 rule should reference Section A question');
+        equal(conditionNode.conditionRule.pattern.includes(sectionAChoiceSectionBId), true, 'Condition 1 pattern should match choice B');
+        equal(condition2Node.conditionRule !== undefined, true, 'Condition 2 should have conditionRule');
+        equal(condition2Node.conditionRule.question, sectionAQuestionId, 'Condition 2 rule should reference Section A question');
+        equal(condition2Node.conditionRule.pattern.includes(sectionAChoiceSectionCId), true, 'Condition 2 pattern should match choice C');
+
+        // GET/PUT responses enrich condition labels from question title + pattern
+        const sectionAQuestionTitle = 'Choose Team B / C';
+        equal(
+            conditionNode.label,
+            `When ${sectionAQuestionTitle} matches ${sectionAChoiceSectionBId}`,
+            'Condition 1 label should be enriched',
+        );
+        equal(
+            condition2Node.label,
+            `When ${sectionAQuestionTitle} matches ${sectionAChoiceSectionCId}`,
+            'Condition 2 label should be enriched',
+        );
+    });
+}}
+
+###
+
+# ============================================
+# Get Final Workflow With Condition Branches
+# ============================================
+# @name getFinalWorkflowWithCondition
+# @ref updateWorkflowWithConditionBranches
+GET {{BASE_URL}}/forms/{{formId}}/workflow
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Final workflow has both conditions and branches', () => {
+        const data = JSON.parse(response.body);
+        equal(data.workflow !== undefined, true, 'Workflow should exist');
+        equal(Array.isArray(data.workflow), true, 'Workflow should be an array');
+        equal(data.workflow.length, 7, 'Workflow should have 7 nodes');
+
+        const conditionNode = data.workflow.find(n => n.id === conditionNodeId);
+        const condition2Node = data.workflow.find(n => n.id === condition2NodeId);
+        equal(conditionNode !== undefined, true, 'Condition 1 should be in workflow');
+        equal(condition2Node !== undefined, true, 'Condition 2 should be in workflow');
+        equal(conditionNode.nextTrue, sectionBNodeId, 'Condition 1 nextTrue -> Section B');
+        equal(conditionNode.nextFalse, condition2NodeId, 'Condition 1 nextFalse -> Condition 2');
+        equal(condition2Node.nextTrue, sectionCNodeId, 'Condition 2 nextTrue -> Section C');
+        equal(condition2Node.nextFalse, endNodeId, 'Condition 2 nextFalse -> END');
+        equal(conditionNode.conditionRule.question, sectionAQuestionId, 'Condition 1 references Section A question');
+        equal(condition2Node.conditionRule.question, sectionAQuestionId, 'Condition 2 references Section A question');
+
+        const sectionAQuestionTitle = 'Choose Team B / C';
+        equal(
+            conditionNode.label,
+            `When ${sectionAQuestionTitle} matches ${sectionAChoiceSectionBId}`,
+            'GET workflow: Condition 1 label should be enriched',
+        );
+        equal(
+            condition2Node.label,
+            `When ${sectionAQuestionTitle} matches ${sectionAChoiceSectionCId}`,
+            'GET workflow: Condition 2 label should be enriched',
+        );
+    });
+}}
+
+###
+
+# ============================================
+# Create section + condition (rule references question on section), then delete
+# ============================================
+# Creates a temporary section, a question on it, and a condition node whose rule references that question; then deletes the condition and the section.
+
+# Create temporary section node
+# @name createTempSectionForDeleteTest
+# @ref getFinalWorkflowWithCondition
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "SECTION",
+    "payload": { "x": 1.0, "y": 2.0 }
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Temp section node created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Temp section node ID should exist');
+        equal(data.type, 'SECTION', 'Node type should be SECTION');
+    });
+    const data = JSON.parse(response.body);
+    exports.tempSectionNodeId = data.id;
+}}
+
+###
+
+# Create question in temp section (for condition rule to reference)
+# @name createTempSectionQuestion
+# @ref createTempSectionForDeleteTest
+POST {{BASE_URL}}/sections/{{tempSectionNodeId}}/questions
+Content-Type: application/json
+
+{
+    "required": true,
+    "type": "SHORT_TEXT",
+    "title": "Temp question for condition rule",
+    "description": {
+        "type": "doc",
+        "content": [
+            {
+                "type": "paragraph",
+                "content": [
+                    { "type": "text", "text": "Will be referenced by condition then deleted" }
+                ]
+            }
+        ]
+    },
+    "order": 1
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Temp section question created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Question ID should exist');
+        equal(data.type, 'SHORT_TEXT', 'Type should be SHORT_TEXT');
+        equal(data.description?.type, 'doc', 'Description should be rich text doc');
+        equal(typeof data.descriptionHtml, 'string', 'descriptionHtml should be a string');
+    });
+    const data = JSON.parse(response.body);
+    exports.tempQuestionId = data.id;
+}}
+
+###
+
+# Create condition node whose rule references the question on the temp section
+# @name createTempConditionForDeleteTest
+# @ref createTempSectionQuestion
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "CONDITION",
+    "payload": { "x": 5.0, "y": 2.0 }
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Temp condition node created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Temp condition node ID should exist');
+        equal(data.type, 'CONDITION', 'Node type should be CONDITION');
+    });
+    const data = JSON.parse(response.body);
+    exports.tempConditionNodeId = data.id;
+}}
+
+###
+
+# Update workflow to attach condition rule (question on temp section, nodeId = temp section)
+# @name updateWorkflowWithTempConditionRule
+# @ref createTempConditionForDeleteTest
+PUT {{BASE_URL}}/forms/{{formId}}/workflow
+Content-Type: application/json
+
+[
+    {
+        "id": "{{startNodeId}}",
+        "label": "開始表單",
+        "payload": { "x": 0.0, "y": 0.0 },
+        "next": "{{sectionNodeId}}"
+    },
+    {
+        "id": "{{sectionNodeId}}",
+        "label": "{{sectionNodeLabel}}",
+        "payload": { "x": 1.0, "y": 2.0 },
+        "next": "{{conditionNodeId}}"
+    },
+    {
+        "id": "{{conditionNodeId}}",
+        "label": "If choose Team B",
+        "payload": { "x": 2.0, "y": 2.0 },
+        "conditionRule": {
+            "source": "CHOICE",
+            "question": "{{sectionAQuestionId}}",
+            "pattern": "{{sectionAChoiceSectionBId}}",
+            "nodeId": "{{sectionNodeId}}"
+        },
+        "nextTrue": "{{sectionBNodeId}}",
+        "nextFalse": "{{condition2NodeId}}"
+    },
+    {
+        "id": "{{condition2NodeId}}",
+        "label": "If choose Team C",
+        "payload": { "x": 3.0, "y": 2.0 },
+        "conditionRule": {
+            "source": "CHOICE",
+            "question": "{{sectionAQuestionId}}",
+            "pattern": "{{sectionAChoiceSectionCId}}",
+            "nodeId": "{{sectionNodeId}}"
+        },
+        "nextTrue": "{{sectionCNodeId}}",
+        "nextFalse": "{{endNodeId}}"
+    },
+    {
+        "id": "{{sectionBNodeId}}",
+        "label": "Section B",
+        "payload": { "x": 2.0, "y": 3.0 },
+        "next": "{{condition2NodeId}}"
+    },
+    {
+        "id": "{{sectionCNodeId}}",
+        "label": "Section C",
+        "payload": { "x": 3.0, "y": 3.0 },
+        "next": "{{endNodeId}}"
+    },
+    {
+        "id": "{{endNodeId}}",
+        "label": "確認/送出",
+        "payload": { "x": 0.0, "y": 1.0 }
+    },
+    {
+        "id": "{{tempSectionNodeId}}",
+        "label": "Temp Section (to delete)",
+        "payload": { "x": 4.0, "y": 2.0 },
+        "next": "{{tempConditionNodeId}}"
+    },
+    {
+        "id": "{{tempConditionNodeId}}",
+        "label": "Temp Condition (to delete)",
+        "payload": { "x": 5.0, "y": 2.0 },
+        "conditionRule": {
+            "source": "NON_CHOICE",
+            "question": "{{tempQuestionId}}",
+            "pattern": ".*",
+            "nodeId": "{{tempSectionNodeId}}"
+        },
+        "nextTrue": "{{endNodeId}}",
+        "nextFalse": "{{endNodeId}}"
+    }
+]
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Workflow updated with temp section and condition', () => {
+        const data = JSON.parse(response.body);
+        const tempCond = data.find(n => n.id === tempConditionNodeId);
+        const tempSec = data.find(n => n.id === tempSectionNodeId);
+        equal(tempCond !== undefined, true, 'Temp condition should be in workflow');
+        equal(tempSec !== undefined, true, 'Temp section should be in workflow');
+        equal(tempCond.conditionRule.question, tempQuestionId, 'Condition rule should reference temp section question');
+        equal(tempCond.conditionRule.nodeId, tempSectionNodeId, 'Condition rule nodeId should be temp section');
+    });
+}}
+
+###
+
+# Delete the section node first (question of condition rule lives on this section)
+# @name deleteTempSectionNode
+# @ref updateWorkflowWithTempConditionRule
+DELETE {{BASE_URL}}/forms/{{formId}}/workflow/nodes/{{tempSectionNodeId}}
+
+?? status == 204
+
+###
+
+# Verify condition rule question is nil after section (and its question) was deleted
+# @name verifyConditionRuleQuestionNilAfterSectionDeleted
+# @ref deleteTempSectionNode
+GET {{BASE_URL}}/forms/{{formId}}/workflow
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Condition rule question is nil after referenced section deleted', () => {
+        const data = JSON.parse(response.body);
+        const tempCond = data.workflow.find(n => n.id === tempConditionNodeId);
+        equal(tempCond !== undefined, true, 'Temp condition node should still exist');
+        equal(tempCond.conditionRule !== undefined, true, 'Condition rule should exist');
+        equal(tempCond.conditionRule.question, undefined, 'Condition rule question should be undefined after section (with question) was deleted');
+    });
+}}
+
+###
+
+# Delete the condition node
+# @name deleteTempConditionNode
+# @ref verifyConditionRuleQuestionNilAfterSectionDeleted
+DELETE {{BASE_URL}}/forms/{{formId}}/workflow/nodes/{{tempConditionNodeId}}
+
+?? status == 204

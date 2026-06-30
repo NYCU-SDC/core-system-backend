@@ -1,0 +1,273 @@
+# ============================================
+# Form Publishing (form-workflow-condition)
+# ============================================
+# Same as form-lifecycle Phase 5 but after condition workflow (6 nodes).
+
+# Import question management from this journey
+# @import ./02-question-management.http
+
+###
+
+# ============================================
+# Get Form Status Before Publishing
+# ============================================
+# @name getFormBeforePublish
+# @ref verifyQuestionDeletion
+GET {{BASE_URL}}/forms/{{formId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form is in DRAFT status before publishing', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'DRAFT', 'Status should be DRAFT before publishing');
+        equal(data.title, 'Form Lifecycle Test Form (Updated)', 'Title should match');
+        
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+        console.log('Title:', data.title);
+        console.log('Visibility:', data.visibility);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Workflow is Valid Before Publishing
+# ============================================
+# @name verifyWorkflowBeforePublish
+# @ref getFormBeforePublish
+GET {{BASE_URL}}/forms/{{formId}}/workflow
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Workflow is valid before publishing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data.workflow), true, 'Workflow should be an array');
+        equal(data.workflow.length, 7, 'Workflow should have 7 nodes (START, Section A, Cond1, Cond2, Section B, Section C, END)');
+        equal(Array.isArray(data.info), true, 'Info should be an array');
+        equal(data.info.length, 0, 'There should be no validation errors');
+
+        // PR131 / CORE-214: enriched condition labels on GET workflow
+        const sectionAQuestionTitle = 'Choose Team B / C';
+        const c1 = data.workflow.find(n => n.id === conditionNodeId);
+        const c2 = data.workflow.find(n => n.id === condition2NodeId);
+        equal(c1 !== undefined, true, 'Condition 1 node should exist');
+        equal(c2 !== undefined, true, 'Condition 2 node should exist');
+        equal(
+            c1.label,
+            `When ${sectionAQuestionTitle} matches ${sectionAChoiceSectionBId}`,
+            'Condition 1 label should be enriched',
+        );
+        equal(
+            c2.label,
+            `When ${sectionAQuestionTitle} matches ${sectionAChoiceSectionCId}`,
+            'Condition 2 label should be enriched',
+        );
+
+        console.log('Workflow is valid and ready for publishing');
+    });
+}}
+
+###
+
+# ============================================
+# Verify Questions Exist Before Publishing
+# ============================================
+# @name verifyQuestionsBeforePublish
+# @ref verifyWorkflowBeforePublish
+GET {{BASE_URL}}/forms/{{formId}}/sections
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form has questions before publishing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        
+        // Find our section
+        const ourSection = data.find(s => s.section.id === sectionNodeId);
+        equal(ourSection !== undefined, true, 'Our section should exist');
+        equal(Array.isArray(ourSection.questions), true, 'Questions should be an array');
+        equal(ourSection.questions.length >= 1, true, 'Should have at least 1 question');
+        
+        console.log('Form has', ourSection.questions.length, 'questions ready for publishing');
+    });
+}}
+
+###
+
+# ============================================
+# Publish Form
+# ============================================
+# @name publishForm
+# @ref verifyQuestionsBeforePublish
+POST {{BASE_URL}}/forms/{{formId}}/publish
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form published successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.visibility !== undefined, true, 'Response should contain visibility');
+        equal(typeof data.visibility, 'string', 'Visibility should be a string');
+        
+        console.log('Form visibility:', data.visibility);
+    });
+
+    const data = JSON.parse(response.body);
+    exports.formVisibility = data.visibility;
+}}
+
+###
+
+# ============================================
+# Get Form After Publishing
+# ============================================
+# @name getFormAfterPublish
+# @ref publishForm
+GET {{BASE_URL}}/forms/{{formId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form status changed to PUBLISHED', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'PUBLISHED', 'Status should be PUBLISHED after publishing');
+        equal(data.visibility, formVisibility, 'Visibility should match');
+        
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+        console.log('Title:', data.title);
+        console.log('Form visibility:', data.visibility);
+        console.log('Publish Time:', data.publishTime);
+        console.log('Deadline:', data.deadline);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Published Form Appears in Listing
+# ============================================
+# @name verifyFormInListing
+# @ref getFormAfterPublish
+GET {{BASE_URL}}/forms
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Published form appears in forms listing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        
+        // Find our published form
+        const publishedForm = data.find(f => f.id === formId);
+        equal(publishedForm !== undefined, true, 'Published form should appear in listing');
+        equal(publishedForm.status, 'PUBLISHED', 'Form status should be PUBLISHED in listing');
+        
+        console.log('Published form found in listing with status:', publishedForm.status);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Published Form in Organization Listing
+# ============================================
+# @name verifyFormInOrgListing
+# @ref verifyFormInListing
+GET {{BASE_URL}}/orgs/{{orgSlug}}/forms
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Published form appears in organization forms listing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        
+        // Find our published form
+        const publishedForm = data.find(f => f.id === formId);
+        equal(publishedForm !== undefined, true, 'Published form should appear in org listing');
+        equal(publishedForm.status, 'PUBLISHED', 'Form status should be PUBLISHED in org listing');
+        
+        console.log('Published form found in organization listing');
+    });
+}}
+
+###
+
+# ============================================
+# Try Publishing Again (Should Be Idempotent or Return Error)
+# ============================================
+# @name publishFormAgain
+# @ref verifyFormInOrgListing
+POST {{BASE_URL}}/forms/{{formId}}/publish
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Error body indicates validation problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+###
+
+# ============================================
+# Get Form Final State
+# ============================================
+# @name getFormFinalState
+# @ref publishFormAgain
+GET {{BASE_URL}}/forms/{{formId}}
+
+?? status == 200
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form remains in PUBLISHED state', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'PUBLISHED', 'Status should remain PUBLISHED');
+        
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+        console.log('Title:', data.title);
+        console.log('Description:', data.description);
+        console.log('Form visibility:', data.visibility);
+        console.log('Publish Time:', data.publishTime);
+        console.log('Deadline:', data.deadline);
+        console.log('Cover Image:', data.coverImage || '(none)');
+        console.log('Google Sheet URL:', data.googleSheetUrl || '(none)');
+        console.log('Created At:', data.createdAt);
+        console.log('Updated At:', data.updatedAt);
+    });
+}}

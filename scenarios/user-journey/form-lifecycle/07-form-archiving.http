@@ -1,0 +1,192 @@
+# ============================================
+# Phase 7: Form Archiving
+# ============================================
+# This file tests the form archiving lifecycle:
+# - Archive the form (status changes from PUBLISHED to ARCHIVED)
+# - Test that archived form appears in archived view of listings
+# - Test that archived form does not appear in default view of listings
+# - Unarchive the form (status changes from ARCHIVED to DRAFT)
+# - Test that form appears in default view of listings again with DRAFT status
+# - Re-publish the form (status changes from DRAFT to PUBLISHED)
+
+# Import setup from Phase 6
+# @import ./06-response-creation.http
+
+###
+
+# ============================================
+# Archive Form
+# ============================================
+# @name archiveForm
+# @ref listFormResponses
+POST {{BASE_URL}}/forms/{{formId}}/archive
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form archived successfully (status changed to ARCHIVED)', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'ARCHIVED', 'Status should be ARCHIVED after archiving');
+
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Archived Form Appears in Archived View of Listing
+# ============================================
+# @name verifyArchivedFormInArchivedListing
+# @ref archiveForm
+GET {{BASE_URL}}/forms?status=ARCHIVED
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Archived form appears in archived view of listing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+
+        const archivedForm = data.find(f => f.id === formId);
+        equal(archivedForm !== undefined, true, 'Archived form should appear in archived listing');
+        equal(archivedForm.status, 'ARCHIVED', 'Form status should be ARCHIVED in archived listing');
+
+        console.log('Archived form correctly appears in archived listing with status:', archivedForm.status);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Archived Form Does Not Appear in Default Listing
+# ============================================
+# @name verifyArchivedFormNotInDefaultListing
+# @ref verifyArchivedFormInArchivedListing
+GET {{BASE_URL}}/orgs/{{orgSlug}}/forms
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Archived form does not appear in default listing', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+
+        const archivedForm = data.find(f => f.id === formId);
+        equal(archivedForm, undefined, 'Archived form should NOT appear in default listing');
+
+        console.log('Archived form correctly excluded from default listing');
+    });
+}}
+
+###
+
+# ============================================
+# Unarchive Form
+# ============================================
+# @name unarchiveForm
+# @ref verifyArchivedFormNotInDefaultListing
+POST {{BASE_URL}}/forms/{{formId}}/unarchive
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form unarchived successfully (status changed to DRAFT)', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'DRAFT', 'Status should be DRAFT after unarchiving');
+
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Unarchived Form Appears in Default Listing with DRAFT Status
+# ============================================
+# @name verifyUnarchivedFormInListing
+# @ref unarchiveForm
+GET {{BASE_URL}}/orgs/{{orgSlug}}/forms
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Unarchived form appears in default listing with DRAFT status', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+
+        const draftForm = data.find(f => f.id === formId);
+        equal(draftForm !== undefined, true, 'Unarchived form should appear in default listing');
+        equal(draftForm.status, 'DRAFT', 'Form status should be DRAFT in listing');
+
+        console.log('Unarchived form found in default listing with status:', draftForm.status);
+    });
+}}
+
+###
+
+# ============================================
+# Re-publish Form
+# ============================================
+# @name republishForm
+# @ref verifyUnarchivedFormInListing
+POST {{BASE_URL}}/forms/{{formId}}/publish
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form re-published successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.visibility !== undefined, true, 'Response should contain visibility');
+        equal(typeof data.visibility, 'string', 'Visibility should be a string');
+
+        console.log('Form re-published with visibility:', data.visibility);
+    });
+}}
+
+###
+
+# ============================================
+# Verify Form is Back to PUBLISHED State
+# ============================================
+# @name verifyFormRepublished
+# @ref republishForm
+GET {{BASE_URL}}/forms/{{formId}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Form is back to PUBLISHED state', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id, formId, 'Form ID should match');
+        equal(data.status, 'PUBLISHED', 'Status should be PUBLISHED after re-publishing');
+
+        console.log('Form ID:', data.id);
+        console.log('Status:', data.status);
+    });
+}}

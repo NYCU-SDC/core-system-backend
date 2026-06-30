@@ -1,0 +1,247 @@
+# ============================================
+# Phase 3: Workflow Basic - Section Creation & Workflow Observation
+# ============================================
+# This file creates sections and observes backend workflow behavior:
+# - Get workflow (observe initial START and END nodes)
+# - Create section node
+# - Observe workflow structure after section creation
+
+# Import setup from Phase 2
+# @import ./02-form-creation.http
+
+###
+
+# ============================================
+# Get Initial Workflow
+# ============================================
+# @name getInitialWorkflow
+# @ref listFormsByOrg
+GET {{BASE_URL}}/forms/{{formId}}/workflow
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Initial workflow structure', () => {
+        const data = JSON.parse(response.body);
+        equal(data.workflow !== undefined, true, 'Workflow should exist');
+        equal(Array.isArray(data.workflow), true, 'Workflow should be an array');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.initialWorkflow = data.workflow;
+    
+    // Try to find START and END nodes (backend returns lowercase)
+    const startNode = data.workflow.find(n => n.type === 'start');
+    const endNode = data.workflow.find(n => n.type === 'end');
+    
+    if (startNode) {
+        exports.startNodeId = startNode.id;
+        console.log('Found START node:', startNode.id);
+    }
+    if (endNode) {
+        exports.endNodeId = endNode.id;
+        console.log('Found END node:', endNode.id);
+    }
+}}
+
+###
+
+# ============================================
+# Create Section Node
+# ============================================
+# @name createSectionNode
+# @ref getInitialWorkflow
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "SECTION",
+    "payload": { "x": 1.0, "y": 2.0 }
+}
+
+{{
+    test.status(201);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Section node created', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Section node ID should exist');
+        equal(data.type, 'SECTION', 'Node type should be SECTION');
+        equal(data.label !== undefined, true, 'Node label should exist');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.sectionNodeId = data.id;
+    exports.sectionNodeLabel = data.label;
+}}
+
+###
+
+# ============================================
+# Get Workflow After Section Creation
+# ============================================
+# @name getWorkflowAfterSection
+# @ref createSectionNode
+GET {{BASE_URL}}/forms/{{formId}}/workflow
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Workflow structure exists', () => {
+        const data = JSON.parse(response.body);
+        equal(data.workflow !== undefined, true, 'Workflow should exist');
+        equal(Array.isArray(data.workflow), true, 'Workflow should be an array');
+    });
+
+    test('All workflow nodes exist', () => {
+        const data = JSON.parse(response.body);
+        
+        // Check if section node is in workflow
+        const sectionNode = data.workflow.find(n => n.id === sectionNodeId);
+        equal(sectionNode !== undefined, true, 'Created section node should be in workflow');
+
+        // Check if START and END nodes still exist
+        const startNode = data.workflow.find(n => n.type === 'START');
+        const endNode = data.workflow.find(n => n.type === 'END');
+        equal(startNode !== undefined, true, 'START node should still exist');
+        equal(endNode !== undefined, true, 'END node should still exist');
+    });
+
+    test('Workflow validation errors present', () => {
+        const data = JSON.parse(response.body);
+        
+        // Check if info contains validation error about workflow structure (since we haven't linked the section node yet)
+        equal(Array.isArray(data.info), true, 'Info should be an array');
+        equal(data.info.length, 1, 'There should be validation errors in info');
+        const hasWorkflowError = data.info.some(i => i.type === 'node_validation_failed');
+        equal(hasWorkflowError, true, 'There should be a workflow structure validation error');
+    });
+
+    const data = JSON.parse(response.body);
+    exports.startNodeId = data.workflow.find(n => n.type === 'START').id;
+    exports.endNodeId = data.workflow.find(n => n.type === 'END').id;
+}}
+
+###
+
+# ============================================
+# List Sections (Observe Sections Structure)
+# ============================================
+# @name listSections
+# @ref getWorkflowAfterSection
+GET {{BASE_URL}}/forms/{{formId}}/sections
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Sections list structure', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+    });
+
+    const data = JSON.parse(response.body);
+    if (data.length > 0) {
+        exports.defaultSectionId = data[0].section.id;
+        console.log('Default section ID:', data[0].section.id);
+    }
+}}
+
+###
+
+# ==========================================================================
+# Update Workflow - Link START -> Section -> END with payload for each node
+# ==========================================================================
+# @name updateWorkflow
+# @ref listSections
+PUT {{BASE_URL}}/forms/{{formId}}/workflow
+Content-Type: application/json
+
+[
+    {
+        "id": "{{startNodeId}}",
+        "label": "開始表單",
+        "payload": { "x": 0.0, "y": 0.0 },
+        "next": "{{sectionNodeId}}"
+    },
+    {
+        "id": "{{sectionNodeId}}",
+        "label": "{{sectionNodeLabel}}",
+        "payload": { "x": 1.0, "y": 2.0 },
+        "next": "{{endNodeId}}"
+    },
+    {
+        "id": "{{endNodeId}}",
+        "label": "確認/送出",
+        "payload": { "x": 0.0, "y": 1.0 }
+    }
+]
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal, deepStrictEqual } = require('assert');
+
+    test('Workflow updated successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(Array.isArray(data), true, 'Response should be an array');
+        equal(data.length, 3, 'Workflow should have 3 nodes');
+        
+        // Find nodes
+        const startNode = data.find(n => n.id === startNodeId);
+        const sectionNode = data.find(n => n.id === sectionNodeId);
+        const endNode = data.find(n => n.id === endNodeId);
+        
+        // Verify connections
+        equal(startNode !== undefined, true, 'START node should exist');
+        equal(sectionNode !== undefined, true, 'Section node should exist');
+        equal(endNode !== undefined, true, 'END node should exist');
+        equal(startNode.next, sectionNodeId, 'START should point to Section');
+        equal(sectionNode.next, endNodeId, 'Section should point to END');
+        deepStrictEqual(startNode.payload, { "x": 0.0, "y": 0.0 }, 'START node payload should match');
+        deepStrictEqual(sectionNode.payload, { "x": 1.0, "y": 2.0 }, 'Section node payload should match');
+        deepStrictEqual(endNode.payload, { "x": 0.0, "y": 1.0 }, 'END node payload should match');
+    });
+}}
+
+###
+
+# ============================================
+# Get Final Workflow
+# ============================================
+# @name getFinalWorkflow
+# @ref updateWorkflow
+GET {{BASE_URL}}/forms/{{formId}}/workflow
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Final workflow is valid', () => {
+        const data = JSON.parse(response.body);
+        equal(data.workflow !== undefined, true, 'Workflow should exist');
+        equal(Array.isArray(data.workflow), true, 'Workflow should be an array');
+        equal(data.info.length, 0, 'There should be no validation errors');
+    });
+
+    test('Workflow validation errors resolved', () => {
+        const data = JSON.parse(response.body);
+        
+        // After linking the nodes, there should be no validation errors
+        equal(Array.isArray(data.info), true, 'Info should be an array');
+        equal(data.info.length, 0, 'There should be no validation errors in info');
+    })
+}}
