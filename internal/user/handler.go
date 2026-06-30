@@ -174,31 +174,6 @@ func (h *Handler) Onboarding(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, meResponse)
 }
 
-func ConvertEmailsToSlice(emails interface{}) []string {
-	if emails == nil {
-		return []string{}
-	}
-
-	switch v := emails.(type) {
-	case []string:
-		if v == nil {
-			return []string{}
-		}
-		return v
-	case []interface{}:
-		// Handle PostgreSQL array returned as []interface{}
-		result := make([]string, 0, len(v))
-		for _, email := range v {
-			if str, ok := email.(string); ok {
-				result = append(result, str)
-			}
-		}
-		return result
-	default:
-		return []string{}
-	}
-}
-
 func ConvertRoleToString(roles []string) string {
 	if roles == nil {
 		return ""
