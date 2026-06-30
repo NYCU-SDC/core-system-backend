@@ -10,9 +10,11 @@ import (
 	"NYCU-SDC/core-system-backend/internal"
 	"NYCU-SDC/core-system-backend/internal/form/answer"
 	"NYCU-SDC/core-system-backend/internal/form/question"
+	"NYCU-SDC/core-system-backend/internal/user"
 	"errors"
 
 	databaseutil "github.com/NYCU-SDC/summer/pkg/database"
+	handlerutil "github.com/NYCU-SDC/summer/pkg/handler"
 	logutil "github.com/NYCU-SDC/summer/pkg/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -47,7 +49,7 @@ type AnswerStore interface {
 }
 
 type UserStore interface {
-	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	Get(ctx context.Context, id uuid.UUID) (user.UserDetail, error)
 }
 type SectionWithQuestionStore interface {
 	ListSections(ctx context.Context, formID uuid.UUID) (map[string]question.Section, error)
@@ -182,17 +184,16 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.userStore.Exists(traceCtx, userID)
+	_, err := s.userStore.Get(traceCtx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check user exists")
+		if errors.Is(err, handlerutil.ErrNotFound) {
+			return nil, internal.ErrUserNotFound
+		}
 		span.RecordError(err)
 		return nil, err
 	}
-	if !exists {
-		return nil, internal.ErrUserNotFound
-	}
 
-	exists, err = s.formStore.Exists(traceCtx, formID)
+	exists, err := s.formStore.Exists(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check form exists")
 		span.RecordError(err)
@@ -220,14 +221,13 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	exists, err := s.userStore.Exists(traceCtx, userID)
+	_, err := s.userStore.Get(traceCtx, userID)
 	if err != nil {
-		err = databaseutil.WrapDBError(err, logger, "check user exists")
+		if errors.Is(err, handlerutil.ErrNotFound) {
+			return nil, internal.ErrUserNotFound
+		}
 		span.RecordError(err)
 		return nil, err
-	}
-	if !exists {
-		return nil, internal.ErrUserNotFound
 	}
 
 	responses, err := s.queries.ListBySubmittedBy(traceCtx, userID)

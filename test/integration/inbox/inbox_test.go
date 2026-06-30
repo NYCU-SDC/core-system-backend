@@ -48,7 +48,7 @@ func TestInboxService_Create(t *testing.T) {
 	testCases := []struct {
 		name        string
 		params      Params
-		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context
+		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context
 		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result uuid.UUID)
 		expectedErr bool
 	}{
@@ -59,7 +59,7 @@ func TestInboxService_Create(t *testing.T) {
 				title:          "test-title",
 				previewMessage: "test-preview-message",
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -120,7 +120,7 @@ func TestInboxService_Create(t *testing.T) {
 				title:          "test-title",
 				previewMessage: "test-preview-message",
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -154,7 +154,7 @@ func TestInboxService_Create(t *testing.T) {
 				title:          "test-title",
 				previewMessage: "test-preview-message",
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
 
@@ -222,7 +222,7 @@ func TestInboxService_List(t *testing.T) {
 	testCases := []struct {
 		name        string
 		params      Params
-		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context
+		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context
 		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result []inbox.ListRow)
 		expectedErr bool
 	}{
@@ -231,7 +231,7 @@ func TestInboxService_List(t *testing.T) {
 			params: Params{
 				expected: 0,
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 
@@ -256,7 +256,7 @@ func TestInboxService_List(t *testing.T) {
 			params: Params{
 				expected: 1,
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -302,7 +302,7 @@ func TestInboxService_List(t *testing.T) {
 			params: Params{
 				expected: 0,
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				// Use a non-existent user ID
 				params.userID = uuid.New()
 
@@ -355,7 +355,7 @@ func TestInboxService_Update(t *testing.T) {
 	testCases := []struct {
 		name        string
 		params      Params
-		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context
+		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context
 		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result inbox.UpdateRow)
 		expectedErr bool
 	}{
@@ -364,7 +364,7 @@ func TestInboxService_Update(t *testing.T) {
 			params: Params{
 				expected: inbox.UserInboxMessageFilter{IsRead: true, IsStarred: true, IsArchived: false},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -402,7 +402,7 @@ func TestInboxService_Update(t *testing.T) {
 			params: Params{
 				expected: inbox.UserInboxMessageFilter{IsRead: false, IsStarred: false, IsArchived: true},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -439,7 +439,7 @@ func TestInboxService_Update(t *testing.T) {
 			params: Params{
 				expected: inbox.UserInboxMessageFilter{IsRead: true, IsStarred: false, IsArchived: false},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -477,7 +477,7 @@ func TestInboxService_Update(t *testing.T) {
 			params: Params{
 				expected: inbox.UserInboxMessageFilter{IsRead: true, IsStarred: false, IsArchived: false},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 
@@ -500,7 +500,7 @@ func TestInboxService_Update(t *testing.T) {
 			params: Params{
 				expected: inbox.UserInboxMessageFilter{IsRead: true, IsStarred: false, IsArchived: false},
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -571,7 +571,7 @@ func TestInboxService_DuplicateCreatesProduceMultipleMessages(t *testing.T) {
 	testCases := []struct {
 		name        string
 		params      Params
-		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context
+		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context
 		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, results []uuid.UUID)
 		expectedErr bool
 	}{
@@ -580,7 +580,7 @@ func TestInboxService_DuplicateCreatesProduceMultipleMessages(t *testing.T) {
 			params: Params{
 				expected: 2,
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -625,7 +625,7 @@ func TestInboxService_DuplicateCreatesProduceMultipleMessages(t *testing.T) {
 			params: Params{
 				expected: 0,
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)
@@ -697,7 +697,7 @@ func TestInboxService_ArchiveVisibilityInList(t *testing.T) {
 	testCases := []struct {
 		name        string
 		params      Params
-		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context
+		setup       func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context
 		validate    func(t *testing.T, params Params, db dbbuilder.DBTX, result []inbox.ListRow)
 		expectedErr bool
 	}{
@@ -707,7 +707,7 @@ func TestInboxService_ArchiveVisibilityInList(t *testing.T) {
 				messageID: uuid.New(),
 				userID:    uuid.New(),
 			},
-			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger interface{}) context.Context {
+			setup: func(t *testing.T, params *Params, db dbbuilder.DBTX, logger any) context.Context {
 				unitBuilder := unitbuilder.New(t, db)
 				userBuilder := userbuilder.New(t, db)
 				formBuilder := formbuilder.New(t, db)

@@ -41,8 +41,11 @@ type Response struct {
 }
 
 type ListResponse struct {
-	FormID        string     `json:"formId" validate:"required,uuid"`
-	ResponseJSONs []Response `json:"responses" validate:"required,dive"`
+	FormID         string     `json:"formId" validate:"required,uuid"`
+	TotalCount     int32      `json:"totalCount" validate:"required"`
+	DraftCount     int32      `json:"draftCount" validate:"required"`
+	SubmittedCount int32      `json:"submittedCount" validate:"required"`
+	ResponseJSONs  []Response `json:"responses" validate:"required,dive"`
 }
 
 type GetFormResponse struct {
@@ -158,11 +161,23 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	listResponse := buildListResponse(formID, allResponses)
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, listResponse)
+}
+
+func buildListResponse(formID uuid.UUID, responses []FormResponse) ListResponse {
 	listResponse := ListResponse{
 		FormID:        formID.String(),
-		ResponseJSONs: make([]Response, 0, len(allResponses)),
+		TotalCount:    int32(len(responses)),
+		ResponseJSONs: make([]Response, 0, len(responses)),
 	}
-	for _, currentResponse := range allResponses {
+	for _, currentResponse := range responses {
+		if currentResponse.Progress == ResponseProgressSubmitted {
+			listResponse.SubmittedCount++
+		} else {
+			listResponse.DraftCount++
+		}
 		listResponse.ResponseJSONs = append(listResponse.ResponseJSONs, Response{
 			ID:          currentResponse.ID.String(),
 			SubmittedBy: currentResponse.SubmittedBy.String(),
@@ -170,8 +185,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:   currentResponse.UpdatedAt.Time,
 		})
 	}
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, listResponse)
+	return listResponse
 }
 
 // ListMe lists responses for a form submitted by the current user
@@ -201,18 +215,7 @@ func (h *Handler) ListMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	listResponse := ListResponse{
-		FormID:        formID.String(),
-		ResponseJSONs: make([]Response, 0),
-	}
-	for _, currentResponse := range userResponses {
-		listResponse.ResponseJSONs = append(listResponse.ResponseJSONs, Response{
-			ID:          currentResponse.ID.String(),
-			SubmittedBy: currentResponse.SubmittedBy.String(),
-			CreatedAt:   currentResponse.CreatedAt.Time,
-			UpdatedAt:   currentResponse.UpdatedAt.Time,
-		})
-	}
+	listResponse := buildListResponse(formID, userResponses)
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, listResponse)
 }
@@ -352,7 +355,7 @@ func (h *Handler) toGetFormResponse(ctx context.Context, formResponse FormRespon
 				}
 
 				// Build answer payload with proper question type and value
-				answerPayload := map[string]interface{}{
+				answerPayload := map[string]any{
 					"questionId":   questionID,
 					"questionType": strings.ToUpper(string(answerable.Question().Type)),
 					"value":        payload,

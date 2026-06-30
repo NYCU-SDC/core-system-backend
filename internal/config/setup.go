@@ -35,9 +35,10 @@ type rawOrgMember struct {
 	OrgRole string `yaml:"org_role"`
 }
 
-type SetupConfig struct {
-	Organizations []Organization
-	Users         []User
+type Setup struct {
+	Organizations         []Organization
+	Users                 []User
+	AllowedOnboardingList AllowedOnboardingList
 }
 
 type Organization struct {
@@ -58,16 +59,11 @@ type OrgMember struct {
 	Slug    string
 	OrgRole string
 }
+
 type AllowedOnboardingList map[string]struct{}
 
-type SetupImpl struct {
-	Config                SetupConfig
-	AllowedOnboardingList AllowedOnboardingList
-}
-
-func (s *SetupImpl) LoadSetupConfig(logger *zap.Logger, setupPath string, setupData string) error {
+func (s *Setup) LoadSetupConfig(logger *zap.Logger, setupPath string, setupData string) error {
 	var rawCfg rawSetupConfig
-	var cfg SetupConfig
 
 	data, err := os.ReadFile(setupPath)
 	if err != nil {
@@ -93,30 +89,31 @@ func (s *SetupImpl) LoadSetupConfig(logger *zap.Logger, setupPath string, setupD
 		}
 	}
 
-	cfg, err = parseSetupConfig(rawCfg)
+	orgs, users, err := parseSetupConfig(rawCfg)
 	if err != nil {
 		return fmt.Errorf("invalid setup config: %w", err)
 	}
 
 	allowedList := make(AllowedOnboardingList)
-	for _, user := range cfg.Users {
+	for _, user := range users {
 		if user.AllowedOnboarding {
 			allowedList[user.Email] = struct{}{}
 		}
 	}
 
-	s.Config = cfg
+	s.Organizations = orgs
+	s.Users = users
 	s.AllowedOnboardingList = allowedList
 
 	return nil
 }
 
-func (s *SetupImpl) AllowedOnboarding(email string) bool {
+func (s *Setup) AllowedOnboarding(email string) bool {
 	_, exist := s.AllowedOnboardingList[strings.ToLower(email)]
 	return exist
 }
 
-func parseSetupConfig(raw rawSetupConfig) (SetupConfig, error) {
+func parseSetupConfig(raw rawSetupConfig) ([]Organization, []User, error) {
 	orgs := make([]Organization, 0, len(raw.Organizations))
 	users := make([]User, 0, len(raw.Users))
 
@@ -124,7 +121,7 @@ func parseSetupConfig(raw rawSetupConfig) (SetupConfig, error) {
 		org := Organization(rawOrg)
 
 		if org.Slug == "" {
-			return SetupConfig{}, fmt.Errorf("organization slug is required")
+			return nil, nil, fmt.Errorf("organization slug is required")
 		}
 
 		orgs = append(orgs, org)
@@ -133,12 +130,12 @@ func parseSetupConfig(raw rawSetupConfig) (SetupConfig, error) {
 	for _, rawUser := range raw.Users {
 		email := normalizeEmail(rawUser.Email)
 		if email == "" {
-			return SetupConfig{}, fmt.Errorf("user email is required")
+			return nil, nil, fmt.Errorf("user email is required")
 		}
 
 		userID, err := parseOptionalUUID(rawUser.UserID)
 		if err != nil {
-			return SetupConfig{}, fmt.Errorf("invalid user_id for email %q: %w", email, err)
+			return nil, nil, fmt.Errorf("invalid user_id for email %q: %w", email, err)
 		}
 
 		orgMembers := make([]OrgMember, 0, len(rawUser.OrgMember))
@@ -146,7 +143,7 @@ func parseSetupConfig(raw rawSetupConfig) (SetupConfig, error) {
 			member := OrgMember(rawMember)
 
 			if member.Slug == "" {
-				return SetupConfig{}, fmt.Errorf("org member slug is required for email %q", email)
+				return nil, nil, fmt.Errorf("org member slug is required for email %q", email)
 			}
 
 			orgMembers = append(orgMembers, member)
@@ -161,10 +158,7 @@ func parseSetupConfig(raw rawSetupConfig) (SetupConfig, error) {
 		})
 	}
 
-	return SetupConfig{
-		Organizations: orgs,
-		Users:         users,
-	}, nil
+	return orgs, users, nil
 }
 
 func parseOptionalUUID(value string) (*uuid.UUID, error) {

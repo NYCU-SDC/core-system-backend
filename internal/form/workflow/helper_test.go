@@ -119,14 +119,14 @@ func createTestService(t *testing.T, logger *zap.Logger, tracer trace.Tracer, mo
 }
 
 // createWorkflowJSON marshals nodes to JSON and fails the test on error
-func createWorkflowJSON(t *testing.T, nodes []map[string]interface{}) []byte {
+func createWorkflowJSON(t *testing.T, nodes []map[string]any) []byte {
 	t.Helper()
 
 	// Default `payload` to a valid object for tests that don't explicitly specify it.
 	// The workflow validator requires payload to be present on every node.
 	for i := range nodes {
 		if _, ok := nodes[i]["payload"]; !ok {
-			nodes[i]["payload"] = map[string]interface{}{
+			nodes[i]["payload"] = map[string]any{
 				"x": 0,
 				"y": 0,
 			}
@@ -143,7 +143,7 @@ func createWorkflow_SimpleValid(t *testing.T) []byte {
 	t.Helper()
 	startID := uuid.New()
 	endID := uuid.New()
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -160,11 +160,11 @@ func createWorkflow_SimpleValid(t *testing.T) []byte {
 
 // createWorkflow_SimpleValid_WithNodePayload returns a minimal start -> end workflow
 // where `payload` is present on both nodes.
-func createWorkflow_SimpleValid_WithNodePayload(t *testing.T, payload interface{}) []byte {
+func createWorkflow_SimpleValid_WithNodePayload(t *testing.T, payload any) []byte {
 	t.Helper()
 	startID := uuid.New()
 	endID := uuid.New()
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":      startID.String(),
 			"type":    "start",
@@ -188,13 +188,13 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 	sectionID := uuid.New()
 	conditionID := uuid.New()
 	endID := uuid.New()
-	workflowJSON, err := json.Marshal([]map[string]interface{}{
+	workflowJSON, err := json.Marshal([]map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
 			"label": "Start",
 			"next":  sectionID.String(),
-			"payload": map[string]interface{}{
+			"payload": map[string]any{
 				"x": 0,
 				"y": 0,
 			},
@@ -204,7 +204,7 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 			"type":  "section",
 			"label": "Section",
 			"next":  conditionID.String(),
-			"payload": map[string]interface{}{
+			"payload": map[string]any{
 				"x": 0,
 				"y": 0,
 			},
@@ -215,12 +215,12 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 			"label":     "Condition",
 			"nextTrue":  endID.String(),
 			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   "choice",
 				"question": "answer",
 				"pattern":  "yes",
 			},
-			"payload": map[string]interface{}{
+			"payload": map[string]any{
 				"x": 0,
 				"y": 0,
 			},
@@ -230,7 +230,7 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 			"type":  "section",
 			"label": "Reference Section",
 			"next":  conditionID.String(),
-			"payload": map[string]interface{}{
+			"payload": map[string]any{
 				"x": 0,
 				"y": 0,
 			},
@@ -239,7 +239,7 @@ func createWorkflow_ComplexValid(t *testing.T) []byte {
 			"id":    endID.String(),
 			"type":  "end",
 			"label": "End",
-			"payload": map[string]interface{}{
+			"payload": map[string]any{
 				"x": 0,
 				"y": 0,
 			},
@@ -256,7 +256,7 @@ func createWorkflow_InvalidNextRef(t *testing.T) []byte {
 	endID := uuid.New()
 	nonExistentID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -280,7 +280,7 @@ func createWorkflow_InvalidNextTrueRef(t *testing.T) []byte {
 	nonExistentID := uuid.New()
 	sectionID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -293,7 +293,7 @@ func createWorkflow_InvalidNextTrueRef(t *testing.T) []byte {
 			"label":     "Condition",
 			"nextTrue":  nonExistentID.String(),
 			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   "choice",
 				"question": uuid.New().String(),
 				"pattern":  "yes",
@@ -322,7 +322,7 @@ func createWorkflow_InvalidNextFalseRef(t *testing.T) []byte {
 	nonExistentID := uuid.New()
 	sectionID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -335,7 +335,7 @@ func createWorkflow_InvalidNextFalseRef(t *testing.T) []byte {
 			"label":     "Condition",
 			"nextTrue":  endID.String(),
 			"nextFalse": nonExistentID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   "choice",
 				"question": uuid.New().String(),
 				"pattern":  "yes",
@@ -364,7 +364,7 @@ func createWorkflow_InvalidConditionRefs(t *testing.T) []byte {
 	nonExistentID2 := uuid.New()
 	sectionID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -377,7 +377,7 @@ func createWorkflow_InvalidConditionRefs(t *testing.T) []byte {
 			"label":     "Condition",
 			"nextTrue":  nonExistentID1.String(),
 			"nextFalse": nonExistentID2.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   "non-choice",
 				"question": uuid.New().String(),
 				"pattern":  "^no$",
@@ -403,7 +403,7 @@ func createWorkflow_ConditionRule(t *testing.T, questionID string) []byte {
 	endID := uuid.New()
 	sectionID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -422,7 +422,7 @@ func createWorkflow_ConditionRule(t *testing.T, questionID string) []byte {
 			"label":     "Condition",
 			"nextTrue":  endID.String(),
 			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   "choice",
 				"question": questionID,
 				"pattern":  "yes",
@@ -456,7 +456,7 @@ func createWorkflow_ConditionRuleWithPatternAndSource(t *testing.T, questionID s
 	endID := uuid.New()
 	sectionID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -475,7 +475,7 @@ func createWorkflow_ConditionRuleWithPatternAndSource(t *testing.T, questionID s
 			"label":     "Condition",
 			"nextTrue":  endID.String(),
 			"nextFalse": endID.String(),
-			"conditionRule": map[string]interface{}{
+			"conditionRule": map[string]any{
 				"source":   source,
 				"question": questionID,
 				"pattern":  pattern,
@@ -586,7 +586,7 @@ func createWorkflow_SimpleForNodeIDTest(t *testing.T) []byte {
 	startID := uuid.New()
 	endID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -608,7 +608,7 @@ func createWorkflow_WithSection(t *testing.T) []byte {
 	sectionID := uuid.New()
 	endID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -638,7 +638,7 @@ func createWorkflow_MultipleNodes(t *testing.T) []byte {
 	conditionID := uuid.New()
 	endID := uuid.New()
 
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":    startID.String(),
 			"type":  "start",
@@ -687,7 +687,7 @@ func createWorkflow_ValidWithEmptyStore(t *testing.T) ([]byte, QuestionStore) {
 func createWorkflow_MissingStartNode(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()
 	endID := uuid.New()
-	nodes := []map[string]interface{}{
+	nodes := []map[string]any{
 		{"id": endID.String(), "type": "end", "label": "End"},
 	}
 	return createWorkflowJSON(t, nodes), emptyQuestionStore()
@@ -698,7 +698,7 @@ func createWorkflow_DuplicateNodeIDs(t *testing.T) ([]byte, QuestionStore) {
 	t.Helper()
 	startID := uuid.New()
 	endID := uuid.New()
-	nodes := []map[string]interface{}{
+	nodes := []map[string]any{
 		{"id": startID.String(), "type": "start", "label": "Start", "next": endID.String()},
 		{"id": startID.String(), "type": "end", "label": "End"},
 	}
@@ -711,7 +711,7 @@ func createWorkflow_UnreachableNode(t *testing.T) ([]byte, QuestionStore) {
 	startID := uuid.New()
 	endID := uuid.New()
 	orphanID := uuid.New()
-	nodes := []map[string]interface{}{
+	nodes := []map[string]any{
 		{"id": startID.String(), "type": "start", "label": "Start", "next": endID.String()},
 		{"id": endID.String(), "type": "end", "label": "End"},
 		{"id": orphanID.String(), "type": "section", "label": "Orphan"},
@@ -726,26 +726,26 @@ func createWorkflow_ActivateOrphanSection(t *testing.T) []byte {
 	startID := uuid.New()
 	endID := uuid.New()
 	sectionID := uuid.New()
-	return createWorkflowJSON(t, []map[string]interface{}{
+	return createWorkflowJSON(t, []map[string]any{
 		{
 			"id":      startID.String(),
 			"type":    "start",
 			"label":   "Start",
 			"next":    endID.String(),
-			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+			"payload": map[string]any{"x": 0.0, "y": 0.0},
 		},
 		{
 			"id":      endID.String(),
 			"type":    "end",
 			"label":   "End",
-			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+			"payload": map[string]any{"x": 0.0, "y": 0.0},
 		},
 		{
 			"id":      sectionID.String(),
 			"type":    "section",
 			"label":   "Orphan",
 			"next":    endID.String(),
-			"payload": map[string]interface{}{"x": 0.0, "y": 0.0},
+			"payload": map[string]any{"x": 0.0, "y": 0.0},
 		},
 	})
 }
@@ -770,7 +770,7 @@ func createWorkflow_ConditionNoRule(t *testing.T) ([]byte, QuestionStore) {
 	conditionID := uuid.New()
 	endID := uuid.New()
 
-	nodes := []map[string]interface{}{
+	nodes := []map[string]any{
 		{"id": startID.String(), "type": "start", "label": "Start", "next": conditionID.String()},
 		{
 			"id":        conditionID.String(),

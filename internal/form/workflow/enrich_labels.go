@@ -38,7 +38,7 @@ func (s *Service) EnrichWorkflowResponse(
 		sectionTitles[id] = sec.Title.String
 	}
 
-	var nodes []map[string]interface{}
+	var nodes []map[string]any
 	err = json.Unmarshal(workflowJSON, &nodes)
 	if err != nil {
 		return workflowJSON, fmt.Errorf("%w: %w", internal.ErrUnmarshalDBWorkflow, err)
@@ -68,7 +68,7 @@ func (s *Service) EnrichWorkflowResponse(
 	return enriched, nil
 }
 
-func conditionLabelFromRule(ctx context.Context, node map[string]interface{}, questionStore QuestionStore) string {
+func conditionLabelFromRule(ctx context.Context, node map[string]any, questionStore QuestionStore) string {
 	fallback := "No label"
 	label, ok := node["label"].(string)
 	if ok {
@@ -76,7 +76,7 @@ func conditionLabelFromRule(ctx context.Context, node map[string]interface{}, qu
 	}
 
 	// If no condition rule, return fallback
-	conditionRule, ok := node["conditionRule"].(map[string]interface{})
+	conditionRule, ok := node["conditionRule"].(map[string]any)
 	if !ok {
 		return fallback
 	}

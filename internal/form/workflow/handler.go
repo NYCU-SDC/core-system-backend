@@ -74,7 +74,7 @@ func nodeTypeToLowercase(apiType string) string {
 
 // workflowToAPIFormat converts workflow JSON from database format to API format (type: lowercase -> uppercase).
 func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
-	var nodes []map[string]interface{}
+	var nodes []map[string]any
 	err := json.Unmarshal(dbWorkflow, &nodes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalDBWorkflow, err)
@@ -99,14 +99,14 @@ func workflowToAPIFormat(dbWorkflow []byte) ([]byte, error) {
 // If a node ID exists in API request but not in database, returns an error.
 func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 	// Parse API workflow (request from client)
-	var apiNodes []map[string]interface{}
+	var apiNodes []map[string]any
 	err := json.Unmarshal(apiWorkflow, &apiNodes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalAPIWorkflow, err)
 	}
 
 	// Parse database workflow
-	var dbNodes []map[string]interface{}
+	var dbNodes []map[string]any
 	err = json.Unmarshal(dbWorkflow, &dbNodes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalDBWorkflow, err)
@@ -151,7 +151,7 @@ func mergeTypeFromDB(apiWorkflow []byte, dbWorkflow []byte) ([]byte, error) {
 
 // workflowFromAPIFormat converts workflow JSON from API format to database format (type: uppercase -> lowercase).
 func workflowFromAPIFormat(apiWorkflow []byte) ([]byte, error) {
-	var nodes []map[string]interface{}
+	var nodes []map[string]any
 	err := json.Unmarshal(apiWorkflow, &nodes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", internal.ErrUnmarshalAPIWorkflow, err)
@@ -192,9 +192,9 @@ type createNodeRequest struct {
 }
 
 type createNodeResponse struct {
-	ID    string      `json:"id"`
-	Type  string      `json:"type"`
-	Label interface{} `json:"label"`
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Label any    `json:"label"`
 }
 
 type ValidationInfo struct {
@@ -290,7 +290,7 @@ func (h *Handler) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var unmarshalTest interface{}
+	var unmarshalTest any
 	err = json.Unmarshal(bodyBytes, &unmarshalTest)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, fmt.Errorf("invalid JSON in request body: %w", err), logger)

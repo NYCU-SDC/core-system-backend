@@ -8,11 +8,11 @@ import (
 
 func NewValidator() *validator.Validate {
 	v := validator.New()
-	
+
 	_ = v.RegisterValidation("username_rules", func(fl validator.FieldLevel) bool {
-        re := regexp.MustCompile(`^\w+$`)
-        return re.MatchString(fl.Field().String())
-    })
+		re := regexp.MustCompile(`^\w+$`)
+		return re.MatchString(fl.Field().String())
+	})
 
 	_ = v.RegisterValidation("font", func(fl validator.FieldLevel) bool {
 		id := fl.Field().String()
@@ -26,7 +26,7 @@ func NewValidator() *validator.Validate {
 	return v
 }
 
-func ValidateStruct(v *validator.Validate, s interface{}) error {
+func ValidateStruct(v *validator.Validate, s any) error {
 	err := v.Struct(s)
 	if err != nil {
 		return err

@@ -71,14 +71,14 @@ func TestWorkflow_MergeTypeFromDB(t *testing.T) {
 			}
 
 			// Parse result to verify type field was added
-			var resultNodes []map[string]interface{}
+			var resultNodes []map[string]any
 			err = json.Unmarshal(result, &resultNodes)
 			if err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
 
 			// Parse database workflow to get expected types
-			var dbNodes []map[string]interface{}
+			var dbNodes []map[string]any
 			err = json.Unmarshal([]byte(tc.dbWorkflow), &dbNodes)
 			if err != nil {
 				t.Fatalf("failed to unmarshal database workflow: %v", err)

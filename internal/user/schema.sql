@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS user_emails (
 );
 
 CREATE OR REPLACE VIEW users_with_emails AS
-SELECT 
+SELECT
     u.id,
     u.name,
     u.username,

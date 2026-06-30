@@ -184,7 +184,7 @@ func (s Service) Parse(ctx context.Context, tokenString string) (user.User, erro
 
 	tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
-	secret := func(token *jwt.Token) (interface{}, error) {
+	secret := func(token *jwt.Token) (any, error) {
 		return []byte(s.secret), nil
 	}
 
@@ -242,7 +242,7 @@ func (s Service) ParseState(ctx context.Context, tokenString string) (*OauthProx
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	secret := func(token *jwt.Token) (interface{}, error) {
+	secret := func(token *jwt.Token) (any, error) {
 		return []byte(s.oauthProxySecret), nil
 	}
 
@@ -324,7 +324,7 @@ func (s Service) ParseFormState(ctx context.Context, tokenString string) (callba
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	secret := func(token *jwt.Token) (interface{}, error) {
+	secret := func(token *jwt.Token) (any, error) {
 		return []byte(s.oauthProxySecret), nil
 	}
 
@@ -456,7 +456,7 @@ func (s Service) ParseLinkToken(ctx context.Context, tokenString string) (*LinkC
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	secret := func(token *jwt.Token) (interface{}, error) {
+	secret := func(token *jwt.Token) (any, error) {
 		return []byte(s.oauthProxySecret), nil
 	}
 

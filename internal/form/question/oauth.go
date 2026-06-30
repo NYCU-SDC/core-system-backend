@@ -138,7 +138,7 @@ func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 	if provider == "" {
 		return nil, ErrMetadataValidate{
 			QuestionID: "oauth_connect",
-			RawData:    []byte(fmt.Sprintf("%v", provider)),
+			RawData:    fmt.Appendf(nil, "%v", provider),
 			Message:    "no provider provided for oauth_connect question",
 		}
 	}
@@ -147,7 +147,7 @@ func GenerateOauthConnectMetadata(provider string) ([]byte, error) {
 	if !validOauthProviders[oauthProvider] {
 		return nil, ErrMetadataValidate{
 			QuestionID: "oauth_connect",
-			RawData:    []byte(fmt.Sprintf("%v", provider)),
+			RawData:    fmt.Appendf(nil, "%v", provider),
 			Message:    "invalid provider provided for oauth_connect question",
 		}
 	}
