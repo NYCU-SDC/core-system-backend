@@ -46,9 +46,8 @@ type JWTStore interface {
 }
 
 type UserStore interface {
-	Exists(ctx context.Context, id uuid.UUID) (bool, error)
-	Get(ctx context.Context, id uuid.UUID) (user.UsersWithEmail, error)
-	FindOrCreate(ctx context.Context, name, username, avatarUrl string, email string, role []string, oauthProvider, oauthProviderID string) (user.FindOrCreateResult, error)
+	Get(ctx context.Context, id uuid.UUID) (user.UserDetail, error)
+	FindOrCreate(ctx context.Context, params user.FindOrCreateParams) (user.FindOrCreateResult, error)
 	CreateAuth(ctx context.Context, userID uuid.UUID, provider, providerID, existingProvider, existingProviderID string) error
 }
 
@@ -271,7 +270,14 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.userStore.FindOrCreate(traceCtx, userInfo.Name.String, userInfo.Username.String, userInfo.AvatarUrl.String, email, userInfo.Role, providerName, auth.ProviderID)
+	result, err := h.userStore.FindOrCreate(traceCtx, user.FindOrCreateParams{
+		Name:            userInfo.Name.String,
+		AvatarURL:       userInfo.AvatarUrl.String,
+		Email:           email,
+		Role:            userInfo.Role,
+		OAuthProvider:   providerName,
+		OAuthProviderID: auth.ProviderID,
+	})
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -328,23 +334,12 @@ func (h *Handler) generateJWT(ctx context.Context, userID uuid.UUID) (string, st
 	traceCtx, span := h.tracer.Start(ctx, "generateJWT")
 	defer span.End()
 
-	userEntityRow, err := h.userStore.Get(traceCtx, userID)
+	userDetail, err := h.userStore.Get(traceCtx, userID)
 	if err != nil {
 		return "", "", err
 	}
 
-	// Convert GetByIDRow to user.User expected by JWTIssuer
-	userEntity := user.User{
-		ID:        userEntityRow.ID,
-		Name:      userEntityRow.Name,
-		Username:  userEntityRow.Username,
-		AvatarUrl: userEntityRow.AvatarUrl,
-		Role:      userEntityRow.Role,
-		CreatedAt: userEntityRow.CreatedAt,
-		UpdatedAt: userEntityRow.UpdatedAt,
-	}
-
-	jwtToken, err := h.jwtIssuer.New(traceCtx, userEntity)
+	jwtToken, err := h.jwtIssuer.New(traceCtx, userDetail.ToJWTUser())
 	if err != nil {
 		return "", "", err
 	}
@@ -475,7 +470,8 @@ func (h *Handler) InternalAPITokenLogin(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		UserIDStr string `json:"uid" validate:"required"`
 	}
-	if err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req); err != nil {
+	err := handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -486,8 +482,8 @@ func (h *Handler) InternalAPITokenLogin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	exists, err := h.userStore.Exists(traceCtx, uid)
-	if err != nil || !exists {
+	_, err = h.userStore.Get(traceCtx, uid)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, internal.ErrUserNotFound, logger)
 		return
 	}
