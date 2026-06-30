@@ -538,7 +538,7 @@ LEFT JOIN users_with_emails creator ON f.created_by = creator.id
 LEFT JOIN users_with_emails last_editor ON f.last_editor = last_editor.id
 WHERE ($1::status IS NULL OR f.status = $1::status)
 AND ($2::visibility IS NULL OR f.visibility = $2::visibility)
-AND ($3::timestamptz IS NULL OR f.deadline >= $3::timestamptz)
+AND ($3::timestamptz IS NULL OR f.deadline IS NULL OR f.deadline >= $3::timestamptz)
 ORDER BY f.updated_at DESC
 `
 

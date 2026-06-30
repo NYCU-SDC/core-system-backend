@@ -103,9 +103,9 @@ func NewService(logger *zap.Logger, db DBTX, answerStore AnswerStore, sectionSto
 	}
 }
 
-// Create creates an empty response (draft) for a given form and user
-// Returns an error if the user already has a response for the form
-func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error) {
+// Create creates an empty response (draft) for a given form and user.
+// Returns an error if the user already has a response for the form.
+func (s *Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID) (FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -120,7 +120,6 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 		return FormResponse{}, internal.ErrFormNotFound
 	}
 
-	// Check if user already has a response for this form
 	exists, err := s.queries.ExistsByFormIDAndSubmittedBy(traceCtx, ExistsByFormIDAndSubmittedByParams{
 		FormID:      formID,
 		SubmittedBy: userID,
@@ -130,7 +129,6 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 		span.RecordError(err)
 		return FormResponse{}, err
 	}
-
 	if exists {
 		err = fmt.Errorf("user already has a response for this form")
 		logger.Error("Failed to create empty response", zap.Error(err), zap.String("formID", formID.String()), zap.String("userID", userID.String()))
@@ -153,7 +151,7 @@ func (s Service) Create(ctx context.Context, formID uuid.UUID, userID uuid.UUID)
 }
 
 // ListByFormID retrieves all responses for a form (e.g. org member listing).
-func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
+func (s *Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListByFormID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -179,7 +177,7 @@ func (s Service) ListByFormID(ctx context.Context, formID uuid.UUID) ([]FormResp
 }
 
 // ListByFormIDAndSubmittedBy retrieves all responses submitted by a given user
-func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUID, userID uuid.UUID) ([]FormResponse, error) {
+func (s *Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUID, userID uuid.UUID) ([]FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListByFormIDAndSubmittedBy")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -216,7 +214,7 @@ func (s Service) ListByFormIDAndSubmittedBy(ctx context.Context, formID uuid.UUI
 	return responses, nil
 }
 
-func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
+func (s *Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListBySubmittedBy")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -240,7 +238,7 @@ func (s Service) ListBySubmittedBy(ctx context.Context, userID uuid.UUID) ([]For
 	return responses, nil
 }
 
-func (s Service) ExportPreview(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (ExportPreviewResponse, error) {
+func (s *Service) ExportPreview(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (ExportPreviewResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ExportPreview")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -258,7 +256,7 @@ func (s Service) ExportPreview(ctx context.Context, formID uuid.UUID, questionID
 	}, nil
 }
 
-func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]byte, string, error) {
+func (s *Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]byte, string, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ExportDownload")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -335,7 +333,7 @@ func (s Service) ExportDownload(ctx context.Context, formID uuid.UUID, questionI
 	return buffer.Bytes(), data.FormTitle, nil
 }
 
-func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (exportData, error) {
+func (s *Service) getExportData(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (exportData, error) {
 	traceCtx, span := s.tracer.Start(ctx, "getExportData")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -485,7 +483,7 @@ func (s Service) getExportData(ctx context.Context, formID uuid.UUID, questionID
 
 // Get retrieves a form response by ID along with its sections, questions, and answers
 // The sections are returned in workflow order (active sections first, then skipped sections)
-func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error) {
+func (s *Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormResponse, []SectionWithAnswerableAndAnswer, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -638,7 +636,7 @@ func (s Service) Get(ctx context.Context, id uuid.UUID, formID uuid.UUID) (FormR
 	return response, result, nil
 }
 
-func (s Service) GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+func (s *Service) GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetFormID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -658,7 +656,7 @@ func (s Service) GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 
 // GetSubmittedBy returns the user ID who submitted the response with the given ID.
 // This is used by the answer handler for ownership checks without creating an import cycle.
-func (s Service) GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+func (s *Service) GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetSubmittedBy")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -688,7 +686,7 @@ func (s Service) GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, e
 
 // Get retrieves a form response by its ID alone (without requiring the formID).
 // This is a lightweight lookup used for ownership checks.
-func (s Service) GetByID(ctx context.Context, id uuid.UUID) (FormResponse, error) {
+func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "GetByID")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -717,7 +715,7 @@ func (s Service) GetByID(ctx context.Context, id uuid.UUID) (FormResponse, error
 }
 
 // Exists returns whether a response with the given id exists.
-func (s Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
+func (s *Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Exists")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -733,7 +731,7 @@ func (s Service) Exists(ctx context.Context, id uuid.UUID) (bool, error) {
 }
 
 // Delete deletes a response by id
-func (s Service) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	traceCtx, span := s.tracer.Start(ctx, "Delete")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -748,7 +746,7 @@ func (s Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s Service) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error) {
+func (s *Service) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error) {
 	traceCtx, span := s.tracer.Start(ctx, "UpdateSubmitted")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -766,7 +764,7 @@ func (s Service) UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormRespons
 // ResolveWorkflowSectionsForResponse runs ResolveSections and builds sectionActiveMap when a workflow exists.
 // If ErrWorkflowNotFound, it returns the error and no section ordering/active-map is produced.
 // Any other error is wrapped and returned.
-func (s Service) ResolveWorkflowSectionsForResponse(
+func (s *Service) ResolveWorkflowSectionsForResponse(
 	ctx context.Context,
 	formID uuid.UUID,
 	answerPayload []answer.Answer,
