@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -27,9 +26,9 @@ func (m *mockHighlightQuerier) UpsertByFormID(ctx context.Context, arg UpsertByF
 	return args.Get(0).(FormHighlight), args.Error(1)
 }
 
-func (m *mockHighlightQuerier) DeleteByFormID(ctx context.Context, formID uuid.UUID) error {
+func (m *mockHighlightQuerier) DeleteByFormID(ctx context.Context, formID uuid.UUID) (int64, error) {
 	args := m.Called(ctx, formID)
-	return args.Error(0)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *mockHighlightQuerier) UpdateDisplayTitleByFormID(ctx context.Context, arg UpdateDisplayTitleByFormIDParams) (FormHighlight, error) {
@@ -69,7 +68,7 @@ func TestService_Clear(t *testing.T) {
 			setup: func(t *testing.T, formID uuid.UUID, queries *mockHighlightQuerier, formStore *mockFormExistsStore) {
 				t.Helper()
 				formStore.On("Exists", mock.Anything, formID).Return(true, nil).Once()
-				queries.On("GetByFormID", mock.Anything, formID).Return(FormHighlight{}, pgx.ErrNoRows).Once()
+				queries.On("DeleteByFormID", mock.Anything, formID).Return(int64(0), nil).Once()
 			},
 			validate: func(t *testing.T, err error) {
 				t.Helper()
@@ -81,8 +80,7 @@ func TestService_Clear(t *testing.T) {
 			setup: func(t *testing.T, formID uuid.UUID, queries *mockHighlightQuerier, formStore *mockFormExistsStore) {
 				t.Helper()
 				formStore.On("Exists", mock.Anything, formID).Return(true, nil).Once()
-				queries.On("GetByFormID", mock.Anything, formID).Return(FormHighlight{FormID: formID}, nil).Once()
-				queries.On("DeleteByFormID", mock.Anything, formID).Return(nil).Once()
+				queries.On("DeleteByFormID", mock.Anything, formID).Return(int64(1), nil).Once()
 			},
 			validate: func(t *testing.T, err error) {
 				t.Helper()
