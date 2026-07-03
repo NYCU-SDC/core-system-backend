@@ -98,6 +98,11 @@ func TestResponseService_CancelSubmission(t *testing.T) {
 			validate: func(t *testing.T, err error, params params, queries *response.Queries) {
 				t.Helper()
 				require.ErrorIs(t, err, internal.ErrResponseNotOwned)
+
+				result, err := queries.Get(context.Background(), response.GetParams{ID: params.responseID, FormID: params.formID})
+				require.NoError(t, err)
+				require.Equal(t, response.ResponseProgressSubmitted, result.Progress)
+				require.True(t, result.SubmittedAt.Valid)
 			},
 		},
 	}
