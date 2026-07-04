@@ -816,7 +816,7 @@ func extractOtherText(answer any) string {
 }
 
 func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), fmt.Sprintf("GetFilterAnswers"))
+	traceCtx, span := h.tracer.Start(r.Context(), "GetFilterAnswers")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
