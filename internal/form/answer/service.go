@@ -29,6 +29,8 @@ type Querier interface {
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
 	WithTx(tx pgx.Tx) *Queries
+	ListDistinctAnswersByQuestionId(ctx context.Context, questionID uuid.UUID) ([][]byte, error)
+	QuestionExists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type QuestionStore interface {
@@ -690,4 +692,98 @@ func (s Service) MergeAnswersForWorkflowResolution(
 		zap.Int("mergedAnswerCount", len(out)),
 	)
 	return out, nil
+}
+
+type FilterAnswerItem struct {
+	DisplayValue string    `json:"displayValue"`
+	Option       uuid.UUID `json:"option"`
+	Selected     bool      `json:"selected"`
+}
+
+func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, selectedOptions []uuid.UUID) ([]FilterAnswerItem, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListFilterAnswers")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	questionExist, err := s.queries.QuestionExists(ctx, questionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check if the question exists")
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to check if the question exists: %w", err)
+	}
+	if !questionExist {
+		return nil, internal.ErrQuestionNotFound
+	}
+
+	selectedMap := make(map[uuid.UUID]bool, len(selectedOptions))
+	for _, option := range selectedOptions {
+		selectedMap[option] = true
+	}
+
+	answers, err := s.queries.ListDistinctAnswersByQuestionId(ctx, questionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list distinct answers by questionId")
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to list distinct answers by questionId: %w", err)
+	}
+
+	var items []FilterAnswerItem
+	seen := make(map[uuid.UUID]bool)
+
+	for _, raw := range answers {
+		var data map[string]any
+		err = json.Unmarshal(raw, &data)
+		if err != nil {
+			continue
+		}
+
+		if choiceIdStr, ok := data["choiceId"].(string); ok {
+
+			choiceId, err := uuid.Parse(choiceIdStr)
+			if err != nil {
+				logger.Error("failed to parse the choiceId string", zap.Error(err))
+				span.RecordError(err)
+				return nil, err
+			}
+
+			if seen[choiceId] {
+				continue
+			}
+			seen[choiceId] = true
+
+			item := FilterAnswerItem{
+				DisplayValue: data["snapshot"].(map[string]any)["name"].(string),
+				Option:       choiceId,
+				Selected:     selectedMap[choiceId],
+			}
+			items = append(items, item)
+		} else if choices, ok := data["choices"].([]any); ok {
+			for _, choice := range choices {
+				choiceMap, ok := choice.(map[string]any)
+				if !ok {
+					continue
+				}
+
+				choiceId, err := uuid.Parse(choiceMap["choiceId"].(string))
+				if err != nil {
+					logger.Error("failed to parse the choiceId string", zap.Error(err))
+					span.RecordError(err)
+					return nil, err
+				}
+
+				if seen[choiceId] {
+					continue
+				}
+				seen[choiceId] = true
+
+				item := FilterAnswerItem{
+					DisplayValue: choiceMap["snapshot"].(map[string]any)["name"].(string),
+					Option:       choiceId,
+					Selected:     selectedMap[choiceId],
+				}
+				items = append(items, item)
+			}
+		}
+	}
+	return items, nil
 }

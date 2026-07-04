@@ -58,6 +58,22 @@ type UploadFilesResponse struct {
 	Files []shared.UploadFileEntry `json:"files"`
 }
 
+type FilterAnswerRequest struct {
+	Filters []struct {
+		QuestionID uuid.UUID `json:"questionId"`
+		Answers    []struct {
+			Option uuid.UUID `json:"option"`
+		} `json:"answers"`
+	} `json:"filters"`
+}
+
+type FilterAnswerResponse struct {
+	ViewId     uuid.UUID          `json:"viewId"`
+	FormId     uuid.UUID          `json:"formId"`
+	QuestionId uuid.UUID          `json:"questionId"`
+	Answers    []FilterAnswerItem `json:"answers"`
+}
+
 type Store interface {
 	Get(ctx context.Context, formID, responseID, questionID uuid.UUID) (Answer, Answerable, error)
 	List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []question.Answerable, map[string]question.Answerable, error)
@@ -67,6 +83,7 @@ type Store interface {
 	ValidatePatchAnswersAgainstWorkflow(ctx context.Context, formID, responseID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, payloads []Payload) error
 	ValidateUploadFilesAgainstWorkflow(ctx context.Context, formID, responseID, questionID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable) error
 	MergeAnswersForWorkflowResolution(ctx context.Context, currentAnswers []Answer, payloads []Payload, answerableMap map[string]question.Answerable) ([]Answer, error)
+	ListFilterAnswers(ctx context.Context, questionID uuid.UUID, selectedOptions []uuid.UUID) ([]FilterAnswerItem, error)
 }
 
 type QuestionGetter interface {
@@ -796,4 +813,60 @@ func extractOtherText(answer any) string {
 		}
 	}
 	return ""
+}
+
+func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
+	traceCtx, span := h.tracer.Start(r.Context(), fmt.Sprintf("GetFilterAnswers"))
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, h.logger)
+
+	formIdStr := r.PathValue("formId")
+	formId, err := handlerutil.ParseUUID(formIdStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	viewIdStr := r.PathValue("viewId")
+	viewId, err := handlerutil.ParseUUID(viewIdStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	questionIdStr := r.PathValue("questionId")
+	questionId, err := handlerutil.ParseUUID(questionIdStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	var selectedOptions []uuid.UUID
+	var req FilterAnswerRequest
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+	for _, filter := range req.Filters {
+		if filter.QuestionID != questionId {
+			continue
+		}
+		for _, answer := range filter.Answers {
+			selectedOptions = append(selectedOptions, answer.Option)
+		}
+	}
+
+	answers, err := h.store.ListFilterAnswers(traceCtx, questionId, selectedOptions)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	handlerutil.WriteJSONResponse(w, http.StatusOK, FilterAnswerResponse{
+		ViewId:     viewId,
+		FormId:     formId,
+		QuestionId: questionId,
+		Answers:    answers,
+	})
 }

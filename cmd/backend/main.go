@@ -403,7 +403,6 @@ func main() {
 	mux.Handle("POST /api/responses/{responseId}/questions/{questionId}/files", authMiddleware.Append(notArchivedByResponse).HandlerFunc(answerHandler.UploadQuestionFiles))
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", authMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
 	mux.Handle("GET /api/oauth/questions/{provider}/callback", authMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
-
 	// Workflow Management
 	// ----------------------
 	mux.Handle("GET /api/forms/{formId}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetHandler))
@@ -421,6 +420,7 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/views/{viewId}/unlock", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Unlock))
 	mux.Handle("POST /api/forms/{formId}/views/{viewId}/duplicate", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Duplicate))
 	mux.Handle("DELETE /api/forms/{formId}/views/{viewId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Delete))
+	mux.Handle("POST /api/forms/{formId}/views/{viewId}/questions/{questionId}/filters", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(answerHandler.GetFilterAnswers))
 
 	// ============================================
 	// File routes

@@ -69,3 +69,11 @@ JOIN form_responses fr ON a.response_id = fr.id
 WHERE fr.form_id = $1
   AND fr.progress = 'submitted'
   AND a.question_id = ANY(@question_id::uuid[]);
+
+-- name: ListDistinctAnswersByQuestionId :many
+SELECT DISTINCT a.value
+FROM answers a
+WHERE a.question_id = $1;
+
+-- name: QuestionExists :one
+SELECT EXISTS(SELECT 1 FROM questions WHERE id = $1);
