@@ -18,7 +18,7 @@ defaults:
     - sqlc.yaml
     - scenarios/**/*.example
     - scenarios/**/*.md
-    - scenarios/shared/**
+    - scenarios/user-journey/shared/**
 
 domains:
   access-control:
