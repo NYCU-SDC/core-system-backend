@@ -274,6 +274,28 @@ func (q *Queries) ListSubmittedByFormID(ctx context.Context, formID uuid.UUID) (
 	return items, nil
 }
 
+const revertSubmission = `-- name: RevertSubmission :one
+UPDATE form_responses
+SET submitted_at = NULL, progress = 'draft', updated_at = now()
+WHERE id = $1
+RETURNING id, form_id, submitted_by, submitted_at, progress, created_at, updated_at
+`
+
+func (q *Queries) RevertSubmission(ctx context.Context, id uuid.UUID) (FormResponse, error) {
+	row := q.db.QueryRow(ctx, revertSubmission, id)
+	var i FormResponse
+	err := row.Scan(
+		&i.ID,
+		&i.FormID,
+		&i.SubmittedBy,
+		&i.SubmittedAt,
+		&i.Progress,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const update = `-- name: Update :exec
 UPDATE form_responses
 SET updated_at = now(), progress = $2
