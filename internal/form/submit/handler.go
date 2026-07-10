@@ -43,22 +43,38 @@ type ResponseStore interface {
 	GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 }
 
+type Mailer interface {
+	SendSubmissionMail(
+		ctx context.Context,
+		to string,
+		response response.FormResponse,
+	) error
+}
+
+type UserStore interface {
+	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
+}
+
 type Handler struct {
 	logger        *zap.Logger
 	validator     *validator.Validate
 	problemWriter *problem.HttpWriter
 	operator      Operator
 	responseStore ResponseStore
+	userStore     UserStore
+	mailer        Mailer
 	tracer        trace.Tracer
 }
 
-func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, operator Operator, responseStore ResponseStore) *Handler {
+func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, operator Operator, responseStore ResponseStore, userStore UserStore, mailer Mailer) *Handler {
 	return &Handler{
 		logger:        logger,
 		validator:     validator,
 		problemWriter: problemWriter,
 		operator:      operator,
 		responseStore: responseStore,
+		userStore:     userStore,
+		mailer:        mailer,
 		tracer:        otel.Tracer("response/handler"),
 	}
 }
@@ -92,6 +108,15 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	emails, err := h.userStore.GetEmails(traceCtx, currentUser.ID)
+	if err != nil {
+		logger.Error(
+			"get user emails failed",
+			zap.Error(err),
+			zap.String("user_id", currentUser.ID.String()),
+		)
+	}
+
 	var request Request
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -120,6 +145,19 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		combinedErr := errors.New("form submission failed: [" + strings.Join(errorStrings, "; ") + "]")
 		h.problemWriter.WriteError(traceCtx, w, combinedErr, logger)
 		return
+	}
+
+	for _, email := range emails {
+		err := h.mailer.SendSubmissionMail(traceCtx, email, newResponse)
+		if err != nil {
+			logger.Error(
+				"send submission email failed",
+				zap.Error(err),
+				zap.String("email", email),
+				zap.String("user_id", currentUser.ID.String()),
+				zap.String("response_id", responseID.String()),
+			)
+		}
 	}
 
 	submitResponse := Response{

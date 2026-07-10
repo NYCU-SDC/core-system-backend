@@ -11,6 +11,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/cors"
 	"NYCU-SDC/core-system-backend/internal/distribute"
+	"NYCU-SDC/core-system-backend/internal/email"
 	"NYCU-SDC/core-system-backend/internal/file"
 	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/answer"
@@ -182,6 +183,16 @@ func main() {
 	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
+	smtpSender := email.NewSMTPSender(
+		cfg.SMTP.Host,
+		cfg.SMTP.Port,
+		cfg.SMTP.Username,
+		cfg.SMTP.Password,
+		cfg.SMTP.From,
+	)
+
+	emailService := email.NewService(smtpSender)
+
 	setupService := setup.NewService(logger, setupCfg, unitService, userService)
 	err = setupService.Setup(context.Background())
 	if err != nil {
@@ -199,7 +210,7 @@ func main() {
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, submitService, tenantService, userService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
 	highlightHandler := highlight.NewHandler(logger, validator, problemWriter, highlightService)
-	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService, responseService)
+	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService, responseService, userService, emailService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
