@@ -12,25 +12,26 @@ import (
 )
 
 func TestSendMail(t *testing.T) {
-	err := godotenv.Load()
-	if err != nil {
-		t.Fatal(err)
+	_ = godotenv.Load()
+	username := os.Getenv("SMTP_USERNAME")
+	password := os.Getenv("SMTP_PASSWORD")
+	from := os.Getenv("SMTP_FROM")
+
+	if username == "" || password == "" || from == "" {
+		t.Skip("SMTP environment variables are not configured")
 	}
+
 	sender := NewSMTPSender(
 		"smtp.gmail.com",
 		"587",
-		os.Getenv("SMTP_USERNAME"),
-		os.Getenv("SMTP_PASSWORD"),
-		os.Getenv("SMTP_FROM"),
+		username,
+		password,
+		from,
 	)
 
-	if os.Getenv("SMTP_USERNAME") == "" {
-		t.Fatal("SMTP_USERNAME is empty")
-	}
-	
 	service := NewService(sender)
 
-	err = service.SendSubmissionMail(
+	err := service.SendSubmissionMail(
 		context.Background(),
 		os.Getenv("SMTP_USERNAME"),
 		response.FormResponse{
