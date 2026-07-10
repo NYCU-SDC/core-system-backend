@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"NYCU-SDC/core-system-backend/internal/form/response"
 )
@@ -47,7 +48,7 @@ func (s *Service) SendSubmissionMail(
 
 此信件由系統自動寄出，請勿直接回覆。`,
 		formResponse.ID.String(),
-		formResponse.UpdatedAt.Time.Format("2006-01-02 15:04:05"),
+		time.Now().Format("2006-01-02 15:04:05"),
 	)
 
 	if err := s.sender.Send(ctx, to, subject, body); err != nil {
