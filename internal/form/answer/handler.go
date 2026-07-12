@@ -871,11 +871,7 @@ func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
 
 	var responseItems []FilterAnswerResponseItem
 	for _, answer := range answers {
-		responseItem := FilterAnswerResponseItem{
-			DisplayValue: answer.DisplayValue,
-			Option:       answer.Option,
-			Selected:     answer.Selected,
-		}
+		responseItem := FilterAnswerResponseItem(answer)
 		responseItems = append(responseItems, responseItem)
 	}
 
