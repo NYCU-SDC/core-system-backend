@@ -403,6 +403,7 @@ func main() {
 	mux.Handle("POST /api/responses/{responseId}/questions/{questionId}/files", authMiddleware.Append(notArchivedByResponse).HandlerFunc(answerHandler.UploadQuestionFiles))
 	mux.Handle("GET /api/responses/{responseId}/questions/{questionId}/oauth", authMiddleware.HandlerFunc(answerHandler.ConnectOAuthAccountStart))
 	mux.Handle("GET /api/oauth/questions/{provider}/callback", authMiddleware.HandlerFunc(answerHandler.OAuthAnswerCallback))
+
 	// Workflow Management
 	// ----------------------
 	mux.Handle("GET /api/forms/{formId}/workflow", authMiddleware.HandlerFunc(workflowHandler.GetHandler))

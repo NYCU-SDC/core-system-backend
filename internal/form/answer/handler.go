@@ -60,18 +60,24 @@ type UploadFilesResponse struct {
 
 type FilterAnswerRequest struct {
 	Filters []struct {
-		QuestionID uuid.UUID `json:"questionId"`
+		QuestionID uuid.UUID `json:"questionId" validate:"required"`
 		Answers    []struct {
-			Option uuid.UUID `json:"option"`
-		} `json:"answers"`
-	} `json:"filters"`
+			Option uuid.UUID `json:"option" validate:"required"`
+		} `json:"answers" validate:"required,min=1"`
+	} `json:"filters" validate:"required,min=1"`
+}
+
+type FilterAnswerResponseItem struct {
+	DisplayValue string    `json:"displayValue"`
+	Option       uuid.UUID `json:"option"`
+	Selected     bool      `json:"selected"`
 }
 
 type FilterAnswerResponse struct {
-	ViewId     uuid.UUID          `json:"viewId"`
-	FormId     uuid.UUID          `json:"formId"`
-	QuestionId uuid.UUID          `json:"questionId"`
-	Answers    []FilterAnswerItem `json:"answers"`
+	ViewId     uuid.UUID                  `json:"viewId"`
+	FormId     uuid.UUID                  `json:"formId"`
+	QuestionId uuid.UUID                  `json:"questionId"`
+	Answers    []FilterAnswerResponseItem `json:"answers"`
 }
 
 type Store interface {
@@ -843,7 +849,7 @@ func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
 
 	var selectedOptions []uuid.UUID
 	var req FilterAnswerRequest
-	err = json.NewDecoder(r.Body).Decode(&req)
+	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &req)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -863,10 +869,20 @@ func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var responseItems []FilterAnswerResponseItem
+	for _, answer := range answers {
+		responseItem := FilterAnswerResponseItem{
+			DisplayValue: answer.DisplayValue,
+			Option:       answer.Option,
+			Selected:     answer.Selected,
+		}
+		responseItems = append(responseItems, responseItem)
+	}
+
 	handlerutil.WriteJSONResponse(w, http.StatusOK, FilterAnswerResponse{
 		ViewId:     viewId,
 		FormId:     formId,
 		QuestionId: questionId,
-		Answers:    answers,
+		Answers:    responseItems,
 	})
 }

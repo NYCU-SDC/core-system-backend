@@ -731,56 +731,59 @@ func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, se
 	seen := make(map[uuid.UUID]bool)
 
 	for _, raw := range answers {
-		var data map[string]any
-		err = json.Unmarshal(raw, &data)
+		var choiceType struct {
+			ChoiceId *uuid.UUID         `json:"choiceId"`
+			Choices  *[]json.RawMessage `json:"choices"`
+		}
+		err = json.Unmarshal(raw, &choiceType)
 		if err != nil {
+			logger.Warn("failed to unmarshal answer data", zap.String("answer", string(raw)), zap.Error(err))
 			continue
 		}
 
-		if choiceIdStr, ok := data["choiceId"].(string); ok {
+		if choiceType.ChoiceId != nil {
 
-			choiceId, err := uuid.Parse(choiceIdStr)
+			var single shared.SingleChoiceAnswer
+			err = json.Unmarshal(raw, &single)
 			if err != nil {
-				logger.Error("failed to parse the choiceId string", zap.Error(err))
-				span.RecordError(err)
-				return nil, err
-			}
-
-			if seen[choiceId] {
+				logger.Warn("failed to unmarshal answer data", zap.String("answer", string(raw)), zap.Error(err))
 				continue
 			}
-			seen[choiceId] = true
+
+			if seen[single.ChoiceID] {
+				continue
+			}
+			seen[single.ChoiceID] = true
 
 			item := FilterAnswerItem{
-				DisplayValue: data["snapshot"].(map[string]any)["name"].(string),
-				Option:       choiceId,
-				Selected:     selectedMap[choiceId],
+				DisplayValue: single.Snapshot.Name,
+				Option:       single.ChoiceID,
+				Selected:     selectedMap[single.ChoiceID],
 			}
+
 			items = append(items, item)
-		} else if choices, ok := data["choices"].([]any); ok {
-			for _, choice := range choices {
-				choiceMap, ok := choice.(map[string]any)
-				if !ok {
+
+		} else if choiceType.Choices != nil {
+
+			var multi shared.MultipleChoiceAnswer
+			err = json.Unmarshal(raw, &multi)
+			if err != nil {
+				logger.Warn("failed to unmarshal answer data", zap.String("answer", string(raw)), zap.Error(err))
+				continue
+			}
+
+			for _, choice := range multi.Choices {
+				if seen[choice.ChoiceID] {
 					continue
 				}
-
-				choiceId, err := uuid.Parse(choiceMap["choiceId"].(string))
-				if err != nil {
-					logger.Error("failed to parse the choiceId string", zap.Error(err))
-					span.RecordError(err)
-					return nil, err
-				}
-
-				if seen[choiceId] {
-					continue
-				}
-				seen[choiceId] = true
+				seen[choice.ChoiceID] = true
 
 				item := FilterAnswerItem{
-					DisplayValue: choiceMap["snapshot"].(map[string]any)["name"].(string),
-					Option:       choiceId,
-					Selected:     selectedMap[choiceId],
+					DisplayValue: choice.Snapshot.Name,
+					Option:       choice.ChoiceID,
+					Selected:     selectedMap[choice.ChoiceID],
 				}
+
 				items = append(items, item)
 			}
 		}
