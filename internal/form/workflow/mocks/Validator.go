@@ -66,7 +66,7 @@ type MockValidator_Activate_Call struct {
 //   - formID uuid.UUID
 //   - workflow1 []byte
 //   - questionStore workflow.QuestionStore
-func (_e *MockValidator_Expecter) Activate(ctx interface{}, formID interface{}, workflow1 interface{}, questionStore interface{}) *MockValidator_Activate_Call {
+func (_e *MockValidator_Expecter) Activate(ctx any, formID any, workflow1 any, questionStore any) *MockValidator_Activate_Call {
 	return &MockValidator_Activate_Call{Call: _e.mock.On("Activate", ctx, formID, workflow1, questionStore)}
 }
 
@@ -135,7 +135,7 @@ type MockValidator_Validate_Call struct {
 //   - formID uuid.UUID
 //   - workflow1 []byte
 //   - questionStore workflow.QuestionStore
-func (_e *MockValidator_Expecter) Validate(ctx interface{}, formID interface{}, workflow1 interface{}, questionStore interface{}) *MockValidator_Validate_Call {
+func (_e *MockValidator_Expecter) Validate(ctx any, formID any, workflow1 any, questionStore any) *MockValidator_Validate_Call {
 	return &MockValidator_Validate_Call{Call: _e.mock.On("Validate", ctx, formID, workflow1, questionStore)}
 }
 
@@ -203,7 +203,7 @@ type MockValidator_ValidateNodeIDsUnchanged_Call struct {
 //   - ctx context.Context
 //   - currentWorkflow []byte
 //   - newWorkflow []byte
-func (_e *MockValidator_Expecter) ValidateNodeIDsUnchanged(ctx interface{}, currentWorkflow interface{}, newWorkflow interface{}) *MockValidator_ValidateNodeIDsUnchanged_Call {
+func (_e *MockValidator_Expecter) ValidateNodeIDsUnchanged(ctx any, currentWorkflow any, newWorkflow any) *MockValidator_ValidateNodeIDsUnchanged_Call {
 	return &MockValidator_ValidateNodeIDsUnchanged_Call{Call: _e.mock.On("ValidateNodeIDsUnchanged", ctx, currentWorkflow, newWorkflow)}
 }
 
@@ -266,7 +266,7 @@ type MockValidator_ValidateUpdateNodeIDs_Call struct {
 //   - ctx context.Context
 //   - currentWorkflow []byte
 //   - newWorkflow []byte
-func (_e *MockValidator_Expecter) ValidateUpdateNodeIDs(ctx interface{}, currentWorkflow interface{}, newWorkflow interface{}) *MockValidator_ValidateUpdateNodeIDs_Call {
+func (_e *MockValidator_Expecter) ValidateUpdateNodeIDs(ctx any, currentWorkflow any, newWorkflow any) *MockValidator_ValidateUpdateNodeIDs_Call {
 	return &MockValidator_ValidateUpdateNodeIDs_Call{Call: _e.mock.On("ValidateUpdateNodeIDs", ctx, currentWorkflow, newWorkflow)}
 }
 

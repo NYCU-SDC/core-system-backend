@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Check if branch is part of an open PR
         id: check
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const branch = context.ref.replace('refs/heads/', '');
@@ -31,17 +31,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26.2"
 
       - name: Lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12
+          version: v2.12.2
 
   Test:
     needs: check-if-in-pr
@@ -49,22 +49,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26.2"
 
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: "1.28.0"
+          sqlc-version: "1.31.1"
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-          mockery-version: "3.5.5"
+          mockery-version: "3.7.1"
 
       - name: Test
         run: make test
@@ -75,22 +75,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26.2"
 
       - name: Setup Sqlc
         uses: sqlc-dev/setup-sqlc@v4
         with:
-          sqlc-version: "1.25.0"
+          sqlc-version: "1.31.1"
 
       - name: Setup mockery
         uses: brokeyourbike/go-mockery-action@v0
         with:
-          mockery-version: "3.5.5"
+          mockery-version: "3.7.1"
 
       - name: Build
         run: |
