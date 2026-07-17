@@ -737,8 +737,7 @@ func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, se
 		}
 		err = json.Unmarshal(raw, &choiceType)
 		if err != nil {
-			logger.Warn("failed to unmarshal answer data", zap.String("answer", string(raw)), zap.Error(err))
-			continue
+			return nil, fmt.Errorf("failed to unmarshal answer data: %w", err)
 		}
 
 		if choiceType.ChoiceId != nil {
@@ -746,8 +745,7 @@ func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, se
 			var single shared.SingleChoiceAnswer
 			err = json.Unmarshal(raw, &single)
 			if err != nil {
-				logger.Warn("failed to unmarshal answer data", zap.String("answer", string(raw)), zap.Error(err))
-				continue
+				return nil, fmt.Errorf("failed to unmarshal answer data: %w", err)
 			}
 
 			if seen[single.ChoiceID] {
@@ -768,8 +766,7 @@ func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, se
 			var multi shared.MultipleChoiceAnswer
 			err = json.Unmarshal(raw, &multi)
 			if err != nil {
-				logger.Warn("failed to unmarshal answer data", zap.String("answer", string(raw)), zap.Error(err))
-				continue
+				return nil, fmt.Errorf("failed to unmarshal answer data: %w", err)
 			}
 
 			for _, choice := range multi.Choices {
