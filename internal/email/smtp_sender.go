@@ -67,7 +67,9 @@ func (s *SMTPSender) Send(
 	if err != nil {
 		return fmt.Errorf("dial smtp server: %w", err)
 	}
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+	}()
 
 	deadline := time.Now().Add(s.timeout)
 	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
@@ -82,7 +84,9 @@ func (s *SMTPSender) Send(
 	if err != nil {
 		return fmt.Errorf("create smtp client: %w", err)
 	}
-	defer client.Close()
+	defer func() {
+		_ = client.Close()
+	}()
 
 	tlsConfig := &tls.Config{
 		ServerName: s.host,
