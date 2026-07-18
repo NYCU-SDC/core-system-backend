@@ -2,8 +2,13 @@ package email
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"mime"
+	"net"
 	"net/smtp"
+	"strings"
+	"time"
 )
 
 type SMTPSender struct {
@@ -12,6 +17,7 @@ type SMTPSender struct {
 	username string
 	password string
 	from     string
+	timeout  time.Duration
 }
 
 func NewSMTPSender(
@@ -27,6 +33,7 @@ func NewSMTPSender(
 		username: username,
 		password: password,
 		from:     from,
+		timeout:  10 * time.Second,
 	}
 }
 
@@ -36,13 +43,55 @@ func (s *SMTPSender) Send(
 	subject string,
 	body string,
 ) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
-	address := s.host + ":" + s.port
+	if err := validateHeader("from", s.from); err != nil {
+		return err
+	}
+	if err := validateHeader("to", to); err != nil {
+		return err
+	}
+	if err := validateHeader("subject", subject); err != nil {
+		return err
+	}
+
+	address := net.JoinHostPort(s.host, s.port)
+
+	dialer := net.Dialer{
+		Timeout: s.timeout,
+	}
+
+	conn, err := dialer.DialContext(ctx, "tcp", address)
+	if err != nil {
+		return fmt.Errorf("dial smtp server: %w", err)
+	}
+	defer conn.Close()
+
+	deadline := time.Now().Add(s.timeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+
+	if err := conn.SetDeadline(deadline); err != nil {
+		return fmt.Errorf("set smtp deadline: %w", err)
+	}
+
+	client, err := smtp.NewClient(conn, s.host)
+	if err != nil {
+		return fmt.Errorf("create smtp client: %w", err)
+	}
+	defer client.Close()
+
+	tlsConfig := &tls.Config{
+		ServerName: s.host,
+		MinVersion: tls.VersionTLS12,
+	}
+
+	if err := client.StartTLS(tlsConfig); err != nil {
+		return fmt.Errorf("smtp start TLS: %w", err)
+	}
 
 	auth := smtp.PlainAuth(
 		"",
@@ -51,25 +100,54 @@ func (s *SMTPSender) Send(
 		s.host,
 	)
 
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+
+	if err := client.Mail(s.from); err != nil {
+		return fmt.Errorf("smtp MAIL FROM: %w", err)
+	}
+
+	if err := client.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp RCPT TO: %w", err)
+	}
+
+	writer, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp DATA: %w", err)
+	}
+
+	encodedSubject := mime.QEncoding.Encode("UTF-8", subject)
+
 	message := []byte(
 		"From: " + s.from + "\r\n" +
 			"To: " + to + "\r\n" +
-			"Subject: " + subject + "\r\n" +
+			"Subject: " + encodedSubject + "\r\n" +
 			"MIME-Version: 1.0\r\n" +
 			"Content-Type: text/plain; charset=UTF-8\r\n" +
 			"\r\n" +
-			body,
+			body + "\r\n",
 	)
 
-	if err := smtp.SendMail(
-		address,
-		auth,
-		s.from,
-		[]string{to},
-		message,
-	); err != nil {
-		return fmt.Errorf("smtp send mail: %w", err)
+	if _, err := writer.Write(message); err != nil {
+		_ = writer.Close()
+		return fmt.Errorf("write smtp message: %w", err)
 	}
 
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("close smtp message: %w", err)
+	}
+
+	if err := client.Quit(); err != nil {
+		return fmt.Errorf("smtp quit: %w", err)
+	}
+
+	return nil
+}
+
+func validateHeader(name, value string) error {
+	if strings.ContainsAny(value, "\r\n") {
+		return fmt.Errorf("%s contains invalid newline characters", name)
+	}
 	return nil
 }

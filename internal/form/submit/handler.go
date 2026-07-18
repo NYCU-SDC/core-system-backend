@@ -108,15 +108,6 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	emails, err := h.userStore.GetEmails(traceCtx, currentUser.ID)
-	if err != nil {
-		logger.Error(
-			"get user emails failed",
-			zap.Error(err),
-			zap.String("user_id", currentUser.ID.String()),
-		)
-	}
-
 	var request Request
 	err = handlerutil.ParseAndValidateRequestBody(traceCtx, h.validator, r, &request)
 	if err != nil {
@@ -147,19 +138,6 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, email := range emails {
-		err := h.mailer.SendSubmissionMail(traceCtx, email, newResponse)
-		if err != nil {
-			logger.Error(
-				"send submission email failed",
-				zap.Error(err),
-				zap.String("email", email),
-				zap.String("user_id", currentUser.ID.String()),
-				zap.String("response_id", responseID.String()),
-			)
-		}
-	}
-
 	submitResponse := Response{
 		ID:        newResponse.ID.String(),
 		FormID:    newResponse.FormID.String(),
@@ -169,4 +147,49 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, submitResponse)
+
+	backgroundCtx := context.WithoutCancel(traceCtx)
+
+	go h.sendSubmissionEmails(
+		backgroundCtx,
+		currentUser.ID,
+		newResponse,
+	)
+}
+
+func (h *Handler) sendSubmissionEmails(
+	ctx context.Context,
+	userID uuid.UUID,
+	newResponse response.FormResponse,
+) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	ctx, span := h.tracer.Start(ctx, "SendSubmissionEmails")
+	defer span.End()
+
+	logger := logutil.WithContext(ctx, h.logger)
+
+	emails, err := h.userStore.GetEmails(ctx, userID)
+	if err != nil {
+		logger.Error(
+			"get user emails failed",
+			zap.Error(err),
+			zap.String("user_id", userID.String()),
+			zap.String("response_id", newResponse.ID.String()),
+		)
+		return
+	}
+
+	for _, email := range emails {
+		if err := h.mailer.SendSubmissionMail(ctx, email, newResponse); err != nil {
+			logger.Error(
+				"send submission email failed",
+				zap.Error(err),
+				zap.String("email", email),
+				zap.String("user_id", userID.String()),
+				zap.String("response_id", newResponse.ID.String()),
+			)
+		}
+	}
 }
