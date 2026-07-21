@@ -392,6 +392,7 @@ func main() {
 	mux.Handle("GET /api/forms/{formId}/responses/{responseId}", authMiddleware.HandlerFunc(responseHandler.Get))
 	mux.Handle("POST /api/forms/{formId}/responses", authMiddleware.Append(notArchivedByForm).HandlerFunc(responseHandler.Create))
 	mux.Handle("DELETE /api/forms/{formId}/responses/{responseId}", authMiddleware.Append(formOwner).HandlerFunc(responseHandler.Delete))
+	mux.Handle("POST /api/forms/{formId}/responses/query", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(responseHandler.GetFilterResults))
 
 	// Response Operations
 	mux.Handle("POST /api/responses/{responseId}/submit", authMiddleware.Append(notArchivedByResponse).HandlerFunc(submitHandler.SubmitHandler))

@@ -35,6 +35,7 @@ type Querier interface {
 	UpdateSubmitted(ctx context.Context, id uuid.UUID) (FormResponse, error)
 	ListSubmittedByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error)
+	GetFilterResponsesByQuestionsAndOptions(ctx context.Context, arg GetFilterResponsesByQuestionsAndOptionsParams) ([]uuid.UUID, error)
 }
 
 type WorkflowResolver interface {
@@ -878,4 +879,82 @@ func (s *Service) GetEditInfo(ctx context.Context, id uuid.UUID) (string, bool, 
 	}
 
 	return string(editInfo.Progress), editInfo.AllowEditResponse, nil
+}
+
+type FilterCondition struct {
+	QuestionId uuid.UUID
+	OptionIds  []uuid.UUID
+}
+
+func (s *Service) QueryResponses(ctx context.Context, formId uuid.UUID, filters []FilterCondition) ([]FormResponse, error) {
+	traceCtx, span := s.tracer.Start(ctx, "QueryResponses")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	formExist, err := s.formStore.Exists(traceCtx, formId)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check if form exists")
+		span.RecordError(err)
+		return nil, err
+	}
+	if !formExist {
+		return nil, internal.ErrFormNotFound
+	}
+
+	if len(filters) == 0 {
+		return []FormResponse{}, nil
+	}
+
+	responsesMap := make(map[uuid.UUID]bool)
+	isFirstFilter := true
+
+	for _, filter := range filters {
+		options, err := s.queries.GetFilterResponsesByQuestionsAndOptions(traceCtx, GetFilterResponsesByQuestionsAndOptionsParams{
+			FormID:     formId,
+			QuestionID: filter.QuestionId,
+			OptionIds:  filter.OptionIds,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "get filter responses by questions and options")
+			span.RecordError(err)
+			return nil, err
+		}
+
+		if isFirstFilter {
+			for _, option := range options {
+				responsesMap[option] = true
+			}
+			isFirstFilter = false
+			continue
+		}
+
+		lookupMap := make(map[uuid.UUID]bool)
+		for _, option := range options {
+			lookupMap[option] = true
+		}
+		newMap := make(map[uuid.UUID]bool)
+		for response := range responsesMap {
+			if lookupMap[response] {
+				newMap[response] = true
+				continue
+			}
+		}
+		responsesMap = newMap
+	}
+
+	responses := make([]FormResponse, 0, len(responsesMap))
+	for response := range responsesMap {
+		info, err := s.queries.Get(traceCtx, GetParams{
+			ID:     response,
+			FormID: formId,
+		})
+		if err != nil {
+			err = databaseutil.WrapDBError(err, logger, "get response by id")
+			span.RecordError(err)
+			return nil, err
+		}
+
+		responses = append(responses, info)
+	}
+	return responses, nil
 }

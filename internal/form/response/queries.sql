@@ -60,3 +60,18 @@ SELECT
 FROM form_responses r
          JOIN forms f ON f.id = r.form_id
 WHERE r.id = $1;
+
+-- name: GetFilterResponsesByQuestionsAndOptions :many
+SELECT DISTINCT a.response_id
+From answers a
+         JOIN form_responses fr ON fr.id = a.response_id
+WHERE fr.form_id = $1
+  AND fr.progress = 'submitted'
+  AND a.question_id = $2
+  AND (
+    (a.value::jsonb ->> 'choiceId')::uuid = ANY(@option_ids::uuid[])
+        OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(a.value::jsonb -> 'choices') AS c
+          WHERE (c ->> 'choiceId')::uuid = ANY(@option_ids::uuid[])
+        )
+    );
