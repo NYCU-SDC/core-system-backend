@@ -1,0 +1,151 @@
+# ============================================
+# Phase 4: Verify GET Response
+# ============================================
+# For each scenario (A and B), GET the full form response and verify:
+#
+#   1. The RANKING question's `choices` field contains ONLY the options
+#      the user selected in the DETAILED_MULTIPLE_CHOICE question
+#      (not all 4 — just the ones they picked).
+#
+#   2. The RANKING answer's value reflects the order the user submitted.
+#
+# These checks confirm the full end-to-end path:
+#   answer.Service.List() -> resolveRankingChoices(nil) -> question.ToResponse(ranking)
+#   -> response.Choices = ranking.Rank (dynamically resolved)
+
+# Import answer submission from Phase 3
+# @import ./03-submit-answers.http
+
+###
+
+# ============================================
+# [A] GET response for Scenario A
+# Expected: Ranking choices = [Frontend, DevOps]
+#           Ranking answer  = DevOps > Frontend
+# ============================================
+# @name getResponseA
+# @ref submitBatchA
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseIdA}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal, deepEqual } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response A has correct structure', () => {
+        equal(data.id, responseIdA, 'Response ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        equal(data.sections.length, 1, 'Should have exactly 1 section');
+    });
+
+    const section = data.sections[0];
+    const dmcDetail    = section.answerDetails.find(d => d.question.id === dmcQuestionId);
+    const rankDetail   = section.answerDetails.find(d => d.question.id === rankingQuestionId);
+
+    test('[A] DMC question is present', () => {
+        equal(dmcDetail !== undefined, true, 'DMC answerDetail should exist');
+        equal(dmcDetail.question.type, 'DETAILED_MULTIPLE_CHOICE', 'Question type should be DETAILED_MULTIPLE_CHOICE');
+    });
+
+    test('[A] Ranking question has dynamically resolved choices', () => {
+        equal(rankDetail !== undefined, true, 'Ranking answerDetail should exist');
+        equal(rankDetail.question.type, 'RANKING', 'Question type should be RANKING');
+        equal(rankDetail.question.sourceId, dmcQuestionId, 'sourceId should reference the DMC question');
+
+        // Choices must be exactly the 2 options the user selected: Frontend + DevOps
+        const choices = rankDetail.question.choices;
+        equal(Array.isArray(choices), true, 'Ranking question should have a choices array');
+        equal(choices.length, 2, 'Ranking choices should contain exactly the 2 selected DMC options');
+
+        const choiceIds = choices.map(c => c.id);
+        equal(choiceIds.includes(dmcChoices[0].id), true, 'Frontend should be in ranking choices');
+        equal(choiceIds.includes(dmcChoices[2].id), true, 'DevOps should be in ranking choices');
+        // Backend and Data Science were NOT selected, so must not appear
+        equal(choiceIds.includes(dmcChoices[1].id), false, 'Backend should NOT be in ranking choices');
+        equal(choiceIds.includes(dmcChoices[3].id), false, 'Data Science should NOT be in ranking choices');
+    });
+
+    test('[A] Ranking answer has correct order', () => {
+        const payload = rankDetail.payload;
+        equal(payload !== null, true, 'Ranking answer payload should exist');
+
+        // payload.answer is a JSON object (json.RawMessage serialised inline)
+        const answer = payload.answer;
+        equal(answer.questionType, 'RANKING', 'answer.questionType should be RANKING');
+
+        // value is string[] in ranked order (DevOps first, Frontend second)
+        const value = answer.value;
+        equal(Array.isArray(value), true, 'answer.value should be an array');
+        equal(value.length, 2, 'Should have 2 ranked choices');
+        equal(value[0], dmcChoices[2].id, 'DevOps (rank 1) should be first');
+        equal(value[1], dmcChoices[0].id, 'Frontend (rank 2) should be second');
+
+        equal(payload.displayValue, 'DevOps > Frontend', 'Display value should show rank order');
+    });
+}}
+
+###
+
+# ============================================
+# [B] GET response for Scenario B
+# Expected: Ranking choices = [Backend, Data Science]
+#           Ranking answer  = Data Science > Backend
+# ============================================
+# @name getResponseB
+# @ref submitRankingB
+GET {{BASE_URL}}/forms/{{formId}}/responses/{{responseIdB}}
+
+{{
+    test.status(200);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+    const data = JSON.parse(response.body);
+
+    test('Response B has correct structure', () => {
+        equal(data.id, responseIdB, 'Response ID should match');
+        equal(data.formId, formId, 'Form ID should match');
+        equal(Array.isArray(data.sections), true, 'Sections should be an array');
+        equal(data.sections.length, 1, 'Should have exactly 1 section');
+    });
+
+    const section = data.sections[0];
+    const rankDetail = section.answerDetails.find(d => d.question.id === rankingQuestionId);
+
+    test('[B] Ranking question has dynamically resolved choices (via DB fallback)', () => {
+        equal(rankDetail !== undefined, true, 'Ranking answerDetail should exist');
+        equal(rankDetail.question.type, 'RANKING', 'Question type should be RANKING');
+        equal(rankDetail.question.sourceId, dmcQuestionId, 'sourceId should reference the DMC question');
+
+        // Choices must be exactly the 2 options the user selected: Backend + Data Science
+        const choices = rankDetail.question.choices;
+        equal(Array.isArray(choices), true, 'Ranking question should have a choices array');
+        equal(choices.length, 2, 'Ranking choices should contain exactly the 2 selected DMC options');
+
+        const choiceIds = choices.map(c => c.id);
+        equal(choiceIds.includes(dmcChoices[1].id), true, 'Backend should be in ranking choices');
+        equal(choiceIds.includes(dmcChoices[3].id), true, 'Data Science should be in ranking choices');
+        // Frontend and DevOps were NOT selected in scenario B
+        equal(choiceIds.includes(dmcChoices[0].id), false, 'Frontend should NOT be in ranking choices');
+        equal(choiceIds.includes(dmcChoices[2].id), false, 'DevOps should NOT be in ranking choices');
+    });
+
+    test('[B] Ranking answer has correct order', () => {
+        const payload = rankDetail.payload;
+        equal(payload !== null, true, 'Ranking answer payload should exist');
+
+        equal(payload.answer.questionType, 'RANKING', 'answer.questionType should be RANKING');
+
+        // value is string[] in ranked order (Data Science first, Backend second)
+        const value = payload.answer.value;
+        equal(Array.isArray(value), true, 'answer.value should be an array');
+        equal(value.length, 2, 'Should have 2 ranked choices');
+        equal(value[0], dmcChoices[3].id, 'Data Science (rank 1) should be first');
+        equal(value[1], dmcChoices[1].id, 'Backend (rank 2) should be second');
+
+        equal(payload.displayValue, 'Data Science > Backend', 'Display value should show rank order');
+    });
+}}

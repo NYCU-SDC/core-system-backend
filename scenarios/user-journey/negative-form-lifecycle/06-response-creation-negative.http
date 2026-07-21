@@ -1,0 +1,646 @@
+# ============================================
+# Negative Response Creation - Error paths for response and answer operations
+# ============================================
+# Variables (formId, responseId, shortTextQuestionId, etc.) come from the positive flow.
+
+# @import ../form-lifecycle/06-response-creation.http
+
+###
+
+# ============================================
+# PATCH answer: wrong questionType for question (SHORT_TEXT question with SINGLE_CHOICE type)
+# ============================================
+# @name patchAnswerWrongTypeForQuestion
+# @ref listFormResponses
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{shortTextQuestionId}}",
+            "questionType": "SINGLE_CHOICE",
+            "value": ["00000000-0000-0000-0000-000000000000"]
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH answer: invalid value type (LINEAR_SCALE expects number, send string)
+# ============================================
+# @name patchAnswerInvalidValueType
+# @ref patchAnswerWrongTypeForQuestion
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{linearScaleQuestionId}}",
+            "questionType": "LINEAR_SCALE",
+            "value": "eight"
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH answer: value out of range (LINEAR_SCALE 1-10, send 99)
+# ============================================
+# @name patchAnswerValueOutOfRange
+# @ref patchAnswerInvalidValueType
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{linearScaleQuestionId}}",
+            "questionType": "LINEAR_SCALE",
+            "value": 99
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH answer: DATE question with wrong type (send LINEAR_SCALE type and number)
+# ============================================
+# @name patchAnswerDateWithWrongType
+# @ref patchAnswerValueOutOfRange
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{dateQuestionId}}",
+            "questionType": "LINEAR_SCALE",
+            "value": 5
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH answer: SINGLE_CHOICE with string value instead of array
+# ============================================
+# @name patchAnswerChoiceWithWrongValueShape
+# @ref patchAnswerDateWithWrongType
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{singleChoiceQuestionId}}",
+            "questionType": "SINGLE_CHOICE",
+            "value": "Remote"
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH answer: invalid choice ID (non-existent option for question)
+# ============================================
+# @name patchAnswerInvalidChoiceId
+# @ref patchAnswerChoiceWithWrongValueShape
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{singleChoiceQuestionId}}",
+            "questionType": "SINGLE_CHOICE",
+            "value": ["00000000-0000-0000-0000-000000000000"]
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH answer: LONG_TEXT with wrong type (send RATING type and number)
+# ============================================
+# @name patchAnswerLongTextWrongType
+# @ref patchAnswerInvalidChoiceId
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{longTextQuestionId}}",
+            "questionType": "RATING",
+            "value": 3
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+}}
+
+###
+
+# ============================================
+# PATCH answer: HYPERLINK with wrong type (send SINGLE_CHOICE type and array)
+# ============================================
+# @name patchAnswerHyperlinkWrongType
+# @ref patchAnswerLongTextWrongType
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{hyperlinkQuestionId}}",
+            "questionType": "SINGLE_CHOICE",
+            "value": ["00000000-0000-0000-0000-000000000000"]
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+}}
+
+###
+
+# ============================================
+# PATCH answer: MULTIPLE_CHOICE with wrong type (send SHORT_TEXT type and string)
+# ============================================
+# @name patchAnswerMultipleChoiceWrongType
+# @ref patchAnswerHyperlinkWrongType
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{multipleChoiceQuestionId}}",
+            "questionType": "SHORT_TEXT",
+            "value": "JavaScript"
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+}}
+
+###
+
+# ============================================
+# PATCH answer: DROPDOWN with wrong type (send DATE type and string)
+# ============================================
+# @name patchAnswerDropdownWrongType
+# @ref patchAnswerMultipleChoiceWrongType
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{dropdownQuestionId}}",
+            "questionType": "DATE",
+            "value": "2024-01-01"
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+}}
+
+###
+
+# ============================================
+# PATCH answer: DETAILED_MULTIPLE_CHOICE with wrong type (send LINEAR_SCALE type and number)
+# ============================================
+# @name patchAnswerDetailedMultipleChoiceWrongType
+# @ref patchAnswerDropdownWrongType
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{detailedMultipleChoiceQuestionId}}",
+            "questionType": "LINEAR_SCALE",
+            "value": 5
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+}}
+
+###
+
+# ============================================
+# PATCH answer: RATING value out of range (scale 1-5, send 99)
+# ============================================
+# @name patchAnswerRatingOutOfRange
+# @ref patchAnswerDetailedMultipleChoiceWrongType
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{ratingQuestionId}}",
+            "questionType": "RATING",
+            "value": 99
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+}}
+
+###
+
+# ============================================
+# PATCH answer: RANKING with wrong value shape (string instead of array of choice ids)
+# ============================================
+# @name patchAnswerRankingWrongValueShape
+# @ref patchAnswerRatingOutOfRange
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{rankingQuestionId}}",
+            "questionType": "RANKING",
+            "value": "first,second,third"
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+}}
+
+###
+
+# ============================================
+# PATCH answer: UPLOAD_FILE with wrong type (send SHORT_TEXT type and string)
+# ============================================
+# Upload questions are answered via file upload endpoint; PATCH with text type should fail.
+# @name patchAnswerUploadFileWrongType
+# @ref patchAnswerRankingWrongValueShape
+PATCH {{BASE_URL}}/responses/{{responseId}}/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{uploadFileQuestionId}}",
+            "questionType": "SHORT_TEXT",
+            "value": "resume.pdf"
+        }
+    ]
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    test.status(400);
+}}
+
+###
+
+# ============================================
+# Create response for non-existent form ID (expect 404)
+# ============================================
+# @name createResponseNonExistentForm
+# @ref patchAnswerUploadFileWrongType
+POST {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/responses
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Get response with non-existent form ID (expect 404)
+# ============================================
+# @name getResponseNonExistentForm
+# @ref createResponseNonExistentForm
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/responses/{{responseId}}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Get response with non-existent response ID (expect 404)
+# ============================================
+# @name getResponseNonExistentResponseId
+# @ref getResponseNonExistentForm
+GET {{BASE_URL}}/forms/{{formId}}/responses/00000000-0000-0000-0000-000000000000
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# PATCH answers with non-existent response ID (expect 404)
+# ============================================
+# @name patchAnswersNonExistentResponse
+# @ref getResponseNonExistentResponseId
+PATCH {{BASE_URL}}/responses/00000000-0000-0000-0000-000000000000/answers
+Content-Type: application/json
+
+{
+    "answers": [
+        {
+            "questionId": "{{shortTextQuestionId}}",
+            "questionType": "SHORT_TEXT",
+            "value": "test"
+        }
+    ]
+}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Get question answer with non-existent response ID (expect 404)
+# ============================================
+# @name getQuestionAnswerNonExistentResponse
+# @ref patchAnswersNonExistentResponse
+GET {{BASE_URL}}/responses/00000000-0000-0000-0000-000000000000/questions/{{shortTextQuestionId}}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Submit with non-existent response ID (expect 404)
+# ============================================
+# @name submitNonExistentResponse
+# @ref getQuestionAnswerNonExistentResponse
+POST {{BASE_URL}}/responses/00000000-0000-0000-0000-000000000000/submit
+Content-Type: application/json
+
+{
+    "answers": []
+}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Cancel submission with non-existent response ID (expect 404)
+# ============================================
+# @name cancelNonExistentResponse
+# @ref submitNonExistentResponse
+POST {{BASE_URL}}/responses/00000000-0000-0000-0000-000000000000/cancel
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# List responses for non-existent form ID (expect 404)
+# ============================================
+# @name listResponsesNonExistentForm
+# @ref cancelNonExistentResponse
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/responses
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Create draft response for cancel validation
+# ============================================
+# @name createDraftResponseForCancel
+# @ref listResponsesNonExistentForm
+POST {{BASE_URL}}/forms/{{formId}}/responses
+
+?? status == 201
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Draft response created successfully', () => {
+        const data = JSON.parse(response.body);
+        equal(data.id !== undefined, true, 'Response ID should exist');
+        console.log('Created draft response:', data.id);
+    });
+
+    const data = JSON.parse(response.body);
+    exports.draftResponseId = data.id;
+}}
+
+###
+
+# ============================================
+# Cancel draft response submission (expect 400)
+# ============================================
+# @name cancelDraftResponseSubmission
+# @ref createDraftResponseForCancel
+POST {{BASE_URL}}/responses/{{draftResponseId}}/cancel
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Bad Request', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Bad Request', 'Response title should be Bad Request');
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###

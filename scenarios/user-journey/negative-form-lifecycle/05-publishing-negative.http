@@ -1,0 +1,241 @@
+# ============================================
+# Negative Form Publishing - Error paths for publish and publish-related reads
+# ============================================
+# Variables (formId, sectionNodeId, etc.) from Phase 4. We use 04 so we can break the workflow before testing publish.
+# For 404 cases we use a non-existent form ID.
+
+# @import ../form-lifecycle/04-question-management.http
+
+###
+
+# ============================================
+# Create condition node so workflow is not publishable
+# ============================================
+# A condition node without rule/connections can make the workflow invalid for publishing.
+# @name createConditionNodeForUnpublishableTest
+# @ref verifyQuestionDeletion
+POST {{BASE_URL}}/forms/{{formId}}/workflow/nodes
+Content-Type: application/json
+
+{
+    "type": "CONDITION",
+    "payload": { "x": 2.0, "y": 2.0 }
+}
+
+?? status == 201
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    if (data.id) {
+        exports.conditionNodeIdUnpublishable = data.id;
+    }
+    if (data.label) {
+        exports.conditionNodeLabelUnpublishable = data.label;
+    }
+}}
+
+###
+
+# ============================================
+# Publish form when workflow has condition node without rule/connections (not publishable) (expect 400)
+# ============================================
+# Condition node is not connected / has no rule; publish should fail.
+# @name publishFormWorkflowWithConditionNotPublishable
+# @ref createConditionNodeForUnpublishableTest
+POST {{BASE_URL}}/forms/{{formId}}/publish
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Update workflow: connect some but not all nodes (condition has only nextTrue, no nextFalse)
+# ============================================
+# START -> SECTION -> CONDITION ->(nextTrue only)-> END. Condition's nextFalse not set = partially connected.
+# @name updateWorkflowPartialConnect
+# @ref publishFormWorkflowWithConditionNotPublishable
+PUT {{BASE_URL}}/forms/{{formId}}/workflow
+Content-Type: application/json
+
+[
+    {
+        "id": "{{startNodeId}}",
+        "label": "開始表單",
+        "payload": { "x": 0.0, "y": 0.0 },
+        "next": "{{sectionNodeId}}"
+    },
+    {
+        "id": "{{sectionNodeId}}",
+        "label": "{{sectionNodeLabel}}",
+        "payload": { "x": 1.0, "y": 2.0 },
+        "next": "{{conditionNodeIdUnpublishable}}"
+    },
+    {
+        "id": "{{conditionNodeIdUnpublishable}}",
+        "label": "{{conditionNodeLabelUnpublishable}}",
+        "payload": { "x": 2.0, "y": 2.0 },
+        "nextTrue": "{{endNodeId}}"
+    },
+    {
+        "id": "{{endNodeId}}",
+        "label": "確認/送出",
+        "payload": { "x": 0.0, "y": 1.0 }
+    }
+]
+
+?? status == 200
+{{
+    test.hasResponseBody();
+}}
+
+###
+
+# ============================================
+# Publish form when workflow has some but not all nodes connected (expect 400)
+# ============================================
+# Condition node has only nextTrue; nextFalse missing = not publishable.
+# @name publishFormWorkflowPartiallyConnectedNotPublishable
+# @ref updateWorkflowPartialConnect
+POST {{BASE_URL}}/forms/{{formId}}/publish
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Delete section node so workflow is not publishable (START/END only)
+# ============================================
+# @name deleteSectionNodeForUnpublishableTest
+# @ref publishFormWorkflowPartiallyConnectedNotPublishable
+DELETE {{BASE_URL}}/forms/{{formId}}/workflow/nodes/{{sectionNodeId}}
+
+?? status == 204
+{{
+    test.status(204);
+}}
+
+###
+
+# ============================================
+# Publish form when workflow is not publishable (expect 400)
+# ============================================
+# Workflow has no section node; publish should fail with validation error.
+# @name publishFormWorkflowNotPublishable
+# @ref deleteSectionNodeForUnpublishableTest
+POST {{BASE_URL}}/forms/{{formId}}/publish
+
+?? status == 400
+{{
+    test.hasResponseBody();
+    const { equal } = require('assert');
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+    });
+}}
+
+###
+
+# ============================================
+# Get form with non-existent form ID (expect 404)
+# ============================================
+# @name getFormNonExistentPublish
+# @ref publishFormWorkflowNotPublishable
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Get workflow with non-existent form ID (expect 404)
+# ============================================
+# @name getWorkflowNonExistentFormPublish
+# @ref getFormNonExistentPublish
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/workflow
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Get sections with non-existent form ID (expect 404)
+# ============================================
+# @name getSectionsNonExistentFormPublish
+# @ref getWorkflowNonExistentFormPublish
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/sections
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Publish form with non-existent form ID (expect 404)
+# ============================================
+# @name publishFormNonExistent
+# @ref getSectionsNonExistentFormPublish
+POST {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/publish
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###

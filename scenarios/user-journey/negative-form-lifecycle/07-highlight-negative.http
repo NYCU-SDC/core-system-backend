@@ -1,0 +1,107 @@
+# ============================================
+# Negative Form Highlight - Error paths for highlight operations
+# ============================================
+# Variables (formId, shortTextQuestionId, etc.) come from the positive flow.
+
+# @import ../form-lifecycle/06a-form-highlight.http
+
+###
+
+# ============================================
+# Set highlight to non-choice question (expect 400)
+# ============================================
+# @name setHighlightNonChoiceQuestion
+# @ref getHighlightAfterClear
+PUT {{BASE_URL}}/forms/{{formId}}/highlight
+Content-Type: application/json
+
+{
+    "questionId": "{{shortTextQuestionId}}",
+    "displayTitle": "Invalid Highlight"
+}
+
+?? status == 400
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates validation/problem', () => {
+        const data = JSON.parse(response.body);
+        equal(data.status, 400, 'Status in body should be 400');
+        equal(data.title, 'Validation Problem', 'Response title should be Validation Problem');
+    });
+}}
+
+###
+
+# ============================================
+# Get highlight for non-existent form ID (expect 404)
+# ============================================
+# @name getHighlightNonExistentForm
+# @ref setHighlightNonChoiceQuestion
+GET {{BASE_URL}}/forms/00000000-0000-0000-0000-000000000000/highlight
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Patch highlight before one is configured (expect 404)
+# ============================================
+# @name patchHighlightBeforeConfiguration
+# @ref getHighlightNonExistentForm
+PATCH {{BASE_URL}}/forms/{{formId}}/highlight
+Content-Type: application/json
+
+{
+    "displayTitle": "No Highlight Exists"
+}
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###
+
+# ============================================
+# Clear highlight before one is configured (expect 404)
+# ============================================
+# @name clearHighlightBeforeConfiguration
+# @ref patchHighlightBeforeConfiguration
+DELETE {{BASE_URL}}/forms/{{formId}}/highlight
+
+?? status == 404
+{{
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Not Found', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Not Found', 'Response title should be Not Found');
+        equal(data.status, 404, 'Status in body should be 404');
+    });
+}}
+
+###

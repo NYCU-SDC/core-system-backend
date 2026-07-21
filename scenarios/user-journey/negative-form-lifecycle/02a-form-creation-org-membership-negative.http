@@ -1,0 +1,83 @@
+# ============================================
+# Negative Form Creation - Organization Membership Error Path
+# ============================================
+# Import 01-setup (auth, verifyOrg). Import organization-lifecycle to get orgSlugNotMember (org that exists, user not a member). Then 403 test, then 02-form-creation for variables.
+
+# @import ../form-lifecycle/01-setup.http
+# @import ../form-lifecycle/02-form-creation.http
+
+# @import ../organization-lifecycle/01-organization-creation.http
+
+###
+
+# ============================================
+# Create form under org before user is a member (expect 403)
+# ============================================
+# Uses org from organization-lifecycle: org exists but current user is not a member.
+# @name createFormBeforeMember
+# @ref createOrgFor403Test
+POST {{BASE_URL}}/orgs/{{orgSlugNotMember}}/forms
+Content-Type: application/json
+
+{
+    "title": "Should Be Forbidden",
+    "description": "User not yet a member",
+    "visibility": "PUBLIC"
+}
+
+?? status == 403
+{{
+    test.status(403);
+    test.hasResponseBody();
+
+    const { equal } = require('assert');
+
+    test('Error body indicates Forbidden', () => {
+        const data = JSON.parse(response.body);
+        equal(data.title, 'Forbidden', 'Response title should be Forbidden');
+        equal(data.status, 403, 'Status in body should be 403');
+    });
+}}
+
+###
+
+# ============================================
+# Get User Email
+# ============================================
+# @name getUserEmail
+# @ref createFormBeforeMember
+GET {{BASE_URL}}/users/me
+
+?? status == 200
+{{
+    test.hasResponseBody();
+    const data = JSON.parse(response.body);
+    exports.userEmail = data.emails[0];
+}}
+
+###
+
+# ============================================
+# Add User to Organization
+# ============================================
+# @name addUserBackToOrg
+# @ref getUserEmail
+POST {{BASE_URL}}/orgs/{{orgSlugNotMember}}/members
+Content-Type: application/json
+
+{
+    "email": "{{userEmail}}"
+}
+
+?? status <= 201
+
+###
+
+# ============================================
+# Delete Organization
+# ============================================
+# @name deleteOrg
+# @ref addUserBackToOrg
+DELETE {{BASE_URL}}/orgs/{{orgSlugNotMember}}
+
+?? status == 204

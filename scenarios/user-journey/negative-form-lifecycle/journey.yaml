@@ -1,0 +1,65 @@
+name: "Negative Form Lifecycle"
+description: "Negative coverage for setup, form CRUD, workflow, questions, publishing, responses, and highlight validation."
+cases:
+  - name: "Invalid Organization Lookup"
+    description: "Verify the API returns the expected not-found response for a non-existent organization slug."
+    domains:
+      - access-control
+      - unit
+    path: "01-setup-negative.http"
+    test: "getOrgInvalidSlug"
+
+  - name: "Form CRUD Validation"
+    description: "Cover invalid form creation payloads together with non-existent form read and update requests."
+    domains:
+      - form-core
+    path: "02-form-creation-negative.http"
+    test: "updateFormNonExistent"
+
+  - name: "Forbidden Organization Access"
+    description: "Verify form creation is forbidden for a non-member organization, then restore membership and clean up the test organization."
+    domains:
+      - access-control
+      - unit
+      - form-core
+    path: "02a-form-creation-org-membership-negative.http"
+    test: "deleteOrg"
+
+  - name: "Workflow Validation"
+    description: "Cover missing-form workflow operations and invalid workflow node payloads."
+    domains:
+      - form-workflow
+    path: "03-workflow-negative.http"
+    test: "getSectionsNonExistentForm"
+
+  - name: "Question Validation"
+    description: "Cover invalid question payloads, ordering edge cases, and missing question resources."
+    domains:
+      - form-question
+    path: "04-question-management-negative.http"
+    test: "getSectionsNonExistentForm"
+
+  - name: "Publish Validation"
+    description: "Verify publishing fails for invalid workflow states and non-existent publish targets."
+    domains:
+      - form-core
+      - form-workflow
+      - form-publish
+    path: "05-publishing-negative.http"
+    test: "publishFormNonExistent"
+
+  - name: "Response Validation"
+    description: "Cover invalid answer payloads, missing responses, missing forms, and cancellation edge cases."
+    domains:
+      - form-question
+      - form-response
+    path: "06-response-creation-negative.http"
+    test: "cancelDraftResponseSubmission"
+
+  - name: "Highlight Validation"
+    description: "Verify highlight APIs reject invalid question types, missing forms, and updates before configuration."
+    domains:
+      - form-highlight
+      - form-question
+    path: "07-highlight-negative.http"
+    test: "clearHighlightBeforeConfiguration"

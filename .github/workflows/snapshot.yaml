@@ -204,3 +204,94 @@ jobs:
                 }
               }
             }'
+
+  ScenarioQA:
+    needs: Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      QA_BASE_URL: http://localhost:18080/api
+      QA_LOGIN_USER_ID: 4eb1b1e2-7bd5-4b08-b3b5-2d3e0459516e
+      BACKEND_IMAGE: nycusdc/core-system-backend:pr-${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
+          password: ${{ secrets.DOCKER_REGISTRY_TOKEN }}
+
+      - name: Pull backend image for QA
+        run: docker pull ${BACKEND_IMAGE}
+
+      - name: Start QA backend stack
+        run: docker compose -f .deploy/ci/compose.yaml up -d --wait --wait-timeout 300
+
+      - name: Collect PR changed files for QA selector
+        id: qa-changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100
+            });
+
+            const changedFiles = {
+              files: files.map((file) => ({
+                path: file.filename,
+                previousPath: file.previous_filename || '',
+                status: file.status
+              }))
+            };
+
+            const issueLabels = await github.paginate(github.rest.issues.listLabelsOnIssue, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              per_page: 100
+            });
+
+            const labels = issueLabels.map((label) => label.name);
+
+            fs.writeFileSync('changed-files.json', JSON.stringify(changedFiles, null, 2));
+            core.setOutput('labels', JSON.stringify(labels));
+
+      - name: Prepare reports dir
+        run: mkdir -p reports
+
+      - name: Run httpYac Tests
+        id: httpyac-tests
+        uses: NYCU-SDC/httpyac-action@feat/CORE-367-qa-test-selection
+        with:
+          scenarios-path: "./scenarios"
+          changed-files-path: "./changed-files.json"
+          labels: ${{ steps.qa-changes.outputs.labels }}
+          output-dir: "./reports"
+          env: |
+            BASE_URL=${{ env.QA_BASE_URL }}
+            LOGIN_USER_ID=${{ env.QA_LOGIN_USER_ID }}
+
+      - name: List generated reports
+        if: always()
+        run: ls -lah reports/ || echo "No reports directory found"
+      
+      - name: Upload test reports artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          path: reports/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Teardown compose
+        if: always()
+        run: docker compose -f .deploy/ci/compose.yaml down -v

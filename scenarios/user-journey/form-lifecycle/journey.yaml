@@ -1,0 +1,26 @@
+name: "Form Lifecycle"
+description: "Positive end-to-end coverage for the form lifecycle, including highlight management and archive recovery."
+cases:
+  - name: "Highlight Lifecycle"
+    description: "Verify highlight configuration, statistics, title updates, and cleanup on a published form."
+    domains:
+      - form-highlight
+      - form-question
+      - form-response
+    path: "06a-form-highlight.http"
+    test: "getHighlightAfterClear"
+
+  - name: "Archive And Restore"
+    description: "Verify archiving, listing visibility changes, unarchive behavior, and successful re-publication."
+    domains:
+      - form-core
+      - form-publish
+    path: "07-form-archiving.http"
+    test: "verifyFormRepublished"
+
+  - name: "View Management"
+    description: "Verify view CRUD, title/order updates, lock/unlock, duplicate with conflict resolution, and deletion."
+    domains:
+      - form-view
+    path: "08-view-management.http"
+    test: "verifyViewDeletion"

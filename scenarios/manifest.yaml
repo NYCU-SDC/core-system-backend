@@ -1,0 +1,101 @@
+defaults:
+  always_run:
+    - smoke
+  ignore_paths:
+    - cmd/backend/main.go
+    - internal/**/models.go
+    - internal/**/db.go
+    - internal/**/queries.sql.go
+    - internal/database/**
+    - internal/config/**
+    - internal/setup/**
+    - internal/*.go
+    - internal/**/*_test.go
+    - test/**
+    - scripts/**
+    - .github/**
+    - .deploy/**
+    - sqlc.yaml
+    - scenarios/**/*.example
+    - scenarios/**/*.md
+    - scenarios/user-journey/shared/**
+
+domains:
+  access-control:
+    paths:
+      - internal/auth/**
+      - internal/jwt/**
+
+  user:
+    paths:
+      - internal/user/**
+
+  unit:
+    paths:
+      - internal/unit/**
+      - internal/tenant/**
+
+  form-core:
+    paths:
+      - internal/form/*.go
+      - internal/form/*.sql
+      - internal/form/font/**
+      - internal/markdown/**
+
+  form-question:
+    paths:
+      - internal/form/question/**
+      - internal/form/shared/**
+
+  form-response:
+    paths:
+      - internal/form/response/**
+      - internal/form/answer/**
+      - internal/form/submit/**
+      - internal/file/**
+
+  form-workflow:
+    paths:
+      - internal/form/workflow/**
+
+  form-highlight:
+    paths:
+      - internal/form/highlight/**
+
+  form-view:
+    paths:
+      - internal/form/view/**
+
+  form-publish:
+    paths:
+      - internal/publish/**
+      - internal/distribute/**
+      - internal/inbox/**
+
+labels:
+  qa:full:
+    mode: full
+  qa:form:
+    domains:
+      - form-core
+      - form-highlight
+      - form-view
+      - form-question
+      - form-workflow
+      - form-response
+      - form-publish
+  qa:form-core:
+    domains:
+      - form-core
+  qa:unit:
+    domains:
+      - unit
+  qa:workflow:
+    domains:
+      - form-workflow
+  qa:negative:
+    journeys:
+      - negative-form-lifecycle
+  qa:ranking:
+    journeys:
+      - form-rank-from-source-id
