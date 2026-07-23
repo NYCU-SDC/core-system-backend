@@ -27,15 +27,16 @@ type Request struct {
 }
 
 type Response struct {
-	ID        string    `json:"id"`
-	FormID    string    `json:"formId"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Progress  string    `json:"progress"`
+	ID          string    `json:"id"`
+	FormID      string    `json:"formId"`
+	CreatedAt   time.Time `json:"createdAt"`
+	SubmittedAt time.Time `json:"updatedAt"`
+	Progress    string    `json:"progress"`
 }
 
 type Operator interface {
 	Submit(ctx context.Context, responseID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
+	SendSubmissionEmails(ctx context.Context, userID uuid.UUID, formResponse response.FormResponse)
 }
 
 // ResponseStore is the minimal interface needed to verify response ownership before submission.
@@ -123,12 +124,20 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	submitResponse := Response{
-		ID:        newResponse.ID.String(),
-		FormID:    newResponse.FormID.String(),
-		CreatedAt: newResponse.CreatedAt.Time,
-		UpdatedAt: newResponse.UpdatedAt.Time,
-		Progress:  strings.ToUpper(string(newResponse.Progress)),
+		ID:          newResponse.ID.String(),
+		FormID:      newResponse.FormID.String(),
+		CreatedAt:   newResponse.CreatedAt.Time,
+		SubmittedAt: newResponse.SubmittedAt.Time,
+		Progress:    strings.ToUpper(string(newResponse.Progress)),
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, submitResponse)
+
+	backgroundCtx := context.WithoutCancel(traceCtx)
+
+	go h.operator.SendSubmissionEmails(
+		backgroundCtx,
+		currentUser.ID,
+		newResponse,
+	)
 }

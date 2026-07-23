@@ -20,6 +20,18 @@ import (
 	"go.uber.org/zap"
 )
 
+type UserStore interface {
+	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
+}
+
+type Mailer interface {
+	SendSubmissionMail(
+		ctx context.Context,
+		to string,
+		response response.FormResponse,
+	) error
+}
+
 type AnswerStore interface {
 	Upsert(ctx context.Context, formID, responseID uuid.UUID, answers []shared.AnswerParam) ([]answer.Answer, []answer.Answerable, []error)
 }
@@ -51,9 +63,11 @@ type Service struct {
 	questionStore QuestionStore
 	responseStore FormResponseStore
 	answerStore   AnswerStore
+	userStore     UserStore
+	mailer        Mailer
 }
 
-func NewService(logger *zap.Logger, formStore FormStore, questionStore QuestionStore, formResponseStore FormResponseStore, answerStore AnswerStore) *Service {
+func NewService(logger *zap.Logger, formStore FormStore, questionStore QuestionStore, formResponseStore FormResponseStore, answerStore AnswerStore, userStore UserStore, mailer Mailer) *Service {
 	return &Service{
 		logger:        logger,
 		tracer:        otel.Tracer("submit/service"),
@@ -61,6 +75,8 @@ func NewService(logger *zap.Logger, formStore FormStore, questionStore QuestionS
 		questionStore: questionStore,
 		responseStore: formResponseStore,
 		answerStore:   answerStore,
+		userStore:     userStore,
+		mailer:        mailer,
 	}
 }
 
@@ -283,5 +299,42 @@ func compareUserForms(now time.Time) func(a, b form.UserForm) int {
 		}
 
 		return 0
+	}
+}
+
+func (s *Service) SendSubmissionEmails(
+	ctx context.Context,
+	userID uuid.UUID,
+	newResponse response.FormResponse,
+) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	ctx, span := s.tracer.Start(ctx, "SendSubmissionEmails")
+	defer span.End()
+
+	logger := logutil.WithContext(ctx, s.logger)
+
+	emails, err := s.userStore.GetEmails(ctx, userID)
+	if err != nil {
+		logger.Error(
+			"get user emails failed",
+			zap.Error(err),
+			zap.String("user_id", userID.String()),
+			zap.String("response_id", newResponse.ID.String()),
+		)
+		return
+	}
+
+	for _, email := range emails {
+		if err := s.mailer.SendSubmissionMail(ctx, email, newResponse); err != nil {
+			logger.Error(
+				"send submission email failed",
+				zap.Error(err),
+				zap.String("email", email),
+				zap.String("user_id", userID.String()),
+				zap.String("response_id", newResponse.ID.String()),
+			)
+		}
 	}
 }
