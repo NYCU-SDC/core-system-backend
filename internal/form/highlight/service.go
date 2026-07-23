@@ -23,7 +23,7 @@ import (
 type Querier interface {
 	GetByFormID(ctx context.Context, formID uuid.UUID) (FormHighlight, error)
 	UpsertByFormID(ctx context.Context, arg UpsertByFormIDParams) (FormHighlight, error)
-	DeleteByFormID(ctx context.Context, formID uuid.UUID) error
+	DeleteByFormID(ctx context.Context, formID uuid.UUID) (int64, error)
 	UpdateDisplayTitleByFormID(ctx context.Context, arg UpdateDisplayTitleByFormIDParams) (FormHighlight, error)
 	GetQuestionByFormIDAndQuestionID(ctx context.Context, arg GetQuestionByFormIDAndQuestionIDParams) (GetQuestionByFormIDAndQuestionIDRow, error)
 	ListAnswerValuesByQuestionID(ctx context.Context, questionID uuid.UUID) ([][]byte, error)
@@ -229,11 +229,14 @@ func (s *Service) Clear(ctx context.Context, formID uuid.UUID) error {
 		return internal.ErrFormNotFound
 	}
 
-	err = s.queries.DeleteByFormID(traceCtx, formID)
+	rowsAffected, err := s.queries.DeleteByFormID(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "delete form highlight")
 		span.RecordError(err)
 		return err
+	}
+	if rowsAffected == 0 {
+		return internal.ErrHighlightNotFound
 	}
 
 	return nil

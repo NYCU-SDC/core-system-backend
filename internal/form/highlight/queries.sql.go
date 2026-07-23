@@ -12,14 +12,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteByFormID = `-- name: DeleteByFormID :exec
+const deleteByFormID = `-- name: DeleteByFormID :execrows
 DELETE FROM form_highlights
 WHERE form_id = $1
 `
 
-func (q *Queries) DeleteByFormID(ctx context.Context, formID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteByFormID, formID)
-	return err
+func (q *Queries) DeleteByFormID(ctx context.Context, formID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteByFormID, formID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getByFormID = `-- name: GetByFormID :one

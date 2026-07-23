@@ -13,7 +13,7 @@ DO UPDATE SET
     updated_at = now()
 RETURNING *;
 
--- name: DeleteByFormID :exec
+-- name: DeleteByFormID :execrows
 DELETE FROM form_highlights
 WHERE form_id = $1;
 
