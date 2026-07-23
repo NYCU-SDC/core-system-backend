@@ -169,6 +169,15 @@ func main() {
 		logger.Fatal("Failed to load setup configuration", zap.Error(err))
 	}
 
+	smtpSender := email.NewSMTPSender(
+		cfg.SMTP.Host,
+		cfg.SMTP.Port,
+		cfg.SMTP.Username,
+		cfg.SMTP.Password,
+		cfg.SMTP.From,
+	)
+	emailService := email.NewService(smtpSender)
+
 	userService := user.NewService(logger, dbPool, fileService, unitService, unitService, &setupCfg)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
@@ -180,18 +189,8 @@ func main() {
 	inboxService := inbox.NewService(logger, dbPool)
 	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService, formService, userService)
 	highlightService := highlight.NewService(logger, dbPool, formService)
-	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
+	submitService := submit.NewService(logger, formService, questionService, responseService, answerService, userService, emailService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
-
-	smtpSender := email.NewSMTPSender(
-		cfg.SMTP.Host,
-		cfg.SMTP.Port,
-		cfg.SMTP.Username,
-		cfg.SMTP.Password,
-		cfg.SMTP.From,
-	)
-
-	emailService := email.NewService(smtpSender)
 
 	setupService := setup.NewService(logger, setupCfg, unitService, userService)
 	err = setupService.Setup(context.Background())
@@ -210,7 +209,7 @@ func main() {
 	unitHandler := unit.NewHandler(logger, validator, problemWriter, unitService, submitService, tenantService, userService)
 	responseHandler := response.NewHandler(logger, validator, problemWriter, responseService, questionService)
 	highlightHandler := highlight.NewHandler(logger, validator, problemWriter, highlightService)
-	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService, responseService, userService, emailService)
+	submitHandler := submit.NewHandler(logger, validator, problemWriter, submitService, responseService)
 	publishHandler := publish.NewHandler(logger, validator, problemWriter, publishService)
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)

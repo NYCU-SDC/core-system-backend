@@ -27,32 +27,21 @@ type Request struct {
 }
 
 type Response struct {
-	ID        string    `json:"id"`
-	FormID    string    `json:"formId"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Progress  string    `json:"progress"`
+	ID          string    `json:"id"`
+	FormID      string    `json:"formId"`
+	CreatedAt   time.Time `json:"createdAt"`
+	SubmittedAt time.Time `json:"updatedAt"`
+	Progress    string    `json:"progress"`
 }
 
 type Operator interface {
 	Submit(ctx context.Context, responseID uuid.UUID, answers []shared.AnswerParam) (response.FormResponse, []error)
+	SendSubmissionEmails(ctx context.Context, userID uuid.UUID, formResponse response.FormResponse)
 }
 
 // ResponseStore is the minimal interface needed to verify response ownership before submission.
 type ResponseStore interface {
 	GetSubmittedBy(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
-}
-
-type Mailer interface {
-	SendSubmissionMail(
-		ctx context.Context,
-		to string,
-		response response.FormResponse,
-	) error
-}
-
-type UserStore interface {
-	GetEmails(ctx context.Context, userID uuid.UUID) ([]string, error)
 }
 
 type Handler struct {
@@ -61,20 +50,16 @@ type Handler struct {
 	problemWriter *problem.HttpWriter
 	operator      Operator
 	responseStore ResponseStore
-	userStore     UserStore
-	mailer        Mailer
 	tracer        trace.Tracer
 }
 
-func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, operator Operator, responseStore ResponseStore, userStore UserStore, mailer Mailer) *Handler {
+func NewHandler(logger *zap.Logger, validator *validator.Validate, problemWriter *problem.HttpWriter, operator Operator, responseStore ResponseStore) *Handler {
 	return &Handler{
 		logger:        logger,
 		validator:     validator,
 		problemWriter: problemWriter,
 		operator:      operator,
 		responseStore: responseStore,
-		userStore:     userStore,
-		mailer:        mailer,
 		tracer:        otel.Tracer("response/handler"),
 	}
 }
@@ -139,57 +124,20 @@ func (h *Handler) SubmitHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	submitResponse := Response{
-		ID:        newResponse.ID.String(),
-		FormID:    newResponse.FormID.String(),
-		CreatedAt: newResponse.CreatedAt.Time,
-		UpdatedAt: newResponse.UpdatedAt.Time,
-		Progress:  strings.ToUpper(string(newResponse.Progress)),
+		ID:          newResponse.ID.String(),
+		FormID:      newResponse.FormID.String(),
+		CreatedAt:   newResponse.CreatedAt.Time,
+		SubmittedAt: newResponse.SubmittedAt.Time,
+		Progress:    strings.ToUpper(string(newResponse.Progress)),
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusCreated, submitResponse)
 
 	backgroundCtx := context.WithoutCancel(traceCtx)
 
-	go h.sendSubmissionEmails(
+	go h.operator.SendSubmissionEmails(
 		backgroundCtx,
 		currentUser.ID,
 		newResponse,
 	)
-}
-
-func (h *Handler) sendSubmissionEmails(
-	ctx context.Context,
-	userID uuid.UUID,
-	newResponse response.FormResponse,
-) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
-	ctx, span := h.tracer.Start(ctx, "SendSubmissionEmails")
-	defer span.End()
-
-	logger := logutil.WithContext(ctx, h.logger)
-
-	emails, err := h.userStore.GetEmails(ctx, userID)
-	if err != nil {
-		logger.Error(
-			"get user emails failed",
-			zap.Error(err),
-			zap.String("user_id", userID.String()),
-			zap.String("response_id", newResponse.ID.String()),
-		)
-		return
-	}
-
-	for _, email := range emails {
-		if err := h.mailer.SendSubmissionMail(ctx, email, newResponse); err != nil {
-			logger.Error(
-				"send submission email failed",
-				zap.Error(err),
-				zap.String("email", email),
-				zap.String("user_id", userID.String()),
-				zap.String("response_id", newResponse.ID.String()),
-			)
-		}
-	}
 }

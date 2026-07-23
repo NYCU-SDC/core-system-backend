@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const defaultSMTPTimeout = 10 * time.Second
+
 type SMTPSender struct {
 	host     string
 	port     string
@@ -33,7 +35,7 @@ func NewSMTPSender(
 		username: username,
 		password: password,
 		from:     from,
-		timeout:  10 * time.Second,
+		timeout:  defaultSMTPTimeout,
 	}
 }
 
@@ -43,17 +45,21 @@ func (s *SMTPSender) Send(
 	subject string,
 	body string,
 ) error {
-	if err := ctx.Err(); err != nil {
+	err := ctx.Err()
+	if err != nil {
 		return err
 	}
 
-	if err := validateHeader("from", s.from); err != nil {
+	err = validateHeader("from", s.from)
+	if err != nil {
 		return err
 	}
-	if err := validateHeader("to", to); err != nil {
+	err = validateHeader("to", to)
+	if err != nil {
 		return err
 	}
-	if err := validateHeader("subject", subject); err != nil {
+	err = validateHeader("subject", subject)
+	if err != nil {
 		return err
 	}
 
@@ -72,11 +78,13 @@ func (s *SMTPSender) Send(
 	}()
 
 	deadline := time.Now().Add(s.timeout)
-	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+	ctxDeadline, ok := ctx.Deadline()
+	if ok && ctxDeadline.Before(deadline) {
 		deadline = ctxDeadline
 	}
 
-	if err := conn.SetDeadline(deadline); err != nil {
+	err = conn.SetDeadline(deadline)
+	if err != nil {
 		return fmt.Errorf("set smtp deadline: %w", err)
 	}
 
@@ -93,7 +101,8 @@ func (s *SMTPSender) Send(
 		MinVersion: tls.VersionTLS12,
 	}
 
-	if err := client.StartTLS(tlsConfig); err != nil {
+	err = client.StartTLS(tlsConfig)
+	if err != nil {
 		return fmt.Errorf("smtp start TLS: %w", err)
 	}
 
@@ -104,15 +113,18 @@ func (s *SMTPSender) Send(
 		s.host,
 	)
 
-	if err := client.Auth(auth); err != nil {
+	err = client.Auth(auth)
+	if err != nil {
 		return fmt.Errorf("smtp auth: %w", err)
 	}
 
-	if err := client.Mail(s.from); err != nil {
+	err = client.Mail(s.from)
+	if err != nil {
 		return fmt.Errorf("smtp MAIL FROM: %w", err)
 	}
 
-	if err := client.Rcpt(to); err != nil {
+	err = client.Rcpt(to)
+	if err != nil {
 		return fmt.Errorf("smtp RCPT TO: %w", err)
 	}
 
@@ -133,16 +145,19 @@ func (s *SMTPSender) Send(
 			body + "\r\n",
 	)
 
-	if _, err := writer.Write(message); err != nil {
+	_, err = writer.Write(message)
+	if err != nil {
 		_ = writer.Close()
 		return fmt.Errorf("write smtp message: %w", err)
 	}
 
-	if err := writer.Close(); err != nil {
+	err = writer.Close()
+	if err != nil {
 		return fmt.Errorf("close smtp message: %w", err)
 	}
 
-	if err := client.Quit(); err != nil {
+	err = client.Quit()
+	if err != nil {
 		return fmt.Errorf("smtp quit: %w", err)
 	}
 
