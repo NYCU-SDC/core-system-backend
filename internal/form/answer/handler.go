@@ -871,6 +871,7 @@ func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
 
 	responseItems := make([]FilterAnswerResponseItem, 0, len(answers))
 	for _, answer := range answers {
+		// nolint:staticcheck
 		responseItem := FilterAnswerResponseItem{
 			DisplayValue: answer.DisplayValue,
 			Option:       answer.Option,
