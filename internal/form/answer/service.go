@@ -695,9 +695,9 @@ func (s Service) MergeAnswersForWorkflowResolution(
 }
 
 type FilterAnswerItem struct {
-	DisplayValue string    `json:"displayValue"`
-	Option       uuid.UUID `json:"option"`
-	Selected     bool      `json:"selected"`
+	DisplayValue string
+	Option       uuid.UUID
+	Selected     bool
 }
 
 func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, selectedOptions []uuid.UUID) ([]FilterAnswerItem, error) {
@@ -705,7 +705,7 @@ func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, se
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
-	questionExist, err := s.queries.QuestionExists(ctx, questionID)
+	questionExist, err := s.queries.QuestionExists(traceCtx, questionID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check if the question exists")
 		span.RecordError(err)
@@ -720,7 +720,7 @@ func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, se
 		selectedMap[option] = true
 	}
 
-	answers, err := s.queries.ListDistinctAnswersByQuestionId(ctx, questionID)
+	answers, err := s.queries.ListDistinctAnswersByQuestionId(traceCtx, questionID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list distinct answers by questionId")
 		span.RecordError(err)

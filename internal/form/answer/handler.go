@@ -63,8 +63,8 @@ type FilterAnswerRequest struct {
 		QuestionID uuid.UUID `json:"questionId" validate:"required"`
 		Answers    []struct {
 			Option uuid.UUID `json:"option" validate:"required"`
-		} `json:"answers" validate:"required,min=1"`
-	} `json:"filters" validate:"required,min=1"`
+		} `json:"answers" validate:"required,dive"`
+	} `json:"filters" validate:"required,dive"`
 }
 
 type FilterAnswerResponseItem struct {
@@ -869,9 +869,13 @@ func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var responseItems []FilterAnswerResponseItem
+	responseItems := make([]FilterAnswerResponseItem, 0, len(answers))
 	for _, answer := range answers {
-		responseItem := FilterAnswerResponseItem(answer)
+		responseItem := FilterAnswerResponseItem{
+			DisplayValue: answer.DisplayValue,
+			Option:       answer.Option,
+			Selected:     answer.Selected,
+		}
 		responseItems = append(responseItems, responseItem)
 	}
 
