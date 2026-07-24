@@ -29,6 +29,8 @@ type Querier interface {
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
 	WithTx(tx pgx.Tx) *Queries
+	ListDistinctAnswersByQuestionId(ctx context.Context, questionID uuid.UUID) ([][]byte, error)
+	QuestionExists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type QuestionStore interface {
@@ -690,4 +692,98 @@ func (s Service) MergeAnswersForWorkflowResolution(
 		zap.Int("mergedAnswerCount", len(out)),
 	)
 	return out, nil
+}
+
+type FilterAnswerItem struct {
+	DisplayValue string
+	Option       uuid.UUID
+	Selected     bool
+}
+
+func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, selectedOptions []uuid.UUID) ([]FilterAnswerItem, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListFilterAnswers")
+	defer span.End()
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	questionExist, err := s.queries.QuestionExists(traceCtx, questionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "check if the question exists")
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to check if the question exists: %w", err)
+	}
+	if !questionExist {
+		return nil, internal.ErrQuestionNotFound
+	}
+
+	selectedMap := make(map[uuid.UUID]bool, len(selectedOptions))
+	for _, option := range selectedOptions {
+		selectedMap[option] = true
+	}
+
+	answers, err := s.queries.ListDistinctAnswersByQuestionId(traceCtx, questionID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list distinct answers by questionId")
+		span.RecordError(err)
+		return nil, fmt.Errorf("failed to list distinct answers by questionId: %w", err)
+	}
+
+	var items []FilterAnswerItem
+	seen := make(map[uuid.UUID]bool)
+
+	for _, raw := range answers {
+		var choiceType struct {
+			ChoiceId *uuid.UUID         `json:"choiceId"`
+			Choices  *[]json.RawMessage `json:"choices"`
+		}
+		err = json.Unmarshal(raw, &choiceType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal answer data: %w", err)
+		}
+
+		if choiceType.ChoiceId != nil {
+
+			var single shared.SingleChoiceAnswer
+			err = json.Unmarshal(raw, &single)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal answer data: %w", err)
+			}
+
+			if seen[single.ChoiceID] {
+				continue
+			}
+			seen[single.ChoiceID] = true
+
+			item := FilterAnswerItem{
+				DisplayValue: single.Snapshot.Name,
+				Option:       single.ChoiceID,
+				Selected:     selectedMap[single.ChoiceID],
+			}
+
+			items = append(items, item)
+
+		} else if choiceType.Choices != nil {
+
+			var multi shared.MultipleChoiceAnswer
+			err = json.Unmarshal(raw, &multi)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal answer data: %w", err)
+			}
+
+			for _, choice := range multi.Choices {
+				if seen[choice.ChoiceID] {
+					continue
+				}
+				seen[choice.ChoiceID] = true
+
+				item := FilterAnswerItem{
+					DisplayValue: choice.Snapshot.Name,
+					Option:       choice.ChoiceID,
+					Selected:     selectedMap[choice.ChoiceID],
+				}
+
+				items = append(items, item)
+			}
+		}
+	}
+	return items, nil
 }
