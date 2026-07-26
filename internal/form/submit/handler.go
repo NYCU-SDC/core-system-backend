@@ -30,7 +30,7 @@ type Response struct {
 	ID          string    `json:"id"`
 	FormID      string    `json:"formId"`
 	CreatedAt   time.Time `json:"createdAt"`
-	SubmittedAt time.Time `json:"updatedAt"`
+	SubmittedAt time.Time `json:"submittedAt"`
 	Progress    string    `json:"progress"`
 }
 

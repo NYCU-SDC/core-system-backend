@@ -307,15 +307,15 @@ func (s *Service) SendSubmissionEmails(
 	userID uuid.UUID,
 	newResponse response.FormResponse,
 ) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	traceCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	ctx, span := s.tracer.Start(ctx, "SendSubmissionEmails")
+	traceCtx, span := s.tracer.Start(traceCtx, "SendSubmissionEmails")
 	defer span.End()
 
-	logger := logutil.WithContext(ctx, s.logger)
+	logger := logutil.WithContext(traceCtx, s.logger)
 
-	emails, err := s.userStore.GetEmails(ctx, userID)
+	emails, err := s.userStore.GetEmails(traceCtx, userID)
 	if err != nil {
 		logger.Error(
 			"get user emails failed",
@@ -327,7 +327,8 @@ func (s *Service) SendSubmissionEmails(
 	}
 
 	for _, email := range emails {
-		if err := s.mailer.SendSubmissionMail(ctx, email, newResponse); err != nil {
+		err := s.mailer.SendSubmissionMail(traceCtx, email, newResponse)
+		if err != nil {
 			logger.Error(
 				"send submission email failed",
 				zap.Error(err),

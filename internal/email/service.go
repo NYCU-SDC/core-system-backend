@@ -49,7 +49,8 @@ func (s *Service) SendSubmissionMail(
 		formResponse.UpdatedAt.Time.Format("2006-01-02 15:04:05"),
 	)
 
-	if err := s.sender.Send(ctx, to, subject, body); err != nil {
+	err := s.sender.Send(ctx, to, subject, body)
+	if err != nil {
 		return fmt.Errorf("send submission thank-you email: %w", err)
 	}
 
