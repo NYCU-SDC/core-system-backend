@@ -3,7 +3,7 @@ module NYCU-SDC/core-system-backend
 go 1.26.2
 
 require (
-	github.com/NYCU-SDC/summer v1.0.1-0.20260223122644-53bd4b1781f1
+	github.com/NYCU-SDC/summer v1.0.3-0.20260727152851-8978aecad7ec
 	github.com/brianvoe/gofakeit/v7 v7.7.3
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
@@ -79,7 +79,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.7.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect

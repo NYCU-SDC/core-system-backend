@@ -158,15 +158,6 @@ func (s *Service) WithTx(tx pgx.Tx) *Service {
 	}
 }
 
-// withTransaction runs fn inside a pgx transaction. If s.db is already a pgx.Tx, fn
-// runs on that transaction without begin/commit/rollback. Otherwise s.db must
-// implement TxBeginner.
-func (s *Service) withTransaction(ctx context.Context, fn func(*Queries) error) error {
-	return internal.WithTransaction(ctx, s.db, s.logger, func(tx pgx.Tx) error {
-		return fn(s.queries.WithTx(tx))
-	})
-}
-
 func (s *Service) Get(ctx context.Context, id uuid.UUID) (UserDetail, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()

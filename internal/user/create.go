@@ -138,8 +138,9 @@ func (s *Service) createOAuthTx(ctx context.Context, qtx *Queries, params create
 
 // createOAuth creates a user with OAuth credentials in a single transaction.
 func (s *Service) createOAuth(ctx context.Context, params createOAuthParams) (uuid.UUID, error) {
+	logger := logutil.WithContext(ctx, s.logger)
 	var accountID uuid.UUID
-	err := s.withTransaction(ctx, func(qtx *Queries) error {
+	err := databaseutil.WithTransactionQueries(ctx, s.db, logger, s.queries).Run(func(qtx *Queries) error {
 		var txErr error
 		accountID, txErr = s.createOAuthTx(ctx, qtx, params)
 		return txErr
@@ -156,7 +157,7 @@ func (s *Service) createWithEmailOnly(
 ) (uuid.UUID, error) {
 	logger := logutil.WithContext(ctx, s.logger)
 	var newUserID uuid.UUID
-	err := s.withTransaction(ctx, func(qtx *Queries) error {
+	err := databaseutil.WithTransactionQueries(ctx, s.db, logger, s.queries).Run(func(qtx *Queries) error {
 		if userID != nil {
 			_, err := qtx.Get(ctx, *userID)
 			if err == nil {

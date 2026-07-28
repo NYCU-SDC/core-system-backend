@@ -64,7 +64,7 @@ func (s *Service) resolveOAuthByEmail(
 	var outcome oauthEmailOutcome
 	var result FindOrCreateResult
 
-	err := s.withTransaction(ctx, func(qtx *Queries) error {
+	err := databaseutil.WithTransactionQueries(ctx, s.db, logger, s.queries).Run(func(qtx *Queries) error {
 		_, err := qtx.GetIDByEmailForUpdate(ctx, params.Email)
 		if errors.Is(err, pgx.ErrNoRows) {
 			outcome = emailNotFound
