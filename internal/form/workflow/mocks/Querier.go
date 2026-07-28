@@ -40,22 +40,22 @@ func (_m *MockQuerier) EXPECT() *MockQuerier_Expecter {
 }
 
 // Activate provides a mock function for the type MockQuerier
-func (_mock *MockQuerier) Activate(ctx context.Context, arg workflow.ActivateParams) (workflow.WorkflowVersion, error) {
+func (_mock *MockQuerier) Activate(ctx context.Context, arg workflow.ActivateParams) (workflow.ActivateRow, error) {
 	ret := _mock.Called(ctx, arg)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Activate")
 	}
 
-	var r0 workflow.WorkflowVersion
+	var r0 workflow.ActivateRow
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.ActivateParams) (workflow.WorkflowVersion, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.ActivateParams) (workflow.ActivateRow, error)); ok {
 		return returnFunc(ctx, arg)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.ActivateParams) workflow.WorkflowVersion); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.ActivateParams) workflow.ActivateRow); ok {
 		r0 = returnFunc(ctx, arg)
 	} else {
-		r0 = ret.Get(0).(workflow.WorkflowVersion)
+		r0 = ret.Get(0).(workflow.ActivateRow)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, workflow.ActivateParams) error); ok {
 		r1 = returnFunc(ctx, arg)
@@ -73,7 +73,7 @@ type MockQuerier_Activate_Call struct {
 // Activate is a helper method to define mock.On call
 //   - ctx context.Context
 //   - arg workflow.ActivateParams
-func (_e *MockQuerier_Expecter) Activate(ctx interface{}, arg interface{}) *MockQuerier_Activate_Call {
+func (_e *MockQuerier_Expecter) Activate(ctx any, arg any) *MockQuerier_Activate_Call {
 	return &MockQuerier_Activate_Call{Call: _e.mock.On("Activate", ctx, arg)}
 }
 
@@ -95,12 +95,12 @@ func (_c *MockQuerier_Activate_Call) Run(run func(ctx context.Context, arg workf
 	return _c
 }
 
-func (_c *MockQuerier_Activate_Call) Return(workflowVersion workflow.WorkflowVersion, err error) *MockQuerier_Activate_Call {
-	_c.Call.Return(workflowVersion, err)
+func (_c *MockQuerier_Activate_Call) Return(activateRow workflow.ActivateRow, err error) *MockQuerier_Activate_Call {
+	_c.Call.Return(activateRow, err)
 	return _c
 }
 
-func (_c *MockQuerier_Activate_Call) RunAndReturn(run func(ctx context.Context, arg workflow.ActivateParams) (workflow.WorkflowVersion, error)) *MockQuerier_Activate_Call {
+func (_c *MockQuerier_Activate_Call) RunAndReturn(run func(ctx context.Context, arg workflow.ActivateParams) (workflow.ActivateRow, error)) *MockQuerier_Activate_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -139,7 +139,7 @@ type MockQuerier_CreateNode_Call struct {
 // CreateNode is a helper method to define mock.On call
 //   - ctx context.Context
 //   - arg workflow.CreateNodeParams
-func (_e *MockQuerier_Expecter) CreateNode(ctx interface{}, arg interface{}) *MockQuerier_CreateNode_Call {
+func (_e *MockQuerier_Expecter) CreateNode(ctx any, arg any) *MockQuerier_CreateNode_Call {
 	return &MockQuerier_CreateNode_Call{Call: _e.mock.On("CreateNode", ctx, arg)}
 }
 
@@ -207,7 +207,7 @@ type MockQuerier_DeleteNode_Call struct {
 // DeleteNode is a helper method to define mock.On call
 //   - ctx context.Context
 //   - arg workflow.DeleteNodeParams
-func (_e *MockQuerier_Expecter) DeleteNode(ctx interface{}, arg interface{}) *MockQuerier_DeleteNode_Call {
+func (_e *MockQuerier_Expecter) DeleteNode(ctx any, arg any) *MockQuerier_DeleteNode_Call {
 	return &MockQuerier_DeleteNode_Call{Call: _e.mock.On("DeleteNode", ctx, arg)}
 }
 
@@ -273,7 +273,7 @@ type MockQuerier_Get_Call struct {
 // Get is a helper method to define mock.On call
 //   - ctx context.Context
 //   - formID uuid.UUID
-func (_e *MockQuerier_Expecter) Get(ctx interface{}, formID interface{}) *MockQuerier_Get_Call {
+func (_e *MockQuerier_Expecter) Get(ctx any, formID any) *MockQuerier_Get_Call {
 	return &MockQuerier_Get_Call{Call: _e.mock.On("Get", ctx, formID)}
 }
 
@@ -306,22 +306,22 @@ func (_c *MockQuerier_Get_Call) RunAndReturn(run func(ctx context.Context, formI
 }
 
 // Update provides a mock function for the type MockQuerier
-func (_mock *MockQuerier) Update(ctx context.Context, arg workflow.UpdateParams) (workflow.WorkflowVersion, error) {
+func (_mock *MockQuerier) Update(ctx context.Context, arg workflow.UpdateParams) (workflow.UpdateRow, error) {
 	ret := _mock.Called(ctx, arg)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Update")
 	}
 
-	var r0 workflow.WorkflowVersion
+	var r0 workflow.UpdateRow
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.UpdateParams) (workflow.WorkflowVersion, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.UpdateParams) (workflow.UpdateRow, error)); ok {
 		return returnFunc(ctx, arg)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.UpdateParams) workflow.WorkflowVersion); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, workflow.UpdateParams) workflow.UpdateRow); ok {
 		r0 = returnFunc(ctx, arg)
 	} else {
-		r0 = ret.Get(0).(workflow.WorkflowVersion)
+		r0 = ret.Get(0).(workflow.UpdateRow)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, workflow.UpdateParams) error); ok {
 		r1 = returnFunc(ctx, arg)
@@ -339,7 +339,7 @@ type MockQuerier_Update_Call struct {
 // Update is a helper method to define mock.On call
 //   - ctx context.Context
 //   - arg workflow.UpdateParams
-func (_e *MockQuerier_Expecter) Update(ctx interface{}, arg interface{}) *MockQuerier_Update_Call {
+func (_e *MockQuerier_Expecter) Update(ctx any, arg any) *MockQuerier_Update_Call {
 	return &MockQuerier_Update_Call{Call: _e.mock.On("Update", ctx, arg)}
 }
 
@@ -361,12 +361,12 @@ func (_c *MockQuerier_Update_Call) Run(run func(ctx context.Context, arg workflo
 	return _c
 }
 
-func (_c *MockQuerier_Update_Call) Return(workflowVersion workflow.WorkflowVersion, err error) *MockQuerier_Update_Call {
-	_c.Call.Return(workflowVersion, err)
+func (_c *MockQuerier_Update_Call) Return(updateRow workflow.UpdateRow, err error) *MockQuerier_Update_Call {
+	_c.Call.Return(updateRow, err)
 	return _c
 }
 
-func (_c *MockQuerier_Update_Call) RunAndReturn(run func(ctx context.Context, arg workflow.UpdateParams) (workflow.WorkflowVersion, error)) *MockQuerier_Update_Call {
+func (_c *MockQuerier_Update_Call) RunAndReturn(run func(ctx context.Context, arg workflow.UpdateParams) (workflow.UpdateRow, error)) *MockQuerier_Update_Call {
 	_c.Call.Return(run)
 	return _c
 }
