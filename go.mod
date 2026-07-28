@@ -3,7 +3,7 @@ module NYCU-SDC/core-system-backend
 go 1.26.2
 
 require (
-	github.com/NYCU-SDC/summer v1.0.3-0.20260727152851-8978aecad7ec
+	github.com/NYCU-SDC/summer v1.0.3-0.20260728141948-2948eeb4b5fa
 	github.com/brianvoe/gofakeit/v7 v7.7.3
 	github.com/go-playground/validator/v10 v10.26.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
