@@ -88,12 +88,6 @@ func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore, fileSe
 	}
 }
 
-func (s *Service) withFileTransaction(ctx context.Context, fn func(*Queries, FileService) error) error {
-	return internal.WithTransaction(ctx, s.db, s.logger, func(tx pgx.Tx) error {
-		return fn(s.queries.WithTx(tx), s.fileService.WithTx(tx))
-	})
-}
-
 func (s Service) List(ctx context.Context, formID, responseID uuid.UUID) ([]Answer, []question.Answerable, map[string]question.Answerable, error) {
 	traceCtx, span := s.tracer.Start(ctx, "List")
 	defer span.End()
@@ -481,7 +475,9 @@ func (s Service) UploadFiles(ctx context.Context, formID, responseID, questionID
 		mergedCount    int
 	)
 
-	err = s.withFileTransaction(traceCtx, func(qtx *Queries, ftx FileService) error {
+	err = databaseutil.WithTransactionQueries(traceCtx, s.db, logger, s.queries).RunWithDBTx(func(tx pgx.Tx, qtx *Queries) error {
+		ftx := s.fileService.WithTx(tx)
+
 		existingEntries, err := s.loadPreviousUploadFileEntries(traceCtx, qtx, responseID, questionID)
 		if err != nil {
 			logger.Error("failed to load previous upload file entries",

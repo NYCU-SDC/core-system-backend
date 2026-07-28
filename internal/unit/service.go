@@ -92,12 +92,6 @@ func NewService(logger *zap.Logger, db DBTX, tenantStore tenantStore) *Service {
 	}
 }
 
-func (s *Service) withTransaction(ctx context.Context, fn func(*Queries) error) error {
-	return internal.WithTransaction(ctx, s.db, s.logger, func(tx pgx.Tx) error {
-		return fn(s.queries.WithTx(tx))
-	})
-}
-
 func (s *Service) CreateOrganizationWithUserID(ctx context.Context, name string, description string, slug string, userID uuid.UUID, metadata []byte) (Unit, error) {
 	traceCtx, span := s.tracer.Start(ctx, "CreateOrganizationWithUserID")
 	defer span.End()
@@ -574,9 +568,9 @@ func (s *Service) UpdateUnitMemberRole(
 	traceCtx, span := s.tracer.Start(ctx, "UpdateUnitMemberRole")
 	defer span.End()
 
-	logger := logutil.WithContext(traceCtx, s.logger)
+	logger := internal.WithContext(traceCtx, s.logger)
 
-	return s.withTransaction(traceCtx, func(qtx *Queries) error {
+	return databaseutil.WithTransactionQueries(traceCtx, s.db, logger, s.queries).Run(func(qtx *Queries) error {
 		// lock admins
 		_, err := qtx.LockAdminsForUnit(traceCtx, unitID)
 		if err != nil {

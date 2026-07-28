@@ -89,15 +89,6 @@ func (s *Service) WithTx(tx pgx.Tx) *Service {
 	}
 }
 
-// withTransaction runs fn inside a pgx transaction. If s.db is already a pgx.Tx, fn
-// runs on that transaction without begin/commit/rollback. Otherwise s.db must
-// implement TxBeginner.
-func (s *Service) withTransaction(ctx context.Context, fn func(tx pgx.Tx, qtx *Queries) error) error {
-	return internal.WithTransaction(ctx, s.db, s.logger, func(tx pgx.Tx) error {
-		return fn(tx, s.queries.WithTx(tx))
-	})
-}
-
 // SaveFile saves the uploaded file data to database with validation
 // uploadedBy can be nil for system uploads
 // opts are validation options (e.g., WithWebP(), WithMaxSize(1024))
@@ -170,7 +161,7 @@ func (s *Service) CreateAttachment(ctx context.Context, fileID uuid.UUID, resour
 
 	var attachment FileAttachment
 	var existingRecord bool
-	err := s.withTransaction(traceCtx, func(_ pgx.Tx, qtx *Queries) error {
+	err := databaseutil.WithTransactionQueries(traceCtx, s.db, logger, s.queries).Run(func(qtx *Queries) error {
 		_, err := qtx.LockFile(traceCtx, fileID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -375,7 +366,7 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	var attachmentCount int
-	err := s.withTransaction(traceCtx, func(tx pgx.Tx, qtx *Queries) error {
+	err := databaseutil.WithTransactionQueries(traceCtx, s.db, logger, s.queries).RunWithDBTx(func(tx pgx.Tx, qtx *Queries) error {
 		_, err := qtx.LockFile(traceCtx, fileID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
