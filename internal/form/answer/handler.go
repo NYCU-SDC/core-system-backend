@@ -74,8 +74,6 @@ type FilterAnswerResponseItem struct {
 }
 
 type FilterAnswerResponse struct {
-	ViewId     uuid.UUID                  `json:"viewId"`
-	FormId     uuid.UUID                  `json:"formId"`
 	QuestionId uuid.UUID                  `json:"questionId"`
 	Answers    []FilterAnswerResponseItem `json:"answers"`
 }
@@ -89,7 +87,7 @@ type Store interface {
 	ValidatePatchAnswersAgainstWorkflow(ctx context.Context, formID, responseID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable, payloads []Payload) error
 	ValidateUploadFilesAgainstWorkflow(ctx context.Context, formID, responseID, questionID uuid.UUID, answersForWorkflow []Answer, answerableMap map[string]question.Answerable) error
 	MergeAnswersForWorkflowResolution(ctx context.Context, currentAnswers []Answer, payloads []Payload, answerableMap map[string]question.Answerable) ([]Answer, error)
-	ListFilterAnswers(ctx context.Context, questionID uuid.UUID, selectedOptions []uuid.UUID) ([]FilterAnswerItem, error)
+	ListFilterAnswers(ctx context.Context, questionID uuid.UUID, selectedOptions []uuid.UUID, formId uuid.UUID) ([]FilterAnswerItem, error)
 }
 
 type QuestionGetter interface {
@@ -826,20 +824,6 @@ func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, h.logger)
 
-	formIdStr := r.PathValue("formId")
-	formId, err := handlerutil.ParseUUID(formIdStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	viewIdStr := r.PathValue("viewId")
-	viewId, err := handlerutil.ParseUUID(viewIdStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
 	questionIdStr := r.PathValue("questionId")
 	questionId, err := handlerutil.ParseUUID(questionIdStr)
 	if err != nil {
@@ -863,7 +847,14 @@ func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	answers, err := h.store.ListFilterAnswers(traceCtx, questionId, selectedOptions)
+	formIdStr := r.PathValue("formId")
+	formId, err := handlerutil.ParseUUID(formIdStr)
+	if err != nil {
+		h.problemWriter.WriteError(traceCtx, w, err, logger)
+		return
+	}
+
+	answers, err := h.store.ListFilterAnswers(traceCtx, questionId, selectedOptions, formId)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -871,18 +862,11 @@ func (h *Handler) GetFilterAnswers(w http.ResponseWriter, r *http.Request) {
 
 	responseItems := make([]FilterAnswerResponseItem, 0, len(answers))
 	for _, answer := range answers {
-		// nolint:staticcheck
-		responseItem := FilterAnswerResponseItem{
-			DisplayValue: answer.DisplayValue,
-			Option:       answer.Option,
-			Selected:     answer.Selected,
-		}
+		responseItem := FilterAnswerResponseItem(answer)
 		responseItems = append(responseItems, responseItem)
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, FilterAnswerResponse{
-		ViewId:     viewId,
-		FormId:     formId,
 		QuestionId: questionId,
 		Answers:    responseItems,
 	})

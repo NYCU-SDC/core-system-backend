@@ -29,7 +29,7 @@ type Querier interface {
 	GetByResponseIDAndQuestionID(ctx context.Context, arg GetByResponseIDAndQuestionIDParams) (Answer, error)
 	BatchUpsert(ctx context.Context, arg BatchUpsertParams) ([]Answer, error)
 	WithTx(tx pgx.Tx) *Queries
-	ListDistinctAnswersByQuestionId(ctx context.Context, questionID uuid.UUID) ([][]byte, error)
+	ListDistinctAnswersByQuestionId(ctx context.Context, arg ListDistinctAnswersByQuestionIdParams) ([][]byte, error)
 	QuestionExists(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
@@ -700,7 +700,7 @@ type FilterAnswerItem struct {
 	Selected     bool
 }
 
-func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, selectedOptions []uuid.UUID) ([]FilterAnswerItem, error) {
+func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, selectedOptions []uuid.UUID, formId uuid.UUID) ([]FilterAnswerItem, error) {
 	traceCtx, span := s.tracer.Start(ctx, "ListFilterAnswers")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -720,7 +720,10 @@ func (s Service) ListFilterAnswers(ctx context.Context, questionID uuid.UUID, se
 		selectedMap[option] = true
 	}
 
-	answers, err := s.queries.ListDistinctAnswersByQuestionId(traceCtx, questionID)
+	answers, err := s.queries.ListDistinctAnswersByQuestionId(traceCtx, ListDistinctAnswersByQuestionIdParams{
+		FormID:     formId,
+		QuestionID: questionID,
+	})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list distinct answers by questionId")
 		span.RecordError(err)

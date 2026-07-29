@@ -196,11 +196,18 @@ func (q *Queries) ListByResponseID(ctx context.Context, responseID uuid.UUID) ([
 const listDistinctAnswersByQuestionId = `-- name: ListDistinctAnswersByQuestionId :many
 SELECT DISTINCT a.value
 FROM answers a
-WHERE a.question_id = $1
+JOIN form_responses fr ON a.response_id = fr.id
+WHERE fr.form_id = $1
+    AND a.question_id = $2
 `
 
-func (q *Queries) ListDistinctAnswersByQuestionId(ctx context.Context, questionID uuid.UUID) ([][]byte, error) {
-	rows, err := q.db.Query(ctx, listDistinctAnswersByQuestionId, questionID)
+type ListDistinctAnswersByQuestionIdParams struct {
+	FormID     uuid.UUID
+	QuestionID uuid.UUID
+}
+
+func (q *Queries) ListDistinctAnswersByQuestionId(ctx context.Context, arg ListDistinctAnswersByQuestionIdParams) ([][]byte, error) {
+	rows, err := q.db.Query(ctx, listDistinctAnswersByQuestionId, arg.FormID, arg.QuestionID)
 	if err != nil {
 		return nil, err
 	}
