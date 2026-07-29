@@ -423,6 +423,7 @@ func main() {
 	mux.Handle("POST /api/forms/{formId}/views/{viewId}/unlock", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Unlock))
 	mux.Handle("POST /api/forms/{formId}/views/{viewId}/duplicate", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Duplicate))
 	mux.Handle("DELETE /api/forms/{formId}/views/{viewId}", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(viewHandler.Delete))
+	mux.Handle("POST /api/forms/{formId}/views/{viewId}/questions/{questionId}/filters", authMiddleware.Append(unitRole.Require(auth.RoleMember, formResolver)).HandlerFunc(answerHandler.GetFilterAnswers))
 
 	// ============================================
 	// File routes
