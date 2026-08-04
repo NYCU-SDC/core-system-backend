@@ -1,6 +1,7 @@
 package view
 
 import (
+	"NYCU-SDC/core-system-backend/internal/form/question"
 	"context"
 	"errors"
 	"fmt"
@@ -20,6 +21,15 @@ import (
 const (
 	defaultViewTitle = "尚未命名的分頁"
 )
+
+type Column struct {
+	QuestionID    string `json:"questionId"`
+	QuestionTitle string `json:"questionTitle"`
+}
+
+type QuestionStore interface {
+	ListByFormID(ctx context.Context, formId uuid.UUID) ([]question.ListByFormIDRow, error)
+}
 
 type Querier interface {
 	Get(ctx context.Context, arg GetParams) (View, error)
@@ -42,18 +52,20 @@ type TxBeginner interface {
 }
 
 type Service struct {
-	db      DBTX
-	logger  *zap.Logger
-	queries Querier
-	tracer  trace.Tracer
+	db            DBTX
+	logger        *zap.Logger
+	queries       Querier
+	tracer        trace.Tracer
+	questionStore QuestionStore
 }
 
-func NewService(logger *zap.Logger, db DBTX) *Service {
+func NewService(logger *zap.Logger, db DBTX, questionStore QuestionStore) *Service {
 	return &Service{
-		db:      db,
-		logger:  logger,
-		queries: New(db),
-		tracer:  otel.Tracer("view/service"),
+		db:            db,
+		logger:        logger,
+		queries:       New(db),
+		tracer:        otel.Tracer("view/service"),
+		questionStore: questionStore,
 	}
 }
 
@@ -97,8 +109,28 @@ func isUniqueViolation(err error) bool {
 	return false
 }
 
+func (s *Service) ListViewColumns(traceCtx context.Context, formID uuid.UUID) ([]Column, error) {
+	logger := logutil.WithContext(traceCtx, s.logger)
+
+	rows, err := s.questionStore.ListByFormID(traceCtx, formID)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list view columns")
+		return nil, err
+	}
+
+	columns := make([]Column, len(rows))
+	for i, row := range rows {
+		columns[i] = Column{
+			row.ID.String(),
+			row.Title.String,
+		}
+	}
+
+	return columns, nil
+}
+
 // Create creates a new view for the given form with a generated default title.
-func (s *Service) Create(ctx context.Context, formID uuid.UUID) (View, error) {
+func (s *Service) Create(ctx context.Context, formID uuid.UUID) (View, []Column, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Create")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -107,17 +139,17 @@ func (s *Service) Create(ctx context.Context, formID uuid.UUID) (View, error) {
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check form exists")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 	if !exist {
-		return View{}, internal.ErrFormNotFound
+		return View{}, nil, internal.ErrFormNotFound
 	}
 
 	titles, err := s.queries.ListTitlesByFormID(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list view titles")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
 	title := generateUniqueTitle(titles, defaultViewTitle)
@@ -126,7 +158,7 @@ func (s *Service) Create(ctx context.Context, formID uuid.UUID) (View, error) {
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "get max order")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
 	newView, err := s.queries.Create(traceCtx, CreateParams{
@@ -137,14 +169,20 @@ func (s *Service) Create(ctx context.Context, formID uuid.UUID) (View, error) {
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create view")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
-	return newView, nil
+	columns, err := s.ListViewColumns(traceCtx, formID)
+	if err != nil {
+		span.RecordError(err)
+		return View{}, nil, err
+	}
+
+	return newView, columns, nil
 }
 
 // List returns all views for the given form ordered by order ASC.
-func (s *Service) List(ctx context.Context, formID uuid.UUID) ([]View, error) {
+func (s *Service) List(ctx context.Context, formID uuid.UUID) ([]View, []Column, error) {
 	traceCtx, span := s.tracer.Start(ctx, "List")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -153,24 +191,30 @@ func (s *Service) List(ctx context.Context, formID uuid.UUID) ([]View, error) {
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "check form exists")
 		span.RecordError(err)
-		return nil, err
+		return nil, nil, err
 	}
 	if !exist {
-		return nil, internal.ErrFormNotFound
+		return nil, nil, internal.ErrFormNotFound
 	}
 
 	views, err := s.queries.ListByFormID(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list views")
 		span.RecordError(err)
-		return nil, err
+		return nil, nil, err
 	}
 
-	return views, nil
+	columns, err := s.ListViewColumns(traceCtx, formID)
+	if err != nil {
+		span.RecordError(err)
+		return nil, nil, err
+	}
+
+	return views, columns, nil
 }
 
 // Get returns a single view by formID and viewID.
-func (s *Service) Get(ctx context.Context, formID, viewID uuid.UUID) (View, error) {
+func (s *Service) Get(ctx context.Context, formID, viewID uuid.UUID) (View, []Column, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Get")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -181,14 +225,20 @@ func (s *Service) Get(ctx context.Context, formID, viewID uuid.UUID) (View, erro
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return View{}, internal.ErrViewNotFound
+			return View{}, nil, internal.ErrViewNotFound
 		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "view", "id", viewID.String(), logger, "get view")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
-	return v, nil
+	columns, err := s.ListViewColumns(traceCtx, formID)
+	if err != nil {
+		span.RecordError(err)
+		return View{}, nil, err
+	}
+
+	return v, columns, nil
 }
 
 // UpdateTitle renames the view.
@@ -254,7 +304,7 @@ func (s *Service) UpdateOrder(ctx context.Context, formID, viewID uuid.UUID, new
 }
 
 // Lock sets locked=true on the view.
-func (s *Service) Lock(ctx context.Context, formID, viewID uuid.UUID) (View, error) {
+func (s *Service) Lock(ctx context.Context, formID, viewID uuid.UUID) (View, []Column, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Lock")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -266,18 +316,24 @@ func (s *Service) Lock(ctx context.Context, formID, viewID uuid.UUID) (View, err
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return View{}, internal.ErrViewNotFound
+			return View{}, nil, internal.ErrViewNotFound
 		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "view", "id", viewID.String(), logger, "lock view")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
-	return v, nil
+	columns, err := s.ListViewColumns(traceCtx, formID)
+	if err != nil {
+		span.RecordError(err)
+		return View{}, nil, err
+	}
+
+	return v, columns, nil
 }
 
 // Unlock sets locked=false on the view.
-func (s *Service) Unlock(ctx context.Context, formID, viewID uuid.UUID) (View, error) {
+func (s *Service) Unlock(ctx context.Context, formID, viewID uuid.UUID) (View, []Column, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Unlock")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -289,32 +345,38 @@ func (s *Service) Unlock(ctx context.Context, formID, viewID uuid.UUID) (View, e
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return View{}, internal.ErrViewNotFound
+			return View{}, nil, internal.ErrViewNotFound
 		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "view", "id", viewID.String(), logger, "unlock view")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
-	return v, nil
+	columns, err := s.ListViewColumns(traceCtx, formID)
+	if err != nil {
+		span.RecordError(err)
+		return View{}, nil, err
+	}
+
+	return v, columns, nil
 }
 
 // Duplicate creates a copy of the view with title, placed immediately after the original in order.
-func (s *Service) Duplicate(ctx context.Context, formID, viewID uuid.UUID) (View, error) {
+func (s *Service) Duplicate(ctx context.Context, formID, viewID uuid.UUID) (View, []Column, error) {
 	traceCtx, span := s.tracer.Start(ctx, "Duplicate")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	beginner, ok := s.db.(TxBeginner)
 	if !ok {
-		return View{}, fmt.Errorf("db does not support transactions")
+		return View{}, nil, fmt.Errorf("db does not support transactions")
 	}
 
 	tx, err := beginner.BeginTx(traceCtx, pgx.TxOptions{})
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "begin tx")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 	defer func() {
 		if rbErr := tx.Rollback(traceCtx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
@@ -330,18 +392,18 @@ func (s *Service) Duplicate(ctx context.Context, formID, viewID uuid.UUID) (View
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return View{}, internal.ErrViewNotFound
+			return View{}, nil, internal.ErrViewNotFound
 		}
 		err = databaseutil.WrapDBErrorWithKeyValue(err, "view", "id", viewID.String(), logger, "get view for duplicate")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
 	titles, err := qtx.ListTitlesByFormID(traceCtx, formID)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "list view titles for duplicate")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 	newTitle := generateDuplicateTitle(original.Title, titles)
 
@@ -354,7 +416,7 @@ func (s *Service) Duplicate(ctx context.Context, formID, viewID uuid.UUID) (View
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "shift orders for duplicate")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
 	newView, err := qtx.Create(traceCtx, CreateParams{
@@ -365,17 +427,23 @@ func (s *Service) Duplicate(ctx context.Context, formID, viewID uuid.UUID) (View
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "create duplicate view")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
 	err = tx.Commit(traceCtx)
 	if err != nil {
 		err = databaseutil.WrapDBError(err, logger, "commit tx")
 		span.RecordError(err)
-		return View{}, err
+		return View{}, nil, err
 	}
 
-	return newView, nil
+	columns, err := s.ListViewColumns(traceCtx, formID)
+	if err != nil {
+		span.RecordError(err)
+		return View{}, nil, err
+	}
+
+	return newView, columns, nil
 }
 
 // Delete deletes the view and move the views after deleted position order forward.

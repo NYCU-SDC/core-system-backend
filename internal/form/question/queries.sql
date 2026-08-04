@@ -183,3 +183,12 @@ SET title = sqlc.arg('title'),
     updated_at = now()
 WHERE id = sqlc.arg('id') AND form_id = sqlc.arg('form_id')
 RETURNING *;
+
+-- name: ListByFormID :many
+SELECT q.id, q.title
+FROM questions q
+JOIN sections s on s.id = q.section_id
+WHERE s.form_id = $1
+ORDER BY
+    s.id ASC,
+    q."order" ASC;
