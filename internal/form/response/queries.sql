@@ -75,3 +75,14 @@ WHERE fr.form_id = $1
           WHERE (c ->> 'choiceId')::uuid = ANY(@option_ids::uuid[])
         )
     );
+
+-- name: ListSubmittedResponsesByIds :many
+SELECT * FROM form_responses
+WHERE id = ANY(@response_ids::uuid[])
+ORDER BY submitted_at ASC, id ASC;
+
+-- name: ListAnswersByResponseIds :many
+SELECT response_id, question_id, value
+FROM answers
+WHERE response_id = ANY(@response_ids::uuid[])
+ORDER BY response_id, created_at;

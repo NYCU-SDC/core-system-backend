@@ -105,20 +105,21 @@ type ExportDownloadRequest struct {
 }
 
 type FilterQueryRequest struct {
-	FormId  uuid.UUID `json:"formId" validate:"required"`
 	Filters []struct {
 		QuestionID uuid.UUID `json:"questionId" validate:"required"`
 		Answers    []struct {
 			Option uuid.UUID `json:"option" validate:"required"`
 		} `json:"answers" validate:"required,min=1"`
-	} `json:"filters"`
+	} `json:"filters" validate:"required,dive"`
 }
 
+type FilterQueryResponseAnswer struct {
+	QuestionId string          `json:"questionId"`
+	Value      json.RawMessage `json:"value"`
+}
 type FilterQueryResponseItem struct {
-	ID          string    `json:"id"`
-	SubmittedBy string    `json:"submittedBy"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	Id      string                      `json:"id"`
+	Answers []FilterQueryResponseAnswer `json:"answers"`
 }
 type FilterQueryResponse struct {
 	FormId    string                    `json:"formId"`
@@ -133,7 +134,7 @@ type Store interface {
 	Delete(ctx context.Context, responseID uuid.UUID) error
 	ExportPreview(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) (ExportPreviewResponse, error)
 	ExportDownload(ctx context.Context, formID uuid.UUID, questionIDs []uuid.UUID) ([]byte, string, error)
-	QueryResponses(ctx context.Context, formId uuid.UUID, filters []FilterCondition) ([]FormResponse, error)
+	QueryResponses(ctx context.Context, formId uuid.UUID, filters []FilterCondition) ([]FilterResponseItem, error)
 }
 
 type QuestionStore interface {
@@ -570,8 +571,9 @@ func (h *Handler) GetFilterResults(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	formId := r.PathValue("formId")
-	if formId != req.FormId.String() {
+	formIdStr := r.PathValue("formId")
+	formId, err := handlerutil.ParseUUID(formIdStr)
+	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
@@ -588,24 +590,28 @@ func (h *Handler) GetFilterResults(w http.ResponseWriter, r *http.Request) {
 		}
 		filters = append(filters, filtersItem)
 	}
-	responses, err := h.store.QueryResponses(traceCtx, req.FormId, filters)
+	responses, err := h.store.QueryResponses(traceCtx, formId, filters)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
 	res := FilterQueryResponse{
-		FormId:    req.FormId.String(),
-		Responses: []FilterQueryResponseItem{},
+		FormId:    formId.String(),
+		Responses: make([]FilterQueryResponseItem, 0, len(responses)),
 	}
 	for _, response := range responses {
-		resItem := FilterQueryResponseItem{
-			ID:          response.ID.String(),
-			SubmittedBy: response.SubmittedBy.String(),
-			CreatedAt:   response.CreatedAt.Time,
-			UpdatedAt:   response.UpdatedAt.Time,
+		answers := make([]FilterQueryResponseAnswer, 0, len(response.Answers))
+		for _, ans := range response.Answers {
+			answers = append(answers, FilterQueryResponseAnswer{
+				QuestionId: ans.QuestionId.String(),
+				Value:      ans.Value,
+			})
 		}
-		res.Responses = append(res.Responses, resItem)
+		res.Responses = append(res.Responses, FilterQueryResponseItem{
+			Id:      response.ID.String(),
+			Answers: answers,
+		})
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, res)

@@ -174,6 +174,39 @@ func (q *Queries) GetFormID(ctx context.Context, id uuid.UUID) (uuid.UUID, error
 	return form_id, err
 }
 
+const listAnswersByResponseIds = `-- name: ListAnswersByResponseIds :many
+SELECT response_id, question_id, value
+FROM answers
+WHERE response_id = ANY($1::uuid[])
+ORDER BY response_id, created_at
+`
+
+type ListAnswersByResponseIdsRow struct {
+	ResponseID uuid.UUID
+	QuestionID uuid.UUID
+	Value      []byte
+}
+
+func (q *Queries) ListAnswersByResponseIds(ctx context.Context, responseIds []uuid.UUID) ([]ListAnswersByResponseIdsRow, error) {
+	rows, err := q.db.Query(ctx, listAnswersByResponseIds, responseIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAnswersByResponseIdsRow
+	for rows.Next() {
+		var i ListAnswersByResponseIdsRow
+		if err := rows.Scan(&i.ResponseID, &i.QuestionID, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listByFormID = `-- name: ListByFormID :many
 SELECT id, form_id, submitted_by, submitted_at, progress, created_at, updated_at FROM form_responses
 WHERE form_id = $1
@@ -290,6 +323,40 @@ ORDER BY submitted_at ASC, id ASC
 
 func (q *Queries) ListSubmittedByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error) {
 	rows, err := q.db.Query(ctx, listSubmittedByFormID, formID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FormResponse
+	for rows.Next() {
+		var i FormResponse
+		if err := rows.Scan(
+			&i.ID,
+			&i.FormID,
+			&i.SubmittedBy,
+			&i.SubmittedAt,
+			&i.Progress,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubmittedResponsesByIds = `-- name: ListSubmittedResponsesByIds :many
+SELECT id, form_id, submitted_by, submitted_at, progress, created_at, updated_at FROM form_responses
+WHERE id = ANY($1::uuid[])
+ORDER BY submitted_at ASC, id ASC
+`
+
+func (q *Queries) ListSubmittedResponsesByIds(ctx context.Context, responseIds []uuid.UUID) ([]FormResponse, error) {
+	rows, err := q.db.Query(ctx, listSubmittedResponsesByIds, responseIds)
 	if err != nil {
 		return nil, err
 	}

@@ -36,6 +36,8 @@ type Querier interface {
 	ListSubmittedByFormID(ctx context.Context, formID uuid.UUID) ([]FormResponse, error)
 	GetEditInfo(ctx context.Context, id uuid.UUID) (GetEditInfoRow, error)
 	GetFilterResponsesByQuestionsAndOptions(ctx context.Context, arg GetFilterResponsesByQuestionsAndOptionsParams) ([]uuid.UUID, error)
+	ListAnswersByResponseIds(ctx context.Context, responseIds []uuid.UUID) ([]ListAnswersByResponseIdsRow, error)
+	ListSubmittedResponsesByIds(ctx context.Context, responseIds []uuid.UUID) ([]FormResponse, error)
 }
 
 type WorkflowResolver interface {
@@ -886,7 +888,17 @@ type FilterCondition struct {
 	OptionIds  []uuid.UUID
 }
 
-func (s *Service) QueryResponses(ctx context.Context, formId uuid.UUID, filters []FilterCondition) ([]FormResponse, error) {
+type FilterAnswerItem struct {
+	QuestionId uuid.UUID
+	Value      []byte
+}
+
+type FilterResponseItem struct {
+	ID      uuid.UUID
+	Answers []FilterAnswerItem
+}
+
+func (s *Service) QueryResponses(ctx context.Context, formId uuid.UUID, filters []FilterCondition) ([]FilterResponseItem, error) {
 	traceCtx, span := s.tracer.Start(ctx, "QueryResponses")
 	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
@@ -902,7 +914,7 @@ func (s *Service) QueryResponses(ctx context.Context, formId uuid.UUID, filters 
 	}
 
 	if len(filters) == 0 {
-		return []FormResponse{}, nil
+		return []FilterResponseItem{}, nil
 	}
 
 	responsesMap := make(map[uuid.UUID]bool)
@@ -942,19 +954,40 @@ func (s *Service) QueryResponses(ctx context.Context, formId uuid.UUID, filters 
 		responsesMap = newMap
 	}
 
-	responses := make([]FormResponse, 0, len(responsesMap))
-	for response := range responsesMap {
-		info, err := s.queries.Get(traceCtx, GetParams{
-			ID:     response,
-			FormID: formId,
-		})
-		if err != nil {
-			err = databaseutil.WrapDBError(err, logger, "get response by id")
-			span.RecordError(err)
-			return nil, err
-		}
-
-		responses = append(responses, info)
+	responseIds := make([]uuid.UUID, 0, len(responsesMap))
+	for id := range responsesMap {
+		responseIds = append(responseIds, id)
 	}
-	return responses, nil
+
+	orderedResponses, err := s.queries.ListSubmittedResponsesByIds(traceCtx, responseIds)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list submitted responses by response ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	answerRows, err := s.queries.ListAnswersByResponseIds(traceCtx, responseIds)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list answers by response ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	answerMap := make(map[uuid.UUID][]FilterAnswerItem)
+	for _, row := range answerRows {
+		answerMap[row.ResponseID] = append(answerMap[row.ResponseID], FilterAnswerItem{
+			QuestionId: row.QuestionID,
+			Value:      row.Value,
+		})
+	}
+
+	response := make([]FilterResponseItem, 0, len(responsesMap))
+	for _, resp := range orderedResponses {
+		response = append(response, FilterResponseItem{
+			ID:      resp.ID,
+			Answers: answerMap[resp.ID],
+		})
+	}
+
+	return response, nil
 }
