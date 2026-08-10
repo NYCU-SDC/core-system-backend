@@ -797,47 +797,6 @@ func (h *Handler) Unarchive(w http.ResponseWriter, r *http.Request) {
 	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
 }
 
-func (h *Handler) Close(w http.ResponseWriter, r *http.Request) {
-	traceCtx, span := h.tracer.Start(r.Context(), "Close")
-	defer span.End()
-	logger := logutil.WithContext(traceCtx, h.logger)
-
-	idStr := r.PathValue("formId")
-	id, err := handlerutil.ParseUUID(idStr)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	currentUser, ok := user.GetFromContext(traceCtx)
-	if !ok {
-		h.problemWriter.WriteError(traceCtx, w, internal.ErrNoUserInContext, logger)
-		return
-	}
-
-	_, err = h.store.SetStatus(traceCtx, id, StatusClosed, currentUser.ID)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	currentForm, err := h.store.Get(traceCtx, id)
-	if err != nil {
-		h.problemWriter.WriteError(traceCtx, w, err, logger)
-		return
-	}
-
-	response := ToResponse(
-		formFromGetRow(currentForm),
-		UserFromProfileFields(currentForm.CreatedBy, currentForm.CreatorName, currentForm.CreatorUsername, currentForm.CreatorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.CreatorEmails),
-		UserFromProfileFields(currentForm.LastEditor, currentForm.LastEditorName, currentForm.LastEditorUsername, currentForm.LastEditorAvatarUrl),
-		user.ConvertEmailsToSlice(currentForm.LastEditorEmails),
-	)
-
-	handlerutil.WriteJSONResponse(w, http.StatusOK, response)
-}
-
 func (h *Handler) GetFonts(w http.ResponseWriter, r *http.Request) {
 	traceCtx, span := h.tracer.Start(r.Context(), "GetFonts")
 	defer span.End()
