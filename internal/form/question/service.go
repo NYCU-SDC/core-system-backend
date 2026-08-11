@@ -33,6 +33,7 @@ type Querier interface {
 	ListTypes(ctx context.Context, ids []uuid.UUID) ([]ListTypesRow, error)
 	ListByIDs(ctx context.Context, questionIDs []uuid.UUID) ([]ListByIDsRow, error)
 	UpdateSection(ctx context.Context, arg UpdateSectionParams) (Section, error)
+	ListByFormID(ctx context.Context, formID uuid.UUID) ([]ListByFormIDRow, error)
 }
 
 // FormStore is used to check form existence for operations that require it (e.g. list sections by form ID).
@@ -494,4 +495,19 @@ func (s *Service) UpdateSection(ctx context.Context, arg UpdateSectionParams) (S
 	}
 
 	return section, nil
+}
+
+func (s *Service) ListByFormID(ctx context.Context, formId uuid.UUID) ([]ListByFormIDRow, error) {
+	ctx, span := s.tracer.Start(ctx, "ListByFormID")
+	defer span.End()
+	logger := logutil.WithContext(ctx, s.logger)
+
+	rows, err := s.queries.ListByFormID(ctx, formId)
+	if err != nil {
+		err = databaseutil.WrapDBError(err, logger, "list questions by ids")
+		span.RecordError(err)
+		return nil, err
+	}
+
+	return rows, nil
 }

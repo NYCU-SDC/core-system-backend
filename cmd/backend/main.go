@@ -204,7 +204,7 @@ func main() {
 	tenantHandler := tenant.NewHandler(logger, validator, problemWriter, tenantService)
 	workflowHandler := workflow.NewHandler(logger, validator, problemWriter, workflowService)
 	fileHandler := file.NewHandler(logger, validator, problemWriter, fileService)
-	viewService := view.NewService(logger, dbPool)
+	viewService := view.NewService(logger, dbPool, questionService)
 	viewHandler := view.NewHandler(logger, validator, problemWriter, viewService)
 
 	// ============================================

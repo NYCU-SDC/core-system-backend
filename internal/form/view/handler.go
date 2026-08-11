@@ -24,6 +24,7 @@ type ViewResponse struct {
 	Order     int32     `json:"order"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	Columns   []Column  `json:"columns"`
 }
 
 type UpdateViewRequest struct {
@@ -32,14 +33,14 @@ type UpdateViewRequest struct {
 }
 
 type Store interface {
-	Create(ctx context.Context, formID uuid.UUID) (View, error)
-	List(ctx context.Context, formID uuid.UUID) ([]View, error)
-	Get(ctx context.Context, formID, viewID uuid.UUID) (View, error)
+	Create(ctx context.Context, formID uuid.UUID) (View, []Column, error)
+	List(ctx context.Context, formID uuid.UUID) ([]View, []Column, error)
+	Get(ctx context.Context, formID, viewID uuid.UUID) (View, []Column, error)
 	UpdateTitle(ctx context.Context, formID, viewID uuid.UUID, title string) (View, error)
 	UpdateOrder(ctx context.Context, formID, viewID uuid.UUID, newOrder int32) (View, error)
-	Lock(ctx context.Context, formID, viewID uuid.UUID) (View, error)
-	Unlock(ctx context.Context, formID, viewID uuid.UUID) (View, error)
-	Duplicate(ctx context.Context, formID, viewID uuid.UUID) (View, error)
+	Lock(ctx context.Context, formID, viewID uuid.UUID) (View, []Column, error)
+	Unlock(ctx context.Context, formID, viewID uuid.UUID) (View, []Column, error)
+	Duplicate(ctx context.Context, formID, viewID uuid.UUID) (View, []Column, error)
 	Delete(ctx context.Context, formID, viewID uuid.UUID) error
 }
 
@@ -66,7 +67,7 @@ func NewHandler(
 	}
 }
 
-func toViewResponse(v View) ViewResponse {
+func toViewResponse(v View, c []Column) ViewResponse {
 	return ViewResponse{
 		ID:        v.ID.String(),
 		FormID:    v.FormID.String(),
@@ -75,6 +76,7 @@ func toViewResponse(v View) ViewResponse {
 		Order:     v.Order,
 		CreatedAt: v.CreatedAt.Time,
 		UpdatedAt: v.UpdatedAt.Time,
+		Columns:   c,
 	}
 }
 
@@ -90,13 +92,13 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, err := h.store.Create(traceCtx, formID)
+	v, columns, err := h.store.Create(traceCtx, formID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, toViewResponse(v))
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, toViewResponse(v, columns))
 }
 
 // List handles GET /forms/{formId}/views
@@ -111,7 +113,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	views, err := h.store.List(traceCtx, formID)
+	views, columns, err := h.store.List(traceCtx, formID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -119,7 +121,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	resp := make([]ViewResponse, 0, len(views))
 	for _, v := range views {
-		resp = append(resp, toViewResponse(v))
+		resp = append(resp, toViewResponse(v, columns))
 	}
 
 	handlerutil.WriteJSONResponse(w, http.StatusOK, resp)
@@ -143,13 +145,13 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, err := h.store.Get(traceCtx, formID, viewID)
+	v, columns, err := h.store.Get(traceCtx, formID, viewID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, toViewResponse(v))
+	handlerutil.WriteJSONResponse(w, http.StatusOK, toViewResponse(v, columns))
 }
 
 // Update handles PATCH /forms/{formId}/views/{viewId}
@@ -178,7 +180,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get current state so we can return a consistent view after partial updates.
-	current, err := h.store.Get(traceCtx, formID, viewID)
+	current, columns, err := h.store.Get(traceCtx, formID, viewID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
@@ -202,7 +204,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, toViewResponse(result))
+	handlerutil.WriteJSONResponse(w, http.StatusOK, toViewResponse(result, columns))
 }
 
 // Lock handles POST /forms/{formId}/views/{viewId}/lock
@@ -223,13 +225,13 @@ func (h *Handler) Lock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, err := h.store.Lock(traceCtx, formID, viewID)
+	v, columns, err := h.store.Lock(traceCtx, formID, viewID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, toViewResponse(v))
+	handlerutil.WriteJSONResponse(w, http.StatusOK, toViewResponse(v, columns))
 }
 
 // Unlock handles POST /forms/{formId}/views/{viewId}/unlock
@@ -250,13 +252,13 @@ func (h *Handler) Unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, err := h.store.Unlock(traceCtx, formID, viewID)
+	v, columns, err := h.store.Unlock(traceCtx, formID, viewID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusOK, toViewResponse(v))
+	handlerutil.WriteJSONResponse(w, http.StatusOK, toViewResponse(v, columns))
 }
 
 // Duplicate handles POST /forms/{formId}/views/{viewId}/duplicate
@@ -277,13 +279,13 @@ func (h *Handler) Duplicate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	v, err := h.store.Duplicate(traceCtx, formID, viewID)
+	v, columns, err := h.store.Duplicate(traceCtx, formID, viewID)
 	if err != nil {
 		h.problemWriter.WriteError(traceCtx, w, err, logger)
 		return
 	}
 
-	handlerutil.WriteJSONResponse(w, http.StatusCreated, toViewResponse(v))
+	handlerutil.WriteJSONResponse(w, http.StatusCreated, toViewResponse(v, columns))
 }
 
 // Delete handles DELETE /forms/{formId}/views/{viewId}
