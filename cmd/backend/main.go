@@ -11,6 +11,7 @@ import (
 	"NYCU-SDC/core-system-backend/internal/config"
 	"NYCU-SDC/core-system-backend/internal/cors"
 	"NYCU-SDC/core-system-backend/internal/distribute"
+	"NYCU-SDC/core-system-backend/internal/email"
 	"NYCU-SDC/core-system-backend/internal/file"
 	"NYCU-SDC/core-system-backend/internal/form"
 	"NYCU-SDC/core-system-backend/internal/form/answer"
@@ -168,6 +169,15 @@ func main() {
 		logger.Fatal("Failed to load setup configuration", zap.Error(err))
 	}
 
+	smtpSender := email.NewSMTPSender(
+		cfg.SMTP.Host,
+		cfg.SMTP.Port,
+		cfg.SMTP.Username,
+		cfg.SMTP.Password,
+		cfg.SMTP.From,
+	)
+	emailService := email.NewService(smtpSender)
+
 	userService := user.NewService(logger, dbPool, fileService, unitService, unitService, &setupCfg)
 	jwtService := jwt.NewService(logger, dbPool, cfg.Secret, cfg.OauthProxySecret, cfg.AccessTokenExpiration, cfg.RefreshTokenExpiration)
 	distributeService := distribute.NewService(logger, unitService)
@@ -179,7 +189,7 @@ func main() {
 	inboxService := inbox.NewService(logger, dbPool)
 	responseService := response.NewService(logger, dbPool, answerService, questionService, workflowService, formService, userService)
 	highlightService := highlight.NewService(logger, dbPool, formService)
-	submitService := submit.NewService(logger, formService, questionService, responseService, answerService)
+	submitService := submit.NewService(logger, formService, questionService, responseService, answerService, userService, emailService)
 	publishService := publish.NewService(logger, distributeService, formService, inboxService, workflowService)
 
 	setupService := setup.NewService(logger, setupCfg, unitService, userService)

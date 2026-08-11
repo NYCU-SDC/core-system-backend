@@ -20,6 +20,14 @@ const DefaultSecret = "default-secret"
 
 var ErrDatabaseURLRequired = errors.New("database_url is required")
 
+type SMTPConfig struct {
+	Host     string `yaml:"host" envconfig:"SMTP_HOST"`
+	Port     string `yaml:"port" envconfig:"SMTP_PORT"`
+	Username string `yaml:"username" envconfig:"SMTP_USERNAME"`
+	Password string `yaml:"password" envconfig:"SMTP_PASSWORD"`
+	From     string `yaml:"from" envconfig:"SMTP_FROM"`
+}
+
 type Config struct {
 	// Dev mode disables strict cookie policies by using SameSite=None
 	// instead of SameSite=Strict, allowing cross-site requests during development.
@@ -49,6 +57,8 @@ type Config struct {
 	SetupData              string        `yaml:"setup_data" envconfig:"SETUP_YAML"`
 	AccessTokenExpiration  time.Duration `yaml:"-"`
 	RefreshTokenExpiration time.Duration `yaml:"-"`
+
+	SMTP SMTPConfig `yaml:"smtp"`
 }
 
 type LogBuffer struct {
@@ -148,6 +158,10 @@ func Load() (Config, *LogBuffer) {
 		DefaultGlobalRoles:        "",
 		DefaultOrgRoles:           "",
 		SetupPath:                 "setup.yaml",
+		SMTP: SMTPConfig{
+			Host: "smtp.gmail.com",
+			Port: "587",
+		},
 	}
 
 	var err error
@@ -235,6 +249,14 @@ func FromEnv(config *Config, logger *LogBuffer) (*Config, error) {
 		DefaultOrgRoles:     os.Getenv("DEFAULT_ORG_ROLES"),
 		SetupPath:           os.Getenv("SETUP_PATH"),
 		SetupData:           os.Getenv("SETUP_YAML"),
+
+		SMTP: SMTPConfig{
+			Host:     os.Getenv("SMTP_HOST"),
+			Port:     os.Getenv("SMTP_PORT"),
+			Username: os.Getenv("SMTP_USERNAME"),
+			Password: os.Getenv("SMTP_PASSWORD"),
+			From:     os.Getenv("SMTP_FROM"),
+		},
 	}
 
 	return configutil.Merge[Config](config, envConfig)
