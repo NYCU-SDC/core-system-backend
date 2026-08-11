@@ -109,7 +109,9 @@ func isUniqueViolation(err error) bool {
 	return false
 }
 
-func (s *Service) ListViewColumns(traceCtx context.Context, formID uuid.UUID) ([]Column, error) {
+func (s *Service) ListViewColumns(ctx context.Context, formID uuid.UUID) ([]Column, error) {
+	traceCtx, span := s.tracer.Start(ctx, "ListViewColumns")
+	defer span.End()
 	logger := logutil.WithContext(traceCtx, s.logger)
 
 	rows, err := s.questionStore.ListByFormID(traceCtx, formID)
